@@ -9,7 +9,10 @@ export type AuthUser = {
 
 export function githubLoginUrl(): string {
   const base = `${WORKERS_API.replace(/\/$/, "")}/auth/github`;
-  const returnTo = encodeURIComponent(window.location.origin);
+  const siteBase = import.meta.env.BASE_URL || "/";
+  const returnTo = encodeURIComponent(
+    `${window.location.origin}${siteBase}`.replace(/\/$/, ""),
+  );
   return `${base}?return_to=${returnTo}`;
 }
 
