@@ -10,7 +10,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail propose-page">
-        <h1>Propose a bounty</h1>
+        <h1>Start a project</h1>
         <p class="lede">Sign in to open a proposal pull request on Plebly/proposals.</p>
         <a class="btn" href="${escapeHtml(githubLoginUrl(PROPOSE_PATH))}">Log in</a>
         <p class="hint" style="margin-top:1rem"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually on GitHub</a></p>
@@ -24,7 +24,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail propose-page">
-      <h1>Propose a bounty</h1>
+      <h1>Start a project</h1>
       <p class="lede">Describe the work, pay the submission fee on ${escapeHtml(networkLabel)}, and we'll open a PR on <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Plebly/proposals</a> for review.</p>
 
       <div class="propose-guide">
@@ -41,7 +41,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           <legend>Proposal</legend>
           <label class="field">
             <span>Title</span>
-            <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the bounty" />
+            <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" />
           </label>
           <label class="field">
             <span>Problem &amp; audience</span>
@@ -60,7 +60,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           <label class="field">
             <span>Out of scope</span>
-            <textarea name="out_of_scope" required minlength="10" rows="3" placeholder="What this bounty explicitly does not include."></textarea>
+            <textarea name="out_of_scope" required minlength="10" rows="3" placeholder="What this project explicitly does not include."></textarea>
           </label>
         </fieldset>
 

@@ -1,6 +1,6 @@
 ## About Plebly
 
-Plebly is a public bounty platform for **Bitcoin development and research**. This site lists open bounties, shows on-chain escrow balances, and connects builders with funded work — without a central gatekeeper holding the keys.
+Plebly is a public funding platform for **Bitcoin development and research**. This site lists open projects, shows on-chain escrow balances, and connects builders with funded work — without a central gatekeeper holding the keys.
 
 We built it for people who want hard problems solved in the open: protocol work, tooling, research, and infrastructure that makes Bitcoin better for everyone.
 
@@ -15,11 +15,20 @@ We built it for people who want hard problems solved in the open: protocol work,
 ## How it works
 
 1. **Submit** — Open a pull request with your proposal and pay the submission fee on-chain.
-2. **Fund** — Anyone sends Bitcoin to the proposal's escrow address.
-3. **Claim** — A builder claims the bounty once funding hits the claim floor.
+2. **Donate** — Anyone sends Bitcoin to the project's escrow address (on-chain, or Lightning that settles into that same address).
+3. **Claim** — A builder claims the project once funding hits the claim floor.
 4. **Complete** — Reviewers verify the deliverable; keyholders release escrow on success.
 
-Browse [open bounties](#/), [propose a bounty](#/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
+Browse [open projects](#/), [start a project](#/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
+
+## Lightning donations
+
+Lightning is a **funding rail into on-chain escrow**, not a separate balance. A reverse submarine swap (via Boltz) pays a hold invoice; after the lockup confirms, Plebly’s claimer broadcasts a claim transaction **to the project’s escrow address**. Only then does the mempool balance — and the claim floor — move.
+
+- Unpaid or in-flight invoices do **not** count toward the claim floor.
+- Escrow credit is the invoice amount minus Boltz service and claim fees; the donate UI shows the expected on-chain credit.
+- Minimum amounts follow the Boltz BTC/BTC reverse pair (often above the smallest on-chain presets).
+- Lightning is enabled on **mainnet** production; signet demos stay on-chain only unless a staging flag is set.
 
 ## Key parameters
 

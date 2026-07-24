@@ -1,4 +1,13 @@
-import { BITCOIN_NETWORK } from "./config";
+import QRCode from "qrcode";
+import { BITCOIN_NETWORK, lightningUiAllowed } from "./config";
+import {
+  createLightningInvoice,
+  fetchLightningStatus,
+  fetchLightningSwap,
+  weblnPay,
+  type LightningStatus,
+  type LightningSwapView,
+} from "./lightning";
 import type { Proposal, ProposalMilestone } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -6,6 +15,24 @@ const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
     ? "https://mempool.space/signet"
     : "https://mempool.space";
+
+const DONATE_PRESETS_SATS = [10_000, 50_000, 100_000, 500_000];
+/** Boltz reverse-swap floors are typically ~25k; clamp LN presets at runtime. */
+const LN_PRESETS_SATS = [25_000, 50_000, 100_000, 500_000];
+
+export type DonateBindOpts = {
+  address: string;
+  proposalId: string | null;
+  proposalPath: string;
+};
+
+export function bitcoinUri(address: string, amountSats?: number | null): string {
+  if (amountSats != null && amountSats > 0) {
+    const btc = (amountSats / 1e8).toFixed(8).replace(/\.?0+$/, "");
+    return `bitcoin:${address}?amount=${btc}`;
+  }
+  return `bitcoin:${address}`;
+}
 
 export function formatProposalDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -53,6 +80,398 @@ function copyBtn(value: string, label: string): string {
 
 function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
+}
+
+/** Prominent funder panel — on-chain + optional Lightning (Boltz → escrow). */
+export function donatePanelHtml(p: Proposal): string {
+  if (!p.escrow_address) return "";
+  const addr = p.escrow_address;
+  const networkNote =
+    BITCOIN_NETWORK === "signet"
+      ? `<p class="donate-network-note">This project is on <strong>signet</strong> — use a signet wallet.</p>`
+      : "";
+  const onchainPresets = DONATE_PRESETS_SATS.map(
+    (sats) =>
+      `<button type="button" class="donate-preset" data-rail="onchain" data-sats="${sats}">${formatSats(sats)}</button>`,
+  ).join("");
+  const lnPresets = LN_PRESETS_SATS.map(
+    (sats) =>
+      `<button type="button" class="donate-preset" data-rail="ln" data-sats="${sats}">${formatSats(sats)}</button>`,
+  ).join("");
+  const showLnTabs = lightningUiAllowed();
+
+  return `<div class="donate-panel" id="donate">
+    <div class="donate-panel-head">
+      <h2 class="donate-title">Donate</h2>
+      <p class="donate-lede">Send Bitcoin to this project’s escrow. No account required — funds stay on-chain.</p>
+    </div>
+    ${networkNote}
+    ${
+      showLnTabs
+        ? `<div class="donate-tabs" role="tablist" aria-label="Donation method" hidden>
+      <button type="button" class="donate-tab active" role="tab" aria-selected="true" data-tab="onchain">On-chain</button>
+      <button type="button" class="donate-tab" role="tab" aria-selected="false" data-tab="lightning">Lightning</button>
+    </div>`
+        : ""
+    }
+    <div class="donate-pane" data-pane="onchain">
+      <div class="donate-qr-wrap">
+        <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
+      </div>
+      <label class="donate-amount-label" for="donate-amount">Amount (optional, sats)</label>
+      <div class="donate-amount-row">
+        <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
+      </div>
+      <div class="donate-presets">${onchainPresets}<button type="button" class="donate-preset donate-preset-any" data-rail="onchain" data-sats="">Any</button></div>
+      <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+      <div class="donate-actions">
+        <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
+        <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
+      </div>
+      <p class="donate-hint">Or scan the QR with your wallet. <a href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a></p>
+    </div>
+    ${
+      showLnTabs
+        ? `<div class="donate-pane" data-pane="lightning" hidden>
+      <p class="donate-ln-note">Lightning settles on-chain to this project’s escrow after a short swap. Claim floor updates when the claim tx confirms. Fees apply — escrow credit is less than the invoice.</p>
+      <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
+      <div class="donate-amount-row">
+        <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
+      </div>
+      <div class="donate-presets donate-ln-presets">${lnPresets}</div>
+      <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
+      <div class="donate-actions donate-ln-create-row">
+        <button type="button" class="btn" id="donate-ln-create">Create invoice</button>
+      </div>
+      <div class="donate-ln-invoice" id="donate-ln-invoice" hidden>
+        <div class="donate-qr-wrap">
+          <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
+        </div>
+        <code class="donate-address mono" id="donate-ln-bolt11"></code>
+        <div class="donate-actions">
+          <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
+          <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
+        </div>
+        <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
+      </div>
+      <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
+    </div>`
+        : ""
+    }
+  </div>`;
+}
+
+async function bindOnchainDonate(
+  panel: Element,
+  address: string,
+): Promise<void> {
+  const qrImg = panel.querySelector<HTMLImageElement>("#donate-qr");
+  const amountInput = panel.querySelector<HTMLInputElement>("#donate-amount");
+  const walletLink = panel.querySelector<HTMLAnchorElement>("#donate-wallet");
+  const copyBtnEl = panel.querySelector<HTMLButtonElement>("#donate-copy");
+
+  const sync = async (sats: number | null) => {
+    const uri = bitcoinUri(address, sats);
+    if (walletLink) walletLink.href = uri;
+    if (qrImg) {
+      try {
+        qrImg.src = await QRCode.toDataURL(uri, {
+          width: 168,
+          margin: 1,
+          color: { dark: "#0c0f0d", light: "#eef2ee" },
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  await sync(null);
+
+  amountInput?.addEventListener("input", () => {
+    const n = Number(amountInput.value);
+    void sync(Number.isFinite(n) && n > 0 ? Math.floor(n) : null);
+  });
+
+  panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="onchain"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const raw = btn.dataset.sats ?? "";
+      panel
+        .querySelectorAll('.donate-preset[data-rail="onchain"]')
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (!raw) {
+        if (amountInput) amountInput.value = "";
+        void sync(null);
+        return;
+      }
+      if (amountInput) amountInput.value = raw;
+      void sync(Number(raw));
+    });
+  });
+
+  copyBtnEl?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(address);
+      const prev = copyBtnEl.textContent;
+      copyBtnEl.textContent = "Copied!";
+      copyBtnEl.classList.add("copied");
+      setTimeout(() => {
+        copyBtnEl.textContent = prev;
+        copyBtnEl.classList.remove("copied");
+      }, 1400);
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+function estimateLnCredit(status: LightningStatus, invoiceSats: number): {
+  feeSats: number;
+  expectedOnchain: number;
+} | null {
+  if (!status.fees) return null;
+  const service = Math.ceil((invoiceSats * status.fees.percentage) / 100);
+  const feeSats = service + status.fees.minerFees.claim;
+  return {
+    feeSats,
+    expectedOnchain: Math.max(0, invoiceSats - feeSats),
+  };
+}
+
+function bindLightningDonate(
+  panel: Element,
+  opts: DonateBindOpts,
+  status: LightningStatus,
+): void {
+  const tabs = panel.querySelector(".donate-tabs");
+  if (tabs) tabs.removeAttribute("hidden");
+
+  const amountInput = panel.querySelector<HTMLInputElement>("#donate-ln-amount");
+  const feeEl = panel.querySelector<HTMLElement>("#donate-ln-fee");
+  const createBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-create");
+  const invoiceWrap = panel.querySelector<HTMLElement>("#donate-ln-invoice");
+  const qrImg = panel.querySelector<HTMLImageElement>("#donate-ln-qr");
+  const bolt11El = panel.querySelector<HTMLElement>("#donate-ln-bolt11");
+  const copyBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-copy");
+  const weblnBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-webln");
+  const statusEl = panel.querySelector<HTMLElement>("#donate-ln-status");
+  const errorEl = panel.querySelector<HTMLElement>("#donate-ln-error");
+
+  const min = status.limits?.minimal ?? 25_000;
+  if (amountInput) {
+    amountInput.min = String(min);
+    amountInput.placeholder = `${min}+`;
+  }
+
+  // Drop presets below Boltz minimum
+  panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="ln"]').forEach((btn) => {
+    const sats = Number(btn.dataset.sats);
+    if (Number.isFinite(sats) && sats < min) btn.hidden = true;
+  });
+
+  const updateFeeHint = () => {
+    if (!feeEl || !amountInput) return;
+    const n = Math.floor(Number(amountInput.value));
+    if (!Number.isFinite(n) || n <= 0) {
+      feeEl.hidden = true;
+      return;
+    }
+    const est = estimateLnCredit(status, n);
+    if (!est) {
+      feeEl.hidden = true;
+      return;
+    }
+    feeEl.hidden = false;
+    feeEl.textContent = `Est. escrow credit ~${formatSats(est.expectedOnchain)} after ~${formatSats(est.feeSats)} fees`;
+  };
+
+  amountInput?.addEventListener("input", updateFeeHint);
+
+  panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="ln"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const raw = btn.dataset.sats ?? "";
+      panel
+        .querySelectorAll('.donate-preset[data-rail="ln"]')
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (amountInput && raw) amountInput.value = raw;
+      updateFeeHint();
+    });
+  });
+
+  panel.querySelectorAll<HTMLButtonElement>(".donate-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.dataset.tab;
+      panel.querySelectorAll(".donate-tab").forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("active", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      panel.querySelectorAll<HTMLElement>(".donate-pane").forEach((pane) => {
+        pane.hidden = pane.dataset.pane !== name;
+      });
+    });
+  });
+
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  const stopPoll = () => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const setError = (msg: string | null) => {
+    if (!errorEl) return;
+    if (!msg) {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+      return;
+    }
+    errorEl.hidden = false;
+    errorEl.textContent = msg;
+  };
+
+  const renderSwap = async (swap: LightningSwapView) => {
+    if (invoiceWrap) invoiceWrap.hidden = false;
+    if (bolt11El) {
+      bolt11El.textContent = swap.bolt11;
+      bolt11El.title = swap.bolt11;
+    }
+    if (qrImg) {
+      try {
+        qrImg.src = await QRCode.toDataURL(swap.bolt11.toUpperCase(), {
+          width: 168,
+          margin: 1,
+          color: { dark: "#0c0f0d", light: "#eef2ee" },
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    if (weblnBtn) {
+      weblnBtn.hidden = !(
+        window as Window & { webln?: unknown }
+      ).webln;
+    }
+    if (feeEl) {
+      feeEl.hidden = false;
+      feeEl.textContent = `Invoice ${formatSats(swap.invoice_amount_sats)} → escrow ~${formatSats(swap.expected_onchain_sats)} (fees ~${formatSats(swap.fee_sats)})`;
+    }
+    if (statusEl) {
+      const map: Record<string, string> = {
+        pending: "Waiting for Lightning payment…",
+        invoice_paid: "Invoice paid — claiming to escrow…",
+        claiming: "Broadcasting claim to escrow…",
+        settled: swap.claim_txid
+          ? `Settled on-chain. Claim tx: ${swap.claim_txid.slice(0, 12)}…`
+          : "Settled on-chain.",
+        failed: swap.error || "Swap failed.",
+        expired: "Invoice expired. Create a new one.",
+      };
+      statusEl.textContent = map[swap.status] || swap.status;
+      statusEl.classList.toggle("ok", swap.status === "settled");
+      statusEl.classList.toggle("bad", swap.status === "failed" || swap.status === "expired");
+    }
+  };
+
+  const startPoll = (swapId: string) => {
+    stopPoll();
+    pollTimer = setInterval(() => {
+      void (async () => {
+        try {
+          const swap = await fetchLightningSwap(swapId);
+          await renderSwap(swap);
+          if (["settled", "failed", "expired"].includes(swap.status)) {
+            stopPoll();
+          }
+        } catch {
+          /* keep polling */
+        }
+      })();
+    }, 4000);
+  };
+
+  createBtn?.addEventListener("click", async () => {
+    setError(null);
+    stopPoll();
+    const amount = Math.floor(Number(amountInput?.value));
+    if (!Number.isFinite(amount) || amount < min) {
+      setError(`Enter at least ${formatSats(min)}.`);
+      return;
+    }
+    if (createBtn) {
+      createBtn.disabled = true;
+      createBtn.textContent = "Creating…";
+    }
+    try {
+      const swap = await createLightningInvoice({
+        proposal_id: opts.proposalId,
+        proposal_path: opts.proposalPath,
+        escrow_address: opts.address,
+        amount_sats: amount,
+      });
+      await renderSwap(swap);
+      startPoll(swap.swap_id);
+    } catch (e) {
+      setError((e as Error).message);
+      if (invoiceWrap) invoiceWrap.hidden = true;
+    } finally {
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.textContent = "Create invoice";
+      }
+    }
+  });
+
+  copyBtn?.addEventListener("click", async () => {
+    const text = bolt11El?.textContent?.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = copyBtn.textContent;
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => {
+        copyBtn.textContent = prev;
+      }, 1400);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  weblnBtn?.addEventListener("click", async () => {
+    const bolt11 = bolt11El?.textContent?.trim();
+    if (!bolt11) return;
+    setError(null);
+    try {
+      await weblnPay(bolt11);
+      if (statusEl) statusEl.textContent = "Payment sent — waiting for settle…";
+    } catch (e) {
+      setError((e as Error).message || "WebLN payment failed");
+    }
+  });
+}
+
+export async function bindDonatePanel(
+  root: ParentNode,
+  opts: DonateBindOpts | string,
+): Promise<void> {
+  const panel = root.querySelector("#donate");
+  if (!panel) return;
+
+  const normalized: DonateBindOpts =
+    typeof opts === "string"
+      ? { address: opts, proposalId: null, proposalPath: "" }
+      : opts;
+
+  await bindOnchainDonate(panel, normalized.address);
+
+  if (!lightningUiAllowed() || !normalized.proposalPath) return;
+
+  const status = await fetchLightningStatus();
+  if (!status.enabled) return;
+  bindLightningDonate(panel, normalized, status);
 }
 
 export function onChainPanelHtml(p: Proposal): string {

@@ -8,6 +8,7 @@ import {
 } from "./auth";
 import { socialAccountLink } from "./icons";
 import { listAllPublicProposals, proposalsForProfile } from "./github";
+import { profileLinkHtml, isKnownSocialUrl } from "./social-links";
 import type { ProfileLink } from "./types";
 import { escapeHtml, proposalHref } from "./util";
 
@@ -23,7 +24,7 @@ function linkRowHtml(links: ProfileLink[]): string {
     .map(
       (l, i) => `
     <div class="link-row" data-index="${i}">
-      <input type="text" class="link-label" placeholder="Label" value="${escapeHtml(l.label)}" maxlength="40" />
+      <input type="text" class="link-label" placeholder="Custom label (optional)" value="${escapeHtml(l.label)}" maxlength="40" />
       <input type="url" class="link-url" placeholder="https://…" value="${escapeHtml(l.url)}" maxlength="300" />
       <button type="button" class="link-btn remove-link">Remove</button>
     </div>`,
@@ -68,6 +69,7 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
 
         <fieldset class="form-block">
           <legend>Links</legend>
+          <p class="hint">Paste a profile URL. Labels are optional for GitHub, X, LinkedIn, and other supported social sites — those show as icons on your profile.</p>
           <div id="links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
           <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
         </fieldset>
@@ -95,7 +97,7 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
     linksList.insertAdjacentHTML(
       "beforeend",
       `<div class="link-row" data-index="${rows.length}">
-        <input type="text" class="link-label" placeholder="Label" maxlength="40" />
+        <input type="text" class="link-label" placeholder="Custom label (optional)" maxlength="40" />
         <input type="url" class="link-url" placeholder="https://…" maxlength="300" />
         <button type="button" class="link-btn remove-link">Remove</button>
       </div>`,
@@ -139,11 +141,14 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
         const label = (row.querySelector(".link-label") as HTMLInputElement).value.trim();
         const url = (row.querySelector(".link-url") as HTMLInputElement).value.trim();
         if (!label && !url) return;
-        if (!label || !url) {
-          throw new Error("Each link needs both a label and a URL.");
+        if (!url) {
+          throw new Error("Each link needs a URL.");
         }
         if (!url.startsWith("https://")) {
           throw new Error("Link URLs must start with https://");
+        }
+        if (!label && !isKnownSocialUrl(url)) {
+          throw new Error("Add a custom label, or use a supported social profile URL.");
         }
         links.push({ label, url });
       });
@@ -184,12 +189,7 @@ export async function renderPublicProfile(
 
   const linksHtml =
     profile.links && profile.links.length
-      ? `<ul class="profile-links">${profile.links
-          .map(
-            (l) =>
-              `<li><a href="${escapeHtml(l.url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(l.label)}</a></li>`,
-          )
-          .join("")}</ul>`
+      ? `<ul class="profile-links">${profile.links.map((l) => `<li>${profileLinkHtml(l)}</li>`).join("")}</ul>`
       : "";
 
   const workHtml =

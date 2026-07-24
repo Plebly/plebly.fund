@@ -5,7 +5,7 @@ export const PLEBLY_X_URL = "https://x.com/joinplebly";
 
 type BrandIcon = "github" | "x-twitter";
 
-export function brandIcon(className: BrandIcon): string {
+export function brandIcon(className: BrandIcon | string): string {
   return `<i class="fa-brands fa-${className}" aria-hidden="true"></i>`;
 }
 

@@ -2,6 +2,7 @@ import {
   ABOUT_BELIEFS,
   ABOUT_BITCOIN_NETWORK,
   ABOUT_INTRO_HTML,
+  ABOUT_LIGHTNING_HTML,
   ABOUT_PARAM_LABELS,
   ABOUT_STEPS,
 } from "./generated/about-data";
@@ -71,11 +72,20 @@ export function renderAbout(shell: AboutShell): void {
         <h2 class="about-block-title">How it works</h2>
         ${processStepsHtml()}
         <p class="about-links">
-          Browse <a href="#/">open bounties</a>,
-          <a href="#/propose">propose a bounty</a>, or read the full rules in the
+          Browse <a href="#/">open projects</a>,
+          <a href="#/propose">start a project</a>, or read the full rules in the
           <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">proposals repo</a>.
         </p>
       </section>
+
+      ${
+        ABOUT_LIGHTNING_HTML
+          ? `<section class="about-block" id="lightning">
+        <h2 class="about-block-title">Lightning donations</h2>
+        <div class="about-prose prose-rich">${ABOUT_LIGHTNING_HTML}</div>
+      </section>`
+          : ""
+      }
 
       <section class="about-block" id="parameters">
         <h2 class="about-block-title">Key parameters</h2>

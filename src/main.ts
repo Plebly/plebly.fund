@@ -54,9 +54,9 @@ function shell(inner: string): string {
       </a>
       <div class="header-end">
         <nav class="nav">
-          <a href="#/" class="${active("home")}">Bounties</a>
-          <a href="#/propose" class="${active("propose")}">Propose</a>
-          <a href="#/about" class="${active("about")}">About us</a>
+          <a href="#/" class="${active("home")}">Projects</a>
+          <a href="#/propose" class="${active("propose")}">Start a project</a>
+          <a href="#/about" class="${active("about")}">About</a>
           ${authNavHtml()}
         </nav>
         ${pleblySocialLinksHtml()}
@@ -116,10 +116,12 @@ async function render() {
     return;
   }
   if (r.name === "proposal") {
+    const hash = location.hash;
+    const q = hash.includes("?") ? hash.slice(hash.indexOf("?")) : "";
     const canonical = proposalHref(r.id);
-    const current = location.hash.split("?")[0];
+    const current = hash.split("?")[0];
     if (current !== canonical) {
-      location.replace(canonical);
+      location.replace(`${canonical}${q}`);
       return;
     }
     await renderProposalPage(r.id, shell);

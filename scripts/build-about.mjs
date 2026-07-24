@@ -142,6 +142,12 @@ export const ABOUT_INTRO_HTML = ${JSON.stringify(
       intro ? marked.parse(intro.body, { async: false }) : "",
     )};
 
+export const ABOUT_LIGHTNING_HTML = ${JSON.stringify(
+      byId.lightning_donations
+        ? marked.parse(byId.lightning_donations.body, { async: false })
+        : "",
+    )};
+
 export const ABOUT_BELIEFS: AboutBelief[] = ${JSON.stringify(beliefs, null, 2)};
 
 export const ABOUT_STEPS: AboutStep[] = ${JSON.stringify(steps, null, 2)};

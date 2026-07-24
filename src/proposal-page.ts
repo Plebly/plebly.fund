@@ -5,7 +5,9 @@ import { socialAccountLink } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
+  bindDonatePanel,
   bindProposalCopyButtons,
+  donatePanelHtml,
   fundingProgressHtml,
   metaChipsHtml,
   milestonesHtml,
@@ -117,9 +119,11 @@ export async function renderProposalPage(
           )
         : "";
 
+    const wantsDonate = /[?&]donate(?:&|$)/.test(location.hash);
+
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
-        <a class="back-link" href="#/">← Bounties</a>
+        <a class="back-link" href="#/">← Projects</a>
 
         <header class="proposal-hero">
           <div class="proposal-hero-top">
@@ -128,10 +132,18 @@ export async function renderProposalPage(
           </div>
           ${metaChipsHtml(match)}
           ${proposerMeta ? `<div class="proposal-meta">Proposed by ${proposerMeta}</div>` : ""}
+          ${
+            match.escrow_address
+              ? `<div class="proposal-hero-donate">
+            <button type="button" class="btn" id="scroll-donate">Donate to this project</button>
+          </div>`
+              : ""
+          }
         </header>
 
         <div class="proposal-layout">
           <aside class="proposal-sidebar">
+            ${donatePanelHtml(match)}
             <div class="proposal-funding">
               ${fundingStatsHtml(balance, match.target_sats, CLAIM_FLOOR_SATS)}
               ${fundingProgressHtml(balance, CLAIM_FLOOR_SATS, match.target_sats)}
@@ -146,6 +158,17 @@ export async function renderProposalPage(
     `);
 
     bindProposalCopyButtons(app);
+    if (match.escrow_address) {
+      await bindDonatePanel(app, {
+        address: match.escrow_address,
+        proposalId: match.id,
+        proposalPath: match.path,
+      });
+      const scrollDonate = () =>
+        app.querySelector("#donate")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      app.querySelector("#scroll-donate")?.addEventListener("click", scrollDonate);
+      if (wantsDonate) scrollDonate();
+    }
   } catch (e) {
     app.innerHTML = shell(
       `<section class="wrap-wide detail proposal-page"><p class="error">${escapeHtml((e as Error).message)}</p></section>`,

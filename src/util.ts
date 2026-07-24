@@ -42,7 +42,7 @@ export function proposalHref(repoPath: string): string {
 }
 
 export function parseRoute(hash: string): import("./types").Route {
-  const path = hash.replace(/^#\/?/, "");
+  const path = hash.replace(/^#\/?/, "").split("?")[0];
   if (!path || path === "home") return { name: "home" };
   if (path === "about") return { name: "about" };
   if (path === "parameters") return { name: "params" };
