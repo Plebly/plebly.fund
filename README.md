@@ -13,4 +13,17 @@ npm run dev
 
 ## Deploy
 
-Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages.yml`). Enable Pages → GitHub Actions in repo settings. Point custom domain `plebly.fund` at Pages.
+Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages.yml`).
+
+### Custom domain (`plebly.fund`)
+
+The domain uses Cloudflare nameservers. In **Cloudflare → plebly.fund → DNS**, add:
+
+| Type  | Name | Content            | Proxy   |
+|-------|------|--------------------|---------|
+| CNAME | `@`  | `plebly.github.io` | DNS only (grey cloud) |
+| CNAME | `www`| `plebly.github.io` | DNS only |
+
+After DNS propagates, add `public/CNAME` containing `plebly.fund`, set the custom domain in GitHub **Settings → Pages** (or `gh api PUT repos/Plebly/plebly.fund/pages -f cname=plebly.fund`), and enable **Enforce HTTPS**.
+
+Until DNS is live, use https://plebly.github.io/plebly.fund/
