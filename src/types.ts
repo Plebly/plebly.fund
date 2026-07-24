@@ -77,6 +77,7 @@ export type Proposal = {
   target_sats: number | null;
   escrow_address: string | null;
   submission_fee_txid: string | null;
+  cover_image?: string | null;
   created_at: string | null;
   escrow_index: number | null;
   milestones: ProposalMilestone[];

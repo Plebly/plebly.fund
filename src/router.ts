@@ -235,7 +235,8 @@ export function applySeo(input: SeoInput): void {
   ensureMeta("property", "og:url").content = canonical;
   ensureMeta("property", "og:image").content = image;
 
-  ensureMeta("name", "twitter:card").content = "summary";
+  ensureMeta("name", "twitter:card").content =
+    image !== `${SITE_ORIGIN}/logo.jpeg` ? "summary_large_image" : "summary";
   ensureMeta("name", "twitter:title").content = document.title;
   ensureMeta("name", "twitter:description").content = description;
   ensureMeta("name", "twitter:image").content = image;

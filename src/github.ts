@@ -74,6 +74,7 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     target_sats: typeof data.target_sats === "number" ? data.target_sats : null,
     escrow_address: (data.escrow_address as string) || null,
     submission_fee_txid: (data.submission_fee_txid as string) || null,
+    cover_image: (data.cover_image as string) || null,
     created_at: (data.created_at as string) || null,
     escrow_index: typeof data.escrow_index === "number" ? data.escrow_index : null,
     milestones: parseMilestones(data.milestones),

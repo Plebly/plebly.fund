@@ -2,6 +2,10 @@ import { githubLoginUrl, submitProposal } from "./auth";
 import { fetchClaimParams } from "./builder";
 import { BITCOIN_NETWORK, SUBMISSION_FEE_SATS } from "./config";
 import { btnWithBrandIcon } from "./icons";
+import {
+  clientCoverPrecheck,
+  uploadProjectCover,
+} from "./media";
 import type { ShellContext } from "./profile-pages";
 import { href } from "./router";
 import { escapeHtml, formatSats } from "./util";
@@ -54,6 +58,15 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             <span>Title</span>
             <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" />
           </label>
+          <div class="field cover-field">
+            <span>Cover image <em class="optional">(optional)</em></span>
+            <input type="file" id="propose-cover-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+            <div class="cover-preview" id="propose-cover-preview" hidden>
+              <img id="propose-cover-img" alt="Cover preview" />
+              <button type="button" class="btn ghost cover-clear" id="propose-cover-clear">Remove</button>
+            </div>
+            <span class="field-hint" id="propose-cover-hint">JPEG, PNG, or WebP · max 2 MiB</span>
+          </div>
           <label class="field">
             <span>Problem &amp; audience</span>
             <textarea name="problem" required minlength="40" rows="4" placeholder="What problem are you solving? Who benefits? Why is this good for Bitcoin?"></textarea>
@@ -114,6 +127,73 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   const form = document.getElementById("propose-form") as HTMLFormElement;
   const msg = document.getElementById("propose-msg")!;
+  const coverInput = document.getElementById(
+    "propose-cover-input",
+  ) as HTMLInputElement;
+  const coverPreview = document.getElementById("propose-cover-preview")!;
+  const coverImg = document.getElementById(
+    "propose-cover-img",
+  ) as HTMLImageElement;
+  const coverHint = document.getElementById("propose-cover-hint")!;
+  const coverClear = document.getElementById("propose-cover-clear");
+  let coverUrl: string | null = null;
+  let coverObjectUrl: string | null = null;
+
+  const clearCover = () => {
+    coverUrl = null;
+    if (coverObjectUrl) {
+      URL.revokeObjectURL(coverObjectUrl);
+      coverObjectUrl = null;
+    }
+    coverImg.removeAttribute("src");
+    coverPreview.hidden = true;
+    coverInput.value = "";
+    coverHint.textContent = "JPEG, PNG, or WebP · max 2 MiB";
+    coverHint.classList.remove("error");
+  };
+
+  coverClear?.addEventListener("click", clearCover);
+
+  coverInput.addEventListener("change", async () => {
+    const file = coverInput.files?.[0];
+    if (!file) {
+      clearCover();
+      return;
+    }
+    const pre = clientCoverPrecheck(file);
+    if (pre) {
+      clearCover();
+      coverHint.textContent = pre;
+      coverHint.classList.add("error");
+      return;
+    }
+
+    if (coverObjectUrl) URL.revokeObjectURL(coverObjectUrl);
+    coverObjectUrl = URL.createObjectURL(file);
+    coverImg.src = coverObjectUrl;
+    coverPreview.hidden = false;
+    coverUrl = null;
+    coverHint.classList.remove("error");
+    coverHint.textContent = "Uploading…";
+
+    try {
+      const uploaded = await uploadProjectCover(file);
+      coverUrl = uploaded.url;
+      coverHint.textContent = "Cover ready";
+    } catch (err) {
+      const e = err as Error & { code?: string };
+      if (e.code === "MEDIA_DISABLED") {
+        clearCover();
+        coverHint.textContent =
+          "Cover uploads are not enabled yet — you can still submit without an image.";
+        coverHint.classList.remove("error");
+        return;
+      }
+      clearCover();
+      coverHint.textContent = e.message;
+      coverHint.classList.add("error");
+    }
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -132,6 +212,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         submission_fee_txid: String(fd.get("submission_fee_txid") || ""),
         target_sats:
           targetRaw && String(targetRaw).length ? Number(targetRaw) : null,
+        cover_image: coverUrl,
       });
       msg.className = "form-msg success";
       msg.innerHTML = result.pr_url

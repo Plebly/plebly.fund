@@ -787,12 +787,33 @@ body.modal-open {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 1.2rem 1.25rem 0.75rem;
   color: inherit;
 }
 
 .project-card-main:hover {
   color: inherit;
+}
+
+.project-card-cover {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.project-card-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.project-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 1.2rem 1.25rem 0.75rem;
 }
 
 .project-card-head {
@@ -1745,6 +1766,25 @@ body.modal-open {
   padding-bottom: 4rem;
 }
 
+.proposal-cover {
+  width: 100vw;
+  max-width: 100vw;
+  margin: 0.5rem 0 0;
+  margin-left: calc(50% - 50vw);
+  aspect-ratio: 16 / 9;
+  max-height: min(28rem, 52vw);
+  overflow: hidden;
+  background: var(--bg);
+  border-block: 1px solid var(--line-soft);
+}
+
+.proposal-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .proposal-hero {
   margin: 0.75rem 0 1.25rem;
 }
@@ -2605,6 +2645,53 @@ body.modal-open {
   color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+
+.field-hint.error {
+  color: var(--danger, #c44);
+}
+
+.cover-field .optional {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.cover-field input[type="file"] {
+  padding: 0.5rem 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+}
+
+.cover-field input[type="file"]:focus {
+  box-shadow: none;
+  border: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cover-preview {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.cover-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+
+.cover-clear {
+  justify-self: start;
 }
 
 .propose-guide {

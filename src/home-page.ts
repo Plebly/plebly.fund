@@ -11,6 +11,7 @@ import {
 } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
+import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import { statusClass, statusLabel } from "./proposal-ui";
 import type { Proposal } from "./types";
@@ -210,17 +211,24 @@ function proposalCardHtml(
       : lightningEnabled && p.escrow_address
         ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
         : "";
+  const cover = safeHttpsImageUrl(p.cover_image);
+  const coverHtml = cover
+    ? `<div class="project-card-cover"><img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" /></div>`
+    : "";
   return `
     <article class="project-card">
       <a class="project-card-main" href="${proposalHref(p.path)}">
-        <div class="project-card-head">
-          <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
-          ${secondaryBadge}
-          ${proposer}
+        ${coverHtml}
+        <div class="project-card-body">
+          <div class="project-card-head">
+            <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
+            ${secondaryBadge}
+            ${proposer}
+          </div>
+          <h3>${escapeHtml(p.title)}</h3>
+          <p class="project-card-excerpt">${escapeHtml(excerptFromBody(p.body))}</p>
+          ${progressHtml(p, floor)}
         </div>
-        <h3>${escapeHtml(p.title)}</h3>
-        <p class="project-card-excerpt">${escapeHtml(excerptFromBody(p.body))}</p>
-        ${progressHtml(p, floor)}
       </a>
       <div class="project-card-actions">
         <a class="btn project-donate-btn" href="${donateHref}">Donate</a>

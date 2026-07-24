@@ -51,7 +51,7 @@ export function consumeSessionFromHash(): boolean {
   return true;
 }
 
-function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+export function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = storedSession();
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -185,6 +185,7 @@ export type SubmitProposalInput = {
   out_of_scope: string;
   submission_fee_txid: string;
   target_sats?: number | null;
+  cover_image?: string | null;
 };
 
 export async function submitProposal(

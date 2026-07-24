@@ -21,6 +21,7 @@ import {
   statusLabel,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
+import { safeHttpsImageUrl } from "./media";
 import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml } from "./util";
 
@@ -77,8 +78,9 @@ export async function renderProposalPage(
     const proposals = await listListedProposals();
     const listed = proposals.find((p) => p.path === path);
     const match: Proposal = listed || proposalFromMarkdown(raw, path);
-    applySeo(
-      seoForRoute(
+    const coverUrl = safeHttpsImageUrl(match.cover_image);
+    applySeo({
+      ...seoForRoute(
         { name: "proposal", id: match.path || path },
         {
           title: match.title,
@@ -90,7 +92,8 @@ export async function renderProposalPage(
               .slice(0, 160) || undefined,
         },
       ),
-    );
+      ...(coverUrl ? { image: coverUrl } : {}),
+    });
     const bodyMd = match.body;
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
@@ -129,9 +132,14 @@ export async function renderProposalPage(
         w.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
     );
 
+    const coverHtml = coverUrl
+      ? `<div class="proposal-cover"><img src="${escapeHtml(coverUrl)}" alt="" decoding="async" /></div>`
+      : "";
+
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
         <a class="back-link" href="${href("/")}">← Projects</a>
+        ${coverHtml}
 
         <header class="proposal-hero">
           <div class="proposal-hero-top">
