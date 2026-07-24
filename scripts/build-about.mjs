@@ -148,6 +148,12 @@ export const ABOUT_LIGHTNING_HTML = ${JSON.stringify(
         : "",
     )};
 
+export const ABOUT_BUILDERS_HTML = ${JSON.stringify(
+      byId.for_builders
+        ? marked.parse(byId.for_builders.body, { async: false })
+        : "",
+    )};
+
 export const ABOUT_BELIEFS: AboutBelief[] = ${JSON.stringify(beliefs, null, 2)};
 
 export const ABOUT_STEPS: AboutStep[] = ${JSON.stringify(steps, null, 2)};

@@ -78,6 +78,10 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     escrow_index: typeof data.escrow_index === "number" ? data.escrow_index : null,
     milestones: parseMilestones(data.milestones),
     proposer: parseProposer(data),
+    claimer: (data.claimer as string) || null,
+    claimed_at: (data.claimed_at as string) || null,
+    payout_address: (data.payout_address as string) || null,
+    deliverable_url: (data.deliverable_url as string) || null,
     body,
   };
 }
@@ -127,6 +131,9 @@ export function proposalsForProfile(
   const username = profile.username?.toLowerCase();
   const github = profile.github?.toLowerCase();
   return proposals.filter((p) => {
+    const claimer = p.claimer?.toLowerCase();
+    if (username && claimer === username) return true;
+    if (github && claimer === github) return true;
     const proposer = p.proposer;
     if (!proposer) return false;
     if (username && proposer.username?.toLowerCase() === username) return true;

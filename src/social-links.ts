@@ -105,13 +105,13 @@ export function profileLinkHtml(link: ProfileLink): string {
   const label = link.label.trim();
   const platform = detectSocialPlatform(link.url);
 
-  if (!label && platform) {
-    const name = escapeHtml(platform.label);
-    return `<a class="profile-link profile-link-icon" href="${href}" target="_blank" rel="noreferrer noopener" aria-label="${name}" title="${name}">${brandIcon(platform.icon)}</a>`;
+  if (platform) {
+    const name = escapeHtml(label || platform.label);
+    return `<a class="profile-link" href="${href}" target="_blank" rel="noreferrer noopener">${brandIcon(platform.icon)}<span>${name}</span></a>`;
   }
 
   const text = escapeHtml(label || link.url);
-  return `<a class="profile-link" href="${href}" target="_blank" rel="noreferrer noopener">${text}</a>`;
+  return `<a class="profile-link profile-link-text" href="${href}" target="_blank" rel="noreferrer noopener"><span>${text}</span></a>`;
 }
 
 /** Hostnames that skip the label requirement (keep in sync with workers/src/lib/social-urls.ts). */

@@ -21,6 +21,10 @@ We built it for people who want hard problems solved in the open: protocol work,
 
 Browse [open projects](#/), [start a project](#/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
+## For builders
+
+Watch a project to follow funding progress — watching does **not** reserve the work. When confirmed escrow meets the claim floor, use **Claim this project** on the project page. That opens a pull request in the proposals repo; the exclusive claim and 90-day window start when the PR merges. Then submit your deliverable the same way for public review.
+
 ## Lightning donations
 
 Lightning is a **funding rail into on-chain escrow**, not a separate balance. A reverse submarine swap (via Boltz) pays a hold invoice; after the lockup confirms, Plebly’s claimer broadcasts a claim transaction **to the project’s escrow address**. Only then does the mempool balance — and the claim floor — move.

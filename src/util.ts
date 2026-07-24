@@ -47,6 +47,7 @@ export function parseRoute(hash: string): import("./types").Route {
   if (path === "about") return { name: "about" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
+  if (path === "work") return { name: "work" };
   if (path === "propose") return { name: "propose" };
   if (path === "submit") return { name: "propose" };
   if (path.startsWith("u/")) {

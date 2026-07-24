@@ -1,5 +1,7 @@
+import { fetchWatches } from "./builder";
+import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import { CLAIM_FLOOR_SATS } from "./config";
-import { profilePath } from "./auth";
+import { profilePath, type AuthUser } from "./auth";
 import { listListedProposals, proposalFromMarkdown } from "./github";
 import { socialAccountLink } from "./icons";
 import { addressBalanceSats } from "./mempool";
@@ -56,6 +58,7 @@ function proposalSectionsHtml(markdown: string): string {
 export async function renderProposalPage(
   path: string,
   shell: ProposalShell,
+  user: AuthUser | null = null,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(
@@ -95,6 +98,15 @@ export async function renderProposalPage(
         : "";
 
     const wantsDonate = /[?&]donate(?:&|$)/.test(location.hash);
+    const watches = user
+      ? await fetchWatches().catch(() => [])
+      : [];
+    const watching = watches.some(
+      (w) =>
+        w.proposal_path === match.path ||
+        w.proposal_id === match.id ||
+        w.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
+    );
 
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
@@ -117,6 +129,7 @@ export async function renderProposalPage(
 
         <div class="proposal-layout">
           <aside class="proposal-sidebar">
+            ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
             ${donatePanelHtml(match)}
             ${onChainPanelHtml(match)}
             ${milestonesHtml(match.milestones)}
@@ -128,6 +141,12 @@ export async function renderProposalPage(
     `);
 
     bindProposalCopyButtons(app);
+    await bindBuilderPanel(app, {
+      proposal: { ...match, balance_sats: balance },
+      balance,
+      user,
+      watching,
+    });
     if (match.escrow_address) {
       await bindDonatePanel(app, {
         address: match.escrow_address,

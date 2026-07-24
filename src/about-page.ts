@@ -1,6 +1,7 @@
 import {
   ABOUT_BELIEFS,
   ABOUT_BITCOIN_NETWORK,
+  ABOUT_BUILDERS_HTML,
   ABOUT_INTRO_HTML,
   ABOUT_LIGHTNING_HTML,
   ABOUT_PARAM_LABELS,
@@ -77,6 +78,15 @@ export function renderAbout(shell: AboutShell): void {
           <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">proposals repo</a>.
         </p>
       </section>
+
+      ${
+        ABOUT_BUILDERS_HTML
+          ? `<section class="about-block" id="builders">
+        <h2 class="about-block-title">For builders</h2>
+        <div class="about-prose prose-rich">${ABOUT_BUILDERS_HTML}</div>
+      </section>`
+          : ""
+      }
 
       ${
         ABOUT_LIGHTNING_HTML

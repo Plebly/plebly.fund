@@ -6,11 +6,22 @@ import {
   updateProfile,
   type AuthUser,
 } from "./auth";
+import { CLAIM_FLOOR_SATS } from "./config";
+import {
+  fetchMyPendingClaims,
+  fetchWatches,
+  isOpenToClaim,
+} from "./builder";
 import { socialAccountLink } from "./icons";
-import { listAllPublicProposals, proposalsForProfile } from "./github";
+import {
+  listAllPublicProposals,
+  listListedProposals,
+  proposalsForProfile,
+} from "./github";
+import { addressBalanceSats } from "./mempool";
 import { profileLinkHtml, isKnownSocialUrl } from "./social-links";
-import type { ProfileLink } from "./types";
-import { escapeHtml, proposalHref } from "./util";
+import type { ProfileLink, Proposal } from "./types";
+import { escapeHtml, formatSats, proposalHref } from "./util";
 
 export type ShellContext = {
   user: AuthUser | null;
@@ -18,6 +29,8 @@ export type ShellContext = {
   shell: (inner: string) => string;
   rerender: () => void;
 };
+
+type AccountTab = "profile" | "watching" | "claims" | "proposals";
 
 function linkRowHtml(links: ProfileLink[]): string {
   return links
@@ -32,25 +45,63 @@ function linkRowHtml(links: ProfileLink[]): string {
     .join("");
 }
 
-export async function renderAccount(ctx: ShellContext): Promise<void> {
+export async function renderAccount(
+  ctx: ShellContext,
+  initialTab?: AccountTab,
+): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
+  const loginReturn = initialTab === "watching" ? "#/work" : "#/account";
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
-        <h1>Account</h1>
-        <p class="lede">Sign in to claim a username and set up your profile.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl("#/account"))}">Log in</a>
+        <h1>Work</h1>
+        <p class="lede">Sign in to watch projects, claim funded work, and manage your profile.</p>
+        <a class="btn" href="${escapeHtml(githubLoginUrl(loginReturn))}">Log in</a>
       </section>
     `);
     return;
   }
 
   const user = ctx.user;
+  const tab: AccountTab = initialTab || "profile";
+  const [watches, pendingClaims, allProps] = await Promise.all([
+    fetchWatches().catch(() => []),
+    fetchMyPendingClaims().catch(() => []),
+    listListedProposals().catch(() => [] as Proposal[]),
+  ]);
+  const byPath = new Map(allProps.map((p) => [p.path, p]));
+  const watchRows = await Promise.all(
+    watches.map(async (w) => {
+      let p = byPath.get(w.proposal_path);
+      if (!p) {
+        p = allProps.find((x) => x.id === w.proposal_id);
+      }
+      let bal = p?.balance_sats;
+      if (p?.escrow_address && bal == null) {
+        try {
+          bal = await addressBalanceSats(p.escrow_address);
+        } catch {
+          /* ignore */
+        }
+      }
+      return { w, p, bal };
+    }),
+  );
+  const myProposals = proposalsForProfile(allProps, user);
+
   app.innerHTML = ctx.shell(`
     <section class="wrap detail account-page">
-      <h1>Account</h1>
+      <h1>${tab === "profile" ? "Account" : "Work"}</h1>
       ${user.username ? `<p class="lede">Profile at <a href="${profilePath(user.username)}">#/u/${escapeHtml(user.username)}</a></p>` : `<p class="lede">Claim a username for your public profile URL.</p>`}
 
+      <div class="account-tabs" role="tablist">
+        <button type="button" class="account-tab ${tab === "profile" ? "active" : ""}" data-tab="profile">Profile</button>
+        <button type="button" class="account-tab ${tab === "watching" ? "active" : ""}" data-tab="watching">Watching</button>
+        <button type="button" class="account-tab ${tab === "claims" ? "active" : ""}" data-tab="claims">Claims</button>
+        <button type="button" class="account-tab ${tab === "proposals" ? "active" : ""}" data-tab="proposals">Proposals</button>
+      </div>
+
+      <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
       <form id="account-form" class="form-panel">
         <fieldset class="form-block">
           <legend>Username</legend>
@@ -65,6 +116,12 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
         <fieldset class="form-block">
           <legend>Bio</legend>
           <textarea id="bio-input" rows="4" maxlength="500" placeholder="What you work on, Bitcoin interests…">${escapeHtml(user.bio || "")}</textarea>
+        </fieldset>
+
+        <fieldset class="form-block">
+          <legend>Payout address</legend>
+          <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… or tb1…" maxlength="120" />
+          <p class="hint">Used when you claim a project. You can override per claim.</p>
         </fieldset>
 
         <fieldset class="form-block">
@@ -84,14 +141,92 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
         ${user.github ? socialAccountLink("github", `https://github.com/${user.github}`, user.github) : ""}
         ${user.x ? socialAccountLink("x-twitter", `https://x.com/${user.x.replace(/^@/, "")}`, user.x) : ""}
       </div>
+      </div>
+
+      <div class="account-pane" data-pane="watching" ${tab === "watching" ? "" : "hidden"}>
+        ${
+          watchRows.length === 0
+            ? `<p class="muted">No watched projects yet. Open a project and tap Watch.</p>`
+            : `<ul class="work-list">${watchRows
+                .map(({ w, p, bal }) => {
+                  const title = p?.title || w.proposal_id;
+                  const href = proposalHref(w.proposal_path);
+                  const open =
+                    p &&
+                    isOpenToClaim(
+                      { ...p, balance_sats: bal },
+                      CLAIM_FLOOR_SATS,
+                    );
+                  return `<li>
+                    <a href="${href}">${escapeHtml(title)}</a>
+                    <span class="pill">${open ? "Open to claim" : formatSats(bal ?? 0)}</span>
+                  </li>`;
+                })
+                .join("")}</ul>`
+        }
+      </div>
+
+      <div class="account-pane" data-pane="claims" ${tab === "claims" ? "" : "hidden"}>
+        ${
+          pendingClaims.length === 0
+            ? `<p class="muted">No pending site claims. When a project is open to claim, use Claim on the project page.</p>
+               <p class="hint">Exclusive lock starts when the claim PR merges in git.</p>`
+            : `<ul class="work-list">${pendingClaims
+                .map(
+                  (c) => `<li>
+                    <a href="${proposalHref(c.proposal_path)}">${escapeHtml(c.proposal_id)}</a>
+                    <span class="pill">Pending</span>
+                    ${
+                      c.pr_url
+                        ? `<a href="${escapeHtml(c.pr_url)}" target="_blank" rel="noreferrer">PR →</a>`
+                        : ""
+                    }
+                  </li>`,
+                )
+                .join("")}</ul>`
+        }
+      </div>
+
+      <div class="account-pane" data-pane="proposals" ${tab === "proposals" ? "" : "hidden"}>
+        ${
+          myProposals.length === 0
+            ? `<p class="muted">No proposals linked to your identity yet.</p>`
+            : `<ul class="work-list">${myProposals
+                .map(
+                  (p) => `<li>
+                    <a href="${proposalHref(p.path)}">${escapeHtml(p.title)}</a>
+                    <span class="pill">${escapeHtml(String(p.status))}</span>
+                  </li>`,
+                )
+                .join("")}</ul>`
+        }
+      </div>
     </section>
   `);
 
-  const form = document.getElementById("account-form") as HTMLFormElement;
-  const msg = document.getElementById("account-msg")!;
-  const linksList = document.getElementById("links-list")!;
+  app.querySelectorAll<HTMLButtonElement>(".account-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const name = (btn.dataset.tab || "profile") as AccountTab;
+      app.querySelectorAll(".account-tab").forEach((t) => {
+        t.classList.toggle("active", t === btn);
+      });
+      app.querySelectorAll<HTMLElement>(".account-pane").forEach((pane) => {
+        pane.hidden = pane.dataset.pane !== name;
+      });
+      if (name === "watching" || name === "claims") {
+        history.replaceState(null, "", "#/work");
+      } else if (name === "profile") {
+        history.replaceState(null, "", "#/account");
+      }
+    });
+  });
+
+  const form = document.getElementById("account-form") as HTMLFormElement | null;
+  const msg = document.getElementById("account-msg");
+  const linksList = document.getElementById("links-list");
 
   document.getElementById("add-link-btn")?.addEventListener("click", () => {
+    if (!linksList) return;
     const rows = linksList.querySelectorAll(".link-row");
     if (rows.length >= 8) return;
     linksList.insertAdjacentHTML(
@@ -106,7 +241,7 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
   });
 
   function bindLinkRemove() {
-    linksList.querySelectorAll(".remove-link").forEach((btn) => {
+    linksList?.querySelectorAll(".remove-link").forEach((btn) => {
       btn.addEventListener("click", () => {
         btn.closest(".link-row")?.remove();
       });
@@ -115,6 +250,7 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
   bindLinkRemove();
 
   document.getElementById("claim-username-btn")?.addEventListener("click", async () => {
+    if (!msg) return;
     const input = document.getElementById("username-input") as HTMLInputElement;
     msg.hidden = false;
     msg.className = "form-msg";
@@ -130,8 +266,9 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
     }
   });
 
-  form.addEventListener("submit", async (e) => {
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!msg || !linksList) return;
     msg.hidden = false;
     msg.textContent = "Saving…";
     msg.className = "form-msg";
@@ -153,7 +290,10 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
         links.push({ label, url });
       });
       const bio = (document.getElementById("bio-input") as HTMLTextAreaElement).value;
-      await updateProfile({ bio, links });
+      const payout_address = (
+        document.getElementById("payout-input") as HTMLInputElement
+      ).value.trim();
+      await updateProfile({ bio, links, payout_address });
       msg.textContent = "Profile saved.";
       msg.className = "form-msg success";
       ctx.rerender();

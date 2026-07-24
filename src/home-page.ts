@@ -1,4 +1,10 @@
 import {
+  fetchWatches,
+  isNearFloor,
+  isOpenToClaim,
+  isTakenStatus,
+} from "./builder";
+import {
   BITCOIN_NETWORK,
   CLAIM_FLOOR_SATS,
   PLATFORM_FEE_PERCENT,
@@ -15,6 +21,7 @@ import { escapeHtml, formatSats, proposalHref } from "./util";
 export type HomeShell = (inner: string) => string;
 
 type SortKey = "funded" | "newest" | "floor";
+type BuilderFilter = "all" | "open" | "near" | "taken";
 
 function networkBadgeHtml(): string {
   const isSignet = BITCOIN_NETWORK === "signet";
@@ -68,7 +75,7 @@ function audiencePathsHtml(): string {
       kicker: "For builders",
       title: "Claim funded work",
       body: "When escrow hits the claim floor, builders can claim, deliver, and get paid through public review — not an admin button.",
-      href: "#projects",
+      href: "#projects?for=builders",
       cta: "See open projects",
     },
     {
@@ -163,16 +170,30 @@ function discoverToolbarHtml(count: number): string {
       </label>
       <a class="discover-repo" href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Repo →</a>
     </div>
+  </div>
+  <div class="builder-filters" role="group" aria-label="Builder filters">
+    <button type="button" class="builder-filter active" data-filter="all">All</button>
+    <button type="button" class="builder-filter" data-filter="open">Open to claim</button>
+    <button type="button" class="builder-filter" data-filter="near">Near floor</button>
+    <button type="button" class="builder-filter" data-filter="taken">Taken</button>
   </div>`;
 }
 
 function progressHtml(p: Proposal, floor: number): string {
   const bal = p.balance_sats ?? 0;
   const pct = Math.min(100, Math.round((bal / floor) * 100));
-  const claimable = bal >= floor;
+  const open = isOpenToClaim(p, floor);
+  const near = isNearFloor(p, floor);
+  const label = open
+    ? "Open to claim"
+    : near
+      ? "Near floor"
+      : isTakenStatus(String(p.status)) || p.claimer
+        ? "Taken"
+        : `${pct}% to claim floor`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
-      <span class="${claimable ? "claimable" : ""}">${claimable ? "Claimable" : `${pct}% to claim floor`}</span>
+      <span class="${open ? "claimable" : ""}">${label}</span>
       <span class="sats">${formatSats(bal)} / ${formatSats(floor)}</span>
     </div>
     <div class="progress"><span style="width:${pct}%"></span></div>
@@ -183,6 +204,7 @@ function proposalCardHtml(
   p: Proposal,
   floor: number,
   lightningEnabled: boolean,
+  watching: boolean,
 ): string {
   const status = String(p.status);
   const proposer =
@@ -194,11 +216,19 @@ function proposalCardHtml(
     lightningEnabled && p.escrow_address
       ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
       : "";
+  const openBadge = isOpenToClaim(p, floor)
+    ? `<span class="project-card-open" title="Confirmed funding meets claim floor">Open to claim</span>`
+    : "";
+  const watchBadge = watching
+    ? `<span class="project-card-watch">Watching</span>`
+    : "";
   return `
     <article class="project-card">
       <a class="project-card-main" href="${proposalHref(p.path)}">
         <div class="project-card-head">
           <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
+          ${openBadge}
+          ${watchBadge}
           ${lnBadge}
           ${proposer}
         </div>
@@ -261,11 +291,31 @@ function bindDiscover(
   proposals: Proposal[],
   floor: number,
   lightningEnabled: boolean,
+  watchPaths: Set<string>,
 ): void {
   const listEl = root.querySelector("#list")!;
   const searchEl = root.querySelector<HTMLInputElement>("#project-search");
   const sortEl = root.querySelector<HTMLSelectElement>("#project-sort");
   const countEl = root.querySelector("#project-count");
+  let builderFilter: BuilderFilter = /[?&]for=builders(?:&|$)/.test(
+    location.hash,
+  )
+    ? "open"
+    : "all";
+
+  root.querySelectorAll<HTMLButtonElement>(".builder-filter").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.filter === builderFilter);
+    btn.addEventListener("click", () => {
+      builderFilter = (btn.dataset.filter || "all") as BuilderFilter;
+      root.querySelectorAll(".builder-filter").forEach((b) => {
+        b.classList.toggle(
+          "active",
+          (b as HTMLButtonElement).dataset.filter === builderFilter,
+        );
+      });
+      renderList();
+    });
+  });
 
   const renderList = () => {
     const q = (searchEl?.value || "").trim().toLowerCase();
@@ -277,6 +327,15 @@ function bindDiscover(
           p.title.toLowerCase().includes(q) ||
           p.body.toLowerCase().includes(q) ||
           String(p.status).toLowerCase().includes(q),
+      );
+    }
+    if (builderFilter === "open") {
+      filtered = filtered.filter((p) => isOpenToClaim(p, floor));
+    } else if (builderFilter === "near") {
+      filtered = filtered.filter((p) => isNearFloor(p, floor));
+    } else if (builderFilter === "taken") {
+      filtered = filtered.filter(
+        (p) => isTakenStatus(String(p.status)) || Boolean(p.claimer),
       );
     }
     filtered = sortProposals(filtered, sort, floor);
@@ -292,7 +351,16 @@ function bindDiscover(
     }
     listEl.className = "project-grid";
     listEl.innerHTML = filtered
-      .map((p) => proposalCardHtml(p, floor, lightningEnabled))
+      .map((p) =>
+        proposalCardHtml(
+          p,
+          floor,
+          lightningEnabled,
+          watchPaths.has(p.path) ||
+            watchPaths.has(p.id || "") ||
+            Boolean(p.id && watchPaths.has(p.id)),
+        ),
+      )
       .join("");
   };
 
@@ -318,14 +386,18 @@ export async function renderHome(shell: HomeShell): Promise<void> {
   const listEl = app.querySelector("#list")!;
   try {
     let proposals = await listListedProposals();
-    const [withBalances, lnStatus] = await Promise.all([
+    const [withBalances, lnStatus, watches] = await Promise.all([
       enrichBalances(proposals),
       lightningUiAllowed()
         ? fetchLightningStatus()
         : Promise.resolve({ enabled: false }),
+      fetchWatches().catch(() => []),
     ]);
     proposals = withBalances;
     const lightningEnabled = Boolean(lnStatus.enabled);
+    const watchPaths = new Set(
+      watches.flatMap((w) => [w.proposal_path, w.proposal_id]),
+    );
     if (proposals.length === 0) {
       listEl.className = "empty-state";
       listEl.innerHTML = `<div class="empty-state-inner">
@@ -335,7 +407,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       </div>`;
       return;
     }
-    bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled);
+    bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled, watchPaths);
   } catch (e) {
     listEl.className = "error";
     listEl.textContent = `Could not load projects: ${(e as Error).message}`;

@@ -97,6 +97,7 @@ export async function fetchPublicProfile(
 export async function updateProfile(input: {
   bio: string;
   links: ProfileLink[];
+  payout_address?: string;
 }): Promise<UserProfile> {
   let res: Response;
   try {

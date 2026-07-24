@@ -12,6 +12,7 @@ export type UserProfile = {
   x?: string;
   nostr?: string;
   avatar_url?: string;
+  payout_address?: string;
   created_at?: string;
   updated_at?: string;
   username_claimed_at?: string;
@@ -69,6 +70,10 @@ export type Proposal = {
   body: string;
   balance_sats?: number;
   proposer?: ProposalProposer | null;
+  claimer?: string | null;
+  claimed_at?: string | null;
+  payout_address?: string | null;
+  deliverable_url?: string | null;
 };
 
 export type Route =
@@ -76,6 +81,7 @@ export type Route =
   | { name: "about" }
   | { name: "params" }
   | { name: "account" }
+  | { name: "work" }
   | { name: "propose" }
   | { name: "proposal"; id: string }
   | { name: "profile"; username: string };

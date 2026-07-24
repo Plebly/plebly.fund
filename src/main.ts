@@ -55,6 +55,7 @@ function shell(inner: string): string {
       <div class="header-end">
         <nav class="nav">
           <a href="#/" class="${active("home")}">Projects</a>
+          <a href="#/work" class="${r.name === "work" || r.name === "account" ? "active" : ""}">Work</a>
           <a href="#/propose" class="${active("propose")}">Start a project</a>
           <a href="#/about" class="${active("about")}">About</a>
           ${authNavHtml()}
@@ -91,8 +92,8 @@ async function render() {
     rerender: () => void render(),
   };
 
-  if (r.name === "account") {
-    await renderAccount(ctx);
+  if (r.name === "account" || r.name === "work") {
+    await renderAccount(ctx, r.name === "work" ? "watching" : undefined);
     bindAuthHandlers();
     return;
   }
@@ -124,7 +125,7 @@ async function render() {
       location.replace(`${canonical}${q}`);
       return;
     }
-    await renderProposalPage(r.id, shell);
+    await renderProposalPage(r.id, shell, currentUser);
     bindAuthHandlers();
     return;
   }
