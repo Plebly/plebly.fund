@@ -7,10 +7,10 @@ export async function renderSubmit(ctx: ShellContext): Promise<void> {
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
-        <h1>Submit a proposal</h1>
-        <p class="lede">Log in to open a pull request on Plebly/proposals via the API.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl("#/submit"))}">Log in with GitHub</a>
-        <p class="hint">You can also <a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">open a PR manually</a>.</p>
+        <h1>Submit</h1>
+        <p class="lede">Sign in to open a proposal pull request.</p>
+        <a class="btn" href="${escapeHtml(githubLoginUrl("#/submit"))}">Log in</a>
+        <p class="hint" style="margin-top:1rem"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
       </section>
     `);
     return;
@@ -18,8 +18,8 @@ export async function renderSubmit(ctx: ShellContext): Promise<void> {
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail">
-      <h1>Submit a proposal</h1>
-      <p class="lede">Creates a PR on <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Plebly/proposals</a>. Pay the submission fee on signet/mainnet first, then paste the txid.</p>
+      <h1>Submit</h1>
+      <p class="lede">Opens a PR on <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Plebly/proposals</a>. Include your submission-fee txid after paying on-chain.</p>
       <form id="submit-form" class="form-panel">
         <label class="field">
           <span>Title</span>
@@ -46,7 +46,7 @@ export async function renderSubmit(ctx: ShellContext): Promise<void> {
           <input name="target_sats" type="number" min="0" step="1" />
         </label>
         <div class="form-actions">
-          <button type="submit" class="btn">Open proposal PR</button>
+          <button type="submit" class="btn">Submit</button>
         </div>
         <p class="form-msg" id="submit-msg" hidden></p>
       </form>

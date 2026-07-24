@@ -5,8 +5,6 @@ import {
   githubLoginUrl,
   logout,
   profilePath,
-  userLabel,
-  type AuthUser,
 } from "./auth";
 import { listListedProposals, fetchParametersMarkdown } from "./github";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
@@ -27,38 +25,41 @@ function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
     const profileLink = currentUser.username
-      ? `<a href="${profilePath(currentUser.username)}">Profile</a>`
+      ? `<a href="${profilePath(currentUser.username)}">${escapeHtml(currentUser.username)}</a>`
       : "";
-    return `${profileLink}
+    return `<span class="nav-divider" aria-hidden="true"></span>
+      ${profileLink}
       <a href="#/account">Account</a>
-      <span class="auth-user">${escapeHtml(userLabel(currentUser))}</span>
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
-  return `<a href="${escapeHtml(githubLoginUrl())}">Log in with GitHub</a>`;
+  return `<span class="nav-divider" aria-hidden="true"></span>
+    <a href="${escapeHtml(githubLoginUrl())}">Log in</a>`;
 }
 
 function shell(inner: string): string {
   const r = route();
-  const active = (name: string) =>
-    r.name === name ? "active" : "";
+  const active = (name: string) => (r.name === name ? "active" : "");
   return `
-    <header class="wrap site-header">
+    <header class="wrap-wide site-header">
       <a class="brand" href="#/">
-        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="36" height="36" />
+        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="28" height="28" />
         <span>Plebly</span>
       </a>
       <nav class="nav">
         <a href="#/" class="${active("home")}">Bounties</a>
         <a href="#/submit" class="${active("submit")}">Submit</a>
         <a href="#/parameters" class="${active("params")}">Parameters</a>
-        <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals repo</a>
         ${authNavHtml()}
       </nav>
     </header>
     <main>${inner}</main>
-    <footer class="wrap site-footer">
-      <span>Non-custodial Bitcoin bounties. Protocol over platform.</span>
-      <span><a href="https://github.com/Plebly">github.com/Plebly</a></span>
+    <footer class="wrap-wide site-footer">
+      <span>Non-custodial · Protocol over platform</span>
+      <span>
+        <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals</a>
+        ·
+        <a href="https://github.com/Plebly" target="_blank" rel="noreferrer">GitHub</a>
+      </span>
     </footer>
   `;
 }
@@ -74,16 +75,19 @@ function bindAuthHandlers() {
 function progressHtml(p: Proposal): string {
   const bal = p.balance_sats ?? 0;
   const pct = Math.min(100, Math.round((bal / CLAIM_FLOOR_SATS) * 100));
-  const target =
-    p.target_sats != null
-      ? ` · target ${formatSats(p.target_sats)}`
-      : "";
+  return `<div class="progress" title="${formatSats(bal)} funded"><span style="width:${pct}%"></span></div>`;
+}
+
+function proposalCardHtml(p: Proposal): string {
+  const bal = p.balance_sats ?? 0;
   return `
-    <div class="progress">
-      <div class="label">${formatSats(bal)} / ${formatSats(CLAIM_FLOOR_SATS)} floor${target}</div>
-      <div class="bar"><span style="width:${pct}%"></span></div>
-    </div>
-  `;
+    <a class="proposal-card" href="#/proposal/${encodeURIComponent(p.path)}">
+      <div class="proposal-card-top">
+        <h3>${escapeHtml(p.title)}</h3>
+        <span class="balance sats">${formatSats(bal)}</span>
+      </div>
+      ${progressHtml(p)}
+    </a>`;
 }
 
 async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
@@ -103,17 +107,18 @@ async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
 async function renderHome() {
   app.innerHTML = shell(`
     <section class="wrap hero">
-      <h1 class="hero-brand">Plebly</h1>
-      <p>Public bounties for Bitcoin development and research. Escrow is on-chain multisig. The proposal record is a public git repository anyone can fork.</p>
+      <h1 class="hero-tagline">Bitcoin bounties, on-chain and public.</h1>
+      <p class="hero-sub">Fund research and development. Escrow lives on Bitcoin. Proposals live in git.</p>
       <div class="cta-row">
-        <a class="btn" href="#/submit">Submit a proposal</a>
-        <a class="btn ghost" href="#/parameters">Fee parameters</a>
+        <a class="btn" href="#/submit">Submit proposal</a>
       </div>
     </section>
-    <section class="wrap section">
-      <h2>Open bounties</h2>
-      <p class="lede">Listed from the canonical proposals repository. Balances from the Bitcoin chain.</p>
-      <div id="list" class="loading">Loading proposals…</div>
+    <section class="wrap-wide bounties">
+      <div class="bounties-head">
+        <h2>Open bounties</h2>
+        <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">View repo</a>
+      </div>
+      <div id="list" class="loading">Loading…</div>
     </section>
   `);
 
@@ -123,26 +128,11 @@ async function renderHome() {
     proposals = await enrichBalances(proposals);
     if (proposals.length === 0) {
       listEl.className = "empty";
-      listEl.innerHTML =
-        "No listed proposals yet. <a href=\"#/submit\">Submit one</a> or open a PR on <a href=\"https://github.com/Plebly/proposals\">Plebly/proposals</a>.";
+      listEl.innerHTML = `No bounties yet. <a href="#/submit">Submit the first</a>.`;
       return;
     }
     listEl.className = "proposal-list";
-    listEl.innerHTML = proposals
-      .map(
-        (p) => `
-      <article class="proposal-row">
-        <div>
-          <h3><a href="#/proposal/${encodeURIComponent(p.path)}">${escapeHtml(p.title)}</a></h3>
-          <div class="meta">
-            <span class="pill">${escapeHtml(String(p.status))}</span>
-            <span>${escapeHtml(p.id || "")}</span>
-          </div>
-        </div>
-        ${progressHtml(p)}
-      </article>`,
-      )
-      .join("");
+    listEl.innerHTML = proposals.map(proposalCardHtml).join("");
   } catch (e) {
     listEl.className = "error";
     listEl.textContent = `Could not load proposals: ${(e as Error).message}`;
@@ -186,16 +176,16 @@ async function renderProposal(path: string) {
         : "";
     app.innerHTML = shell(`
       <section class="wrap detail">
-        <a href="#/">← Bounties</a>
+        <a class="back-link" href="#/">← Bounties</a>
         <h1>${escapeHtml(match.title)}</h1>
-        <div class="meta">
+        <div class="meta" style="margin-bottom:1rem">
           <span class="pill">${escapeHtml(String(match.status))}</span>
-          <span>${escapeHtml(match.id || "")}</span>
+          ${match.id ? `<span>${escapeHtml(match.id)}</span>` : ""}
         </div>
         <div class="panel">
-          <div>Claim floor: ${formatSats(CLAIM_FLOOR_SATS)}</div>
-          <div>Balance: ${balance != null ? formatSats(balance) : "—"}</div>
-          <div>Escrow: <span class="mono">${escapeHtml(match.escrow_address || "not allocated")}</span></div>
+          <div>Balance <span class="sats">${balance != null ? formatSats(balance) : "—"}</span></div>
+          <div>Claim floor <span class="sats">${formatSats(CLAIM_FLOOR_SATS)}</span></div>
+          <div>Escrow <span class="mono">${escapeHtml(match.escrow_address || "not allocated")}</span></div>
           ${proposerHtml}
         </div>
         <div class="prose">${escapeHtml(match.body)}</div>
@@ -215,6 +205,7 @@ async function renderParams() {
   const md = await fetchParametersMarkdown();
   app.innerHTML = shell(`
     <section class="wrap detail">
+      <a class="back-link" href="#/">← Bounties</a>
       <h1>Parameters</h1>
       <div class="prose">${escapeHtml(md || "PARAMETERS.md not available yet.")}</div>
     </section>

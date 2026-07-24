@@ -4,7 +4,6 @@ import {
   githubLoginUrl,
   profilePath,
   updateProfile,
-  userLabel,
   type AuthUser,
 } from "./auth";
 import { listAllPublicProposals, proposalsForProfile } from "./github";
@@ -37,8 +36,8 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
         <h1>Account</h1>
-        <p class="lede">Log in to claim a username and manage your profile.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl("#/account"))}">Log in with GitHub</a>
+        <p class="lede">Sign in to claim a username and set up your profile.</p>
+        <a class="btn" href="${escapeHtml(githubLoginUrl("#/account"))}">Log in</a>
       </section>
     `);
     return;
@@ -48,7 +47,7 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
   app.innerHTML = ctx.shell(`
     <section class="wrap detail account-page">
       <h1>Account</h1>
-      ${user.username ? `<p class="lede">Public profile: <a href="${profilePath(user.username)}">${escapeHtml(profilePath(user.username))}</a></p>` : `<p class="lede">Claim a username for a custom profile URL at <span class="mono">#/u/yourname</span>.</p>`}
+      ${user.username ? `<p class="lede">Profile at <a href="${profilePath(user.username)}">#/u/${escapeHtml(user.username)}</a></p>` : `<p class="lede">Claim a username for your public profile URL.</p>`}
 
       <form id="account-form" class="form-panel">
         <fieldset class="form-block">
@@ -78,9 +77,8 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
         <p class="form-msg" id="account-msg" hidden></p>
       </form>
 
-      <div class="panel identity-panel">
-        <div>GitHub: ${user.github ? `<a href="https://github.com/${escapeHtml(user.github)}" target="_blank" rel="noreferrer">@${escapeHtml(user.github)}</a>` : "—"}</div>
-        <div>Display: ${escapeHtml(userLabel(user))}</div>
+      <div class="identity-panel">
+        ${user.github ? `<div>GitHub <a href="https://github.com/${escapeHtml(user.github)}" target="_blank" rel="noreferrer">@${escapeHtml(user.github)}</a></div>` : ""}
       </div>
     </section>
   `);
@@ -198,15 +196,15 @@ export async function renderPublicProfile(
   app.innerHTML = ctx.shell(`
     <section class="wrap detail profile-page">
       <div class="profile-header">
-        ${profile.avatar_url ? `<img class="avatar" src="${escapeHtml(profile.avatar_url)}" alt="" width="72" height="72" />` : ""}
+        ${profile.avatar_url ? `<img class="avatar" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" />` : ""}
         <div>
           <h1>@${escapeHtml(profile.username || username)}</h1>
-          ${profile.github ? `<div class="meta"><a href="https://github.com/${escapeHtml(profile.github)}" target="_blank" rel="noreferrer">github.com/${escapeHtml(profile.github)}</a></div>` : ""}
+          ${profile.github ? `<div class="meta"><a href="https://github.com/${escapeHtml(profile.github)}" target="_blank" rel="noreferrer">@${escapeHtml(profile.github)}</a></div>` : ""}
         </div>
       </div>
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
       ${linksHtml}
-      <h2 class="section-title">Proposals & bounties</h2>
+      <h2 class="section-title">Work</h2>
       ${workHtml}
     </section>
   `);
