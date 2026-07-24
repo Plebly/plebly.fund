@@ -8,7 +8,9 @@ export type AuthUser = {
 };
 
 export function githubLoginUrl(): string {
-  return `${WORKERS_API.replace(/\/$/, "")}/auth/github`;
+  const base = `${WORKERS_API.replace(/\/$/, "")}/auth/github`;
+  const returnTo = encodeURIComponent(window.location.origin);
+  return `${base}?return_to=${returnTo}`;
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
