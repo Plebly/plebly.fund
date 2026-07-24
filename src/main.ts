@@ -1,7 +1,9 @@
 import "./style.css";
 import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
 import "@fortawesome/fontawesome-free/css/brands.min.css";
-import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import { renderAbout } from "./about-page";
+import { WORKERS_API } from "./config";
+import { renderHome } from "./home-page";
 import {
   consumeSessionFromHash,
   currentReturnPath,
@@ -11,15 +13,12 @@ import {
   profilePath,
   type AuthUser,
 } from "./auth";
-import { ABOUT_HTML } from "./generated/about-html";
-import { listListedProposals } from "./github";
-import { addressBalanceSats } from "./mempool";
 import { renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
-import type { Proposal, Route } from "./types";
-import { escapeHtml, formatSats, parseRoute, proposalHref } from "./util";
+import type { Route } from "./types";
+import { escapeHtml, parseRoute, proposalHref } from "./util";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -82,83 +81,6 @@ function bindAuthHandlers() {
   });
 }
 
-function progressHtml(p: Proposal): string {
-  const bal = p.balance_sats ?? 0;
-  const pct = Math.min(100, Math.round((bal / CLAIM_FLOOR_SATS) * 100));
-  return `<div class="progress" title="${formatSats(bal)} funded"><span style="width:${pct}%"></span></div>`;
-}
-
-function proposalCardHtml(p: Proposal): string {
-  const bal = p.balance_sats ?? 0;
-  return `
-    <a class="proposal-card" href="${proposalHref(p.path)}">
-      <div class="proposal-card-top">
-        <h3>${escapeHtml(p.title)}</h3>
-        <span class="balance sats">${formatSats(bal)}</span>
-      </div>
-      ${progressHtml(p)}
-    </a>`;
-}
-
-async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
-  return Promise.all(
-    proposals.map(async (p) => {
-      if (!p.escrow_address) return p;
-      try {
-        const balance_sats = await addressBalanceSats(p.escrow_address);
-        return { ...p, balance_sats };
-      } catch {
-        return p;
-      }
-    }),
-  );
-}
-
-async function renderHome() {
-  app.innerHTML = shell(`
-    <section class="wrap hero">
-      <h1 class="hero-tagline">Bitcoin bounties, on-chain and public.</h1>
-      <p class="hero-sub">Fund research and development. Escrow lives on Bitcoin. Proposals live in git.</p>
-      <div class="cta-row">
-        <a class="btn" href="#/propose">Propose a bounty</a>
-      </div>
-      <p class="hero-follow">${pleblySocialAccountsHtml()}</p>
-    </section>
-    <section class="wrap-wide bounties">
-      <div class="bounties-head">
-        <h2>Open bounties</h2>
-        <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">View repo</a>
-      </div>
-      <div id="list" class="loading">Loading…</div>
-    </section>
-  `);
-
-  const listEl = app.querySelector("#list")!;
-  try {
-    let proposals = await listListedProposals();
-    proposals = await enrichBalances(proposals);
-    if (proposals.length === 0) {
-      listEl.className = "empty";
-      listEl.innerHTML = `No bounties yet. <a href="#/propose">Propose the first</a>.`;
-      return;
-    }
-    listEl.className = "proposal-list";
-    listEl.innerHTML = proposals.map(proposalCardHtml).join("");
-  } catch (e) {
-    listEl.className = "error";
-    listEl.textContent = `Could not load proposals: ${(e as Error).message}`;
-  }
-}
-
-async function renderAbout() {
-  app.innerHTML = shell(`
-    <section class="wrap detail about-page">
-      <h1>About us</h1>
-      <div class="prose-rich">${ABOUT_HTML}</div>
-    </section>
-  `);
-}
-
 async function render() {
   currentUser = await fetchCurrentUser();
   const r = route();
@@ -185,7 +107,7 @@ async function render() {
     return;
   }
   if (r.name === "about") {
-    await renderAbout();
+    renderAbout(shell);
     bindAuthHandlers();
     return;
   }
@@ -204,7 +126,7 @@ async function render() {
     bindAuthHandlers();
     return;
   }
-  await renderHome();
+  await renderHome(shell);
   bindAuthHandlers();
 }
 

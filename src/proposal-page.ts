@@ -1,18 +1,23 @@
 import { CLAIM_FLOOR_SATS } from "./config";
 import { profilePath } from "./auth";
-import { listListedProposals } from "./github";
+import { listListedProposals, proposalFromMarkdown } from "./github";
 import { socialAccountLink } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
+import {
+  bindProposalCopyButtons,
+  fundingProgressHtml,
+  metaChipsHtml,
+  milestonesHtml,
+  onChainPanelHtml,
+  sectionBodyHtml,
+  statusClass,
+  statusLabel,
+} from "./proposal-ui";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
 export type ProposalShell = (inner: string) => string;
-
-function progressHtml(balance: number, floor: number): string {
-  const pct = Math.min(100, Math.round((balance / floor) * 100));
-  return `<div class="proposal-progress" title="${formatSats(balance)} funded"><span style="width:${pct}%"></span></div>`;
-}
 
 function stripLeadingTitle(markdown: string): string {
   return markdown.replace(/^#\s+.+\n+/, "").trim();
@@ -32,9 +37,15 @@ function proposalSectionsHtml(markdown: string): string {
       const title = (nl === -1 ? chunk : chunk.slice(0, nl)).trim();
       const body = (nl === -1 ? "" : chunk.slice(nl + 1)).trim();
       const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      return `<section class="proposal-section" id="${escapeHtml(id)}">
+      const sectionClass =
+        id === "verification"
+          ? "proposal-section proposal-section-verify"
+          : id === "out-of-scope"
+            ? "proposal-section proposal-section-muted"
+            : "proposal-section";
+      return `<section class="${sectionClass}" id="${escapeHtml(id)}">
         <h2 class="proposal-section-title">${escapeHtml(title)}</h2>
-        <div class="prose-rich">${renderMarkdown(body)}</div>
+        ${sectionBodyHtml(title, body, renderMarkdown)}
       </section>`;
     })
     .join("");
@@ -45,27 +56,23 @@ function fundingStatsHtml(
   target: number | null,
   floor: number,
 ): string {
-  const funded =
-    balance != null
-      ? `<div class="proposal-stat">
-          <span class="proposal-stat-label">Funded</span>
-          <span class="proposal-stat-value sats">${formatSats(balance)}</span>
-        </div>`
-      : "";
-  const targetHtml =
-    target != null
-      ? `<div class="proposal-stat">
-          <span class="proposal-stat-label">Target</span>
-          <span class="proposal-stat-value sats">${formatSats(target)}</span>
-        </div>`
-      : "";
   return `<div class="proposal-stats">
-      ${funded}
+      <div class="proposal-stat proposal-stat-primary">
+        <span class="proposal-stat-label">Funded</span>
+        <span class="proposal-stat-value sats">${balance != null ? formatSats(balance) : "—"}</span>
+      </div>
       <div class="proposal-stat">
         <span class="proposal-stat-label">Claim floor</span>
         <span class="proposal-stat-value sats">${formatSats(floor)}</span>
       </div>
-      ${targetHtml}
+      ${
+        target != null
+          ? `<div class="proposal-stat">
+        <span class="proposal-stat-label">Target</span>
+        <span class="proposal-stat-value sats">${formatSats(target)}</span>
+      </div>`
+          : ""
+      }
     </div>`;
 }
 
@@ -86,20 +93,8 @@ export async function renderProposalPage(
     const raw = await res.text();
     const proposals = await listListedProposals();
     const listed = proposals.find((p) => p.path === path);
-    const match: Proposal =
-      listed ||
-      ({
-        id: path,
-        title: path,
-        status: "unknown",
-        path,
-        target_sats: null,
-        escrow_address: null,
-        submission_fee_txid: null,
-        body: raw,
-      } satisfies Proposal);
-
-    const bodyMd = listed?.body ?? raw.replace(/^---[\s\S]*?---\n?/, "").trim();
+    const match: Proposal = listed || proposalFromMarkdown(raw, path);
+    const bodyMd = match.body;
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
     let balance: number | undefined;
@@ -122,18 +117,6 @@ export async function renderProposalPage(
           )
         : "";
 
-    const progressBlock =
-      balance != null
-        ? progressHtml(balance, CLAIM_FLOOR_SATS)
-        : `<div class="proposal-progress proposal-progress-empty"><span style="width:0"></span></div>`;
-
-    const escrowBlock = match.escrow_address
-      ? `<div class="proposal-escrow">
-          <span class="proposal-stat-label">Escrow</span>
-          <code class="mono">${escapeHtml(match.escrow_address)}</code>
-        </div>`
-      : "";
-
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
         <a class="back-link" href="#/">← Bounties</a>
@@ -141,20 +124,28 @@ export async function renderProposalPage(
         <header class="proposal-hero">
           <div class="proposal-hero-top">
             <h1>${escapeHtml(match.title)}</h1>
-            <span class="pill pill-status">${escapeHtml(String(match.status))}</span>
+            <span class="pill pill-status ${statusClass(String(match.status))}">${escapeHtml(statusLabel(String(match.status)))}</span>
           </div>
-          ${proposerMeta ? `<div class="proposal-meta">${proposerMeta}</div>` : ""}
+          ${metaChipsHtml(match)}
+          ${proposerMeta ? `<div class="proposal-meta">Proposed by ${proposerMeta}</div>` : ""}
         </header>
 
-        <div class="proposal-funding">
-          ${fundingStatsHtml(balance, match.target_sats, CLAIM_FLOOR_SATS)}
-          ${progressBlock}
-          ${escrowBlock}
-        </div>
+        <div class="proposal-layout">
+          <aside class="proposal-sidebar">
+            <div class="proposal-funding">
+              ${fundingStatsHtml(balance, match.target_sats, CLAIM_FLOOR_SATS)}
+              ${fundingProgressHtml(balance, CLAIM_FLOOR_SATS, match.target_sats)}
+            </div>
+            ${onChainPanelHtml(match)}
+            ${milestonesHtml(match.milestones)}
+          </aside>
 
-        <div class="proposal-sections">${sectionsHtml}</div>
+          <div class="proposal-sections">${sectionsHtml}</div>
+        </div>
       </section>
     `);
+
+    bindProposalCopyButtons(app);
   } catch (e) {
     app.innerHTML = shell(
       `<section class="wrap-wide detail proposal-page"><p class="error">${escapeHtml((e as Error).message)}</p></section>`,

@@ -79,22 +79,106 @@ function emitTs(modulePath, body) {
   );
 }
 
+function splitSections(md) {
+  const sections = [];
+  for (const chunk of md.split(/^##\s+/m).filter((c) => c.trim())) {
+    const nl = chunk.indexOf("\n");
+    const title = (nl === -1 ? chunk : chunk.slice(0, nl)).trim();
+    const body = (nl === -1 ? "" : chunk.slice(nl + 1)).trim();
+    sections.push({ id: slugify(title), title, body });
+  }
+  return sections;
+}
+
+function parseBeliefs(body) {
+  const beliefs = [];
+  for (const para of body.split(/\n\n+/)) {
+    const m = para.trim().match(/^\*\*([^*]+)\.\*\*\s+([\s\S]+)$/);
+    if (m) beliefs.push({ title: m[1], body: marked.parseInline(m[2].trim()) });
+  }
+  return beliefs;
+}
+
+function parseSteps(body) {
+  const steps = [];
+  for (const line of body.split("\n")) {
+    const m = line
+      .trim()
+      .match(/^\d+\.\s+\*\*([^*]+)\*\*\s+[—–-]\s*(.+)$/);
+    if (m) steps.push({ title: m[1], body: m[2].trim() });
+  }
+  return steps;
+}
+
 async function main() {
   const parametersMd = await loadParametersMarkdown();
   const params = parseParametersMarkdown(parametersMd);
   const template = readFileSync(join(root, "content/about.md"), "utf8");
 
   const network = (process.env.VITE_BITCOIN_NETWORK || "signet").toLowerCase();
-  const aboutMd = substitute(template, params, {
-    bitcoin_network: network === "signet" ? "signet" : "mainnet",
-  });
+  const bitcoinNetwork = network === "signet" ? "signet" : "mainnet";
+  const aboutMd = substitute(template, params, { bitcoin_network: bitcoinNetwork });
 
   const aboutHtml = marked.parse(aboutMd, { async: false });
+  const sections = splitSections(aboutMd);
+  const byId = Object.fromEntries(sections.map((s) => [s.id, s]));
+  const intro = byId.about_plebly;
+  const beliefs = parseBeliefs(byId.what_we_believe?.body || "");
+  const steps = parseSteps(byId.how_it_works?.body || "");
   const genDir = join(root, "src/generated");
 
   emitTs(
     join(genDir, "about-html.ts"),
     `export const ABOUT_HTML = ${JSON.stringify(aboutHtml)};`,
+  );
+
+  emitTs(
+    join(genDir, "about-data.ts"),
+    `export type AboutBelief = { title: string; body: string };
+export type AboutStep = { title: string; body: string };
+export type AboutParamDisplay = { label: string; value: string; hint: string };
+
+export const ABOUT_INTRO_HTML = ${JSON.stringify(
+      intro ? marked.parse(intro.body, { async: false }) : "",
+    )};
+
+export const ABOUT_BELIEFS: AboutBelief[] = ${JSON.stringify(beliefs, null, 2)};
+
+export const ABOUT_STEPS: AboutStep[] = ${JSON.stringify(steps, null, 2)};
+
+export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
+      [
+        {
+          label: "Submission fee",
+          value: params.submission_fee,
+          hint: "Paid when you open a proposal PR; exact and non-refundable.",
+        },
+        {
+          label: "Platform fee",
+          value: params.platform_fee,
+          hint: "Deducted only on successful completion.",
+        },
+        {
+          label: "Claim floor",
+          value: params.minimum_funding_claim_floor,
+          hint: "Minimum escrow balance before a builder can claim.",
+        },
+        {
+          label: "Claim window",
+          value: params.claim_window,
+          hint: `After claim acceptance, with a possible ${params.claim_extension || "extension"}.`,
+        },
+        {
+          label: "Milestone threshold",
+          value: params.milestone_threshold,
+          hint: "Milestone splits apply above this amount.",
+        },
+      ],
+      null,
+      2,
+    )};
+
+export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
   );
 
   const submissionFeeSats = parseSats(params.submission_fee);

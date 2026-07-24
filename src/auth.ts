@@ -98,11 +98,18 @@ export async function updateProfile(input: {
   bio: string;
   links: ProfileLink[];
 }): Promise<UserProfile> {
-  const res = await authFetch(`${API()}/profile/me`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  let res: Response;
+  try {
+    res = await authFetch(`${API()}/profile/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    throw new Error(
+      "Could not reach the API. If this persists after a refresh, the server may need an update.",
+    );
+  }
   const data = (await res.json()) as { user?: UserProfile; error?: string };
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data.user!;

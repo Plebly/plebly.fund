@@ -133,14 +133,21 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
     msg.hidden = false;
     msg.textContent = "Saving…";
     msg.className = "form-msg";
-    const links: ProfileLink[] = [];
-    linksList.querySelectorAll(".link-row").forEach((row) => {
-      const label = (row.querySelector(".link-label") as HTMLInputElement).value.trim();
-      const url = (row.querySelector(".link-url") as HTMLInputElement).value.trim();
-      if (label && url) links.push({ label, url });
-    });
-    const bio = (document.getElementById("bio-input") as HTMLTextAreaElement).value;
     try {
+      const links: ProfileLink[] = [];
+      linksList.querySelectorAll(".link-row").forEach((row) => {
+        const label = (row.querySelector(".link-label") as HTMLInputElement).value.trim();
+        const url = (row.querySelector(".link-url") as HTMLInputElement).value.trim();
+        if (!label && !url) return;
+        if (!label || !url) {
+          throw new Error("Each link needs both a label and a URL.");
+        }
+        if (!url.startsWith("https://")) {
+          throw new Error("Link URLs must start with https://");
+        }
+        links.push({ label, url });
+      });
+      const bio = (document.getElementById("bio-input") as HTMLTextAreaElement).value;
       await updateProfile({ bio, links });
       msg.textContent = "Profile saved.";
       msg.className = "form-msg success";

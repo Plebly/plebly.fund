@@ -1,5 +1,5 @@
 import { PROPOSALS_API, PROPOSALS_RAW } from "./config";
-import type { Proposal, ProposalProposer } from "./types";
+import type { Proposal, ProposalMilestone, ProposalProposer } from "./types";
 
 type GhContent = {
   name: string;
@@ -8,7 +8,15 @@ type GhContent = {
   download_url: string | null;
 };
 
-function parseFrontMatter(raw: string): {
+function parseMilestones(value: unknown): ProposalMilestone[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (m): m is ProposalMilestone =>
+      !!m && typeof m === "object" && "deliverable" in m,
+  );
+}
+
+export function parseFrontMatter(raw: string): {
   data: Record<string, unknown>;
   body: string;
 } {
@@ -56,23 +64,29 @@ function parseProposer(data: Record<string, unknown>): ProposalProposer | null {
   };
 }
 
+export function proposalFromMarkdown(raw: string, path: string, dir = "unknown"): Proposal {
+  const { data, body } = parseFrontMatter(raw);
+  return {
+    id: (data.id as string) || path.replace(/\.md$/, "").split("/").pop() || null,
+    title: (data.title as string) || path,
+    status: (data.status as string) || dir,
+    path,
+    target_sats: typeof data.target_sats === "number" ? data.target_sats : null,
+    escrow_address: (data.escrow_address as string) || null,
+    submission_fee_txid: (data.submission_fee_txid as string) || null,
+    created_at: (data.created_at as string) || null,
+    escrow_index: typeof data.escrow_index === "number" ? data.escrow_index : null,
+    milestones: parseMilestones(data.milestones),
+    proposer: parseProposer(data),
+    body,
+  };
+}
+
 async function loadProposalFile(item: GhContent, dir: string): Promise<Proposal | null> {
   if (item.type !== "file" || !item.name.endsWith(".md")) return null;
   const rawRes = await fetch(`${PROPOSALS_RAW}/${item.path}`);
   if (!rawRes.ok) return null;
-  const raw = await rawRes.text();
-  const { data, body } = parseFrontMatter(raw);
-  return {
-    id: (data.id as string) || item.name.replace(/\.md$/, ""),
-    title: (data.title as string) || item.name,
-    status: (data.status as string) || dir,
-    path: item.path,
-    target_sats: typeof data.target_sats === "number" ? data.target_sats : null,
-    escrow_address: (data.escrow_address as string) || null,
-    submission_fee_txid: (data.submission_fee_txid as string) || null,
-    proposer: parseProposer(data),
-    body,
-  };
+  return proposalFromMarkdown(await rawRes.text(), item.path, dir);
 }
 
 export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {

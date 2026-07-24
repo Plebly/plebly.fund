@@ -16,4 +16,9 @@ export const MEMPOOL_API =
     ? "https://mempool.space/signet/api"
     : "https://mempool.space/api";
 
-export { CLAIM_FLOOR_SATS, SUBMISSION_FEE_SATS } from "./generated/parameters";
+export {
+  CLAIM_FLOOR_SATS,
+  MILESTONE_THRESHOLD_SATS,
+  PLATFORM_FEE_PERCENT,
+  SUBMISSION_FEE_SATS,
+} from "./generated/parameters";

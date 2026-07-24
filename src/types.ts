@@ -39,6 +39,16 @@ export type ProposalStatus =
   | "refunding"
   | "redirected";
 
+export type ProposalMilestone = {
+  id?: string;
+  deliverable: string;
+  verification: string;
+  out_of_scope: string;
+  allocation_sats: number;
+  deadline: string;
+  dependencies?: string[];
+};
+
 export type ProposalProposer = {
   github?: string | null;
   username?: string | null;
@@ -53,6 +63,9 @@ export type Proposal = {
   target_sats: number | null;
   escrow_address: string | null;
   submission_fee_txid: string | null;
+  created_at: string | null;
+  escrow_index: number | null;
+  milestones: ProposalMilestone[];
   body: string;
   balance_sats?: number;
   proposer?: ProposalProposer | null;
