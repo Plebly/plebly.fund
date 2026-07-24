@@ -258,16 +258,6 @@ a:hover {
   min-width: 9.5rem;
 }
 
-.landing-hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  margin: 1.5rem 0 0;
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-family: var(--mono);
-}
-
 .landing-section-head {
   margin-bottom: 1.25rem;
 }

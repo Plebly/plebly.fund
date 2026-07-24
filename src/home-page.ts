@@ -7,8 +7,6 @@ import {
 import {
   BITCOIN_NETWORK,
   CLAIM_FLOOR_SATS,
-  PLATFORM_FEE_PERCENT,
-  SUBMISSION_FEE_SATS,
   lightningUiAllowed,
 } from "./config";
 import { listListedProposals } from "./github";
@@ -51,13 +49,6 @@ function landingHeroHtml(): string {
         <a class="btn landing-btn" href="#projects">Donate to a project</a>
         <a class="btn ghost landing-btn" href="#/propose">Start a project</a>
       </div>
-      <p class="landing-hero-meta">
-        <span>${formatSats(CLAIM_FLOOR_SATS)} claim floor</span>
-        <span aria-hidden="true">·</span>
-        <span>Plebly takes ${PLATFORM_FEE_PERCENT}% on payout</span>
-        <span aria-hidden="true">·</span>
-        <span>${formatSats(SUBMISSION_FEE_SATS)} to propose</span>
-      </p>
     </div>
   </section>`;
 }
