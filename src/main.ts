@@ -1,34 +1,46 @@
 import "./style.css";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
-import { fetchCurrentUser, githubLoginUrl, logout, userLabel } from "./auth";
+import {
+  fetchCurrentUser,
+  githubLoginUrl,
+  logout,
+  profilePath,
+  userLabel,
+  type AuthUser,
+} from "./auth";
 import { listListedProposals, fetchParametersMarkdown } from "./github";
+import { renderAccount, renderPublicProfile } from "./profile-pages";
+import { renderSubmit } from "./submit-page";
 import { addressBalanceSats } from "./mempool";
-import type { Proposal } from "./types";
+import type { Proposal, Route } from "./types";
+import { escapeHtml, formatSats, parseRoute } from "./util";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
-let currentUser: Awaited<ReturnType<typeof fetchCurrentUser>> = null;
+let currentUser: AuthUser | null = null;
 
-function route(): { name: "home" | "proposal" | "params"; id?: string } {
-  const hash = location.hash.replace(/^#\/?/, "");
-  if (!hash || hash === "home") return { name: "home" };
-  if (hash === "parameters") return { name: "params" };
-  if (hash.startsWith("proposal/")) {
-    return { name: "proposal", id: decodeURIComponent(hash.slice("proposal/".length)) };
-  }
-  return { name: "home" };
+function route(): Route {
+  return parseRoute(location.hash);
 }
 
 function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
-    return `<span class="auth-user">${escapeHtml(userLabel(currentUser))}</span>
+    const profileLink = currentUser.username
+      ? `<a href="${profilePath(currentUser.username)}">Profile</a>`
+      : "";
+    return `${profileLink}
+      <a href="#/account">Account</a>
+      <span class="auth-user">${escapeHtml(userLabel(currentUser))}</span>
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<a href="${escapeHtml(githubLoginUrl())}">Log in with GitHub</a>`;
 }
 
 function shell(inner: string): string {
+  const r = route();
+  const active = (name: string) =>
+    r.name === name ? "active" : "";
   return `
     <header class="wrap site-header">
       <a class="brand" href="#/">
@@ -36,8 +48,9 @@ function shell(inner: string): string {
         <span>Plebly</span>
       </a>
       <nav class="nav">
-        <a href="#/" class="${route().name === "home" ? "active" : ""}">Bounties</a>
-        <a href="#/parameters" class="${route().name === "params" ? "active" : ""}">Parameters</a>
+        <a href="#/" class="${active("home")}">Bounties</a>
+        <a href="#/submit" class="${active("submit")}">Submit</a>
+        <a href="#/parameters" class="${active("params")}">Parameters</a>
         <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals repo</a>
         ${authNavHtml()}
       </nav>
@@ -56,10 +69,6 @@ function bindAuthHandlers() {
     currentUser = null;
     void render();
   });
-}
-
-function formatSats(n: number): string {
-  return `${n.toLocaleString("en-US")} sats`;
 }
 
 function progressHtml(p: Proposal): string {
@@ -97,7 +106,7 @@ async function renderHome() {
       <h1 class="hero-brand">Plebly</h1>
       <p>Public bounties for Bitcoin development and research. Escrow is on-chain multisig. The proposal record is a public git repository anyone can fork.</p>
       <div class="cta-row">
-        <a class="btn" href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Submit a proposal</a>
+        <a class="btn" href="#/submit">Submit a proposal</a>
         <a class="btn ghost" href="#/parameters">Fee parameters</a>
       </div>
     </section>
@@ -115,7 +124,7 @@ async function renderHome() {
     if (proposals.length === 0) {
       listEl.className = "empty";
       listEl.innerHTML =
-        "No listed proposals yet. Open a pull request on <a href=\"https://github.com/Plebly/proposals\">Plebly/proposals</a>.";
+        "No listed proposals yet. <a href=\"#/submit\">Submit one</a> or open a PR on <a href=\"https://github.com/Plebly/proposals\">Plebly/proposals</a>.";
       return;
     }
     listEl.className = "proposal-list";
@@ -169,6 +178,12 @@ async function renderProposal(path: string) {
         /* ignore */
       }
     }
+    const proposer = match.proposer;
+    const proposerHtml = proposer?.username
+      ? `<div>Proposer: <a href="${profilePath(proposer.username)}">@${escapeHtml(proposer.username)}</a></div>`
+      : proposer?.github
+        ? `<div>Proposer: <a href="https://github.com/${escapeHtml(proposer.github)}" target="_blank" rel="noreferrer">@${escapeHtml(proposer.github)}</a></div>`
+        : "";
     app.innerHTML = shell(`
       <section class="wrap detail">
         <a href="#/">← Bounties</a>
@@ -181,6 +196,7 @@ async function renderProposal(path: string) {
           <div>Claim floor: ${formatSats(CLAIM_FLOOR_SATS)}</div>
           <div>Balance: ${balance != null ? formatSats(balance) : "—"}</div>
           <div>Escrow: <span class="mono">${escapeHtml(match.escrow_address || "not allocated")}</span></div>
+          ${proposerHtml}
         </div>
         <div class="prose">${escapeHtml(match.body)}</div>
       </section>
@@ -205,23 +221,37 @@ async function renderParams() {
   `);
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 async function render() {
   currentUser = await fetchCurrentUser();
   const r = route();
+  const ctx = {
+    user: currentUser,
+    routeName: r.name,
+    shell,
+    rerender: () => void render(),
+  };
+
+  if (r.name === "account") {
+    await renderAccount(ctx);
+    bindAuthHandlers();
+    return;
+  }
+  if (r.name === "submit") {
+    await renderSubmit(ctx);
+    bindAuthHandlers();
+    return;
+  }
+  if (r.name === "profile") {
+    await renderPublicProfile(ctx, r.username);
+    bindAuthHandlers();
+    return;
+  }
   if (r.name === "params") {
     await renderParams();
     bindAuthHandlers();
     return;
   }
-  if (r.name === "proposal" && r.id) {
+  if (r.name === "proposal") {
     await renderProposal(r.id);
     bindAuthHandlers();
     return;
