@@ -11,9 +11,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail propose-page">
         <h1>Start a project</h1>
-        <p class="lede">Sign in to open a proposal pull request on Plebly/proposals.</p>
+        <p class="lede">Sign in to open a proposal pull request.</p>
         <a class="btn" href="${escapeHtml(githubLoginUrl(PROPOSE_PATH))}">Log in</a>
-        <p class="hint" style="margin-top:1rem"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually on GitHub</a></p>
+        <p class="hint" style="margin-top:1rem"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
       </section>
     `);
     return;
@@ -25,16 +25,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   app.innerHTML = ctx.shell(`
     <section class="wrap detail propose-page">
       <h1>Start a project</h1>
-      <p class="lede">Describe the work, pay the submission fee on ${escapeHtml(networkLabel)}, and we'll open a PR on <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Plebly/proposals</a> for review.</p>
-
-      <div class="propose-guide">
-        <p>Strong proposals are concise and answer three things:</p>
-        <ul>
-          <li><strong>Problem</strong> — who is affected and why it matters for Bitcoin</li>
-          <li><strong>Plan</strong> — what you will ship, under a free/open license</li>
-          <li><strong>Proof</strong> — how reviewers verify the deliverable without ambiguity</li>
-        </ul>
-      </div>
+      <p class="lede">Describe the work and pay the ${escapeHtml(feeLabel)} submission fee on ${escapeHtml(networkLabel)}.</p>
 
       <form id="propose-form" class="form-panel form-panel-wide">
         <fieldset class="form-block">
@@ -46,12 +37,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           <label class="field">
             <span>Problem &amp; audience</span>
             <textarea name="problem" required minlength="40" rows="4" placeholder="What problem are you solving? Who benefits? Why is this good for Bitcoin?"></textarea>
-            <span class="field-hint">One focused paragraph. Name the users or ecosystem gap, not just the technology.</span>
           </label>
           <label class="field">
             <span>Plan &amp; deliverables</span>
             <textarea name="deliverable" required minlength="40" rows="5" placeholder="Concrete artifacts you will produce: code, docs, research, designs. Include license intent (FOSS)."></textarea>
-            <span class="field-hint">Be specific about what exists when the work is done — repos, specs, tests, or published results.</span>
           </label>
           <label class="field">
             <span>Verification</span>
@@ -69,7 +58,6 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           <label class="field">
             <span>Target funding (optional)</span>
             <input name="target_sats" type="number" min="0" step="1" placeholder="e.g. 5000000" />
-            <span class="field-hint">Suggested escrow goal in sats. Final amount depends on contributors.</span>
           </label>
           <label class="field">
             <span>Submission fee txid</span>

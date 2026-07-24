@@ -153,7 +153,7 @@ function discoverToolbarHtml(count: number): string {
   return `<div class="discover-toolbar">
     <div class="discover-toolbar-left">
       <h2 id="projects">Open projects</h2>
-      <p class="projects-sub"><span id="project-count">${count}</span> live · donate to any escrow below</p>
+      <p class="projects-sub"><span id="project-count">${count}</span> live</p>
     </div>
     <div class="discover-controls">
       <label class="discover-search">
@@ -168,7 +168,6 @@ function discoverToolbarHtml(count: number): string {
           <option value="floor">Closest to floor</option>
         </select>
       </label>
-      <a class="discover-repo" href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Repo →</a>
     </div>
   </div>
   <div class="builder-filters" role="group" aria-label="Builder filters">
@@ -185,7 +184,7 @@ function progressHtml(p: Proposal, floor: number): string {
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
   const label = open
-    ? "Open to claim"
+    ? `${pct}% funded`
     : near
       ? "Near floor"
       : isTakenStatus(String(p.status)) || p.claimer
@@ -238,7 +237,6 @@ function proposalCardHtml(
       </a>
       <div class="project-card-actions">
         <a class="btn project-donate-btn" href="${href}">Donate</a>
-        <a class="project-card-link" href="${proposalHref(p.path)}">Details →</a>
       </div>
     </article>`;
 }

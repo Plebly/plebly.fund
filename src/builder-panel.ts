@@ -42,7 +42,6 @@ export function builderPanelHtml(
   return `<div class="builder-panel" id="builder">
     <div class="builder-panel-head">
       <h2 class="builder-title">Build</h2>
-      <p class="builder-lede">Watch to follow funding. Claiming locks the work exclusively after a git PR merges — watching does not reserve it. A refundable claim bond is required.</p>
     </div>
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
@@ -50,8 +49,7 @@ export function builderPanelHtml(
     <div id="builder-body" class="builder-body">
       ${
         open
-          ? `<p class="builder-status">Open to claim — confirmed funding meets the ${formatSats(floor)} floor.</p>
-             ${claimBtnHtml()}`
+          ? claimBtnHtml()
           : need > 0
             ? `<p class="builder-status">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>
                ${claimBtnHtml(true)}`
@@ -62,7 +60,7 @@ export function builderPanelHtml(
     <div class="builder-modal" id="builder-claim-modal" hidden>
       <div class="builder-modal-card">
         <h3>Claim this project</h3>
-        <p>Exclusive for 90 days after the claim PR merges. Max one active claim per identity. Bond is refunded on completion; forfeited on expiry or abandoned checkpoint.</p>
+        <p>Exclusive for 90 days after merge. One active claim per identity. Bond refunded on completion; forfeited on expiry or abandoned checkpoint.</p>
         <p class="builder-bond-hint muted" id="claim-bond-hint">Bond: ${formatSats(CLAIM_BOND_SATS)} to the fee address.</p>
         <label class="donate-amount-label" for="claim-payout">Payout address</label>
         <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
@@ -137,8 +135,7 @@ function renderStatusBody(
 
   switch (status.state) {
     case "open":
-      body.innerHTML = `<p class="builder-status">Open to claim — confirmed funding meets the floor.</p>
-        ${claimBtnHtml()}`;
+      body.innerHTML = claimBtnHtml();
       break;
     case "below_floor": {
       const need = Math.max(
@@ -150,11 +147,11 @@ function renderStatusBody(
       break;
     }
     case "claim_pending":
-      body.innerHTML = `${meta}<p class="builder-status">Claim pending review${
+      body.innerHTML = `${meta}<p class="builder-status">Claim pending${
         status.pending?.pr_url
-          ? ` — <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">view PR</a>`
+          ? ` — <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
           : ""
-      }. Exclusive lock starts when the PR merges.</p>`;
+      }. Exclusive after merge.</p>`;
       break;
     case "claimed":
       if (isYou) {
@@ -183,8 +180,8 @@ function renderStatusBody(
         body.innerHTML = `${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
           status.claimer || "another builder",
         )}</strong>${
-          days != null ? ` · ${days} day${days === 1 ? "" : "s"} left in window` : ""
-        }. Opens again if the claim expires.</p>
+          days != null ? ` · ${days} day${days === 1 ? "" : "s"} left` : ""
+        }.</p>
         <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
       }
       break;
@@ -237,7 +234,7 @@ export async function bindBuilderPanel(
       const addr = params.fee_address
         ? ` to <code class="mono">${escapeHtml(params.fee_address)}</code>`
         : "";
-      bondHint.innerHTML = `Bond: <strong>${formatSats(params.claim_bond_sats)}</strong>${addr}. Refunded on completion; forfeited on expiry/abandon.`;
+      bondHint.innerHTML = `Bond: <strong>${formatSats(params.claim_bond_sats)}</strong>${addr}`;
     }
   } catch {
     /* defaults */

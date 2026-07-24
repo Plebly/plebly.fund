@@ -75,7 +75,7 @@ function claimsPaneHtml(
               }
               ${
                 c.pr_url
-                  ? `<a href="${escapeHtml(c.pr_url)}" target="_blank" rel="noreferrer">PR →</a>`
+                  ? `<a href="${escapeHtml(c.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
                   : ""
               }
             </li>`,
@@ -109,7 +109,6 @@ function claimsPaneHtml(
     : "";
 
   return `${summaryHtml}
-    <p class="hint">Exclusive lock starts when the claim PR merges. Bond refunded on completion; forfeited on expiry/abandon.</p>
     <h3 class="section-title">Pending</h3>
     ${pendingHtml}
     ${bonds}
@@ -205,7 +204,7 @@ export async function renderAccount(
             <input id="username-input" type="text" value="${escapeHtml(user.username || "")}" placeholder="yourname" pattern="[a-z0-9-]+" minlength="3" maxlength="32" ${user.username ? "readonly" : ""} />
             ${user.username ? "" : `<button type="button" class="btn" id="claim-username-btn">Claim</button>`}
           </div>
-          <p class="hint" id="username-hint">3–32 characters, lowercase letters, numbers, hyphens. First claim secures the name.</p>
+          <p class="hint" id="username-hint">3–32 characters · lowercase letters, numbers, hyphens</p>
         </fieldset>
 
         <fieldset class="form-block">
@@ -216,12 +215,11 @@ export async function renderAccount(
         <fieldset class="form-block">
           <legend>Payout address</legend>
           <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… or tb1…" maxlength="120" />
-          <p class="hint">Used when you claim a project. You can override per claim.</p>
+          <p class="hint">Default for claims; overrideable per claim.</p>
         </fieldset>
 
         <fieldset class="form-block">
           <legend>Links</legend>
-          <p class="hint">Paste a profile URL. Labels are optional for GitHub, X, LinkedIn, and other supported social sites — those show as icons on your profile.</p>
           <div id="links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
           <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
         </fieldset>

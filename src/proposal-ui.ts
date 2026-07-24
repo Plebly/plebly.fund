@@ -124,7 +124,6 @@ function explorerLink(href: string, label: string): string {
 export function donateTriggerHtml(): string {
   return `<div class="donate-trigger-card">
     <h2 class="donate-title">Donate</h2>
-    <p class="donate-lede">Fund this project’s escrow with Bitcoin on-chain or Lightning.</p>
     <button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>
   </div>`;
 }
@@ -161,24 +160,20 @@ export function donatePanelHtml(p: Proposal): string {
   return `<div class="donate-panel" id="donate">
     <div class="donate-panel-head">
       <h2 class="donate-title" id="donate-modal-title">Donate</h2>
-      <p class="donate-lede">Fund this project’s escrow. No account required — choose Bitcoin on-chain or Lightning.</p>
     </div>
     ${networkNote}
     <div class="donate-rails" role="tablist" aria-label="How to donate">
       <button type="button" class="donate-rail active" role="tab" aria-selected="true" data-tab="onchain" id="donate-rail-onchain">
         <span class="donate-rail-kicker">Bitcoin</span>
         <span class="donate-rail-name">On-chain</span>
-        <span class="donate-rail-desc">Send sats straight to escrow</span>
       </button>
       <button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
         <span class="donate-rail-kicker">Lightning</span>
         <span class="donate-rail-name">Invoice</span>
-        <span class="donate-rail-desc">Pay LN · settles into escrow</span>
       </button>
     </div>
 
     <div class="donate-pane" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
-      <p class="donate-pane-intro">Copy the address or scan the QR. Amount is optional.</p>
       <div class="donate-qr-wrap">
         <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
       </div>
@@ -191,13 +186,13 @@ export function donatePanelHtml(p: Proposal): string {
       <div class="donate-actions">
         <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
         <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
+        <a class="btn ghost" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">Explorer</a>
       </div>
-      <p class="donate-hint">Or scan the QR. <a href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a></p>
     </div>
 
     <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
       <div id="donate-ln-ready" hidden>
-        <p class="donate-pane-intro">Pay a Lightning invoice. A reverse swap sends the claim on-chain to this escrow (fees apply).</p>
+        <p class="donate-pane-intro">Reverse swap to escrow — fees apply.</p>
         <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
         <div class="donate-amount-row">
           <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
@@ -221,7 +216,6 @@ export function donatePanelHtml(p: Proposal): string {
         <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
       </div>
       <div id="donate-ln-unavailable" class="donate-ln-unavailable">
-        <p class="donate-pane-intro"><strong>Lightning</strong> settles into the same escrow after a short swap.</p>
         <p class="donate-ln-wait muted" id="donate-ln-wait">Checking availability…</p>
       </div>
     </div>
