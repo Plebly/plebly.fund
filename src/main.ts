@@ -32,7 +32,7 @@ function shell(inner: string): string {
   return `
     <header class="wrap site-header">
       <a class="brand" href="#/">
-        <img src="/logo.jpeg" alt="" width="36" height="36" />
+        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="36" height="36" />
         <span>Plebly</span>
       </a>
       <nav class="nav">
