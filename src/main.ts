@@ -1,6 +1,7 @@
 import "./style.css";
 import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
 import "@fortawesome/fontawesome-free/css/brands.min.css";
+import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
 import { WORKERS_API } from "./config";
 import { renderHome } from "./home-page";

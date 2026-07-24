@@ -7,9 +7,11 @@ import { socialAccountLink } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
+  bindDonateModal,
   bindDonatePanel,
   bindProposalCopyButtons,
-  donatePanelHtml,
+  donateModalHtml,
+  donateTriggerHtml,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
@@ -100,6 +102,8 @@ export async function renderProposalPage(
     const wantsDonate =
       /[?&]donate(?:=[^&]*)?(?:&|$)/.test(location.hash) ||
       /[?&]rail=lightning(?:&|$)/.test(location.hash);
+    const wantsLnRail =
+      /[?&](?:rail=lightning|donate=ln)(?:&|$)/.test(location.hash);
     const watches = user
       ? await fetchWatches().catch(() => [])
       : [];
@@ -132,13 +136,14 @@ export async function renderProposalPage(
         <div class="proposal-layout">
           <aside class="proposal-sidebar">
             ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
-            ${donatePanelHtml(match)}
+            ${match.escrow_address ? donateTriggerHtml() : ""}
             ${onChainPanelHtml(match)}
             ${milestonesHtml(match.milestones)}
           </aside>
 
           <div class="proposal-sections">${sectionsHtml}</div>
         </div>
+        ${match.escrow_address ? donateModalHtml(match) : ""}
       </section>
     `);
 
@@ -155,9 +160,10 @@ export async function renderProposalPage(
         proposalId: match.id,
         proposalPath: match.path,
       });
-      if (wantsDonate) {
-        app.querySelector("#donate")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      bindDonateModal(app, {
+        open: wantsDonate,
+        rail: wantsLnRail ? "lightning" : undefined,
+      });
     }
   } catch (e) {
     app.innerHTML = shell(

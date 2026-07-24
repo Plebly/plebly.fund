@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { btnWithIcon, solidIcon } from "./icons";
 import { BITCOIN_NETWORK, lightningUiAllowed } from "./config";
 import {
   createLightningInvoice,
@@ -119,6 +120,27 @@ function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
 }
 
+/** Compact sidebar card — opens donate modal. */
+export function donateTriggerHtml(): string {
+  return `<div class="donate-trigger-card">
+    <h2 class="donate-title">Donate</h2>
+    <p class="donate-lede">Fund this project’s escrow with Bitcoin on-chain or Lightning.</p>
+    <button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>
+  </div>`;
+}
+
+/** Full donate flow inside a modal shell. */
+export function donateModalHtml(p: Proposal): string {
+  if (!p.escrow_address) return "";
+  return `<div class="site-modal donate-modal" id="donate-modal" hidden>
+    <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
+    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
+      <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
+      ${donatePanelHtml(p)}
+    </div>
+  </div>`;
+}
+
 /** Prominent funder panel — Bitcoin on-chain and Lightning as equal rails. */
 export function donatePanelHtml(p: Proposal): string {
   if (!p.escrow_address) return "";
@@ -138,7 +160,7 @@ export function donatePanelHtml(p: Proposal): string {
 
   return `<div class="donate-panel" id="donate">
     <div class="donate-panel-head">
-      <h2 class="donate-title">Donate</h2>
+      <h2 class="donate-title" id="donate-modal-title">Donate</h2>
       <p class="donate-lede">Fund this project’s escrow. No account required — choose Bitcoin on-chain or Lightning.</p>
     </div>
     ${networkNote}
@@ -571,6 +593,46 @@ export async function bindDonatePanel(
     return;
   }
   bindLightningDonate(panel, normalized, status);
+}
+
+export function bindDonateModal(
+  root: ParentNode,
+  opts?: { open?: boolean; rail?: "onchain" | "lightning" },
+): void {
+  const modal = root.querySelector<HTMLElement>("#donate-modal");
+  const openBtn = root.querySelector<HTMLButtonElement>("#donate-open");
+  const closeBtn = root.querySelector<HTMLButtonElement>("#donate-close");
+  const backdrop = root.querySelector<HTMLElement>("[data-close-donate]");
+  const panel = root.querySelector("#donate");
+
+  const open = () => {
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+    if (opts?.rail === "lightning" && panel) {
+      selectDonateRail(panel, "lightning");
+    }
+    closeBtn?.focus();
+    window.addEventListener("keydown", onEscape);
+  };
+
+  const close = () => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+    window.removeEventListener("keydown", onEscape);
+    openBtn?.focus();
+  };
+
+  const onEscape = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && modal && !modal.hidden) close();
+  };
+
+  openBtn?.addEventListener("click", open);
+  closeBtn?.addEventListener("click", close);
+  backdrop?.addEventListener("click", close);
+
+  if (opts?.open) open();
 }
 
 export function onChainPanelHtml(p: Proposal): string {

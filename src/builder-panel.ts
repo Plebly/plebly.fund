@@ -11,8 +11,19 @@ import {
 import { CLAIM_FLOOR_SATS } from "./config";
 import { githubLoginUrl } from "./auth";
 import type { AuthUser } from "./auth";
+import { btnWithIcon } from "./icons";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
+
+function watchBtnHtml(watching: boolean): string {
+  return watching
+    ? btnWithIcon("eye-slash", "Unwatch")
+    : btnWithIcon("eye", "Watch");
+}
+
+function claimBtnHtml(disabled = false): string {
+  return `<button type="button" class="btn" id="builder-claim"${disabled ? " disabled" : ""}>${btnWithIcon("handshake", "Claim this project")}</button>`;
+}
 
 export function builderPanelHtml(
   p: Proposal,
@@ -30,16 +41,16 @@ export function builderPanelHtml(
       <p class="builder-lede">Watch to follow funding. Claiming locks the work exclusively after a git PR merges — watching does not reserve it.</p>
     </div>
     <div class="builder-actions">
-      <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watching ? "Watching" : "Watch"}</button>
+      <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
     <div id="builder-body" class="builder-body">
       ${
         open
           ? `<p class="builder-status">Open to claim — confirmed funding meets the ${formatSats(floor)} floor.</p>
-             <button type="button" class="btn" id="builder-claim">Claim this project</button>`
+             ${claimBtnHtml()}`
           : need > 0
             ? `<p class="builder-status">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>
-               <button type="button" class="btn" id="builder-claim" disabled>Claim this project</button>`
+               ${claimBtnHtml(true)}`
             : `<p class="builder-status muted">Loading claim status…</p>`
       }
     </div>
@@ -74,6 +85,11 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
   el.className = `builder-msg ${cls}`.trim();
 }
 
+function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
+  btn.dataset.watching = watching ? "1" : "0";
+  btn.innerHTML = watchBtnHtml(watching);
+}
+
 function renderStatusBody(
   body: HTMLElement,
   status: ClaimStatus,
@@ -90,7 +106,7 @@ function renderStatusBody(
   switch (status.state) {
     case "open":
       body.innerHTML = `<p class="builder-status">Open to claim — confirmed funding meets the floor.</p>
-        <button type="button" class="btn" id="builder-claim">Claim this project</button>`;
+        ${claimBtnHtml()}`;
       break;
     case "below_floor": {
       const need = Math.max(
@@ -98,7 +114,7 @@ function renderStatusBody(
         status.claim_floor_sats - (status.confirmed_balance_sats ?? 0),
       );
       body.innerHTML = `<p class="builder-status">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>
-        <button type="button" class="btn" id="builder-claim" disabled>Claim this project</button>`;
+        ${claimBtnHtml(true)}`;
       break;
     }
     case "claim_pending":
@@ -187,14 +203,12 @@ export async function bindBuilderPanel(
       const watching = watchBtn.dataset.watching === "1";
       if (watching) {
         await removeWatch(opts.proposal.path);
-        watchBtn.dataset.watching = "0";
-        watchBtn.textContent = "Watch";
-        setMsg(msg, "Removed from your watch list.");
+        setWatchBtn(watchBtn, false);
+        setMsg(msg, null);
       } else {
         await addWatch(opts.proposal.path);
-        watchBtn.dataset.watching = "1";
-        watchBtn.textContent = "Watching";
-        setMsg(msg, "Watching — this does not reserve the bounty.");
+        setWatchBtn(watchBtn, true);
+        setMsg(msg, null);
       }
     } catch (e) {
       if ((e as Error).message === "login_required") requireLogin();

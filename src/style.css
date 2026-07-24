@@ -488,6 +488,121 @@ a:hover {
   line-height: 1.5;
 }
 
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.btn-icon .fa-solid,
+.btn-icon .fa-brands {
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.site-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.site-modal[hidden] {
+  display: none !important;
+}
+
+.site-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 10, 0.72);
+}
+
+.site-modal-card {
+  position: relative;
+  width: min(32rem, 100%);
+  max-height: min(92vh, 48rem);
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.site-modal-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.site-modal-close:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.donate-modal-card .donate-panel {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  scroll-margin-top: 0;
+}
+
+.donate-trigger-card {
+  padding: 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(232, 149, 46, 0.28);
+  border-radius: var(--radius);
+}
+
+.donate-trigger-card .donate-title {
+  margin-bottom: 0.25rem;
+}
+
+.donate-trigger-card .donate-lede {
+  margin-bottom: 0.75rem;
+}
+
+.donate-open-btn {
+  width: 100%;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.danger-zone {
+  margin-top: 1.5rem;
+  border-color: rgba(196, 92, 74, 0.35);
+}
+
+.btn.danger {
+  color: #f0d5d0;
+  background: rgba(196, 92, 74, 0.18);
+  border: 1px solid rgba(196, 92, 74, 0.45);
+}
+
+.btn.danger:hover {
+  background: rgba(196, 92, 74, 0.28);
+  border-color: rgba(196, 92, 74, 0.65);
+}
+
 .deliverable-form {
   display: flex;
   flex-direction: column;
@@ -1411,6 +1526,8 @@ a:hover {
   color: var(--ink-secondary);
   font-size: 0.8125rem;
   line-height: 1.25;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .social-account:hover {
   color: var(--accent);
@@ -2513,13 +2630,13 @@ a:hover {
   padding: 0;
   margin: 0 0 2rem;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.375rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
 }
 
 .profile-links li {
-  display: flex;
+  display: inline-flex;
   max-width: 100%;
 }
 
@@ -2531,6 +2648,11 @@ a:hover {
   font-size: 0.875rem;
   line-height: 1.25;
   color: var(--accent);
+  flex-shrink: 0;
+}
+
+.profile-link:not(.profile-link-text) {
+  white-space: nowrap;
 }
 
 .profile-link:hover {
@@ -2554,11 +2676,23 @@ a:hover {
 
 .profile-link span {
   line-height: 1.25;
-  overflow-wrap: anywhere;
 }
 
 .profile-link-text span {
-  padding-left: 1.625rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.identity-panel {
+  margin-top: 1rem;
+}
+
+.identity-panel-label {
+  margin: 0 0 0.5rem;
+}
+
+.identity-links {
+  margin: 0;
 }
 
 .section-title {

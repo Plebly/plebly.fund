@@ -4,9 +4,23 @@ export const PLEBLY_GITHUB_URL = "https://github.com/Plebly";
 export const PLEBLY_X_URL = "https://x.com/joinplebly";
 
 type BrandIcon = "github" | "x-twitter";
+type SolidIcon =
+  | "eye"
+  | "eye-slash"
+  | "handshake"
+  | "bitcoin-sign"
+  | "xmark";
 
 export function brandIcon(className: BrandIcon | string): string {
   return `<i class="fa-brands fa-${className}" aria-hidden="true"></i>`;
+}
+
+export function solidIcon(className: SolidIcon | string): string {
+  return `<i class="fa-solid fa-${className}" aria-hidden="true"></i>`;
+}
+
+export function btnWithIcon(icon: SolidIcon | string, label: string): string {
+  return `<span class="btn-icon">${solidIcon(icon)}<span>${escapeHtml(label)}</span></span>`;
 }
 
 export function iconLink(

@@ -136,6 +136,19 @@ export async function checkUsernameAvailable(
   return Boolean(data.available);
 }
 
+export async function deleteAccount(): Promise<void> {
+  if (!WORKERS_API) throw new Error("API not configured");
+  let res: Response;
+  try {
+    res = await authFetch(`${API()}/profile/me`, { method: "DELETE" });
+  } catch {
+    throw new Error("Could not reach the API.");
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  clearStoredSession();
+}
+
 export async function logout(): Promise<void> {
   if (!WORKERS_API) return;
   clearStoredSession();

@@ -100,18 +100,142 @@ export function isKnownSocialUrl(url: string): boolean {
   return detectSocialPlatform(url) != null;
 }
 
-export function profileLinkHtml(link: ProfileLink): string {
-  const href = escapeHtml(link.url);
+function normalizeProfileUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./i, "").toLowerCase();
+    const path = u.pathname.replace(/\/+$/, "").toLowerCase() || "/";
+    return `${host}${path}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+function profilePathHandle(url: string): string | null {
+  try {
+    const path = new URL(url).pathname.replace(/^\/+|\/+$/g, "");
+    const seg = path.split("/").filter(Boolean)[0];
+    return seg ? seg.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop custom links that repeat OAuth GitHub / X identities. */
+export function filterIdentityDuplicateLinks(
+  links: ProfileLink[],
+  identity: { github?: string; x?: string },
+): ProfileLink[] {
+  const blocked = new Set<string>();
+  if (identity.github) {
+    blocked.add(normalizeProfileUrl(`https://github.com/${identity.github}`));
+  }
+  if (identity.x) {
+    blocked.add(
+      normalizeProfileUrl(`https://x.com/${identity.x.replace(/^@/, "")}`),
+    );
+  }
+
+  return links.filter((link) => {
+    const url = link.url.trim();
+    if (!url) return false;
+    if (blocked.has(normalizeProfileUrl(url))) return false;
+
+    const platform = detectSocialPlatform(url);
+    const handle = profilePathHandle(url);
+    if (
+      platform?.icon === "github" &&
+      identity.github &&
+      handle === identity.github.replace(/^@/, "").toLowerCase()
+    ) {
+      return false;
+    }
+    if (
+      platform?.icon === "x-twitter" &&
+      identity.x &&
+      handle === identity.x.replace(/^@/, "").toLowerCase()
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function profileLinksForUser(profile: {
+  github?: string;
+  x?: string;
+  links?: ProfileLink[];
+}): ProfileLink[] {
+  const oauth: ProfileLink[] = [];
+  if (profile.github) {
+    oauth.push({
+      label: "",
+      url: `https://github.com/${profile.github.replace(/^@/, "")}`,
+    });
+  }
+  if (profile.x) {
+    oauth.push({
+      label: "",
+      url: `https://x.com/${profile.x.replace(/^@/, "")}`,
+    });
+  }
+  const custom = filterIdentityDuplicateLinks(profile.links ?? [], profile);
+  return [...oauth, ...custom];
+}
+
+function profileLinkLabel(
+  link: ProfileLink,
+  identity?: { github?: string; x?: string },
+): string {
   const label = link.label.trim();
+  if (label) return label;
+
   const platform = detectSocialPlatform(link.url);
+  if (!platform) return link.url;
+
+  const handle = profilePathHandle(link.url);
+  if (
+    platform.icon === "github" &&
+    identity?.github &&
+    handle === identity.github.replace(/^@/, "").toLowerCase()
+  ) {
+    return `@${identity.github.replace(/^@/, "")}`;
+  }
+  if (
+    platform.icon === "x-twitter" &&
+    identity?.x &&
+    handle === identity.x.replace(/^@/, "").toLowerCase()
+  ) {
+    return `@${identity.x.replace(/^@/, "")}`;
+  }
+  return platform.label;
+}
+
+export function profileLinkHtml(
+  link: ProfileLink,
+  identity?: { github?: string; x?: string },
+): string {
+  const href = escapeHtml(link.url);
+  const platform = detectSocialPlatform(link.url);
+  const name = escapeHtml(profileLinkLabel(link, identity));
 
   if (platform) {
-    const name = escapeHtml(label || platform.label);
     return `<a class="profile-link" href="${href}" target="_blank" rel="noreferrer noopener">${brandIcon(platform.icon)}<span>${name}</span></a>`;
   }
 
-  const text = escapeHtml(label || link.url);
-  return `<a class="profile-link profile-link-text" href="${href}" target="_blank" rel="noreferrer noopener"><span>${text}</span></a>`;
+  return `<a class="profile-link profile-link-text" href="${href}" target="_blank" rel="noreferrer noopener"><span>${name}</span></a>`;
+}
+
+export function profileLinksListHtml(profile: {
+  github?: string;
+  x?: string;
+  links?: ProfileLink[];
+}): string {
+  const links = profileLinksForUser(profile);
+  if (!links.length) return "";
+  return `<ul class="profile-links">${links
+    .map((l) => `<li>${profileLinkHtml(l, profile)}</li>`)
+    .join("")}</ul>`;
 }
 
 /** Hostnames that skip the label requirement (keep in sync with workers/src/lib/social-urls.ts). */
