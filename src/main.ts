@@ -16,7 +16,7 @@ import { renderSubmit } from "./submit-page";
 import { addressBalanceSats } from "./mempool";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml, socialAccountLink } from "./icons";
 import type { Proposal, Route } from "./types";
-import { escapeHtml, formatSats, parseRoute } from "./util";
+import { escapeHtml, formatSats, parseRoute, proposalHref } from "./util";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -88,7 +88,7 @@ function progressHtml(p: Proposal): string {
 function proposalCardHtml(p: Proposal): string {
   const bal = p.balance_sats ?? 0;
   return `
-    <a class="proposal-card" href="#/proposal/${encodeURIComponent(p.path)}">
+    <a class="proposal-card" href="${proposalHref(p.path)}">
       <div class="proposal-card-top">
         <h3>${escapeHtml(p.title)}</h3>
         <span class="balance sats">${formatSats(bal)}</span>
@@ -251,6 +251,12 @@ async function render() {
     return;
   }
   if (r.name === "proposal") {
+    const canonical = proposalHref(r.id);
+    const current = location.hash.split("?")[0];
+    if (current !== canonical) {
+      location.replace(canonical);
+      return;
+    }
     await renderProposal(r.id);
     bindAuthHandlers();
     return;

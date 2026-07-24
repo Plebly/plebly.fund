@@ -9,7 +9,7 @@ import {
 import { socialAccountLink } from "./icons";
 import { listAllPublicProposals, proposalsForProfile } from "./github";
 import type { ProfileLink } from "./types";
-import { escapeHtml } from "./util";
+import { escapeHtml, proposalHref } from "./util";
 
 export type ShellContext = {
   user: AuthUser | null;
@@ -191,7 +191,7 @@ export async function renderPublicProfile(
       : `<ul class="work-list">${work
           .map(
             (p) =>
-              `<li><a href="#/proposal/${encodeURIComponent(p.path)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+              `<li><a href="${proposalHref(p.path)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
           )
           .join("")}</ul>`;
 
