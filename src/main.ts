@@ -5,6 +5,7 @@ import {
   githubLoginUrl,
   logout,
   profilePath,
+  type AuthUser,
 } from "./auth";
 import { listListedProposals, fetchParametersMarkdown } from "./github";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
