@@ -456,11 +456,11 @@ a:hover {
   font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  margin: 2rem 0 0.75rem;
+  margin: 2.25rem 0 0.75rem;
 }
 
 .prose-rich h2:first-child {
-  margin-top: 0.5rem;
+  margin-top: 0;
 }
 
 .prose-rich p {
@@ -480,6 +480,10 @@ a:hover {
 .prose-rich ul {
   margin: 0 0 1rem;
   padding-left: 1.25rem;
+}
+
+.prose-rich li {
+  margin-bottom: 0.5rem;
 }
 
 .prose-rich li {

@@ -55,7 +55,7 @@ function shell(inner: string): string {
         <nav class="nav">
           <a href="#/" class="${active("home")}">Bounties</a>
           <a href="#/submit" class="${active("submit")}">Submit</a>
-          <a href="#/about" class="${active("about")}">About</a>
+          <a href="#/about" class="${active("about")}">About us</a>
           ${authNavHtml()}
         </nav>
         ${pleblySocialLinksHtml()}
@@ -210,8 +210,7 @@ async function renderProposal(path: string) {
 async function renderAbout() {
   app.innerHTML = shell(`
     <section class="wrap detail about-page">
-      <a class="back-link" href="#/">← Bounties</a>
-      <h1>About</h1>
+      <h1>About us</h1>
       <div class="prose-rich">${ABOUT_HTML}</div>
     </section>
   `);

@@ -1,41 +1,41 @@
-## What Plebly is
+## About Plebly
 
-Plebly is a public bounty platform for Bitcoin development and research. Proposals live in git. Escrow lives on Bitcoin. No single party can freeze or redirect funds.
+Plebly is a public bounty platform for **Bitcoin development and research**. This site lists open bounties, shows on-chain escrow balances, and connects builders with funded work — without a central gatekeeper holding the keys.
 
-Anyone can fork the proposal record. Plebly can decline to list a proposal, but cannot erase it or confiscate its escrow.
+We built it for people who want hard problems solved in the open: protocol work, tooling, research, and infrastructure that makes Bitcoin better for everyone.
+
+## What we believe
+
+**Non-custodial escrow.** Escrow addresses are publicly verifiable multisig. No organization — including Plebly — can freeze, redirect, or confiscate funds. Payment follows the rules, not an admin button.
+
+**Uncensorable proposals.** The canonical record lives in [Plebly/proposals](https://github.com/Plebly/proposals). Anyone can fork it. We may decline to list a proposal, but we cannot erase it or its funding history.
+
+**Protocol over platform.** Parameters, keyholders, and escrow rules are published in git. Changes require a public process and notice — not a silent config change.
 
 ## How it works
 
-1. **Submit** — Open a pull request on [Plebly/proposals](https://github.com/Plebly/proposals) and pay the submission fee on-chain.
-2. **Fund** — Contributors send Bitcoin to the proposal's escrow address.
-3. **Claim** — A builder claims once funding reaches the claim floor.
+1. **Submit** — Open a pull request with your proposal and pay the submission fee on-chain.
+2. **Fund** — Anyone sends Bitcoin to the proposal's escrow address.
+3. **Claim** — A builder claims the bounty once funding hits the claim floor.
 4. **Complete** — Reviewers verify the deliverable; keyholders release escrow on success.
 
-## Fees and thresholds
+Browse [open bounties](#/), [submit your own](#/submit), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
-The submission fee is **{{submission_fee}}**.
+## Key parameters
 
-On successful completion, **{{platform_fee}}** is deducted from escrow and sent to the platform operations wallet.
+These numbers are fixed at launch and pulled from [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md) on every deploy:
 
-Bounties become claimable at **{{minimum_funding_claim_floor}}** (the claim floor). Milestone splits apply above **{{milestone_threshold}}**.
+- **Submission fee:** {{submission_fee}} — paid when you open a proposal PR; exact and non-refundable.
+- **Platform fee:** {{platform_fee}} — deducted only on successful completion.
+- **Claim floor:** {{minimum_funding_claim_floor}} — minimum escrow balance before a builder can claim.
+- **Claim window:** {{claim_window}} after a claim is accepted, with a possible {{claim_extension}}.
 
-After a claim is accepted, the builder has **{{claim_window}}** to deliver. Reviewers may grant **{{claim_extension}}**.
+Milestone splits apply above **{{milestone_threshold}}**. Badge tiers, funding windows, and confirmation counts are documented in PARAMETERS.md.
 
-## Funding windows and badges
+## Testing vs launch
 
-While parameters are still being ratified before launch, the proposed defaults are:
+The site is currently on **{{bitcoin_network}}** for end-to-end testing. Launch will use **mainnet only** with 3-of-5 multisig escrow — see [KEYHOLDERS.md](https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md).
 
-- Active funding window: **{{active_funding_window}}**
-- Funding window extension: **{{funding_window_extension}}**
-- Idle claimable → contributor ballot: **{{idle_claimable_contributor_ballot}}**
-- Notable Contributor badge: **{{badge_notable_contributor}}**
-- Major Contributor badge: **{{badge_major_contributor}}**
-- Patron badge: **{{badge_patron}}**
+## Get involved
 
-Confirmation requirements: submission fee **{{submission_fee_confirmations}}** conf; funding, badges, and votes **{{funding_badge_vote_confirmations}}** conf; completion finality **{{completion_finality_confirmations}}** conf.
-
-## Network
-
-The site is currently running on **{{bitcoin_network}}** for testing. Launch will use mainnet only with 3-of-5 multisig escrow — see [KEYHOLDERS.md](https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md).
-
-Canonical parameter values live in [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md). Changes require a public process and thirty-day notice.
+Follow updates on [X @joinplebly](https://x.com/joinplebly) and [GitHub @Plebly](https://github.com/Plebly). Questions, proposals, and corrections belong in the open repo.
