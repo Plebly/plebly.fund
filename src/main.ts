@@ -7,33 +7,43 @@ import { WORKERS_API } from "./config";
 import { renderHome } from "./home-page";
 import {
   consumeSessionFromHash,
-  currentReturnPath,
   fetchCurrentUser,
   githubLoginUrl,
   logout,
   accountNavLabel,
+  currentReturnPath,
   type AuthUser,
 } from "./auth";
 import { renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
+import {
+  applySeo,
+  bindSpaNavigation,
+  href,
+  migrateHashRoute,
+  navigate,
+  parseLocation,
+  proposalHref,
+  seoForRoute,
+} from "./router";
 import type { Route } from "./types";
-import { escapeHtml, parseRoute, proposalHref } from "./util";
+import { escapeHtml } from "./util";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 let currentUser: AuthUser | null = null;
 
 function route(): Route {
-  return parseRoute(location.hash);
+  return parseLocation();
 }
 
 function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
     return `<span class="nav-divider" aria-hidden="true"></span>
-      <a href="#/account" class="${route().name === "account" ? "active" : ""}">${escapeHtml(accountNavLabel(currentUser))}</a>
+      <a href="${href("/account")}" class="${route().name === "account" ? "active" : ""}">${escapeHtml(accountNavLabel(currentUser))}</a>
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<span class="nav-divider" aria-hidden="true"></span>
@@ -45,15 +55,15 @@ function shell(inner: string): string {
   const active = (name: string) => (r.name === name ? "active" : "");
   return `
     <header class="wrap-wide site-header">
-      <a class="brand" href="#/">
+      <a class="brand" href="${href("/")}">
         <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="28" height="28" />
         <span>Plebly</span>
       </a>
       <div class="header-end">
         <nav class="nav">
-          <a href="#/" class="${active("home")}">Projects</a>
-          <a href="#/propose" class="${active("propose")}">Start a project</a>
-          <a href="#/about" class="${active("about")}">About</a>
+          <a href="${href("/")}" class="${active("home")}">Projects</a>
+          <a href="${href("/propose")}" class="${active("propose")}">Start a project</a>
+          <a href="${href("/about")}" class="${active("about")}">About</a>
           ${authNavHtml()}
         </nav>
         ${pleblySocialLinksHtml()}
@@ -78,6 +88,16 @@ function bindAuthHandlers() {
   });
 }
 
+function scrollToHashTarget(): void {
+  const raw = location.hash;
+  if (!raw || raw === "#" || raw.includes("plebly_auth=")) return;
+  const id = decodeURIComponent(raw.slice(1).split("&")[0] || "");
+  if (!id) return;
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 async function render() {
   currentUser = await fetchCurrentUser();
   const r = route();
@@ -89,13 +109,12 @@ async function render() {
   };
 
   if (r.name === "work") {
-    location.replace("#/account?tab=watching");
+    navigate("/account?tab=watching", { replace: true });
     return;
   }
   if (r.name === "account") {
-    const tabParam = new URLSearchParams(
-      location.hash.includes("?") ? location.hash.slice(location.hash.indexOf("?")) : "",
-    ).get("tab");
+    applySeo(seoForRoute(r));
+    const tabParam = new URLSearchParams(location.search).get("tab");
     const initialTab = (
       tabParam === "watching" ||
       tabParam === "claims" ||
@@ -106,44 +125,53 @@ async function render() {
     ) as "profile" | "watching" | "claims" | "proposals" | undefined;
     await renderAccount(ctx, initialTab);
     bindAuthHandlers();
+    scrollToHashTarget();
     return;
   }
   if (r.name === "propose") {
+    applySeo(seoForRoute(r));
     await renderPropose(ctx);
     bindAuthHandlers();
+    scrollToHashTarget();
     return;
   }
   if (r.name === "profile") {
+    applySeo(seoForRoute(r));
     await renderPublicProfile(ctx, r.username);
     bindAuthHandlers();
+    scrollToHashTarget();
     return;
   }
   if (r.name === "about") {
+    applySeo(seoForRoute(r));
     renderAbout(shell);
     bindAuthHandlers();
+    scrollToHashTarget();
     return;
   }
   if (r.name === "params") {
-    location.replace("#/about");
+    navigate("/about", { replace: true });
     return;
   }
   if (r.name === "proposal") {
-    const hash = location.hash;
-    const q = hash.includes("?") ? hash.slice(hash.indexOf("?")) : "";
-    const canonical = proposalHref(r.id);
-    const current = hash.split("?")[0];
-    if (current !== canonical) {
-      location.replace(`${canonical}${q}`);
+    const canonicalPath = new URL(proposalHref(r.id), location.origin);
+    if (location.pathname !== canonicalPath.pathname) {
+      navigate(`${canonicalPath.pathname}${location.search}`, { replace: true });
       return;
     }
     await renderProposalPage(r.id, shell, currentUser);
     bindAuthHandlers();
+    scrollToHashTarget();
     return;
   }
+  applySeo(seoForRoute({ name: "home" }));
   await renderHome(shell);
   bindAuthHandlers();
+  scrollToHashTarget();
 }
 
-window.addEventListener("hashchange", () => void render());
+migrateHashRoute();
 consumeSessionFromHash();
+bindSpaNavigation();
+window.addEventListener("popstate", () => void render());
 void render();

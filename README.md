@@ -19,6 +19,8 @@ npm run dev
 
 Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages.yml`).
 
+The site uses **path-based SPA routes** (`/propose`, `/about`, `/proposal/…`). The build copies `index.html` to `404.html` so GitHub Pages deep links load the app. Legacy `#/…` URLs redirect to the path equivalent.
+
 ### Custom domain (`plebly.fund`)
 
 Cloudflare DNS should point `@` and `www` CNAME records at `plebly.github.io`. **Set proxy status to DNS only (grey cloud)** — orange cloud breaks GitHub Pages routing and blocks TLS certificate issuance.

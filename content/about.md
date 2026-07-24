@@ -19,7 +19,7 @@ We built it for people who want hard problems solved in the open: protocol work,
 3. **Claim** — A builder claims the project once funding hits the claim floor.
 4. **Complete** — Reviewers verify the deliverable; keyholders release escrow on success.
 
-Browse [open projects](#/), [start a project](#/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
+Browse [open projects](/), [start a project](/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
 ## For builders
 

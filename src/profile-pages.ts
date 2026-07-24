@@ -24,7 +24,14 @@ import {
 import { addressBalanceSats } from "./mempool";
 import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
 import type { ProfileLink, Proposal } from "./types";
-import { escapeHtml, formatSats, proposalHref } from "./util";
+import {
+  applySeo,
+  href,
+  navigate,
+  proposalHref,
+  seoForRoute,
+} from "./router";
+import { escapeHtml, formatSats } from "./util";
 
 export type ShellContext = {
   user: AuthUser | null;
@@ -70,7 +77,7 @@ function claimsPaneHtml(
     return `<div class="empty-state"><div class="empty-state-inner">
       <p class="empty-state-title">No claims yet</p>
       <p class="empty-state-body">When escrow hits the claim floor, claim a project from its page.</p>
-      <a class="btn" href="#/">Browse projects</a>
+      <a class="btn" href="${href("/")}">Browse projects</a>
     </div></div>`;
   }
 
@@ -146,7 +153,7 @@ export async function renderAccount(
   initialTab?: AccountTab,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
-  const loginReturn = "#/account";
+  const loginReturn = "/account";
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
@@ -268,7 +275,7 @@ export async function renderAccount(
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No watched projects</p>
                 <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
-                <a class="btn" href="#/">Browse projects</a>
+                <a class="btn" href="${href("/")}">Browse projects</a>
               </div></div>`
             : `<ul class="work-list">${watchRows
                 .map(({ w, p, bal }) => {
@@ -299,7 +306,7 @@ export async function renderAccount(
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No proposals yet</p>
                 <p class="empty-state-body">Describe the work and open a proposal PR.</p>
-                <a class="btn" href="#/propose">Start a project</a>
+                <a class="btn" href="${href("/propose")}">Start a project</a>
               </div></div>`
             : `<ul class="work-list">${myProposals
                 .map(
@@ -326,7 +333,7 @@ export async function renderAccount(
       history.replaceState(
         null,
         "",
-        name === "profile" ? "#/account" : `#/account?tab=${name}`,
+        name === "profile" ? href("/account") : href("/account", `?tab=${name}`),
       );
     });
   });
@@ -426,7 +433,7 @@ export async function renderAccount(
     }
     try {
       await deleteAccount();
-      location.hash = "#/";
+      navigate("/", { replace: true });
       ctx.rerender();
     } catch (err) {
       if (deleteMsg) {
@@ -448,6 +455,12 @@ export async function renderPublicProfile(
 
   const profile = await fetchPublicProfile(username);
   if (!profile) {
+    applySeo({
+      title: "Profile not found",
+      description: "This Plebly profile could not be found.",
+      path: `/u/${encodeURIComponent(username)}`,
+      noindex: true,
+    });
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
         <h1>Profile not found</h1>
@@ -456,6 +469,16 @@ export async function renderPublicProfile(
     `);
     return;
   }
+
+  applySeo(
+    seoForRoute(
+      { name: "profile", username: profile.username || username },
+      {
+        title: `@${profile.username || username}`,
+        description: profile.bio?.trim().slice(0, 160) || undefined,
+      },
+    ),
+  );
 
   const all = await listAllPublicProposals();
   const work = proposalsForProfile(all, profile);

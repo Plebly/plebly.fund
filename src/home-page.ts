@@ -14,7 +14,8 @@ import { fetchLightningStatus } from "./lightning";
 import { addressBalanceSats } from "./mempool";
 import { statusClass, statusLabel } from "./proposal-ui";
 import type { Proposal } from "./types";
-import { escapeHtml, formatSats, proposalHref } from "./util";
+import { href, proposalHref } from "./router";
+import { escapeHtml, formatSats } from "./util";
 
 export type HomeShell = (inner: string) => string;
 
@@ -46,8 +47,8 @@ function landingHeroHtml(): string {
       <p class="landing-title">Fund open Bitcoin projects.<br />Donate on-chain. Keep the record public.</p>
       <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
       <div class="landing-cta-row">
-        <a class="btn landing-btn" href="#projects">Donate to a project</a>
-        <a class="btn ghost landing-btn" href="#/propose">Start a project</a>
+        <a class="btn landing-btn" href="${href("/", "", "#projects")}">Donate to a project</a>
+        <a class="btn ghost landing-btn" href="${href("/propose")}">Start a project</a>
       </div>
     </div>
   </section>`;
@@ -59,21 +60,21 @@ function audiencePathsHtml(): string {
       kicker: "For donors",
       title: "Fund a project",
       body: "Pick a project, copy the escrow address or open your wallet — no account needed. Balances update from the mempool.",
-      href: "#projects",
+      href: href("/", "", "#projects"),
       cta: "Browse projects",
     },
     {
       kicker: "For builders",
       title: "Claim funded work",
       body: "When escrow hits the claim floor, builders can claim, deliver, and get paid through public review — not an admin button.",
-      href: "#projects?for=builders",
+      href: href("/", "?for=builders", "#projects"),
       cta: "See open projects",
     },
     {
       kicker: "For creators",
       title: "Start a project",
       body: "Describe the problem and deliverable, pay the submission fee on-chain, and let donors fund the escrow.",
-      href: "#/propose",
+      href: href("/propose"),
       cta: "Start a project",
     },
   ];
@@ -116,7 +117,7 @@ function howItWorksHtml(): string {
         </li>`,
         )
         .join("")}</ol>
-      <p class="landing-how-link"><a href="#/about">Read the full protocol →</a></p>
+      <p class="landing-how-link"><a href="${href("/about")}">Read the full protocol →</a></p>
     </div>
   </section>`;
 }
@@ -200,7 +201,7 @@ function proposalCardHtml(
     p.proposer?.username || p.proposer?.github
       ? `<span class="project-card-by">by ${escapeHtml(p.proposer.username || p.proposer.github || "")}</span>`
       : "";
-  const href = `${proposalHref(p.path)}?donate`;
+  const donateHref = `${proposalHref(p.path)}?donate`;
   const open = isOpenToClaim(p, floor);
   const secondaryBadge = open
     ? `<span class="project-card-open" title="Confirmed funding meets claim floor">Open to claim</span>`
@@ -222,7 +223,7 @@ function proposalCardHtml(
         ${progressHtml(p, floor)}
       </a>
       <div class="project-card-actions">
-        <a class="btn project-donate-btn" href="${href}">Donate</a>
+        <a class="btn project-donate-btn" href="${donateHref}">Donate</a>
       </div>
     </article>`;
 }
@@ -233,8 +234,8 @@ function bottomCtaHtml(): string {
       <h2>Have a project worth funding?</h2>
       <p>Write a clear deliverable, pay the on-chain submission fee, and list it for donors to support.</p>
       <div class="landing-cta-row">
-        <a class="btn" href="#/propose">Start a project</a>
-        <a class="btn ghost" href="#/about">About Plebly</a>
+        <a class="btn" href="${href("/propose")}">Start a project</a>
+        <a class="btn ghost" href="${href("/about")}">About Plebly</a>
       </div>
     </div>
   </section>`;
@@ -281,8 +282,8 @@ function bindDiscover(
   const searchEl = root.querySelector<HTMLInputElement>("#project-search");
   const sortEl = root.querySelector<HTMLSelectElement>("#project-sort");
   const countEl = root.querySelector("#project-count");
-  let builderFilter: BuilderFilter = /[?&]for=builders(?:&|$)/.test(
-    location.hash,
+  let builderFilter: BuilderFilter = /(?:^|[?&])for=builders(?:&|$)/.test(
+    location.search,
   )
     ? "open"
     : "all";
@@ -329,7 +330,7 @@ function bindDiscover(
       listEl.innerHTML = `<div class="empty-state-inner">
         <p class="empty-state-title">No matching projects</p>
         <p class="empty-state-body">Try another search, or start something new.</p>
-        <a class="btn" href="#/propose">Start a project</a>
+        <a class="btn" href="${href("/propose")}">Start a project</a>
       </div>`;
       return;
     }
@@ -387,7 +388,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       listEl.innerHTML = `<div class="empty-state-inner">
         <p class="empty-state-title">No open projects yet</p>
         <p class="empty-state-body">Be the first to list funded work in the open repo.</p>
-        <a class="btn" href="#/propose">Start a project</a>
+        <a class="btn" href="${href("/propose")}">Start a project</a>
       </div>`;
       return;
     }

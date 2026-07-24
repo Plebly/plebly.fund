@@ -3,9 +3,10 @@ import { fetchClaimParams } from "./builder";
 import { BITCOIN_NETWORK, SUBMISSION_FEE_SATS } from "./config";
 import { btnWithBrandIcon } from "./icons";
 import type { ShellContext } from "./profile-pages";
+import { href } from "./router";
 import { escapeHtml, formatSats } from "./util";
 
-const PROPOSE_PATH = "#/propose";
+const PROPOSE_PATH = "/propose";
 
 export async function renderPropose(ctx: ShellContext): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;

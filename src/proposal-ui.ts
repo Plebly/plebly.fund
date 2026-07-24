@@ -317,7 +317,7 @@ function bindDonateRails(panel: Element): void {
       selectDonateRail(panel, name);
     });
   });
-  if (/[?&](?:rail=lightning|donate=ln)(?:&|$)/.test(location.hash)) {
+  if (/(?:^|[?&])(?:rail=lightning|donate=ln)(?:&|$)/.test(location.search)) {
     selectDonateRail(panel, "lightning");
   }
 }

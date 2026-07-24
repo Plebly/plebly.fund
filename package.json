@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/build-about.mjs && vite",
-    "build": "node scripts/build-about.mjs && tsc && vite build",
+    "build": "node scripts/build-about.mjs && tsc && vite build && node scripts/spa-fallback.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

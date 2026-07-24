@@ -247,7 +247,7 @@ export async function bindBuilderPanel(
     payoutInput.value = opts.user.payout_address;
   }
 
-  const loginHref = githubLoginUrl(location.hash || "#/");
+  const loginHref = githubLoginUrl();
   const requireLogin = (reason: string) => {
     setMsg(
       msg,

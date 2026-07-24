@@ -8,6 +8,7 @@ import {
   ABOUT_STEPS,
 } from "./generated/about-data";
 import { pleblySocialAccountsHtml } from "./icons";
+import { href } from "./router";
 import { escapeHtml } from "./util";
 
 export type AboutShell = (inner: string) => string;
@@ -74,8 +75,8 @@ export function renderAbout(shell: AboutShell): void {
         <h2 class="about-block-title">How it works</h2>
         ${processStepsHtml()}
         <p class="about-links">
-          Browse <a href="#/">open projects</a>,
-          <a href="#/propose">start a project</a>, or read the full rules in the
+          Browse <a href="${href("/")}">open projects</a>,
+          <a href="${href("/propose")}">start a project</a>, or read the full rules in the
           <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">proposals repo</a>.
         </p>
       </section>

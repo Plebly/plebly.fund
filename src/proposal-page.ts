@@ -21,6 +21,7 @@ import {
   statusLabel,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
+import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml } from "./util";
 
 export type ProposalShell = (inner: string) => string;
@@ -76,6 +77,20 @@ export async function renderProposalPage(
     const proposals = await listListedProposals();
     const listed = proposals.find((p) => p.path === path);
     const match: Proposal = listed || proposalFromMarkdown(raw, path);
+    applySeo(
+      seoForRoute(
+        { name: "proposal", id: match.path || path },
+        {
+          title: match.title,
+          description:
+            match.body
+              ?.replace(/^#+\s+.+$/gm, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 160) || undefined,
+        },
+      ),
+    );
     const bodyMd = match.body;
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
@@ -100,10 +115,10 @@ export async function renderProposalPage(
         : "";
 
     const wantsDonate =
-      /[?&]donate(?:=[^&]*)?(?:&|$)/.test(location.hash) ||
-      /[?&]rail=lightning(?:&|$)/.test(location.hash);
+      /(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
+      /(?:^|[?&])rail=lightning(?:&|$)/.test(location.search);
     const wantsLnRail =
-      /[?&](?:rail=lightning|donate=ln)(?:&|$)/.test(location.hash);
+      /(?:^|[?&])(?:rail=lightning|donate=ln)(?:&|$)/.test(location.search);
     const watches = user
       ? await fetchWatches().catch(() => [])
       : [];
@@ -116,7 +131,7 @@ export async function renderProposalPage(
 
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
-        <a class="back-link" href="#/">← Projects</a>
+        <a class="back-link" href="${href("/")}">← Projects</a>
 
         <header class="proposal-hero">
           <div class="proposal-hero-top">

@@ -44,33 +44,3 @@ export function proposalRepoPath(slug: string): string {
   }
   return `${PROPOSALS_PREFIX}${path.endsWith(".md") ? path : `${path}.md`}`;
 }
-
-export function proposalHref(repoPath: string): string {
-  const segments = proposalSlug(repoPath)
-    .split("/")
-    .filter(Boolean)
-    .map((s) => encodeURIComponent(s));
-  return `#/proposal/${segments.join("/")}`;
-}
-
-export function parseRoute(hash: string): import("./types").Route {
-  const path = hash.replace(/^#\/?/, "").split("?")[0];
-  if (!path || path === "home") return { name: "home" };
-  if (path === "about") return { name: "about" };
-  if (path === "parameters") return { name: "params" };
-  if (path === "account") return { name: "account" };
-  if (path === "work") return { name: "work" };
-  if (path === "propose") return { name: "propose" };
-  if (path === "submit") return { name: "propose" };
-  if (path.startsWith("u/")) {
-    return { name: "profile", username: decodeURIComponent(path.slice(2)) };
-  }
-  if (path.startsWith("proposal/")) {
-    const slug = path.slice("proposal/".length);
-    return {
-      name: "proposal",
-      id: proposalRepoPath(slug),
-    };
-  }
-  return { name: "home" };
-}

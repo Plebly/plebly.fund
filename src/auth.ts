@@ -1,5 +1,12 @@
 import { WORKERS_API } from "./config";
+import {
+  currentReturnPath,
+  href,
+  profileHref as profilePath,
+} from "./router";
 import type { ProfileLink, PublicProfile, UserProfile } from "./types";
+
+export { currentReturnPath, profilePath };
 
 const SESSION_KEY = "plebly_session";
 
@@ -21,19 +28,26 @@ function clearStoredSession(): void {
   sessionStorage.removeItem(SESSION_KEY);
 }
 
-/** Read OAuth session from URL hash and strip it (workers.dev cookies are third-party). */
+/**
+ * Read OAuth session from URL hash and strip it.
+ * Workers append `#plebly_auth=…` because workers.dev cookies are third-party on plebly.fund.
+ */
 export function consumeSessionFromHash(): boolean {
   const hash = location.hash;
   const match = hash.match(/plebly_auth=([^&]+)/);
   if (!match) return false;
 
   setStoredSession(decodeURIComponent(match[1]));
-  const routeHash = hash.replace(/[?&]?plebly_auth=[^&]*/, "");
-  if (!routeHash || routeHash === "#") {
-    location.hash = "#/";
-  } else {
-    location.hash = routeHash.startsWith("#") ? routeHash : `#${routeHash}`;
-  }
+  const cleaned = hash
+    .replace(/^[?#]/, "")
+    .replace(/[?&]?plebly_auth=[^&]*/g, "")
+    .replace(/^&/, "");
+  const nextHash = cleaned ? `#${cleaned}` : "";
+  history.replaceState(
+    null,
+    "",
+    `${location.pathname}${location.search}${nextHash}`,
+  );
   return true;
 }
 
@@ -46,26 +60,18 @@ function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
 
 export type AuthUser = UserProfile;
 
-export function profilePath(username: string): string {
-  return `#/u/${encodeURIComponent(username)}`;
-}
-
-/** Current hash route for post-login redirect, e.g. #/propose */
-export function currentReturnPath(): string {
-  const hash = location.hash.replace(/[?&]?plebly_auth=[^&]*/, "");
-  if (!hash || hash === "#") return "#/";
-  return hash.startsWith("#") ? hash : `#${hash}`;
-}
-
+/** Build GitHub OAuth URL; return_to is a full path URL (e.g. https://plebly.fund/propose). */
 export function githubLoginUrl(returnPath?: string): string {
   const base = `${API()}/auth/github`;
-  const siteBase = import.meta.env.BASE_URL || "/";
-  const origin = `${window.location.origin}${siteBase}`.replace(/\/$/, "");
-  const path = returnPath ?? currentReturnPath();
-  const returnTo = encodeURIComponent(
-    `${origin}${path.startsWith("#") ? path : `#${path}`}`,
-  );
-  return `${base}?return_to=${returnTo}`;
+  let path = returnPath ?? currentReturnPath();
+  if (path.startsWith("#/")) path = path.slice(1);
+  if (path.startsWith("#")) path = "/";
+  if (!path.startsWith("/")) path = `/${path}`;
+  const qIdx = path.indexOf("?");
+  const pathname = qIdx === -1 ? path : path.slice(0, qIdx);
+  const search = qIdx === -1 ? "" : path.slice(qIdx);
+  const returnTo = `${window.location.origin}${href(pathname, search)}`;
+  return `${base}?return_to=${encodeURIComponent(returnTo)}`;
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
