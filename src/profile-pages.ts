@@ -9,9 +9,10 @@ import {
 } from "./auth";
 import { CLAIM_FLOOR_SATS } from "./config";
 import {
-  fetchMyPendingClaims,
+  fetchMyClaims,
   fetchWatches,
   isOpenToClaim,
+  type ClaimLedgerView,
 } from "./builder";
 import { socialAccountLink } from "./icons";
 import {
@@ -32,6 +33,87 @@ export type ShellContext = {
 };
 
 type AccountTab = "profile" | "watching" | "claims" | "proposals";
+
+function claimsPaneHtml(
+  pending: {
+    proposal_id: string;
+    proposal_path: string;
+    pr_url?: string;
+    claim_bond_txid?: string;
+  }[],
+  ledger: ClaimLedgerView | null,
+): string {
+  const summary = ledger?.summary;
+  const summaryHtml = summary
+    ? `<div class="claim-summary">
+        <span class="pill">Active ${summary.active}</span>
+        <span class="pill">Completed ${summary.completed}</span>
+        <span class="pill">Expired ${summary.expired}</span>
+        <span class="pill">Abandoned ${summary.abandoned}</span>
+        <span class="pill">Rejected ${summary.rejected}</span>
+        ${
+          ledger
+            ? `<span class="pill">Next bond ${formatSats(ledger.required_bond_sats)}</span>`
+            : ""
+        }
+      </div>`
+    : "";
+
+  const pendingHtml =
+    pending.length === 0
+      ? `<p class="muted">No pending site claims.</p>`
+      : `<ul class="work-list">${pending
+          .map(
+            (c) => `<li>
+              <a href="${proposalHref(c.proposal_path)}">${escapeHtml(c.proposal_id)}</a>
+              <span class="pill">Pending</span>
+              ${
+                c.claim_bond_txid
+                  ? `<span class="mono muted">${escapeHtml(c.claim_bond_txid.slice(0, 10))}…</span>`
+                  : ""
+              }
+              ${
+                c.pr_url
+                  ? `<a href="${escapeHtml(c.pr_url)}" target="_blank" rel="noreferrer">PR →</a>`
+                  : ""
+              }
+            </li>`,
+          )
+          .join("")}</ul>`;
+
+  const bonds = ledger?.bonds?.length
+    ? `<h3 class="section-title">Bonds</h3><ul class="work-list">${ledger.bonds
+        .slice(0, 20)
+        .map(
+          (b) => `<li>
+            <a href="${proposalHref(`proposals/listed/${b.proposal_id}.md`)}">${escapeHtml(b.proposal_id)}</a>
+            <span class="pill">${escapeHtml(b.status)}</span>
+            <span class="mono muted">${escapeHtml(b.txid.slice(0, 10))}… · ${formatSats(b.amount_sats)}</span>
+          </li>`,
+        )
+        .join("")}</ul>`
+    : "";
+
+  const cooldowns = ledger?.cooldowns?.length
+    ? `<h3 class="section-title">Cooldowns</h3><ul class="work-list">${ledger.cooldowns
+        .slice(0, 20)
+        .map(
+          (c) => `<li>
+            <span>${escapeHtml(c.proposal_id)}</span>
+            <span class="pill">${escapeHtml(c.reason)}</span>
+            <span class="muted">until ${escapeHtml(new Date(c.until).toLocaleDateString())}</span>
+          </li>`,
+        )
+        .join("")}</ul>`
+    : "";
+
+  return `${summaryHtml}
+    <p class="hint">Exclusive lock starts when the claim PR merges. Bond refunded on completion; forfeited on expiry/abandon.</p>
+    <h3 class="section-title">Pending</h3>
+    ${pendingHtml}
+    ${bonds}
+    ${cooldowns}`;
+}
 
 function linkRowHtml(links: ProfileLink[]): string {
   return links
@@ -65,11 +147,13 @@ export async function renderAccount(
 
   const user = ctx.user;
   const tab: AccountTab = initialTab || "profile";
-  const [watches, pendingClaims, allProps] = await Promise.all([
+  const [watches, myClaims, allProps] = await Promise.all([
     fetchWatches().catch(() => []),
-    fetchMyPendingClaims().catch(() => []),
+    fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
     listListedProposals().catch(() => [] as Proposal[]),
   ]);
+  const pendingClaims = myClaims.pending;
+  const ledger = myClaims.ledger;
   const byPath = new Map(allProps.map((p) => [p.path, p]));
   const watchRows = await Promise.all(
     watches.map(async (w) => {
@@ -178,24 +262,7 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="claims" ${tab === "claims" ? "" : "hidden"}>
-        ${
-          pendingClaims.length === 0
-            ? `<p class="muted">No pending site claims. When a project is open to claim, use Claim on the project page.</p>
-               <p class="hint">Exclusive lock starts when the claim PR merges in git.</p>`
-            : `<ul class="work-list">${pendingClaims
-                .map(
-                  (c) => `<li>
-                    <a href="${proposalHref(c.proposal_path)}">${escapeHtml(c.proposal_id)}</a>
-                    <span class="pill">Pending</span>
-                    ${
-                      c.pr_url
-                        ? `<a href="${escapeHtml(c.pr_url)}" target="_blank" rel="noreferrer">PR →</a>`
-                        : ""
-                    }
-                  </li>`,
-                )
-                .join("")}</ul>`
-        }
+        ${claimsPaneHtml(pendingClaims, ledger)}
       </div>
 
       <div class="account-pane" data-pane="proposals" ${tab === "proposals" ? "" : "hidden"}>
@@ -373,6 +440,28 @@ export async function renderPublicProfile(
           )
           .join("")}</ul>`;
 
+  const s = profile.claim_summary;
+  const claimStatsHtml = s
+    ? `<div class="claim-summary">
+        <span class="pill">Claims done ${s.completed}</span>
+        <span class="pill">Active ${s.active}</span>
+        <span class="pill">Expired ${s.expired}</span>
+        <span class="pill">Abandoned ${s.abandoned}</span>
+        <span class="pill">Rejected ${s.rejected}</span>
+      </div>`
+    : "";
+  const suspendHtml = profile.claim_suspended
+    ? `<p class="error">Claiming suspended${
+        profile.claim_suspend_reason
+          ? `: ${escapeHtml(profile.claim_suspend_reason)}`
+          : ""
+      }${
+        profile.claim_suspend_until
+          ? ` until ${escapeHtml(new Date(profile.claim_suspend_until).toLocaleDateString())}`
+          : ""
+      }.</p>`
+    : "";
+
   app.innerHTML = ctx.shell(`
     <section class="wrap detail profile-page">
       <div class="profile-header">
@@ -381,8 +470,10 @@ export async function renderPublicProfile(
           <h1>${escapeHtml(profile.username || username)}</h1>
         </div>
       </div>
+      ${suspendHtml}
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
       ${linksHtml}
+      ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}
       <h2 class="section-title">Work</h2>
       ${workHtml}
     </section>

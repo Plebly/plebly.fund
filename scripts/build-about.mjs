@@ -197,6 +197,25 @@ export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
   const claimFloorSats = parseSats(params.minimum_funding_claim_floor);
   const milestoneSats = parseSats(params.milestone_threshold);
   const platformFeePct = parsePercent(params.platform_fee);
+  const firstInt = (raw, fallback) => {
+    const m = String(raw ?? "").match(/(\d+)/);
+    return m ? Number(m[1]) : fallback;
+  };
+  const claimBondSats = parseSats(params.claim_bond) ?? 10_000;
+  const maxActiveClaims = firstInt(params.max_active_claims, 1);
+  const claimPendingTtlHours = firstInt(params.claim_pending_ttl, 72);
+  const reclaimCooldownDays = firstInt(params.reclaim_cooldown, 30);
+  const claimCheckpointDay = firstInt(params.claim_checkpoint_day, 45);
+  const claimCheckpointGraceDays = firstInt(params.claim_checkpoint_grace, 7);
+  const claimAbuseEscalationThreshold = firstInt(
+    params.claim_abuse_escalation_threshold,
+    2,
+  );
+  const maxSiteClaimPrsPerDay = firstInt(params.max_site_claim_prs_per_day, 10);
+  const identityRelinkCooldownDays = firstInt(
+    params.identity_relink_cooldown,
+    7,
+  );
 
   if (
     submissionFeeSats == null ||
@@ -212,7 +231,16 @@ export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
     `export const SUBMISSION_FEE_SATS = ${submissionFeeSats};
 export const CLAIM_FLOOR_SATS = ${claimFloorSats};
 export const MILESTONE_THRESHOLD_SATS = ${milestoneSats};
-export const PLATFORM_FEE_PERCENT = ${platformFeePct};`,
+export const PLATFORM_FEE_PERCENT = ${platformFeePct};
+export const CLAIM_BOND_SATS = ${claimBondSats};
+export const MAX_ACTIVE_CLAIMS = ${maxActiveClaims};
+export const CLAIM_PENDING_TTL_HOURS = ${claimPendingTtlHours};
+export const RECLAIM_COOLDOWN_DAYS = ${reclaimCooldownDays};
+export const CLAIM_CHECKPOINT_DAY = ${claimCheckpointDay};
+export const CLAIM_CHECKPOINT_GRACE_DAYS = ${claimCheckpointGraceDays};
+export const CLAIM_ABUSE_ESCALATION_THRESHOLD = ${claimAbuseEscalationThreshold};
+export const MAX_SITE_CLAIM_PRS_PER_DAY = ${maxSiteClaimPrsPerDay};
+export const IDENTITY_RELINK_COOLDOWN_DAYS = ${identityRelinkCooldownDays};`,
   );
 
   console.log("Generated about page and parameters from PARAMETERS.md");

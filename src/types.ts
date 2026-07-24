@@ -18,10 +18,23 @@ export type UserProfile = {
   username_claimed_at?: string;
 };
 
+export type ClaimSummary = {
+  active: number;
+  completed: number;
+  expired: number;
+  rejected: number;
+  abandoned: number;
+};
+
 export type PublicProfile = Pick<
   UserProfile,
   "username" | "bio" | "links" | "github" | "nostr" | "x" | "avatar_url" | "created_at"
->;
+> & {
+  claim_suspended?: boolean;
+  claim_suspend_reason?: string;
+  claim_suspend_until?: string;
+  claim_summary?: ClaimSummary;
+};
 
 export type ProposalStatus =
   | "pr_open"

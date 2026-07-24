@@ -1,14 +1,18 @@
 import {
   addWatch,
   claimWindowDaysLeft,
+  fetchClaimParams,
   fetchClaimStatus,
   isOpenToClaim,
   removeWatch,
+  submitAbandonedChallenge,
+  submitCheckpoint,
   submitClaim,
   submitDeliverable,
+  type ClaimParams,
   type ClaimStatus,
 } from "./builder";
-import { CLAIM_FLOOR_SATS } from "./config";
+import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
 import { githubLoginUrl } from "./auth";
 import type { AuthUser } from "./auth";
 import { btnWithIcon } from "./icons";
@@ -38,7 +42,7 @@ export function builderPanelHtml(
   return `<div class="builder-panel" id="builder">
     <div class="builder-panel-head">
       <h2 class="builder-title">Build</h2>
-      <p class="builder-lede">Watch to follow funding. Claiming locks the work exclusively after a git PR merges — watching does not reserve it.</p>
+      <p class="builder-lede">Watch to follow funding. Claiming locks the work exclusively after a git PR merges — watching does not reserve it. A refundable claim bond is required.</p>
     </div>
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
@@ -58,9 +62,12 @@ export function builderPanelHtml(
     <div class="builder-modal" id="builder-claim-modal" hidden>
       <div class="builder-modal-card">
         <h3>Claim this project</h3>
-        <p>Exclusive for 90 days after the claim PR merges. First merge wins. Provide a Bitcoin payout address.</p>
+        <p>Exclusive for 90 days after the claim PR merges. Max one active claim per identity. Bond is refunded on completion; forfeited on expiry or abandoned checkpoint.</p>
+        <p class="builder-bond-hint muted" id="claim-bond-hint">Bond: ${formatSats(CLAIM_BOND_SATS)} to the fee address.</p>
         <label class="donate-amount-label" for="claim-payout">Payout address</label>
         <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
+        <label class="donate-amount-label" for="claim-bond-txid">Claim bond txid</label>
+        <input id="claim-bond-txid" class="donate-amount mono" type="text" maxlength="64" placeholder="64-char txid" />
         <label class="donate-amount-label" for="claim-note">Note (optional)</label>
         <input id="claim-note" class="donate-amount" type="text" maxlength="200" placeholder="Short note for reviewers" />
         <div class="donate-actions">
@@ -90,10 +97,34 @@ function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
   btn.innerHTML = watchBtnHtml(watching);
 }
 
+function metaBits(status: ClaimStatus): string {
+  const bits: string[] = [];
+  if (status.proposer_claimed) {
+    bits.push(`<span class="pill pill-status status-active">Proposer-claimed</span>`);
+  }
+  if (status.claim_bond_txid) {
+    bits.push(
+      `<span class="builder-meta">Bond locked · <code class="mono">${escapeHtml(status.claim_bond_txid.slice(0, 12))}…</code></span>`,
+    );
+  }
+  if (status.checkpoint_due_at) {
+    const due = new Date(status.checkpoint_due_at).toLocaleDateString();
+    bits.push(
+      status.checkpoint_url
+        ? `<span class="builder-meta">Checkpoint filed</span>`
+        : `<span class="builder-meta">Checkpoint due ${escapeHtml(due)}</span>`,
+    );
+  }
+  return bits.length
+    ? `<div class="builder-meta-row">${bits.join(" ")}</div>`
+    : "";
+}
+
 function renderStatusBody(
   body: HTMLElement,
   status: ClaimStatus,
   user: AuthUser | null,
+  proposalPath: string,
 ): void {
   const days = claimWindowDaysLeft(status.claimed_at);
   const isYou =
@@ -102,6 +133,7 @@ function renderStatusBody(
     (status.claimer === user.username ||
       status.claimer === user.github ||
       status.claimer === user.id);
+  const meta = metaBits(status);
 
   switch (status.state) {
     case "open":
@@ -118,7 +150,7 @@ function renderStatusBody(
       break;
     }
     case "claim_pending":
-      body.innerHTML = `<p class="builder-status">Claim pending review${
+      body.innerHTML = `${meta}<p class="builder-status">Claim pending review${
         status.pending?.pr_url
           ? ` — <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">view PR</a>`
           : ""
@@ -126,10 +158,18 @@ function renderStatusBody(
       break;
     case "claimed":
       if (isYou) {
-        body.innerHTML = `<p class="builder-status">You claimed this project${
+        body.innerHTML = `${meta}<p class="builder-status">You claimed this project${
           days != null ? ` · ${days} day${days === 1 ? "" : "s"} left` : ""
         }.</p>
-        <button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
+        <div class="builder-claim-tools">
+          <button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>
+          <button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
+        </div>
+        <div id="checkpoint-form" class="deliverable-form" hidden>
+          <label class="donate-amount-label" for="checkpoint-url">Progress URL</label>
+          <input id="checkpoint-url" class="donate-amount" type="url" placeholder="https://…" />
+          <button type="button" class="btn" id="checkpoint-submit">Save checkpoint</button>
+        </div>
         <div id="deliverable-form" class="deliverable-form" hidden>
           <label class="donate-amount-label" for="deliv-url">Deliverable URL</label>
           <input id="deliv-url" class="donate-amount" type="url" placeholder="https://…" />
@@ -140,26 +180,21 @@ function renderStatusBody(
           <button type="button" class="btn" id="deliv-submit">Open deliverable PR</button>
         </div>`;
       } else {
-        body.innerHTML = `<p class="builder-status">Claimed by <strong>${escapeHtml(
+        body.innerHTML = `${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
           status.claimer || "another builder",
         )}</strong>${
           days != null ? ` · ${days} day${days === 1 ? "" : "s"} left in window` : ""
-        }. Opens again if the claim expires.</p>`;
+        }. Opens again if the claim expires.</p>
+        <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
       }
       break;
     case "in_review":
-      body.innerHTML = `<p class="builder-status">In review${
-        status.claimer
-          ? ` · fulfiller ${escapeHtml(status.claimer)}`
-          : ""
-      }.${
-        status.pending
-          ? ""
-          : ""
-      }</p>`;
+      body.innerHTML = `${meta}<p class="builder-status">In review${
+        status.claimer ? ` · fulfiller ${escapeHtml(status.claimer)}` : ""
+      }.</p>`;
       break;
     case "completed":
-      body.innerHTML = `<p class="builder-status">Completed${
+      body.innerHTML = `${meta}<p class="builder-status">Completed${
         status.claimer ? ` · ${escapeHtml(status.claimer)}` : ""
       }.</p>`;
       break;
@@ -185,6 +220,28 @@ export async function bindBuilderPanel(
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
+  const bondInput = panel.querySelector<HTMLInputElement>("#claim-bond-txid");
+  const bondHint = panel.querySelector<HTMLElement>("#claim-bond-hint");
+
+  let params: ClaimParams = {
+    claim_bond_sats: CLAIM_BOND_SATS,
+    max_active_claims: 1,
+    reclaim_cooldown_days: 30,
+    checkpoint_day: 45,
+    checkpoint_grace_days: 7,
+    fee_address: null,
+  };
+  try {
+    params = await fetchClaimParams();
+    if (bondHint) {
+      const addr = params.fee_address
+        ? ` to <code class="mono">${escapeHtml(params.fee_address)}</code>`
+        : "";
+      bondHint.innerHTML = `Bond: <strong>${formatSats(params.claim_bond_sats)}</strong>${addr}. Refunded on completion; forfeited on expiry/abandon.`;
+    }
+  } catch {
+    /* defaults */
+  }
 
   if (payoutInput && opts.user?.payout_address) {
     payoutInput.value = opts.user.payout_address;
@@ -216,6 +273,17 @@ export async function bindBuilderPanel(
     }
   });
 
+  const refreshStatus = async () => {
+    const status = await fetchClaimStatus(opts.proposal.path);
+    if (status && body) {
+      renderStatusBody(body, status, opts.user, opts.proposal.path);
+      bindClaimButton();
+      bindDeliverable();
+      bindCheckpoint();
+      bindChallenge();
+    }
+  };
+
   const bindClaimButton = () => {
     panel.querySelector<HTMLButtonElement>("#builder-claim")?.addEventListener(
       "click",
@@ -240,8 +308,13 @@ export async function bindBuilderPanel(
       return;
     }
     const payout = payoutInput?.value.trim() || "";
+    const bond = bondInput?.value.trim() || "";
     if (!payout) {
       setMsg(msg, "Enter a payout address.", "error");
+      return;
+    }
+    if (!bond || bond.length !== 64) {
+      setMsg(msg, "Enter the 64-character claim bond txid.", "error");
       return;
     }
     setMsg(msg, "Opening claim PR…");
@@ -250,24 +323,78 @@ export async function bindBuilderPanel(
         proposal_path: opts.proposal.path,
         payout_address: payout,
         note: noteInput?.value.trim() || undefined,
+        claim_bond_txid: bond,
       });
       if (modal) modal.hidden = true;
       setMsg(
         msg,
-        `Claim PR opened. Exclusive after merge: ${result.pr_url}`,
+        `Claim PR opened (bond ${formatSats(result.bond_sats || params.claim_bond_sats)}). Exclusive after merge: ${result.pr_url}`,
         "success",
       );
-      const status = await fetchClaimStatus(opts.proposal.path);
-      if (status && body) {
-        renderStatusBody(body, status, opts.user);
-        bindClaimButton();
-        bindDeliverable();
-      }
+      await refreshStatus();
     } catch (e) {
       if ((e as Error).message === "login_required") requireLogin();
       else setMsg(msg, (e as Error).message, "error");
     }
   });
+
+  const bindCheckpoint = () => {
+    panel.querySelector("#builder-checkpoint")?.addEventListener("click", () => {
+      const form = panel.querySelector<HTMLElement>("#checkpoint-form");
+      if (form) form.hidden = !form.hidden;
+    });
+    panel.querySelector("#checkpoint-submit")?.addEventListener("click", async () => {
+      const url = (
+        panel.querySelector("#checkpoint-url") as HTMLInputElement | null
+      )?.value.trim();
+      if (!url?.startsWith("https://")) {
+        setMsg(msg, "Checkpoint URL must be https://", "error");
+        return;
+      }
+      try {
+        await submitCheckpoint({
+          proposal_path: opts.proposal.path,
+          url,
+        });
+        setMsg(msg, "Checkpoint saved.", "success");
+        await refreshStatus();
+      } catch (e) {
+        if ((e as Error).message === "login_required") requireLogin();
+        else setMsg(msg, (e as Error).message, "error");
+      }
+    });
+  };
+
+  const bindChallenge = () => {
+    panel.querySelector("#builder-challenge")?.addEventListener("click", async () => {
+      if (!opts.user) {
+        requireLogin();
+        return;
+      }
+      const reason = window.prompt(
+        "Why is this claim abandoned? (visible in challenge PR)",
+        "No progress / missed checkpoint",
+      );
+      if (reason == null) return;
+      setMsg(msg, "Opening abandoned-claim challenge…");
+      try {
+        const result = await submitAbandonedChallenge({
+          proposal_path: opts.proposal.path,
+          reason: reason.trim() || undefined,
+        });
+        setMsg(
+          msg,
+          result.pr_url
+            ? `Challenge opened: ${result.pr_url}`
+            : "Challenge recorded.",
+          "success",
+        );
+      } catch (e) {
+        if ((e as Error).message === "login_required") requireLogin();
+        else setMsg(msg, (e as Error).message, "error");
+      }
+    });
+  };
 
   const bindDeliverable = () => {
     panel
@@ -307,12 +434,7 @@ export async function bindBuilderPanel(
   };
 
   try {
-    const status = await fetchClaimStatus(opts.proposal.path);
-    if (status && body) {
-      renderStatusBody(body, status, opts.user);
-      bindClaimButton();
-      bindDeliverable();
-    }
+    await refreshStatus();
   } catch {
     /* keep static HTML */
   }
