@@ -60,12 +60,24 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           <div class="field cover-field">
             <span>Cover image <em class="optional">(optional)</em></span>
-            <input type="file" id="propose-cover-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
-            <div class="cover-preview" id="propose-cover-preview" hidden>
-              <img id="propose-cover-img" alt="Cover preview" />
-              <button type="button" class="btn ghost cover-clear" id="propose-cover-clear">Remove</button>
+            <input type="file" id="propose-cover-input" class="cover-file-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden />
+            <div class="cover-picker" id="propose-cover-picker">
+              <button type="button" class="cover-pick-btn" id="propose-cover-pick">
+                <span class="cover-pick-label">Choose cover</span>
+                <span class="cover-pick-meta">JPEG, PNG, or WebP · max 2 MiB · 16:9 works best</span>
+              </button>
             </div>
-            <span class="field-hint" id="propose-cover-hint">JPEG, PNG, or WebP · max 2 MiB</span>
+            <div class="cover-preview" id="propose-cover-preview" hidden>
+              <div class="cover-preview-frame">
+                <img id="propose-cover-img" alt="" />
+                <div class="cover-preview-status" id="propose-cover-status" hidden></div>
+              </div>
+              <div class="cover-preview-actions">
+                <button type="button" class="btn ghost" id="propose-cover-replace">Replace</button>
+                <button type="button" class="btn ghost" id="propose-cover-clear">Remove</button>
+              </div>
+            </div>
+            <span class="field-hint" id="propose-cover-hint" hidden></span>
           </div>
           <label class="field">
             <span>Problem &amp; audience</span>
@@ -130,73 +142,154 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const coverInput = document.getElementById(
     "propose-cover-input",
   ) as HTMLInputElement;
+  const coverPicker = document.getElementById("propose-cover-picker")!;
   const coverPreview = document.getElementById("propose-cover-preview")!;
   const coverImg = document.getElementById(
     "propose-cover-img",
   ) as HTMLImageElement;
+  const coverStatus = document.getElementById("propose-cover-status")!;
   const coverHint = document.getElementById("propose-cover-hint")!;
+  const coverPick = document.getElementById("propose-cover-pick");
+  const coverReplace = document.getElementById("propose-cover-replace");
   const coverClear = document.getElementById("propose-cover-clear");
   let coverUrl: string | null = null;
   let coverObjectUrl: string | null = null;
+  let coverUploading = false;
+
+  const setHint = (text: string, kind: "" | "error" | "ok" = "") => {
+    if (!text) {
+      coverHint.hidden = true;
+      coverHint.textContent = "";
+      coverHint.className = "field-hint";
+      return;
+    }
+    coverHint.hidden = false;
+    coverHint.textContent = text;
+    coverHint.className =
+      kind === "error"
+        ? "field-hint error"
+        : kind === "ok"
+          ? "field-hint ok"
+          : "field-hint";
+  };
+
+  const setPreviewStatus = (text: string, kind: "" | "busy" | "error" = "") => {
+    if (!text) {
+      coverStatus.hidden = true;
+      coverStatus.textContent = "";
+      coverStatus.className = "cover-preview-status";
+      return;
+    }
+    coverStatus.hidden = false;
+    coverStatus.textContent = text;
+    coverStatus.className = `cover-preview-status${kind ? ` is-${kind}` : ""}`;
+  };
+
+  const showPicker = () => {
+    coverPicker.hidden = false;
+    coverPreview.hidden = true;
+  };
+
+  const showPreview = () => {
+    coverPicker.hidden = true;
+    coverPreview.hidden = false;
+  };
 
   const clearCover = () => {
     coverUrl = null;
+    coverUploading = false;
     if (coverObjectUrl) {
       URL.revokeObjectURL(coverObjectUrl);
       coverObjectUrl = null;
     }
     coverImg.removeAttribute("src");
-    coverPreview.hidden = true;
+    coverImg.alt = "";
+    setPreviewStatus("");
     coverInput.value = "";
-    coverHint.textContent = "JPEG, PNG, or WebP · max 2 MiB";
-    coverHint.classList.remove("error");
+    showPicker();
+    setHint("");
   };
 
-  coverClear?.addEventListener("click", clearCover);
+  const openFilePicker = () => {
+    if (coverUploading) return;
+    coverInput.click();
+  };
+
+  coverPick?.addEventListener("click", openFilePicker);
+  coverReplace?.addEventListener("click", openFilePicker);
+  coverClear?.addEventListener("click", () => {
+    if (coverUploading) return;
+    clearCover();
+  });
+
+  coverPicker.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    coverPicker.classList.add("is-dragover");
+  });
+  coverPicker.addEventListener("dragleave", () => {
+    coverPicker.classList.remove("is-dragover");
+  });
+  coverPicker.addEventListener("drop", (e) => {
+    e.preventDefault();
+    coverPicker.classList.remove("is-dragover");
+    if (coverUploading) return;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    coverInput.files = dt.files;
+    coverInput.dispatchEvent(new Event("change"));
+  });
 
   coverInput.addEventListener("change", async () => {
     const file = coverInput.files?.[0];
-    if (!file) {
-      clearCover();
-      return;
-    }
+    if (!file) return;
+
     const pre = clientCoverPrecheck(file);
     if (pre) {
       clearCover();
-      coverHint.textContent = pre;
-      coverHint.classList.add("error");
+      setHint(pre, "error");
       return;
     }
 
     if (coverObjectUrl) URL.revokeObjectURL(coverObjectUrl);
     coverObjectUrl = URL.createObjectURL(file);
     coverImg.src = coverObjectUrl;
-    coverPreview.hidden = false;
+    coverImg.alt = "Cover preview";
     coverUrl = null;
-    coverHint.classList.remove("error");
-    coverHint.textContent = "Uploading…";
+    coverUploading = true;
+    showPreview();
+    setHint("");
+    setPreviewStatus("Uploading…", "busy");
 
     try {
       const uploaded = await uploadProjectCover(file);
       coverUrl = uploaded.url;
-      coverHint.textContent = "Cover ready";
+      coverUploading = false;
+      setPreviewStatus("");
+      setHint("Cover ready — it will be included when you open the PR.", "ok");
     } catch (err) {
       const e = err as Error & { code?: string };
+      coverUploading = false;
+      clearCover();
       if (e.code === "MEDIA_DISABLED") {
-        clearCover();
-        coverHint.textContent =
-          "Cover uploads are not enabled yet — you can still submit without an image.";
-        coverHint.classList.remove("error");
+        setHint(
+          "Cover uploads are not enabled yet — you can still submit without an image.",
+        );
         return;
       }
-      clearCover();
-      coverHint.textContent = e.message;
-      coverHint.classList.add("error");
+      setHint(e.message, "error");
     }
   });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (coverUploading) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = "Wait for the cover upload to finish, or remove it.";
+      return;
+    }
     msg.hidden = false;
     msg.className = "form-msg";
     msg.textContent = "Opening pull request…";

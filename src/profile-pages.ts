@@ -261,12 +261,10 @@ export async function renderAccount(
           : ""
       }
 
-      <fieldset class="form-block danger-zone">
-        <legend>Delete account</legend>
-        <p class="hint">Permanently removes your profile, watch list, and saved settings. Your GitHub login can create a new profile later.</p>
-        <button type="button" class="btn danger" id="delete-account-btn">Delete account</button>
+      <div class="account-danger">
+        <button type="button" class="btn-text-danger" id="delete-account-btn">Delete account</button>
         <p class="form-msg" id="delete-account-msg" hidden></p>
-      </fieldset>
+      </div>
       </div>
 
       <div class="account-pane" data-pane="watching" ${tab === "watching" ? "" : "hidden"}>
