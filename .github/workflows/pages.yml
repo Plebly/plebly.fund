@@ -27,6 +27,7 @@ jobs:
       - run: npm run build
         env:
           VITE_WORKERS_API: https://plebly-api.securesovereigns.workers.dev
+          VITE_BITCOIN_NETWORK: signet
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
