@@ -17,4 +17,4 @@ Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages
 
 ### Custom domain (`plebly.fund`)
 
-Cloudflare DNS should point `@` and `www` CNAME records at `plebly.github.io` (DNS only / grey cloud). The repo includes `public/CNAME` and builds with `VITE_BASE_PATH=/`.
+Cloudflare DNS should point `@` and `www` CNAME records at `plebly.github.io`. **Set proxy status to DNS only (grey cloud)** — orange cloud breaks GitHub Pages routing and blocks TLS certificate issuance.
