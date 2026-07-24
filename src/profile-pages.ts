@@ -211,7 +211,7 @@ export async function renderPublicProfile(
       <div class="profile-header">
         ${profile.avatar_url ? `<img class="avatar" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" />` : ""}
         <div>
-          <h1>@${escapeHtml(profile.username || username)}</h1>
+          <h1>${escapeHtml(profile.username || username)}</h1>
           ${socialHtml ? `<div class="meta social-row">${socialHtml}</div>` : ""}
         </div>
       </div>
