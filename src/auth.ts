@@ -1,7 +1,48 @@
 import { WORKERS_API } from "./config";
 import type { ProfileLink, PublicProfile, UserProfile } from "./types";
 
+const SESSION_KEY = "plebly_session";
+
 const API = () => WORKERS_API.replace(/\/$/, "");
+
+function storedSession(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredSession(token: string): void {
+  sessionStorage.setItem(SESSION_KEY, token);
+}
+
+function clearStoredSession(): void {
+  sessionStorage.removeItem(SESSION_KEY);
+}
+
+/** Read OAuth session from URL hash and strip it (workers.dev cookies are third-party). */
+export function consumeSessionFromHash(): boolean {
+  const hash = location.hash;
+  const match = hash.match(/plebly_auth=([^&]+)/);
+  if (!match) return false;
+
+  setStoredSession(decodeURIComponent(match[1]));
+  const routeHash = hash.replace(/[?&]?plebly_auth=[^&]*/, "");
+  if (!routeHash || routeHash === "#") {
+    location.hash = "#/";
+  } else {
+    location.hash = routeHash.startsWith("#") ? routeHash : `#${routeHash}`;
+  }
+  return true;
+}
+
+function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = storedSession();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers, credentials: "include" });
+}
 
 export type AuthUser = UserProfile;
 
@@ -22,7 +63,11 @@ export function githubLoginUrl(returnPath?: string): string {
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
   if (!WORKERS_API) return null;
   try {
-    const res = await fetch(`${API()}/auth/me`, { credentials: "include" });
+    const res = await authFetch(`${API()}/auth/me`);
+    if (res.status === 401) {
+      clearStoredSession();
+      return null;
+    }
     if (!res.ok) return null;
     const data = (await res.json()) as { user: AuthUser | null };
     return data.user;
@@ -45,9 +90,8 @@ export async function updateProfile(input: {
   bio: string;
   links: ProfileLink[];
 }): Promise<UserProfile> {
-  const res = await fetch(`${API()}/profile/me`, {
+  const res = await authFetch(`${API()}/profile/me`, {
     method: "PUT",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
@@ -57,9 +101,8 @@ export async function updateProfile(input: {
 }
 
 export async function claimUsername(username: string): Promise<UserProfile> {
-  const res = await fetch(`${API()}/profile/username`, {
+  const res = await authFetch(`${API()}/profile/username`, {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
   });
@@ -79,10 +122,8 @@ export async function checkUsernameAvailable(
 
 export async function logout(): Promise<void> {
   if (!WORKERS_API) return;
-  await fetch(`${API()}/auth/logout`, {
-    method: "POST",
-    credentials: "include",
-  });
+  clearStoredSession();
+  await authFetch(`${API()}/auth/logout`, { method: "POST" });
 }
 
 export function userLabel(user: AuthUser): string {
@@ -105,9 +146,8 @@ export type SubmitProposalInput = {
 export async function submitProposal(
   input: SubmitProposalInput,
 ): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
-  const res = await fetch(`${API()}/proposals/submit`, {
+  const res = await authFetch(`${API()}/proposals/submit`, {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });

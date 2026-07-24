@@ -3,6 +3,7 @@ import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
 import "@fortawesome/fontawesome-free/css/brands.min.css";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import {
+  consumeSessionFromHash,
   fetchCurrentUser,
   githubLoginUrl,
   logout,
@@ -266,4 +267,5 @@ async function render() {
 }
 
 window.addEventListener("hashchange", () => void render());
+consumeSessionFromHash();
 void render();
