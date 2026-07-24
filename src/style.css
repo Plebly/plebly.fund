@@ -1594,37 +1594,95 @@ a:hover {
   margin-bottom: 0.75rem;
 }
 
-.donate-tabs {
+.donate-rails {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.25rem;
-  margin: 0 0 0.875rem;
-  padding: 0.2rem;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.donate-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink-secondary);
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-}
-
-.donate-tab {
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 550;
-  color: var(--ink-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: calc(var(--radius-sm) - 2px);
-  padding: 0.45rem 0.5rem;
+  padding: 0.75rem 0.85rem;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
-.donate-tab:hover {
+.donate-rail:hover {
   color: var(--ink);
+  border-color: var(--line);
+  background: var(--bg-hover);
 }
 
-.donate-tab.active {
+.donate-rail.active {
   color: var(--ink);
-  background: var(--bg-elevated);
-  box-shadow: 0 0 0 1px var(--line-soft);
+  border-color: rgba(232, 149, 46, 0.55);
+  background:
+    linear-gradient(135deg, rgba(232, 149, 46, 0.14), transparent 70%),
+    var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px rgba(232, 149, 46, 0.18);
+}
+
+.donate-rail-limited:not(.active) {
+  opacity: 0.85;
+}
+
+.donate-rail-kicker {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.donate-rail.active .donate-rail-kicker {
+  color: var(--accent);
+}
+
+.donate-rail-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+
+.donate-rail-desc {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.donate-rail.active .donate-rail-desc {
+  color: var(--ink-secondary);
+}
+
+.donate-pane-intro {
+  margin: 0 0 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.donate-ln-unavailable {
+  padding: 0.25rem 0;
+}
+
+.donate-ln-wait {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .donate-ln-note {
@@ -1632,6 +1690,12 @@ a:hover {
   font-size: 0.75rem;
   line-height: 1.5;
   color: var(--ink-secondary);
+}
+
+@media (max-width: 520px) {
+  .donate-rails {
+    grid-template-columns: 1fr;
+  }
 }
 
 .donate-ln-fee {

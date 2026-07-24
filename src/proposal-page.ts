@@ -97,7 +97,9 @@ export async function renderProposalPage(
           )
         : "";
 
-    const wantsDonate = /[?&]donate(?:&|$)/.test(location.hash);
+    const wantsDonate =
+      /[?&]donate(?:=[^&]*)?(?:&|$)/.test(location.hash) ||
+      /[?&]rail=lightning(?:&|$)/.test(location.hash);
     const watches = user
       ? await fetchWatches().catch(() => [])
       : [];

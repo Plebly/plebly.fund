@@ -119,13 +119,13 @@ function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
 }
 
-/** Prominent funder panel — on-chain + optional Lightning (Boltz → escrow). */
+/** Prominent funder panel — Bitcoin on-chain and Lightning as equal rails. */
 export function donatePanelHtml(p: Proposal): string {
   if (!p.escrow_address) return "";
   const addr = p.escrow_address;
   const networkNote =
     BITCOIN_NETWORK === "signet"
-      ? `<p class="donate-network-note">This project is on <strong>signet</strong> — use a signet wallet.</p>`
+      ? `<p class="donate-network-note">This project is on <strong>signet</strong> — use a signet wallet for on-chain donations.</p>`
       : "";
   const onchainPresets = DONATE_PRESETS_SATS.map(
     (sats) =>
@@ -135,23 +135,28 @@ export function donatePanelHtml(p: Proposal): string {
     (sats) =>
       `<button type="button" class="donate-preset" data-rail="ln" data-sats="${sats}">${formatSats(sats)}</button>`,
   ).join("");
-  const showLnTabs = lightningUiAllowed();
 
   return `<div class="donate-panel" id="donate">
     <div class="donate-panel-head">
       <h2 class="donate-title">Donate</h2>
-      <p class="donate-lede">Send Bitcoin to this project’s escrow. No account required — funds stay on-chain.</p>
+      <p class="donate-lede">Fund this project’s escrow. No account required — choose Bitcoin on-chain or Lightning.</p>
     </div>
     ${networkNote}
-    ${
-      showLnTabs
-        ? `<div class="donate-tabs" role="tablist" aria-label="Donation method" hidden>
-      <button type="button" class="donate-tab active" role="tab" aria-selected="true" data-tab="onchain">On-chain</button>
-      <button type="button" class="donate-tab" role="tab" aria-selected="false" data-tab="lightning">Lightning</button>
-    </div>`
-        : ""
-    }
-    <div class="donate-pane" data-pane="onchain">
+    <div class="donate-rails" role="tablist" aria-label="How to donate">
+      <button type="button" class="donate-rail active" role="tab" aria-selected="true" data-tab="onchain" id="donate-rail-onchain">
+        <span class="donate-rail-kicker">Bitcoin</span>
+        <span class="donate-rail-name">On-chain</span>
+        <span class="donate-rail-desc">Send sats straight to escrow</span>
+      </button>
+      <button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
+        <span class="donate-rail-kicker">Lightning</span>
+        <span class="donate-rail-name">Invoice</span>
+        <span class="donate-rail-desc">Pay LN · settles into escrow</span>
+      </button>
+    </div>
+
+    <div class="donate-pane" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
+      <p class="donate-pane-intro">Copy the address or scan the QR. Amount is optional.</p>
       <div class="donate-qr-wrap">
         <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
       </div>
@@ -165,36 +170,39 @@ export function donatePanelHtml(p: Proposal): string {
         <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
         <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
       </div>
-      <p class="donate-hint">Or scan the QR with your wallet. <a href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a></p>
+      <p class="donate-hint">Or scan the QR. <a href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a></p>
     </div>
-    ${
-      showLnTabs
-        ? `<div class="donate-pane" data-pane="lightning" hidden>
-      <p class="donate-ln-note">Lightning settles on-chain to this project’s escrow after a short swap. Claim floor updates when the claim tx confirms. Fees apply — escrow credit is less than the invoice.</p>
-      <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
-      <div class="donate-amount-row">
-        <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
-      </div>
-      <div class="donate-presets donate-ln-presets">${lnPresets}</div>
-      <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
-      <div class="donate-actions donate-ln-create-row">
-        <button type="button" class="btn" id="donate-ln-create">Create invoice</button>
-      </div>
-      <div class="donate-ln-invoice" id="donate-ln-invoice" hidden>
-        <div class="donate-qr-wrap">
-          <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
+
+    <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
+      <div id="donate-ln-ready" hidden>
+        <p class="donate-pane-intro">Pay a Lightning invoice. A reverse swap sends the claim on-chain to this escrow (fees apply).</p>
+        <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
+        <div class="donate-amount-row">
+          <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
         </div>
-        <code class="donate-address mono" id="donate-ln-bolt11"></code>
-        <div class="donate-actions">
-          <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
-          <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
+        <div class="donate-presets donate-ln-presets">${lnPresets}</div>
+        <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
+        <div class="donate-actions donate-ln-create-row">
+          <button type="button" class="btn" id="donate-ln-create">Create Lightning invoice</button>
         </div>
-        <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
+        <div class="donate-ln-invoice" id="donate-ln-invoice" hidden>
+          <div class="donate-qr-wrap donate-qr-wrap-ln">
+            <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
+          </div>
+          <code class="donate-address mono" id="donate-ln-bolt11"></code>
+          <div class="donate-actions">
+            <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
+            <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
+          </div>
+          <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
+        </div>
+        <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
       </div>
-      <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
-    </div>`
-        : ""
-    }
+      <div id="donate-ln-unavailable" class="donate-ln-unavailable">
+        <p class="donate-pane-intro"><strong>Lightning</strong> settles into the same escrow after a short swap.</p>
+        <p class="donate-ln-wait muted" id="donate-ln-wait">Checking availability…</p>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -276,13 +284,57 @@ function estimateLnCredit(status: LightningStatus, invoiceSats: number): {
   };
 }
 
+function selectDonateRail(panel: Element, name: "onchain" | "lightning"): void {
+  panel.querySelectorAll<HTMLButtonElement>(".donate-rail").forEach((rail) => {
+    const on = rail.dataset.tab === name;
+    rail.classList.toggle("active", on);
+    rail.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  panel.querySelectorAll<HTMLElement>(".donate-pane").forEach((pane) => {
+    pane.hidden = pane.dataset.pane !== name;
+  });
+}
+
+function bindDonateRails(panel: Element): void {
+  panel.querySelectorAll<HTMLButtonElement>(".donate-rail").forEach((rail) => {
+    rail.addEventListener("click", () => {
+      const name = rail.dataset.tab === "lightning" ? "lightning" : "onchain";
+      selectDonateRail(panel, name);
+    });
+  });
+  if (/[?&](?:rail=lightning|donate=ln)(?:&|$)/.test(location.hash)) {
+    selectDonateRail(panel, "lightning");
+  }
+}
+
+function setLightningUnavailable(panel: Element, reason: string): void {
+  const ready = panel.querySelector<HTMLElement>("#donate-ln-ready");
+  const unavail = panel.querySelector<HTMLElement>("#donate-ln-unavailable");
+  const wait = panel.querySelector<HTMLElement>("#donate-ln-wait");
+  if (ready) ready.hidden = true;
+  if (unavail) unavail.hidden = false;
+  if (wait) wait.textContent = reason;
+  panel
+    .querySelector<HTMLButtonElement>("#donate-rail-lightning")
+    ?.classList.add("donate-rail-limited");
+}
+
+function setLightningReady(panel: Element): void {
+  const ready = panel.querySelector<HTMLElement>("#donate-ln-ready");
+  const unavail = panel.querySelector<HTMLElement>("#donate-ln-unavailable");
+  if (ready) ready.hidden = false;
+  if (unavail) unavail.hidden = true;
+  panel
+    .querySelector<HTMLButtonElement>("#donate-rail-lightning")
+    ?.classList.remove("donate-rail-limited");
+}
+
 function bindLightningDonate(
   panel: Element,
   opts: DonateBindOpts,
   status: LightningStatus,
 ): void {
-  const tabs = panel.querySelector(".donate-tabs");
-  if (tabs) tabs.removeAttribute("hidden");
+  setLightningReady(panel);
 
   const amountInput = panel.querySelector<HTMLInputElement>("#donate-ln-amount");
   const feeEl = panel.querySelector<HTMLElement>("#donate-ln-fee");
@@ -334,20 +386,6 @@ function bindLightningDonate(
       btn.classList.add("active");
       if (amountInput && raw) amountInput.value = raw;
       updateFeeHint();
-    });
-  });
-
-  panel.querySelectorAll<HTMLButtonElement>(".donate-tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const name = tab.dataset.tab;
-      panel.querySelectorAll(".donate-tab").forEach((t) => {
-        const on = t === tab;
-        t.classList.toggle("active", on);
-        t.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      panel.querySelectorAll<HTMLElement>(".donate-pane").forEach((pane) => {
-        pane.hidden = pane.dataset.pane !== name;
-      });
     });
   });
 
@@ -457,7 +495,7 @@ function bindLightningDonate(
     } finally {
       if (createBtn) {
         createBtn.disabled = false;
-        createBtn.textContent = "Create invoice";
+        createBtn.textContent = "Create Lightning invoice";
       }
     }
   });
@@ -502,12 +540,36 @@ export async function bindDonatePanel(
       ? { address: opts, proposalId: null, proposalPath: "" }
       : opts;
 
+  bindDonateRails(panel);
   await bindOnchainDonate(panel, normalized.address);
 
-  if (!lightningUiAllowed() || !normalized.proposalPath) return;
+  if (!normalized.proposalPath) {
+    setLightningUnavailable(
+      panel,
+      "Lightning needs a listed project path. Use on-chain for now.",
+    );
+    return;
+  }
+
+  if (!lightningUiAllowed()) {
+    setLightningUnavailable(
+      panel,
+      BITCOIN_NETWORK === "signet"
+        ? "Lightning donations are off on signet (Boltz has no signet pair). Use Bitcoin on-chain, or enable staging with VITE_LIGHTNING_TESTNET=1 + Workers LIGHTNING_ENABLED."
+        : "Lightning is not enabled for this deployment.",
+    );
+    return;
+  }
 
   const status = await fetchLightningStatus();
-  if (!status.enabled) return;
+  if (!status.enabled) {
+    setLightningUnavailable(
+      panel,
+      status.reason ||
+        "Lightning reverse swaps are unavailable right now. Use Bitcoin on-chain.",
+    );
+    return;
+  }
   bindLightningDonate(panel, normalized, status);
 }
 
