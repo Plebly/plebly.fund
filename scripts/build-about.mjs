@@ -168,7 +168,7 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Platform fee",
           value: params.platform_fee,
-          hint: "Deducted only on successful completion.",
+          hint: "Paid to Plebly from escrow only when a project completes successfully.",
         },
         {
           label: "Claim floor",

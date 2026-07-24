@@ -39,7 +39,7 @@ Lightning is a **funding rail into on-chain escrow**, not a separate balance. A 
 These numbers are fixed at launch and pulled from [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md) on every deploy:
 
 - **Submission fee:** {{submission_fee}} — paid when you open a proposal PR; exact and non-refundable.
-- **Platform fee:** {{platform_fee}} — deducted only on successful completion.
+- **Platform fee:** {{platform_fee}} — paid to Plebly from escrow only when a project completes successfully.
 - **Claim floor:** {{minimum_funding_claim_floor}} — minimum escrow balance before a builder can claim.
 - **Claim window:** {{claim_window}} after a claim is accepted, with a possible {{claim_extension}}.
 

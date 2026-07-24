@@ -54,7 +54,7 @@ function landingHeroHtml(): string {
       <p class="landing-hero-meta">
         <span>${formatSats(CLAIM_FLOOR_SATS)} claim floor</span>
         <span aria-hidden="true">·</span>
-        <span>${PLATFORM_FEE_PERCENT}% on success</span>
+        <span>Plebly takes ${PLATFORM_FEE_PERCENT}% on payout</span>
         <span aria-hidden="true">·</span>
         <span>${formatSats(SUBMISSION_FEE_SATS)} to propose</span>
       </p>

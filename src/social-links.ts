@@ -183,36 +183,35 @@ export function profileLinksForUser(profile: {
   return [...oauth, ...custom];
 }
 
-function profileLinkLabel(
+function profileLinkAriaLabel(
+  link: ProfileLink,
+  platform: SocialPlatform | null,
+): string {
+  const label = link.label.trim();
+  if (label) return label;
+  const handle = profilePathHandle(link.url);
+  if (platform && handle) return `${platform.label} @${handle}`;
+  if (platform) return platform.label;
+  return link.url;
+}
+
+/** Visible text beside the icon; null = icon-only (known social, blank label). */
+function profileLinkVisibleText(
   link: ProfileLink,
   identity?: { github?: string; x?: string },
-): string {
+): string | null {
   const label = link.label.trim();
   if (label) return label;
 
   const platform = detectSocialPlatform(link.url);
-  if (!platform) return link.url;
-
-  const handle = profilePathHandle(link.url);
-  if (handle) {
-    if (
-      platform.icon === "github" &&
-      identity?.github &&
-      handle === identity.github.replace(/^@/, "").toLowerCase()
-    ) {
-      return `@${identity.github.replace(/^@/, "")}`;
-    }
-    if (
-      platform.icon === "x-twitter" &&
-      identity?.x &&
-      handle === identity.x.replace(/^@/, "").toLowerCase()
-    ) {
-      return `@${identity.x.replace(/^@/, "")}`;
-    }
-    // Icon already names the platform — show the handle, not "X" / "GitHub"
-    return `@${handle}`;
+  if (platform) {
+    // Blank label on a known social → icon only (label was optional)
+    return null;
   }
-  return platform.label;
+
+  // Prefer matching OAuth handle if we ever surface non-platform text
+  void identity;
+  return link.url;
 }
 
 export function profileLinkHtml(
@@ -221,13 +220,18 @@ export function profileLinkHtml(
 ): string {
   const href = escapeHtml(link.url);
   const platform = detectSocialPlatform(link.url);
-  const name = escapeHtml(profileLinkLabel(link, identity));
+  const text = profileLinkVisibleText(link, identity);
+  const aria = escapeHtml(profileLinkAriaLabel(link, platform));
 
   if (platform) {
-    return `<a class="profile-link" href="${href}" target="_blank" rel="noreferrer noopener">${brandIcon(platform.icon)}<span>${name}</span></a>`;
+    const labelHtml = text
+      ? `<span>${escapeHtml(text)}</span>`
+      : "";
+    const iconOnly = text ? "" : " profile-link-icon";
+    return `<a class="profile-link${iconOnly}" href="${href}" target="_blank" rel="noreferrer noopener" aria-label="${aria}" title="${aria}">${brandIcon(platform.icon)}${labelHtml}</a>`;
   }
 
-  return `<a class="profile-link profile-link-text" href="${href}" target="_blank" rel="noreferrer noopener"><span>${name}</span></a>`;
+  return `<a class="profile-link profile-link-text" href="${href}" target="_blank" rel="noreferrer noopener"><span>${escapeHtml(text || link.url)}</span></a>`;
 }
 
 export function profileLinksListHtml(profile: {
