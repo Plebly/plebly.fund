@@ -194,19 +194,23 @@ function profileLinkLabel(
   if (!platform) return link.url;
 
   const handle = profilePathHandle(link.url);
-  if (
-    platform.icon === "github" &&
-    identity?.github &&
-    handle === identity.github.replace(/^@/, "").toLowerCase()
-  ) {
-    return `@${identity.github.replace(/^@/, "")}`;
-  }
-  if (
-    platform.icon === "x-twitter" &&
-    identity?.x &&
-    handle === identity.x.replace(/^@/, "").toLowerCase()
-  ) {
-    return `@${identity.x.replace(/^@/, "")}`;
+  if (handle) {
+    if (
+      platform.icon === "github" &&
+      identity?.github &&
+      handle === identity.github.replace(/^@/, "").toLowerCase()
+    ) {
+      return `@${identity.github.replace(/^@/, "")}`;
+    }
+    if (
+      platform.icon === "x-twitter" &&
+      identity?.x &&
+      handle === identity.x.replace(/^@/, "").toLowerCase()
+    ) {
+      return `@${identity.x.replace(/^@/, "")}`;
+    }
+    // Icon already names the platform — show the handle, not "X" / "GitHub"
+    return `@${handle}`;
   }
   return platform.label;
 }
