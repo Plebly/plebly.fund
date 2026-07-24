@@ -41,7 +41,7 @@ These numbers are fixed at launch and pulled from [PARAMETERS.md](https://github
 - **Submission fee:** {{submission_fee}} — paid when you open a proposal PR; exact and non-refundable.
 - **Platform fee:** {{platform_fee}} — paid to Plebly from escrow only when a project completes successfully.
 - **Claim floor:** {{minimum_funding_claim_floor}} — minimum escrow balance before a builder can claim.
-- **Claim window:** {{claim_window}} after a claim is accepted, with a possible {{claim_extension}}.
+- **Claim window:** {{claim_window}} after a claim is accepted. {{claim_extension}}.
 
 Milestone splits apply above **{{milestone_threshold}}**. Badge tiers, funding windows, and confirmation counts are documented in PARAMETERS.md.
 

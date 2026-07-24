@@ -163,7 +163,7 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Submission fee",
           value: params.submission_fee,
-          hint: "Paid when you open a proposal PR; exact and non-refundable.",
+          hint: "Paid when you open a proposal PR.",
         },
         {
           label: "Platform fee",
@@ -178,7 +178,7 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Claim window",
           value: params.claim_window,
-          hint: `After claim acceptance, with a possible ${params.claim_extension || "extension"}.`,
+          hint: params.claim_extension || "Extension via reviewer vote.",
         },
         {
           label: "Milestone threshold",

@@ -120,10 +120,9 @@ function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
 }
 
-/** Compact sidebar card — opens donate modal. */
+/** Compact sidebar control — opens donate modal. */
 export function donateTriggerHtml(): string {
   return `<div class="donate-trigger-card">
-    <h2 class="donate-title">Donate</h2>
     <button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>
   </div>`;
 }
@@ -186,8 +185,8 @@ export function donatePanelHtml(p: Proposal): string {
       <div class="donate-actions">
         <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
         <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
-        <a class="btn ghost" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">Explorer</a>
       </div>
+      <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
     </div>
 
     <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
@@ -571,8 +570,8 @@ export async function bindDonatePanel(
     setLightningUnavailable(
       panel,
       BITCOIN_NETWORK === "signet"
-        ? "Lightning donations are off on signet (Boltz has no signet pair). Use Bitcoin on-chain, or enable staging with VITE_LIGHTNING_TESTNET=1 + Workers LIGHTNING_ENABLED."
-        : "Lightning is not enabled for this deployment.",
+        ? "Lightning isn’t available on signet. Use Bitcoin on-chain."
+        : "Lightning isn’t available right now. Use Bitcoin on-chain.",
     );
     return;
   }

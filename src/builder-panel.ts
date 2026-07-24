@@ -15,7 +15,7 @@ import {
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
 import { githubLoginUrl } from "./auth";
 import type { AuthUser } from "./auth";
-import { btnWithIcon } from "./icons";
+import { btnWithIcon, solidIcon } from "./icons";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -57,11 +57,13 @@ export function builderPanelHtml(
       }
     </div>
     <p class="builder-msg" id="builder-msg" hidden></p>
-    <div class="builder-modal" id="builder-claim-modal" hidden>
-      <div class="builder-modal-card">
-        <h3>Claim this project</h3>
+    <div class="site-modal" id="builder-claim-modal" hidden>
+      <div class="site-modal-backdrop" data-close-claim tabindex="-1" aria-hidden="true"></div>
+      <div class="site-modal-card builder-claim-card" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title">
+        <button type="button" class="site-modal-close" id="claim-close" aria-label="Close">${solidIcon("xmark")}</button>
+        <h3 id="claim-modal-title">Claim this project</h3>
         <p>Exclusive for 90 days after merge. One active claim per identity. Bond refunded on completion; forfeited on expiry or abandoned checkpoint.</p>
-        <p class="builder-bond-hint muted" id="claim-bond-hint">Bond: ${formatSats(CLAIM_BOND_SATS)} to the fee address.</p>
+        <p class="builder-bond-hint muted" id="claim-bond-hint">Send claim bond of ${formatSats(CLAIM_BOND_SATS)} to the submission-fee address (refunded on completion).</p>
         <label class="donate-amount-label" for="claim-payout">Payout address</label>
         <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
         <label class="donate-amount-label" for="claim-bond-txid">Claim bond txid</label>
@@ -233,8 +235,8 @@ export async function bindBuilderPanel(
     if (bondHint) {
       const addr = params.fee_address
         ? ` to <code class="mono">${escapeHtml(params.fee_address)}</code>`
-        : "";
-      bondHint.innerHTML = `Bond: <strong>${formatSats(params.claim_bond_sats)}</strong>${addr}`;
+        : " to the submission-fee address";
+      bondHint.innerHTML = `Send claim bond of <strong>${formatSats(params.claim_bond_sats)}</strong>${addr} (same as submission fee; refunded on completion).`;
     }
   } catch {
     /* defaults */
@@ -281,6 +283,25 @@ export async function bindBuilderPanel(
     }
   };
 
+  const closeClaimModal = () => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+    window.removeEventListener("keydown", onClaimEscape);
+  };
+
+  const onClaimEscape = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && modal && !modal.hidden) closeClaimModal();
+  };
+
+  const openClaimModal = () => {
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+    window.addEventListener("keydown", onClaimEscape);
+    panel.querySelector<HTMLButtonElement>("#claim-close")?.focus();
+  };
+
   const bindClaimButton = () => {
     panel.querySelector<HTMLButtonElement>("#builder-claim")?.addEventListener(
       "click",
@@ -289,15 +310,17 @@ export async function bindBuilderPanel(
           requireLogin();
           return;
         }
-        if (modal) modal.hidden = false;
+        openClaimModal();
       },
     );
   };
   bindClaimButton();
 
-  panel.querySelector("#claim-cancel")?.addEventListener("click", () => {
-    if (modal) modal.hidden = true;
-  });
+  panel.querySelector("#claim-cancel")?.addEventListener("click", closeClaimModal);
+  panel.querySelector("#claim-close")?.addEventListener("click", closeClaimModal);
+  panel
+    .querySelector("[data-close-claim]")
+    ?.addEventListener("click", closeClaimModal);
 
   panel.querySelector("#claim-confirm")?.addEventListener("click", async () => {
     if (!opts.user) {
@@ -322,7 +345,7 @@ export async function bindBuilderPanel(
         note: noteInput?.value.trim() || undefined,
         claim_bond_txid: bond,
       });
-      if (modal) modal.hidden = true;
+      closeClaimModal();
       setMsg(
         msg,
         `Claim PR opened (bond ${formatSats(result.bond_sats || params.claim_bond_sats)}). Exclusive after merge: ${result.pr_url}`,

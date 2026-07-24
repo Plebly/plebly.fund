@@ -1,5 +1,7 @@
 import { githubLoginUrl, submitProposal } from "./auth";
+import { fetchClaimParams } from "./builder";
 import { BITCOIN_NETWORK, SUBMISSION_FEE_SATS } from "./config";
+import { btnWithBrandIcon } from "./icons";
 import type { ShellContext } from "./profile-pages";
 import { escapeHtml, formatSats } from "./util";
 
@@ -11,9 +13,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail propose-page">
         <h1>Start a project</h1>
-        <p class="lede">Sign in to open a proposal pull request.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl(PROPOSE_PATH))}">Log in</a>
-        <p class="hint" style="margin-top:1rem"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
+        <p class="lede">Sign in with GitHub to open a proposal pull request.</p>
+        <a class="btn" href="${escapeHtml(githubLoginUrl(PROPOSE_PATH))}">${btnWithBrandIcon("github", "Log in with GitHub")}</a>
+        <p class="hint form-alt-link"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
       </section>
     `);
     return;
@@ -21,6 +23,23 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   const feeLabel = formatSats(SUBMISSION_FEE_SATS);
   const networkLabel = BITCOIN_NETWORK === "signet" ? "signet" : "mainnet";
+  let feeAddress: string | null = null;
+  try {
+    const params = await fetchClaimParams();
+    feeAddress = params.fee_address;
+  } catch {
+    /* address optional until API configured */
+  }
+
+  const feeAddressHtml = feeAddress
+    ? `<div class="fee-pay-block">
+        <code class="donate-address mono" id="propose-fee-address" title="${escapeHtml(feeAddress)}">${escapeHtml(feeAddress)}</code>
+        <div class="donate-actions donate-ln-create-row">
+          <button type="button" class="btn" id="propose-fee-copy" data-copy="${escapeHtml(feeAddress)}">Copy address</button>
+        </div>
+        <span class="field-hint">Send exactly ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}, then paste the txid below.</span>
+      </div>`
+    : `<span class="field-hint">Pay exactly ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)} to the published submission-fee address, then paste the txid below.</span>`;
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail propose-page">
@@ -59,10 +78,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             <span>Target funding (optional)</span>
             <input name="target_sats" type="number" min="0" step="1" placeholder="e.g. 5000000" />
           </label>
+          <div class="field">
+            <span>Submission fee</span>
+            ${feeAddressHtml}
+          </div>
           <label class="field">
             <span>Submission fee txid</span>
             <input name="submission_fee_txid" required pattern="[0-9a-fA-F]{64}" placeholder="64-character transaction id" class="mono" />
-            <span class="field-hint">Pay ${escapeHtml(feeLabel)} (exact) on ${escapeHtml(networkLabel)} first, then paste the txid here.</span>
           </label>
         </fieldset>
 
@@ -73,6 +95,21 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       </form>
     </section>
   `);
+
+  const copyBtn = document.getElementById("propose-fee-copy");
+  copyBtn?.addEventListener("click", async () => {
+    const text = copyBtn.getAttribute("data-copy") || "";
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = "Copied";
+      setTimeout(() => {
+        copyBtn.textContent = "Copy address";
+      }, 1500);
+    } catch {
+      /* ignore */
+    }
+  });
 
   const form = document.getElementById("propose-form") as HTMLFormElement;
   const msg = document.getElementById("propose-msg")!;

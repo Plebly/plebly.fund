@@ -46,7 +46,7 @@ function landingHeroHtml(): string {
       ${networkBadgeHtml()}
       <p class="landing-brand">Plebly</p>
       <h1 class="landing-title">Fund open Bitcoin projects.<br />Donate on-chain. Keep the record public.</h1>
-      <p class="landing-sub">Browse live projects, send sats to escrow anyone can verify, or start the next idea worth funding — without a custodian in the middle.</p>
+      <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
       <div class="landing-cta-row">
         <a class="btn landing-btn" href="#projects">Donate to a project</a>
         <a class="btn ghost landing-btn" href="#/propose">Start a project</a>
@@ -89,7 +89,6 @@ function audiencePathsHtml(): string {
   return `<section class="wrap-wide landing-paths">
     <div class="landing-section-head">
       <h2>Choose your path</h2>
-      <p>Same rails whether you donate, build, or propose — escrow on Bitcoin, proposals in git.</p>
     </div>
     <div class="path-grid">${paths
       .map(

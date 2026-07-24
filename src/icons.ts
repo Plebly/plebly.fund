@@ -23,6 +23,10 @@ export function btnWithIcon(icon: SolidIcon | string, label: string): string {
   return `<span class="btn-icon">${solidIcon(icon)}<span>${escapeHtml(label)}</span></span>`;
 }
 
+export function btnWithBrandIcon(icon: BrandIcon, label: string): string {
+  return `<span class="btn-icon">${brandIcon(icon)}<span>${escapeHtml(label)}</span></span>`;
+}
+
 export function iconLink(
   icon: BrandIcon,
   href: string,

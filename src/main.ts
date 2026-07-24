@@ -37,7 +37,7 @@ function authNavHtml(): string {
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<span class="nav-divider" aria-hidden="true"></span>
-    <a href="${escapeHtml(githubLoginUrl(currentReturnPath()))}">Log in</a>`;
+    <a href="${escapeHtml(githubLoginUrl(currentReturnPath()))}">Log in with GitHub</a>`;
 }
 
 function shell(inner: string): string {

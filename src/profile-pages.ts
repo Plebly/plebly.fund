@@ -15,7 +15,7 @@ import {
   isOpenToClaim,
   type ClaimLedgerView,
 } from "./builder";
-import { socialAccountLink } from "./icons";
+import { btnWithBrandIcon, socialAccountLink } from "./icons";
 import {
   listAllPublicProposals,
   listListedProposals,
@@ -60,10 +60,24 @@ function claimsPaneHtml(
       </div>`
     : "";
 
+  const hasAny =
+    pending.length > 0 ||
+    Boolean(ledger?.bonds?.length) ||
+    Boolean(ledger?.cooldowns?.length) ||
+    Boolean(summary && (summary.active || summary.completed || summary.expired || summary.abandoned || summary.rejected));
+
+  if (!hasAny) {
+    return `<div class="empty-state"><div class="empty-state-inner">
+      <p class="empty-state-title">No claims yet</p>
+      <p class="empty-state-body">When escrow hits the claim floor, claim a project from its page.</p>
+      <a class="btn ghost" href="#/">Browse projects</a>
+    </div></div>`;
+  }
+
   const pendingHtml =
     pending.length === 0
-      ? `<p class="muted">No pending site claims.</p>`
-      : `<ul class="work-list">${pending
+      ? ""
+      : `<h3 class="section-title">Pending</h3><ul class="work-list">${pending
           .map(
             (c) => `<li>
               <a href="${proposalHref(c.proposal_path)}">${escapeHtml(c.proposal_id)}</a>
@@ -109,7 +123,6 @@ function claimsPaneHtml(
     : "";
 
   return `${summaryHtml}
-    <h3 class="section-title">Pending</h3>
     ${pendingHtml}
     ${bonds}
     ${cooldowns}`;
@@ -138,8 +151,8 @@ export async function renderAccount(
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
         <h1>Account</h1>
-        <p class="lede">Sign in to watch projects, claim funded work, and manage your profile.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl(loginReturn))}">Log in</a>
+        <p class="lede">Sign in with GitHub to watch projects, claim funded work, and manage your profile.</p>
+        <a class="btn" href="${escapeHtml(githubLoginUrl(loginReturn))}">${btnWithBrandIcon("github", "Log in with GitHub")}</a>
       </section>
     `);
     return;
@@ -230,13 +243,16 @@ export async function renderAccount(
         <p class="form-msg" id="account-msg" hidden></p>
       </form>
 
-      <div class="identity-panel">
-        <p class="hint identity-panel-label">Connected accounts</p>
+      ${
+        user.github
+          ? `<div class="identity-panel">
+        <p class="hint identity-panel-label">Signed in with</p>
         <div class="social-row identity-links">
-          ${user.github ? socialAccountLink("github", `https://github.com/${user.github}`, user.github) : ""}
-          ${user.x ? socialAccountLink("x-twitter", `https://x.com/${user.x.replace(/^@/, "")}`, user.x) : ""}
+          ${socialAccountLink("github", `https://github.com/${user.github}`, user.github)}
         </div>
-      </div>
+      </div>`
+          : ""
+      }
 
       <fieldset class="form-block danger-zone">
         <legend>Delete account</legend>
@@ -249,7 +265,11 @@ export async function renderAccount(
       <div class="account-pane" data-pane="watching" ${tab === "watching" ? "" : "hidden"}>
         ${
           watchRows.length === 0
-            ? `<p class="muted">No watched projects yet. Open a project and tap Watch.</p>`
+            ? `<div class="empty-state"><div class="empty-state-inner">
+                <p class="empty-state-title">No watched projects</p>
+                <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
+                <a class="btn ghost" href="#/">Browse projects</a>
+              </div></div>`
             : `<ul class="work-list">${watchRows
                 .map(({ w, p, bal }) => {
                   const title = p?.title || w.proposal_id;
@@ -276,7 +296,11 @@ export async function renderAccount(
       <div class="account-pane" data-pane="proposals" ${tab === "proposals" ? "" : "hidden"}>
         ${
           myProposals.length === 0
-            ? `<p class="muted">No proposals linked to your identity yet.</p>`
+            ? `<div class="empty-state"><div class="empty-state-inner">
+                <p class="empty-state-title">No proposals yet</p>
+                <p class="empty-state-body">Describe the work and open a proposal PR.</p>
+                <a class="btn ghost" href="#/propose">Start a project</a>
+              </div></div>`
             : `<ul class="work-list">${myProposals
                 .map(
                   (p) => `<li>
@@ -440,7 +464,10 @@ export async function renderPublicProfile(
 
   const workHtml =
     work.length === 0
-      ? `<p class="muted">No public proposals linked yet.</p>`
+      ? `<div class="empty-state"><div class="empty-state-inner">
+          <p class="empty-state-title">No public proposals</p>
+          <p class="empty-state-body">Proposals linked to this profile will show here.</p>
+        </div></div>`
       : `<ul class="work-list">${work
           .map(
             (p) =>
@@ -482,7 +509,7 @@ export async function renderPublicProfile(
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
       ${linksHtml}
       ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}
-      <h2 class="section-title">Work</h2>
+      <h2 class="section-title">Proposals</h2>
       ${workHtml}
     </section>
   `);
