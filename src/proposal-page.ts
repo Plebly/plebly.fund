@@ -8,16 +8,16 @@ import {
   bindDonatePanel,
   bindProposalCopyButtons,
   donatePanelHtml,
-  fundingProgressHtml,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
+  proposalFundingBarHtml,
   sectionBodyHtml,
   statusClass,
   statusLabel,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml } from "./util";
 
 export type ProposalShell = (inner: string) => string;
 
@@ -51,31 +51,6 @@ function proposalSectionsHtml(markdown: string): string {
       </section>`;
     })
     .join("");
-}
-
-function fundingStatsHtml(
-  balance: number | undefined,
-  target: number | null,
-  floor: number,
-): string {
-  return `<div class="proposal-stats">
-      <div class="proposal-stat proposal-stat-primary">
-        <span class="proposal-stat-label">Funded</span>
-        <span class="proposal-stat-value sats">${balance != null ? formatSats(balance) : "—"}</span>
-      </div>
-      <div class="proposal-stat">
-        <span class="proposal-stat-label">Claim floor</span>
-        <span class="proposal-stat-value sats">${formatSats(floor)}</span>
-      </div>
-      ${
-        target != null
-          ? `<div class="proposal-stat">
-        <span class="proposal-stat-label">Target</span>
-        <span class="proposal-stat-value sats">${formatSats(target)}</span>
-      </div>`
-          : ""
-      }
-    </div>`;
 }
 
 export async function renderProposalPage(
@@ -132,22 +107,17 @@ export async function renderProposalPage(
           </div>
           ${metaChipsHtml(match)}
           ${proposerMeta ? `<div class="proposal-meta">Proposed by ${proposerMeta}</div>` : ""}
-          ${
-            match.escrow_address
-              ? `<div class="proposal-hero-donate">
-            <button type="button" class="btn" id="scroll-donate">Donate to this project</button>
-          </div>`
-              : ""
-          }
         </header>
+
+        ${
+          match.escrow_address
+            ? proposalFundingBarHtml(balance, CLAIM_FLOOR_SATS, match.target_sats)
+            : ""
+        }
 
         <div class="proposal-layout">
           <aside class="proposal-sidebar">
             ${donatePanelHtml(match)}
-            <div class="proposal-funding">
-              ${fundingStatsHtml(balance, match.target_sats, CLAIM_FLOOR_SATS)}
-              ${fundingProgressHtml(balance, CLAIM_FLOOR_SATS, match.target_sats)}
-            </div>
             ${onChainPanelHtml(match)}
             ${milestonesHtml(match.milestones)}
           </aside>
@@ -164,10 +134,9 @@ export async function renderProposalPage(
         proposalId: match.id,
         proposalPath: match.path,
       });
-      const scrollDonate = () =>
+      if (wantsDonate) {
         app.querySelector("#donate")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      app.querySelector("#scroll-donate")?.addEventListener("click", scrollDonate);
-      if (wantsDonate) scrollDonate();
+      }
     }
   } catch (e) {
     app.innerHTML = shell(

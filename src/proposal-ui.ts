@@ -74,6 +74,43 @@ export function fundingProgressHtml(
     </div>`;
 }
 
+function fundingStatsHtml(
+  balance: number | undefined,
+  target: number | null,
+  floor: number,
+): string {
+  return `<div class="proposal-stats">
+      <div class="proposal-stat proposal-stat-primary">
+        <span class="proposal-stat-label">Funded</span>
+        <span class="proposal-stat-value sats">${balance != null ? formatSats(balance) : "—"}</span>
+      </div>
+      <div class="proposal-stat">
+        <span class="proposal-stat-label">Claim floor</span>
+        <span class="proposal-stat-value sats">${formatSats(floor)}</span>
+      </div>
+      ${
+        target != null
+          ? `<div class="proposal-stat">
+        <span class="proposal-stat-label">Target</span>
+        <span class="proposal-stat-value sats">${formatSats(target)}</span>
+      </div>`
+          : ""
+      }
+    </div>`;
+}
+
+/** Full-width funding summary — sits above proposal body, not in sidebar. */
+export function proposalFundingBarHtml(
+  balance: number | undefined,
+  floor: number,
+  target: number | null,
+): string {
+  return `<div class="proposal-funding-bar">
+    ${fundingStatsHtml(balance, target, floor)}
+    ${fundingProgressHtml(balance, floor, target)}
+  </div>`;
+}
+
 function copyBtn(value: string, label: string): string {
   return `<button type="button" class="copy-btn" data-copy="${escapeHtml(value)}" title="Copy ${escapeHtml(label)}">Copy</button>`;
 }

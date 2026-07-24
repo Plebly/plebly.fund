@@ -193,7 +193,6 @@ a:hover {
 
 .landing-hero-inner {
   position: relative;
-  max-width: 44rem;
   animation: landing-rise 0.7s ease both;
 }
 
@@ -233,7 +232,7 @@ a:hover {
   letter-spacing: -0.03em;
   line-height: 1.25;
   color: var(--ink-secondary);
-  max-width: 22ch;
+  max-width: 36rem;
 }
 
 .landing-sub {
@@ -1366,11 +1365,27 @@ a:hover {
 }
 
 .proposal-hero {
-  margin: 0.75rem 0 1.5rem;
+  margin: 0.75rem 0 1.25rem;
 }
 
-.proposal-hero-donate {
-  margin-top: 1rem;
+.proposal-funding-bar {
+  margin-bottom: 1.25rem;
+  padding: 1.125rem 1.25rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.proposal-funding-bar .proposal-stats {
+  margin-bottom: 0.75rem;
+}
+
+.proposal-funding-bar .funding-meter {
+  margin-top: 0;
+}
+
+.proposal-funding-bar .proposal-progress {
+  margin-bottom: 0;
 }
 
 .donate-panel {
@@ -1904,21 +1919,6 @@ a:hover {
 
 .proposal-meta a {
   color: var(--ink-secondary);
-}
-
-.proposal-funding {
-  padding: 1.125rem 1.25rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-}
-
-.proposal-funding .proposal-stats {
-  margin-bottom: 0;
-}
-
-.proposal-funding .proposal-progress {
-  margin-bottom: 0;
 }
 
 .proposal-stats {
