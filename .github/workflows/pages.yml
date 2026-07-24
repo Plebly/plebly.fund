@@ -28,7 +28,7 @@ jobs:
         env:
           VITE_WORKERS_API: https://plebly-api.securesovereigns.workers.dev
           VITE_BITCOIN_NETWORK: signet
-          VITE_BASE_PATH: /plebly.fund/
+          VITE_BASE_PATH: /
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
