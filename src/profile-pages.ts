@@ -1,13 +1,13 @@
 import {
   claimUsername,
-  fetchCurrentUser,
+  fetchPublicProfile,
   githubLoginUrl,
-  logout,
   profilePath,
   updateProfile,
   userLabel,
   type AuthUser,
 } from "./auth";
+import { listAllPublicProposals, proposalsForProfile } from "./github";
 import type { ProfileLink } from "./types";
 import { escapeHtml } from "./util";
 
@@ -161,12 +161,7 @@ export async function renderPublicProfile(
     <section class="wrap detail"><p class="loading">Loading profile…</p></section>
   `);
 
-import {
-  claimUsername,
-  fetchPublicProfile,
-  updateProfile,
-} from "./auth";
-import { listAllPublicProposals, proposalsForProfile } from "./github";
+  const profile = await fetchPublicProfile(username);
   if (!profile) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
