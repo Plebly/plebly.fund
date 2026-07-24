@@ -21,6 +21,8 @@ Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages
 
 The site uses **path-based SPA routes** (`/propose`, `/about`, `/proposal/…`). The build copies `index.html` to `404.html` so GitHub Pages deep links load the app. Legacy `#/…` URLs redirect to the path equivalent.
 
+LLM / agent discovery: [`/llms.txt`](https://plebly.fund/llms.txt) (curated index) and [`/llms-full.txt`](https://plebly.fund/llms-full.txt) (longer context), per [llmstxt.org](https://llmstxt.org/).
+
 ### Custom domain (`plebly.fund`)
 
 Cloudflare DNS should point `@` and `www` CNAME records at `plebly.github.io`. **Set proxy status to DNS only (grey cloud)** — orange cloud breaks GitHub Pages routing and blocks TLS certificate issuance.

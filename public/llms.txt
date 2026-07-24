@@ -1,0 +1,29 @@
+# Plebly
+
+> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow; builders claim funded work through open pull requests. No custodian can freeze or redirect escrow.
+
+Plebly is protocol-over-platform: rules, parameters, and proposal history live in git. The website at https://plebly.fund lists projects, shows mempool escrow balances, and helps donors and builders participate. Lightning donations (when enabled) settle into the same on-chain escrow address via reverse submarine swaps.
+
+Canonical proposal record: https://github.com/Plebly/proposals
+
+## Site
+
+- [Home / open projects](https://plebly.fund/): Browse listed projects and escrow funding progress
+- [About](https://plebly.fund/about): Beliefs, how it works, fees, and network status
+- [Start a project](https://plebly.fund/propose): Submit a proposal (GitHub login; on-chain submission fee required)
+- [Full context for LLMs](https://plebly.fund/llms-full.txt): Longer plain-text overview of product rules and flows
+
+## Protocol (source of truth)
+
+- [Proposals repository](https://github.com/Plebly/proposals): Canonical uncensorable proposal and funding record
+- [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md): Fixed launch parameters (fees, claim floor, windows, claim-abuse knobs)
+- [KEYHOLDERS.md](https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md): Multisig keyholder and network notes
+- [Proposal template](https://github.com/Plebly/proposals/blob/main/template/proposal.md): Required fields for a new proposal
+- [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
+
+## Optional
+
+- [Sitemap](https://plebly.fund/sitemap.xml): Machine-readable page index
+- [robots.txt](https://plebly.fund/robots.txt): Crawler policy
+- [Plebly on X](https://x.com/joinplebly): Product updates
+- [Plebly on GitHub](https://github.com/Plebly): Organization and open source

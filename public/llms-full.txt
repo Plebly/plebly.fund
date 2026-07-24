@@ -1,0 +1,55 @@
+# Plebly — full context for LLMs
+
+Plebly (https://plebly.fund) is a public funding platform for Bitcoin development and research.
+
+## What it is
+
+- Lists open projects with publicly verifiable Bitcoin escrow balances (mempool).
+- Connects donors and builders without a custodian that can freeze or redirect escrow.
+- Canonical proposals and funding history live in git: https://github.com/Plebly/proposals
+- The website may decline to list a proposal, but cannot erase the repo record or on-chain history.
+
+## Core beliefs
+
+1. Non-custodial escrow — publicly verifiable multisig; payment follows published rules.
+2. Uncensorable proposals — forkable git record in Plebly/proposals.
+3. Protocol over platform — PARAMETERS.md, keyholders, and process changes are public with notice.
+
+## How funding works
+
+1. Submit — Open a proposal PR; pay the exact on-chain submission fee.
+2. Donate — Anyone sends Bitcoin to the project escrow address (on-chain, or Lightning that settles into that address).
+3. Claim — A builder claims once confirmed escrow meets the claim floor (opens a claim PR; exclusivity starts on merge).
+4. Complete — Reviewers verify the deliverable; keyholders release escrow on success.
+
+### Lightning
+
+Lightning is a funding rail into on-chain escrow, not a separate balance. Reverse submarine swaps (Boltz) settle to the project escrow address. Unpaid invoices do not count toward the claim floor. Escrow credit is invoice amount minus swap/claim fees.
+
+### Platform economics (see PARAMETERS.md for authoritative values)
+
+- Submission fee: paid when opening a proposal PR; exact and non-refundable.
+- Platform fee: a percentage of escrow paid to Plebly only at successful disbursement (not “the project gets 2.5%”).
+- Claim floor: minimum confirmed escrow before a builder can claim.
+- Claim window: exclusive period after claim acceptance, with a possible reviewer-approved extension.
+- Claim bonds and abuse mitigations (active-claim caps, cooldowns, checkpoints) are documented in PARAMETERS.md and site docs.
+
+## Important URLs
+
+- Site home: https://plebly.fund/
+- About: https://plebly.fund/about
+- Start a project: https://plebly.fund/propose
+- Curated LLM index: https://plebly.fund/llms.txt
+- Proposals repo: https://github.com/Plebly/proposals
+- Parameters: https://github.com/Plebly/proposals/blob/main/PARAMETERS.md
+- Keyholders: https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md
+
+## Network note
+
+The public site may run on Bitcoin signet while testing. Launch targets mainnet with multisig escrow as documented in KEYHOLDERS.md. Always check the site About page and PARAMETERS.md for the active network and numbers.
+
+## What not to confuse
+
+- Watching a project does not reserve or claim it.
+- Donating to escrow is not the same as paying the submission fee or claim bond (those go to the published fee/ops address).
+- Plebly’s platform fee is taken at successful payout; it is not the share builders receive.

@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
 
+# Curated context for LLM / agent crawlers (https://llmstxt.org/)
+# https://plebly.fund/llms.txt
+# https://plebly.fund/llms-full.txt
+
 Sitemap: https://plebly.fund/sitemap.xml
