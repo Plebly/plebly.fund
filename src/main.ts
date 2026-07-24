@@ -16,6 +16,7 @@ import { listListedProposals } from "./github";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderSubmit } from "./submit-page";
 import { addressBalanceSats } from "./mempool";
+import { renderMarkdown } from "./markdown";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml, socialAccountLink } from "./icons";
 import type { Proposal, Route } from "./types";
 import { escapeHtml, formatSats, parseRoute, proposalHref } from "./util";
@@ -158,8 +159,9 @@ async function renderProposal(path: string) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const raw = await res.text();
     const proposals = await listListedProposals();
-    const match =
-      proposals.find((p) => p.path === path) ||
+    const listed = proposals.find((p) => p.path === path);
+    const match: Proposal =
+      listed ||
       ({
         id: path,
         title: path,
@@ -170,6 +172,7 @@ async function renderProposal(path: string) {
         submission_fee_txid: null,
         body: raw,
       } satisfies Proposal);
+    const bodyHtml = renderMarkdown(listed?.body ?? raw.replace(/^---[\s\S]*?---\n?/, "").trim());
     let balance: number | undefined;
     if (match.escrow_address) {
       try {
@@ -198,7 +201,7 @@ async function renderProposal(path: string) {
           <div>Escrow <span class="mono">${escapeHtml(match.escrow_address || "not allocated")}</span></div>
           ${proposerHtml}
         </div>
-        <div class="prose">${escapeHtml(match.body)}</div>
+        <div class="prose-rich proposal-body">${bodyHtml}</div>
       </section>
     `);
   } catch (e) {
