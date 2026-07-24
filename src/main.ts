@@ -13,11 +13,11 @@ import {
 } from "./auth";
 import { ABOUT_HTML } from "./generated/about-html";
 import { listListedProposals } from "./github";
-import { renderAccount, renderPublicProfile } from "./profile-pages";
-import { renderPropose } from "./propose-page";
 import { addressBalanceSats } from "./mempool";
-import { renderMarkdown } from "./markdown";
-import { pleblySocialAccountsHtml, pleblySocialLinksHtml, socialAccountLink } from "./icons";
+import { renderProposalPage } from "./proposal-page";
+import { renderPropose } from "./propose-page";
+import { renderAccount, renderPublicProfile } from "./profile-pages";
+import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
 import type { Proposal, Route } from "./types";
 import { escapeHtml, formatSats, parseRoute, proposalHref } from "./util";
 
@@ -150,67 +150,6 @@ async function renderHome() {
   }
 }
 
-async function renderProposal(path: string) {
-  app.innerHTML = shell(`<section class="wrap detail"><p class="loading">Loading…</p></section>`);
-  try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/Plebly/proposals/main/${path}`,
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw = await res.text();
-    const proposals = await listListedProposals();
-    const listed = proposals.find((p) => p.path === path);
-    const match: Proposal =
-      listed ||
-      ({
-        id: path,
-        title: path,
-        status: "unknown",
-        path,
-        target_sats: null,
-        escrow_address: null,
-        submission_fee_txid: null,
-        body: raw,
-      } satisfies Proposal);
-    const bodyHtml = renderMarkdown(listed?.body ?? raw.replace(/^---[\s\S]*?---\n?/, "").trim());
-    let balance: number | undefined;
-    if (match.escrow_address) {
-      try {
-        balance = await addressBalanceSats(match.escrow_address);
-      } catch {
-        /* ignore */
-      }
-    }
-    const proposer = match.proposer;
-    const proposerHtml = proposer?.username
-      ? `<div>Proposer: <a href="${profilePath(proposer.username)}">@${escapeHtml(proposer.username)}</a></div>`
-      : proposer?.github
-        ? `<div>Proposer: ${socialAccountLink("github", `https://github.com/${proposer.github}`, proposer.github)}</div>`
-        : "";
-    app.innerHTML = shell(`
-      <section class="wrap detail">
-        <a class="back-link" href="#/">← Bounties</a>
-        <h1>${escapeHtml(match.title)}</h1>
-        <div class="meta" style="margin-bottom:1rem">
-          <span class="pill">${escapeHtml(String(match.status))}</span>
-          ${match.id ? `<span>${escapeHtml(match.id)}</span>` : ""}
-        </div>
-        <div class="panel">
-          <div>Balance <span class="sats">${balance != null ? formatSats(balance) : "—"}</span></div>
-          <div>Claim floor <span class="sats">${formatSats(CLAIM_FLOOR_SATS)}</span></div>
-          <div>Escrow <span class="mono">${escapeHtml(match.escrow_address || "not allocated")}</span></div>
-          ${proposerHtml}
-        </div>
-        <div class="prose-rich proposal-body">${bodyHtml}</div>
-      </section>
-    `);
-  } catch (e) {
-    app.innerHTML = shell(
-      `<section class="wrap detail"><p class="error">${escapeHtml((e as Error).message)}</p></section>`,
-    );
-  }
-}
-
 async function renderAbout() {
   app.innerHTML = shell(`
     <section class="wrap detail about-page">
@@ -261,7 +200,7 @@ async function render() {
       location.replace(canonical);
       return;
     }
-    await renderProposal(r.id);
+    await renderProposalPage(r.id, shell);
     bindAuthHandlers();
     return;
   }
