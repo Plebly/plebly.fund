@@ -17,6 +17,12 @@
   --accent-soft: rgba(var(--accent-rgb), 0.14);
   --accent-border: rgba(var(--accent-rgb), 0.35);
   --accent-on: #faf8ff;
+  /* Cool teal tertiary — Lightning / live rails; keep purple for brand CTAs */
+  --tertiary: #3ecfbf;
+  --tertiary-rgb: 62, 207, 191;
+  --tertiary-text: #5eead4;
+  --tertiary-soft: rgba(var(--tertiary-rgb), 0.12);
+  --tertiary-border: rgba(var(--tertiary-rgb), 0.38);
   --good: #4ebf8a;
   --good-rgb: 78, 191, 138;
   --bad: #d47373;
@@ -206,7 +212,7 @@ a:hover {
   inset: 0;
   background:
     radial-gradient(ellipse 80% 60% at 15% 20%, rgba(var(--accent-rgb), 0.18), transparent 55%),
-    radial-gradient(ellipse 50% 45% at 90% 80%, rgba(var(--accent-rgb), 0.1), transparent 50%),
+    radial-gradient(ellipse 50% 45% at 90% 80%, rgba(var(--tertiary-rgb), 0.1), transparent 50%),
     linear-gradient(180deg, #12101a 0%, var(--bg) 100%);
   animation: landing-glow 10s ease-in-out infinite;
   pointer-events: none;
@@ -1818,6 +1824,14 @@ body.modal-open {
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.18);
 }
 
+.donate-rail[data-tab="lightning"].active {
+  border-color: rgba(var(--tertiary-rgb), 0.55);
+  background:
+    linear-gradient(135deg, rgba(var(--tertiary-rgb), 0.14), transparent 70%),
+    var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px rgba(var(--tertiary-rgb), 0.18);
+}
+
 .donate-rail-limited:not(.active) {
   opacity: 0.85;
 }
@@ -1832,6 +1846,10 @@ body.modal-open {
 
 .donate-rail.active .donate-rail-kicker {
   color: var(--accent-text);
+}
+
+.donate-rail[data-tab="lightning"].active .donate-rail-kicker {
+  color: var(--tertiary-text);
 }
 
 .donate-rail-name {
@@ -1898,6 +1916,10 @@ body.modal-open {
   color: var(--ink-secondary);
 }
 
+.donate-ln-status.live {
+  color: var(--tertiary-text);
+}
+
 .donate-ln-status.ok {
   color: var(--good);
 }
@@ -1918,8 +1940,9 @@ body.modal-open {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--accent-text);
-  border: 1px solid var(--accent-border);
+  color: var(--tertiary-text);
+  border: 1px solid var(--tertiary-border);
+  background: var(--tertiary-soft);
   border-radius: 999px;
   padding: 0.1rem 0.4rem;
   vertical-align: middle;

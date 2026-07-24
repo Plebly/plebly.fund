@@ -461,8 +461,13 @@ function bindLightningDonate(
         expired: "Invoice expired. Create a new one.",
       };
       statusEl.textContent = map[swap.status] || swap.status;
+      const live = ["pending", "invoice_paid", "claiming"].includes(swap.status);
+      statusEl.classList.toggle("live", live);
       statusEl.classList.toggle("ok", swap.status === "settled");
-      statusEl.classList.toggle("bad", swap.status === "failed" || swap.status === "expired");
+      statusEl.classList.toggle(
+        "bad",
+        swap.status === "failed" || swap.status === "expired",
+      );
     }
   };
 
