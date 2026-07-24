@@ -444,6 +444,52 @@ a:hover {
   line-height: 1.65;
 }
 
+.prose-rich {
+  max-width: 40rem;
+  color: var(--ink-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+.prose-rich h2 {
+  color: var(--ink);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 2rem 0 0.75rem;
+}
+
+.prose-rich h2:first-child {
+  margin-top: 0.5rem;
+}
+
+.prose-rich p {
+  margin: 0 0 1rem;
+}
+
+.prose-rich strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.prose-rich a {
+  color: var(--accent);
+}
+
+.prose-rich ol,
+.prose-rich ul {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.prose-rich li {
+  margin-bottom: 0.375rem;
+}
+
+.prose-rich li::marker {
+  color: var(--muted);
+}
+
 .detail .panel {
   margin: 1.25rem 0;
   padding: 1rem 1.125rem;

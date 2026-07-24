@@ -120,9 +120,3 @@ export function proposalsForProfile(
     return false;
   });
 }
-
-export async function fetchParametersMarkdown(): Promise<string> {
-  const res = await fetch(`${PROPOSALS_RAW}/PARAMETERS.md`);
-  if (!res.ok) return "";
-  return res.text();
-}

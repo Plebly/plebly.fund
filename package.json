@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "node scripts/build-about.mjs && vite",
+    "build": "node scripts/build-about.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "marked": "^15.0.7",
     "typescript": "^5.8.2",
     "vite": "^6.2.2"
   },

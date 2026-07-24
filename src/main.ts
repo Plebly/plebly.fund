@@ -9,7 +9,8 @@ import {
   profilePath,
   type AuthUser,
 } from "./auth";
-import { listListedProposals, fetchParametersMarkdown } from "./github";
+import { ABOUT_HTML } from "./generated/about-html";
+import { listListedProposals } from "./github";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderSubmit } from "./submit-page";
 import { addressBalanceSats } from "./mempool";
@@ -53,7 +54,7 @@ function shell(inner: string): string {
         <nav class="nav">
           <a href="#/" class="${active("home")}">Bounties</a>
           <a href="#/submit" class="${active("submit")}">Submit</a>
-          <a href="#/parameters" class="${active("params")}">Parameters</a>
+          <a href="#/about" class="${active("about")}">About</a>
           ${authNavHtml()}
         </nav>
         ${pleblySocialLinksHtml()}
@@ -205,16 +206,12 @@ async function renderProposal(path: string) {
   }
 }
 
-async function renderParams() {
-  app.innerHTML = shell(
-    `<section class="wrap detail"><h1>Parameters</h1><p class="loading">Loading…</p></section>`,
-  );
-  const md = await fetchParametersMarkdown();
+async function renderAbout() {
   app.innerHTML = shell(`
-    <section class="wrap detail">
+    <section class="wrap detail about-page">
       <a class="back-link" href="#/">← Bounties</a>
-      <h1>Parameters</h1>
-      <div class="prose">${escapeHtml(md || "PARAMETERS.md not available yet.")}</div>
+      <h1>About</h1>
+      <div class="prose-rich">${ABOUT_HTML}</div>
     </section>
   `);
 }
@@ -244,9 +241,13 @@ async function render() {
     bindAuthHandlers();
     return;
   }
-  if (r.name === "params") {
-    await renderParams();
+  if (r.name === "about") {
+    await renderAbout();
     bindAuthHandlers();
+    return;
+  }
+  if (r.name === "params") {
+    location.replace("#/about");
     return;
   }
   if (r.name === "proposal") {

@@ -60,6 +60,7 @@ export type Proposal = {
 
 export type Route =
   | { name: "home" }
+  | { name: "about" }
   | { name: "params" }
   | { name: "account" }
   | { name: "submit" }

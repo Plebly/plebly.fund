@@ -13,6 +13,7 @@ export function formatSats(n: number): string {
 export function parseRoute(hash: string): import("./types").Route {
   const path = hash.replace(/^#\/?/, "");
   if (!path || path === "home") return { name: "home" };
+  if (path === "about") return { name: "about" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
   if (path === "submit") return { name: "submit" };
