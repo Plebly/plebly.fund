@@ -42,8 +42,8 @@ function landingHeroHtml(): string {
     <div class="landing-hero-bg" aria-hidden="true"></div>
     <div class="wrap-wide landing-hero-inner">
       ${networkBadgeHtml()}
-      <p class="landing-brand">Plebly</p>
-      <h1 class="landing-title">Fund open Bitcoin projects.<br />Donate on-chain. Keep the record public.</h1>
+      <h1 class="landing-brand">Plebly</h1>
+      <p class="landing-title">Fund open Bitcoin projects.<br />Donate on-chain. Keep the record public.</p>
       <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
       <div class="landing-cta-row">
         <a class="btn landing-btn" href="#projects">Donate to a project</a>
@@ -174,7 +174,7 @@ function progressHtml(p: Proposal, floor: number): string {
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
   const label = open
-    ? `${pct}% funded`
+    ? "Open to claim"
     : near
       ? "Near floor"
       : isTakenStatus(String(p.status)) || p.claimer
@@ -201,24 +201,20 @@ function proposalCardHtml(
       ? `<span class="project-card-by">by ${escapeHtml(p.proposer.username || p.proposer.github || "")}</span>`
       : "";
   const href = `${proposalHref(p.path)}?donate`;
-  const lnBadge =
-    lightningEnabled && p.escrow_address
-      ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
-      : "";
-  const openBadge = isOpenToClaim(p, floor)
+  const open = isOpenToClaim(p, floor);
+  const secondaryBadge = open
     ? `<span class="project-card-open" title="Confirmed funding meets claim floor">Open to claim</span>`
-    : "";
-  const watchBadge = watching
-    ? `<span class="project-card-watch">Watching</span>`
-    : "";
+    : watching
+      ? `<span class="project-card-watch">Watching</span>`
+      : lightningEnabled && p.escrow_address
+        ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
+        : "";
   return `
     <article class="project-card">
       <a class="project-card-main" href="${proposalHref(p.path)}">
         <div class="project-card-head">
           <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
-          ${openBadge}
-          ${watchBadge}
-          ${lnBadge}
+          ${secondaryBadge}
           ${proposer}
         </div>
         <h3>${escapeHtml(p.title)}</h3>

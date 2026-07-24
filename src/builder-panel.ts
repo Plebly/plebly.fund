@@ -15,7 +15,7 @@ import {
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
 import { githubLoginUrl } from "./auth";
 import type { AuthUser } from "./auth";
-import { btnWithIcon, solidIcon } from "./icons";
+import { btnWithBrandIcon, btnWithIcon, solidIcon } from "./icons";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -62,14 +62,15 @@ export function builderPanelHtml(
       <div class="site-modal-card builder-claim-card" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title">
         <button type="button" class="site-modal-close" id="claim-close" aria-label="Close">${solidIcon("xmark")}</button>
         <h3 id="claim-modal-title">Claim this project</h3>
-        <p>Exclusive for 90 days after merge. One active claim per identity. Bond refunded on completion; forfeited on expiry or abandoned checkpoint.</p>
-        <p class="builder-bond-hint muted" id="claim-bond-hint">Send claim bond of ${formatSats(CLAIM_BOND_SATS)} to the submission-fee address (refunded on completion).</p>
+        <p>Exclusive after merge. One active claim per identity.</p>
+        <p class="builder-bond-hint muted" id="claim-bond-hint">Send claim bond of ${formatSats(CLAIM_BOND_SATS)} to the submission-fee address (refunded on completion; forfeited on expiry or abandoned checkpoint).</p>
         <label class="donate-amount-label" for="claim-payout">Payout address</label>
         <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
         <label class="donate-amount-label" for="claim-bond-txid">Claim bond txid</label>
         <input id="claim-bond-txid" class="donate-amount mono" type="text" maxlength="64" placeholder="64-char txid" />
         <label class="donate-amount-label" for="claim-note">Note (optional)</label>
         <input id="claim-note" class="donate-amount" type="text" maxlength="200" placeholder="Short note for reviewers" />
+        <p class="builder-msg" id="claim-modal-msg" hidden></p>
         <div class="donate-actions">
           <button type="button" class="btn" id="claim-confirm">Open claim PR</button>
           <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
@@ -246,13 +247,22 @@ export async function bindBuilderPanel(
     payoutInput.value = opts.user.payout_address;
   }
 
-  const requireLogin = () => {
-    location.href = githubLoginUrl(location.hash || "#/");
+  const loginHref = githubLoginUrl(location.hash || "#/");
+  const requireLogin = (reason: string) => {
+    setMsg(
+      msg,
+      null,
+    );
+    if (msg) {
+      msg.hidden = false;
+      msg.className = "builder-msg";
+      msg.innerHTML = `${escapeHtml(reason)} <a class="btn" href="${escapeHtml(loginHref)}">${btnWithBrandIcon("github", "Log in with GitHub")}</a>`;
+    }
   };
 
   watchBtn?.addEventListener("click", async () => {
     if (!opts.user) {
-      requireLogin();
+      requireLogin("Sign in with GitHub to watch this project.");
       return;
     }
     try {
@@ -267,8 +277,9 @@ export async function bindBuilderPanel(
         setMsg(msg, null);
       }
     } catch (e) {
-      if ((e as Error).message === "login_required") requireLogin();
-      else setMsg(msg, (e as Error).message, "error");
+      if ((e as Error).message === "login_required") {
+        requireLogin("Sign in with GitHub to watch this project.");
+      } else setMsg(msg, (e as Error).message, "error");
     }
   });
 
@@ -283,11 +294,15 @@ export async function bindBuilderPanel(
     }
   };
 
+  const modalMsg = panel.querySelector<HTMLElement>("#claim-modal-msg");
+
   const closeClaimModal = () => {
     if (!modal) return;
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     window.removeEventListener("keydown", onClaimEscape);
+    setMsg(modalMsg, null);
+    panel.querySelector<HTMLButtonElement>("#builder-claim")?.focus();
   };
 
   const onClaimEscape = (e: KeyboardEvent) => {
@@ -299,6 +314,7 @@ export async function bindBuilderPanel(
     modal.hidden = false;
     document.body.classList.add("modal-open");
     window.addEventListener("keydown", onClaimEscape);
+    setMsg(modalMsg, null);
     panel.querySelector<HTMLButtonElement>("#claim-close")?.focus();
   };
 
@@ -307,7 +323,7 @@ export async function bindBuilderPanel(
       "click",
       () => {
         if (!opts.user) {
-          requireLogin();
+          requireLogin("Sign in with GitHub to claim this project.");
           return;
         }
         openClaimModal();
@@ -324,20 +340,20 @@ export async function bindBuilderPanel(
 
   panel.querySelector("#claim-confirm")?.addEventListener("click", async () => {
     if (!opts.user) {
-      requireLogin();
+      requireLogin("Sign in with GitHub to claim this project.");
       return;
     }
     const payout = payoutInput?.value.trim() || "";
     const bond = bondInput?.value.trim() || "";
     if (!payout) {
-      setMsg(msg, "Enter a payout address.", "error");
+      setMsg(modalMsg, "Enter a payout address.", "error");
       return;
     }
     if (!bond || bond.length !== 64) {
-      setMsg(msg, "Enter the 64-character claim bond txid.", "error");
+      setMsg(modalMsg, "Enter the 64-character claim bond txid.", "error");
       return;
     }
-    setMsg(msg, "Opening claim PR…");
+    setMsg(modalMsg, "Opening claim PR…");
     try {
       const result = await submitClaim({
         proposal_path: opts.proposal.path,
@@ -353,8 +369,10 @@ export async function bindBuilderPanel(
       );
       await refreshStatus();
     } catch (e) {
-      if ((e as Error).message === "login_required") requireLogin();
-      else setMsg(msg, (e as Error).message, "error");
+      if ((e as Error).message === "login_required") {
+        closeClaimModal();
+        requireLogin("Sign in with GitHub to claim this project.");
+      } else setMsg(modalMsg, (e as Error).message, "error");
     }
   });
 
@@ -379,7 +397,7 @@ export async function bindBuilderPanel(
         setMsg(msg, "Checkpoint saved.", "success");
         await refreshStatus();
       } catch (e) {
-        if ((e as Error).message === "login_required") requireLogin();
+        if ((e as Error).message === "login_required") requireLogin("Sign in with GitHub to file a checkpoint.");
         else setMsg(msg, (e as Error).message, "error");
       }
     });
@@ -388,7 +406,7 @@ export async function bindBuilderPanel(
   const bindChallenge = () => {
     panel.querySelector("#builder-challenge")?.addEventListener("click", async () => {
       if (!opts.user) {
-        requireLogin();
+        requireLogin("Sign in with GitHub to challenge this claim.");
         return;
       }
       const reason = window.prompt(
@@ -410,7 +428,7 @@ export async function bindBuilderPanel(
           "success",
         );
       } catch (e) {
-        if ((e as Error).message === "login_required") requireLogin();
+        if ((e as Error).message === "login_required") requireLogin("Sign in with GitHub to challenge this claim.");
         else setMsg(msg, (e as Error).message, "error");
       }
     });
@@ -447,8 +465,9 @@ export async function bindBuilderPanel(
         });
         setMsg(msg, `Deliverable PR opened: ${result.pr_url}`, "success");
       } catch (e) {
-        if ((e as Error).message === "login_required") requireLogin();
-        else setMsg(msg, (e as Error).message, "error");
+        if ((e as Error).message === "login_required") {
+          requireLogin("Sign in with GitHub to submit a deliverable.");
+        } else setMsg(msg, (e as Error).message, "error");
       }
     });
   };

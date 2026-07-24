@@ -6,6 +6,18 @@ export function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/** QR module colors from live CSS theme tokens. */
+export function themeQrColors(): { dark: string; light: string } {
+  try {
+    const styles = getComputedStyle(document.documentElement);
+    const dark = styles.getPropertyValue("--bg").trim() || "#0c0b10";
+    const light = styles.getPropertyValue("--ink").trim() || "#f2f0f6";
+    return { dark, light };
+  } catch {
+    return { dark: "#0c0b10", light: "#f2f0f6" };
+  }
+}
+
 export function formatSats(n: number): string {
   return `${n.toLocaleString("en-US")} sats`;
 }

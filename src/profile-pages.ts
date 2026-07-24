@@ -70,7 +70,7 @@ function claimsPaneHtml(
     return `<div class="empty-state"><div class="empty-state-inner">
       <p class="empty-state-title">No claims yet</p>
       <p class="empty-state-body">When escrow hits the claim floor, claim a project from its page.</p>
-      <a class="btn ghost" href="#/">Browse projects</a>
+      <a class="btn" href="#/">Browse projects</a>
     </div></div>`;
   }
 
@@ -268,7 +268,7 @@ export async function renderAccount(
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No watched projects</p>
                 <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
-                <a class="btn ghost" href="#/">Browse projects</a>
+                <a class="btn" href="#/">Browse projects</a>
               </div></div>`
             : `<ul class="work-list">${watchRows
                 .map(({ w, p, bal }) => {
@@ -299,7 +299,7 @@ export async function renderAccount(
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No proposals yet</p>
                 <p class="empty-state-body">Describe the work and open a proposal PR.</p>
-                <a class="btn ghost" href="#/propose">Start a project</a>
+                <a class="btn" href="#/propose">Start a project</a>
               </div></div>`
             : `<ul class="work-list">${myProposals
                 .map(

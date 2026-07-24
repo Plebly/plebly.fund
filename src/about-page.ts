@@ -60,7 +60,8 @@ export function renderAbout(shell: AboutShell): void {
   app.innerHTML = shell(`
     <section class="wrap-wide detail about-page">
       <header class="about-hero">
-        <h1>About us</h1>
+        <p class="about-eyebrow">About</p>
+        <h1>Plebly</h1>
         <div class="about-lede prose-rich">${ABOUT_INTRO_HTML}</div>
       </header>
 

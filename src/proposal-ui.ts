@@ -10,7 +10,7 @@ import {
   type LightningSwapView,
 } from "./lightning";
 import type { Proposal, ProposalMilestone } from "./types";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml, formatSats, themeQrColors } from "./util";
 
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
@@ -68,7 +68,7 @@ export function fundingProgressHtml(
   const claimable = funded >= floor;
   return `<div class="funding-meter">
       <div class="funding-meter-top">
-        <span class="funding-meter-label">${claimable ? "Claimable" : `${pct}% funded`}</span>
+        <span class="funding-meter-label${claimable ? " claimable" : ""}">${claimable ? "Open to claim" : `${pct}% to claim floor`}</span>
         <span class="funding-meter-goal sats">${formatSats(funded)} / ${formatSats(goal)}</span>
       </div>
       <div class="proposal-progress"><span style="width:${pct}%"></span></div>
@@ -238,7 +238,7 @@ async function bindOnchainDonate(
         qrImg.src = await QRCode.toDataURL(uri, {
           width: 168,
           margin: 1,
-          color: { dark: "#0c0f0d", light: "#eef2ee" },
+          color: themeQrColors(),
         });
       } catch {
         /* ignore */
@@ -274,7 +274,7 @@ async function bindOnchainDonate(
     try {
       await navigator.clipboard.writeText(address);
       const prev = copyBtnEl.textContent;
-      copyBtnEl.textContent = "Copied!";
+      copyBtnEl.textContent = "Copied";
       copyBtnEl.classList.add("copied");
       setTimeout(() => {
         copyBtnEl.textContent = prev;
@@ -434,7 +434,7 @@ function bindLightningDonate(
         qrImg.src = await QRCode.toDataURL(swap.bolt11.toUpperCase(), {
           width: 168,
           margin: 1,
-          color: { dark: "#0c0f0d", light: "#eef2ee" },
+          color: themeQrColors(),
         });
       } catch {
         /* ignore */
@@ -521,7 +521,7 @@ function bindLightningDonate(
     try {
       await navigator.clipboard.writeText(text);
       const prev = copyBtn.textContent;
-      copyBtn.textContent = "Copied!";
+      copyBtn.textContent = "Copied";
       setTimeout(() => {
         copyBtn.textContent = prev;
       }, 1400);
