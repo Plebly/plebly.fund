@@ -11,7 +11,7 @@ import {
   fetchCurrentUser,
   githubLoginUrl,
   logout,
-  profilePath,
+  accountNavLabel,
   type AuthUser,
 } from "./auth";
 import { renderProposalPage } from "./proposal-page";
@@ -32,12 +32,8 @@ function route(): Route {
 function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
-    const profileLink = currentUser.username
-      ? `<a href="${profilePath(currentUser.username)}">${escapeHtml(currentUser.username)}</a>`
-      : "";
     return `<span class="nav-divider" aria-hidden="true"></span>
-      ${profileLink}
-      <a href="#/account">Account</a>
+      <a href="#/account" class="${route().name === "account" ? "active" : ""}">${escapeHtml(accountNavLabel(currentUser))}</a>
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<span class="nav-divider" aria-hidden="true"></span>
@@ -56,7 +52,6 @@ function shell(inner: string): string {
       <div class="header-end">
         <nav class="nav">
           <a href="#/" class="${active("home")}">Projects</a>
-          <a href="#/work" class="${r.name === "work" || r.name === "account" ? "active" : ""}">Work</a>
           <a href="#/propose" class="${active("propose")}">Start a project</a>
           <a href="#/about" class="${active("about")}">About</a>
           ${authNavHtml()}
@@ -93,8 +88,23 @@ async function render() {
     rerender: () => void render(),
   };
 
-  if (r.name === "account" || r.name === "work") {
-    await renderAccount(ctx, r.name === "work" ? "watching" : undefined);
+  if (r.name === "work") {
+    location.replace("#/account?tab=watching");
+    return;
+  }
+  if (r.name === "account") {
+    const tabParam = new URLSearchParams(
+      location.hash.includes("?") ? location.hash.slice(location.hash.indexOf("?")) : "",
+    ).get("tab");
+    const initialTab = (
+      tabParam === "watching" ||
+      tabParam === "claims" ||
+      tabParam === "proposals" ||
+      tabParam === "profile"
+        ? tabParam
+        : undefined
+    ) as "profile" | "watching" | "claims" | "proposals" | undefined;
+    await renderAccount(ctx, initialTab);
     bindAuthHandlers();
     return;
   }

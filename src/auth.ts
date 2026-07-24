@@ -163,6 +163,14 @@ export function userLabel(user: AuthUser): string {
   return user.id;
 }
 
+/** Nav label for the signed-in account link (no @ prefix). */
+export function accountNavLabel(user: AuthUser): string {
+  if (user.username) return user.username;
+  if (user.github) return user.github;
+  if (user.x) return user.x.replace(/^@/, "");
+  return "Account";
+}
+
 export type SubmitProposalInput = {
   title: string;
   problem: string;

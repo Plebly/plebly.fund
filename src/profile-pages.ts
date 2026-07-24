@@ -5,6 +5,7 @@ import {
   githubLoginUrl,
   profilePath,
   updateProfile,
+  accountNavLabel,
   type AuthUser,
 } from "./auth";
 import { CLAIM_FLOOR_SATS } from "./config";
@@ -133,11 +134,11 @@ export async function renderAccount(
   initialTab?: AccountTab,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
-  const loginReturn = initialTab === "watching" ? "#/work" : "#/account";
+  const loginReturn = "#/account";
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
-        <h1>Work</h1>
+        <h1>Account</h1>
         <p class="lede">Sign in to watch projects, claim funded work, and manage your profile.</p>
         <a class="btn" href="${escapeHtml(githubLoginUrl(loginReturn))}">Log in</a>
       </section>
@@ -176,8 +177,17 @@ export async function renderAccount(
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail account-page">
-      <h1>${tab === "profile" ? "Account" : "Work"}</h1>
-      ${user.username ? `<p class="lede">Profile at <a href="${profilePath(user.username)}">#/u/${escapeHtml(user.username)}</a></p>` : `<p class="lede">Claim a username for your public profile URL.</p>`}
+      <div class="account-head">
+        <div>
+          <h1>${escapeHtml(accountNavLabel(user))}</h1>
+          ${user.username ? "" : `<p class="lede">Claim a username for your public profile URL.</p>`}
+        </div>
+        ${
+          user.username
+            ? `<a class="btn ghost" href="${profilePath(user.username)}">View profile</a>`
+            : ""
+        }
+      </div>
 
       <div class="account-tabs" role="tablist">
         <button type="button" class="account-tab ${tab === "profile" ? "active" : ""}" data-tab="profile">Profile</button>
@@ -291,11 +301,11 @@ export async function renderAccount(
       app.querySelectorAll<HTMLElement>(".account-pane").forEach((pane) => {
         pane.hidden = pane.dataset.pane !== name;
       });
-      if (name === "watching" || name === "claims") {
-        history.replaceState(null, "", "#/work");
-      } else if (name === "profile") {
-        history.replaceState(null, "", "#/account");
-      }
+      history.replaceState(
+        null,
+        "",
+        name === "profile" ? "#/account" : `#/account?tab=${name}`,
+      );
     });
   });
 
