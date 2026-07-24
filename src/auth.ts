@@ -50,12 +50,20 @@ export function profilePath(username: string): string {
   return `#/u/${encodeURIComponent(username)}`;
 }
 
+/** Current hash route for post-login redirect, e.g. #/submit */
+export function currentReturnPath(): string {
+  const hash = location.hash.replace(/[?&]?plebly_auth=[^&]*/, "");
+  if (!hash || hash === "#") return "#/";
+  return hash.startsWith("#") ? hash : `#${hash}`;
+}
+
 export function githubLoginUrl(returnPath?: string): string {
   const base = `${API()}/auth/github`;
   const siteBase = import.meta.env.BASE_URL || "/";
   const origin = `${window.location.origin}${siteBase}`.replace(/\/$/, "");
+  const path = returnPath ?? currentReturnPath();
   const returnTo = encodeURIComponent(
-    returnPath ? `${origin}${returnPath.replace(/^\#/, "#")}` : origin,
+    `${origin}${path.startsWith("#") ? path : `#${path}`}`,
   );
   return `${base}?return_to=${returnTo}`;
 }

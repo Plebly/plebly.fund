@@ -4,6 +4,7 @@ import "@fortawesome/fontawesome-free/css/brands.min.css";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import {
   consumeSessionFromHash,
+  currentReturnPath,
   fetchCurrentUser,
   githubLoginUrl,
   logout,
@@ -39,7 +40,7 @@ function authNavHtml(): string {
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<span class="nav-divider" aria-hidden="true"></span>
-    <a href="${escapeHtml(githubLoginUrl())}">Log in</a>`;
+    <a href="${escapeHtml(githubLoginUrl(currentReturnPath()))}">Log in</a>`;
 }
 
 function shell(inner: string): string {
