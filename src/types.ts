@@ -63,6 +63,6 @@ export type Route =
   | { name: "about" }
   | { name: "params" }
   | { name: "account" }
-  | { name: "submit" }
+  | { name: "propose" }
   | { name: "proposal"; id: string }
   | { name: "profile"; username: string };

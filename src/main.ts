@@ -14,7 +14,7 @@ import {
 import { ABOUT_HTML } from "./generated/about-html";
 import { listListedProposals } from "./github";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
-import { renderSubmit } from "./submit-page";
+import { renderPropose } from "./propose-page";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml, socialAccountLink } from "./icons";
@@ -56,7 +56,7 @@ function shell(inner: string): string {
       <div class="header-end">
         <nav class="nav">
           <a href="#/" class="${active("home")}">Bounties</a>
-          <a href="#/submit" class="${active("submit")}">Submit</a>
+          <a href="#/propose" class="${active("propose")}">Propose</a>
           <a href="#/about" class="${active("about")}">About us</a>
           ${authNavHtml()}
         </nav>
@@ -120,7 +120,7 @@ async function renderHome() {
       <h1 class="hero-tagline">Bitcoin bounties, on-chain and public.</h1>
       <p class="hero-sub">Fund research and development. Escrow lives on Bitcoin. Proposals live in git.</p>
       <div class="cta-row">
-        <a class="btn" href="#/submit">Submit proposal</a>
+        <a class="btn" href="#/propose">Propose a bounty</a>
       </div>
       <p class="hero-follow">${pleblySocialAccountsHtml()}</p>
     </section>
@@ -139,7 +139,7 @@ async function renderHome() {
     proposals = await enrichBalances(proposals);
     if (proposals.length === 0) {
       listEl.className = "empty";
-      listEl.innerHTML = `No bounties yet. <a href="#/submit">Submit the first</a>.`;
+      listEl.innerHTML = `No bounties yet. <a href="#/propose">Propose the first</a>.`;
       return;
     }
     listEl.className = "proposal-list";
@@ -235,8 +235,8 @@ async function render() {
     bindAuthHandlers();
     return;
   }
-  if (r.name === "submit") {
-    await renderSubmit(ctx);
+  if (r.name === "propose") {
+    await renderPropose(ctx);
     bindAuthHandlers();
     return;
   }

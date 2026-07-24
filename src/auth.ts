@@ -50,7 +50,7 @@ export function profilePath(username: string): string {
   return `#/u/${encodeURIComponent(username)}`;
 }
 
-/** Current hash route for post-login redirect, e.g. #/submit */
+/** Current hash route for post-login redirect, e.g. #/propose */
 export function currentReturnPath(): string {
   const hash = location.hash.replace(/[?&]?plebly_auth=[^&]*/, "");
   if (!hash || hash === "#") return "#/";
@@ -144,6 +144,7 @@ export function userLabel(user: AuthUser): string {
 
 export type SubmitProposalInput = {
   title: string;
+  problem: string;
   deliverable: string;
   verification: string;
   out_of_scope: string;
