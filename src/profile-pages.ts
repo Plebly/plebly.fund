@@ -6,6 +6,7 @@ import {
   updateProfile,
   type AuthUser,
 } from "./auth";
+import { socialAccountLink } from "./icons";
 import { listAllPublicProposals, proposalsForProfile } from "./github";
 import type { ProfileLink } from "./types";
 import { escapeHtml } from "./util";
@@ -77,8 +78,9 @@ export async function renderAccount(ctx: ShellContext): Promise<void> {
         <p class="form-msg" id="account-msg" hidden></p>
       </form>
 
-      <div class="identity-panel">
-        ${user.github ? `<div>GitHub <a href="https://github.com/${escapeHtml(user.github)}" target="_blank" rel="noreferrer">@${escapeHtml(user.github)}</a></div>` : ""}
+      <div class="identity-panel social-row">
+        ${user.github ? socialAccountLink("github", `https://github.com/${user.github}`, user.github) : ""}
+        ${user.x ? socialAccountLink("x-twitter", `https://x.com/${user.x.replace(/^@/, "")}`, user.x) : ""}
       </div>
     </section>
   `);
@@ -193,13 +195,24 @@ export async function renderPublicProfile(
           )
           .join("")}</ul>`;
 
+  const socialHtml = [
+    profile.github
+      ? socialAccountLink("github", `https://github.com/${profile.github}`, profile.github)
+      : "",
+    profile.x
+      ? socialAccountLink("x-twitter", `https://x.com/${profile.x.replace(/^@/, "")}`, profile.x)
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
   app.innerHTML = ctx.shell(`
     <section class="wrap detail profile-page">
       <div class="profile-header">
         ${profile.avatar_url ? `<img class="avatar" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" />` : ""}
         <div>
           <h1>@${escapeHtml(profile.username || username)}</h1>
-          ${profile.github ? `<div class="meta"><a href="https://github.com/${escapeHtml(profile.github)}" target="_blank" rel="noreferrer">@${escapeHtml(profile.github)}</a></div>` : ""}
+          ${socialHtml ? `<div class="meta social-row">${socialHtml}</div>` : ""}
         </div>
       </div>
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}

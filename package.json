@@ -10,5 +10,8 @@
   "devDependencies": {
     "typescript": "^5.8.2",
     "vite": "^6.2.2"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.3.1"
   }
 }

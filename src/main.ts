@@ -1,4 +1,6 @@
 import "./style.css";
+import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
+import "@fortawesome/fontawesome-free/css/brands.min.css";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import {
   fetchCurrentUser,
@@ -11,6 +13,7 @@ import { listListedProposals, fetchParametersMarkdown } from "./github";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderSubmit } from "./submit-page";
 import { addressBalanceSats } from "./mempool";
+import { pleblySocialAccountsHtml, pleblySocialLinksHtml, socialAccountLink } from "./icons";
 import type { Proposal, Route } from "./types";
 import { escapeHtml, formatSats, parseRoute } from "./util";
 
@@ -46,20 +49,22 @@ function shell(inner: string): string {
         <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="28" height="28" />
         <span>Plebly</span>
       </a>
-      <nav class="nav">
-        <a href="#/" class="${active("home")}">Bounties</a>
-        <a href="#/submit" class="${active("submit")}">Submit</a>
-        <a href="#/parameters" class="${active("params")}">Parameters</a>
-        ${authNavHtml()}
-      </nav>
+      <div class="header-end">
+        <nav class="nav">
+          <a href="#/" class="${active("home")}">Bounties</a>
+          <a href="#/submit" class="${active("submit")}">Submit</a>
+          <a href="#/parameters" class="${active("params")}">Parameters</a>
+          ${authNavHtml()}
+        </nav>
+        ${pleblySocialLinksHtml()}
+      </div>
     </header>
     <main>${inner}</main>
     <footer class="wrap-wide site-footer">
       <span>Non-custodial · Protocol over platform</span>
-      <span>
+      <span class="footer-links">
         <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals</a>
-        ·
-        <a href="https://github.com/Plebly" target="_blank" rel="noreferrer">GitHub</a>
+        ${pleblySocialAccountsHtml()}
       </span>
     </footer>
   `;
@@ -113,6 +118,7 @@ async function renderHome() {
       <div class="cta-row">
         <a class="btn" href="#/submit">Submit proposal</a>
       </div>
+      <p class="hero-follow">${pleblySocialAccountsHtml()}</p>
     </section>
     <section class="wrap-wide bounties">
       <div class="bounties-head">
@@ -173,7 +179,7 @@ async function renderProposal(path: string) {
     const proposerHtml = proposer?.username
       ? `<div>Proposer: <a href="${profilePath(proposer.username)}">@${escapeHtml(proposer.username)}</a></div>`
       : proposer?.github
-        ? `<div>Proposer: <a href="https://github.com/${escapeHtml(proposer.github)}" target="_blank" rel="noreferrer">@${escapeHtml(proposer.github)}</a></div>`
+        ? `<div>Proposer: ${socialAccountLink("github", `https://github.com/${proposer.github}`, proposer.github)}</div>`
         : "";
     app.innerHTML = shell(`
       <section class="wrap detail">
