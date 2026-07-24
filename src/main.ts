@@ -1,10 +1,13 @@
 import "./style.css";
-import { CLAIM_FLOOR_SATS } from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import { fetchCurrentUser, githubLoginUrl, logout, userLabel } from "./auth";
 import { listListedProposals, fetchParametersMarkdown } from "./github";
 import { addressBalanceSats } from "./mempool";
 import type { Proposal } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
+
+let currentUser: Awaited<ReturnType<typeof fetchCurrentUser>> = null;
 
 function route(): { name: "home" | "proposal" | "params"; id?: string } {
   const hash = location.hash.replace(/^#\/?/, "");
@@ -14,6 +17,15 @@ function route(): { name: "home" | "proposal" | "params"; id?: string } {
     return { name: "proposal", id: decodeURIComponent(hash.slice("proposal/".length)) };
   }
   return { name: "home" };
+}
+
+function authNavHtml(): string {
+  if (!WORKERS_API) return "";
+  if (currentUser) {
+    return `<span class="auth-user">${escapeHtml(userLabel(currentUser))}</span>
+      <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
+  }
+  return `<a href="${escapeHtml(githubLoginUrl())}">Log in with GitHub</a>`;
 }
 
 function shell(inner: string): string {
@@ -27,6 +39,7 @@ function shell(inner: string): string {
         <a href="#/" class="${route().name === "home" ? "active" : ""}">Bounties</a>
         <a href="#/parameters" class="${route().name === "params" ? "active" : ""}">Parameters</a>
         <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals repo</a>
+        ${authNavHtml()}
       </nav>
     </header>
     <main>${inner}</main>
@@ -35,6 +48,14 @@ function shell(inner: string): string {
       <span><a href="https://github.com/Plebly">github.com/Plebly</a></span>
     </footer>
   `;
+}
+
+function bindAuthHandlers() {
+  document.getElementById("logout-btn")?.addEventListener("click", async () => {
+    await logout();
+    currentUser = null;
+    void render();
+  });
 }
 
 function formatSats(n: number): string {
@@ -193,10 +214,20 @@ function escapeHtml(s: string): string {
 }
 
 async function render() {
+  currentUser = await fetchCurrentUser();
   const r = route();
-  if (r.name === "params") return renderParams();
-  if (r.name === "proposal" && r.id) return renderProposal(r.id);
-  return renderHome();
+  if (r.name === "params") {
+    await renderParams();
+    bindAuthHandlers();
+    return;
+  }
+  if (r.name === "proposal" && r.id) {
+    await renderProposal(r.id);
+    bindAuthHandlers();
+    return;
+  }
+  await renderHome();
+  bindAuthHandlers();
 }
 
 window.addEventListener("hashchange", () => void render());

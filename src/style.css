@@ -88,6 +88,24 @@ a:hover {
   color: var(--ink);
 }
 
+.auth-user {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+.link-btn:hover {
+  color: var(--ink);
+}
+
 .hero {
   padding: 4.5rem 0 3.5rem;
   border-bottom: 1px solid var(--line);
