@@ -20,7 +20,7 @@ import {
   statusLabel,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
-import { href, proposalHref } from "./router";
+import { href, profileHref, proposalHref } from "./router";
 import { escapeHtml, formatSats } from "./util";
 
 export type HomeShell = (inner: string) => string;
@@ -208,10 +208,12 @@ function proposalCardHtml(
   watching: boolean,
 ): string {
   const status = String(p.status);
-  const proposer =
-    p.proposer?.username || p.proposer?.github
-      ? `<span class="project-card-by">by ${escapeHtml(p.proposer.username || p.proposer.github || "")}</span>`
-      : "";
+  const proposerName = p.proposer?.username || p.proposer?.github || "";
+  const proposer = proposerName
+    ? p.proposer?.username
+      ? `<a class="project-card-by" href="${profileHref(p.proposer.username)}">by ${escapeHtml(proposerName)}</a>`
+      : `<span class="project-card-by">by ${escapeHtml(proposerName)}</span>`
+    : "";
   const donateHref = `${proposalHref(p.path)}?donate`;
   const open = isOpenToClaim(p, floor);
   const secondaryBadge = open
@@ -233,7 +235,6 @@ function proposalCardHtml(
           <div class="project-card-head">
             <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
             ${secondaryBadge}
-            ${proposer}
           </div>
           <h3>${escapeHtml(p.title)}</h3>
           <p class="project-card-excerpt">${escapeHtml(excerptFromBody(p.body))}</p>
@@ -241,6 +242,7 @@ function proposalCardHtml(
         </div>
       </a>
       <div class="project-card-actions">
+        ${proposer}
         <a class="btn project-donate-btn" href="${donateHref}">Donate</a>
       </div>
     </article>`;

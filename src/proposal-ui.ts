@@ -826,23 +826,75 @@ export function ballotPanelHtml(proposalId: string | null): string {
   </div>`;
 }
 
+function formatMilestoneDeadline(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** Created-by byline with profile link when a site username is present. */
+export function proposerBylineHtml(
+  proposer: Proposal["proposer"] | null | undefined,
+  profileHref: (username: string) => string,
+): string {
+  if (!proposer) return "";
+  const username = proposer.username?.trim();
+  if (username) {
+    return `<div class="proposal-byline">
+      <span class="proposal-byline-label">Created by</span>
+      <a class="proposal-byline-link" href="${profileHref(username)}">${escapeHtml(username)}</a>
+    </div>`;
+  }
+  const github = proposer.github?.trim();
+  if (github) {
+    return `<div class="proposal-byline">
+      <span class="proposal-byline-label">Created by</span>
+      <a class="proposal-byline-link" href="https://github.com/${escapeHtml(github)}" target="_blank" rel="noreferrer noopener">${escapeHtml(github)}</a>
+    </div>`;
+  }
+  return "";
+}
+
 export function milestonesHtml(milestones: ProposalMilestone[]): string {
   if (!milestones.length) return "";
-  return `<div class="milestones">
-    <h3 class="milestones-title">Milestones</h3>
-    <div class="milestone-list">${milestones
-      .map(
-        (m, i) => `<article class="milestone-card">
-          <div class="milestone-head">
-            <span class="milestone-num">${i + 1}</span>
-            <span class="milestone-sats sats">${formatSats(m.allocation_sats)}</span>
+  const total = milestones.reduce(
+    (s, m) => s + (Number(m.allocation_sats) || 0),
+    0,
+  );
+  return `<section class="proposal-milestones" aria-labelledby="milestones-heading">
+    <header class="proposal-milestones-head">
+      <div>
+        <h2 id="milestones-heading" class="proposal-milestones-title">Milestones</h2>
+        <p class="proposal-milestones-lede">Work lands in stages · ${escapeHtml(formatSats(total))} allocated</p>
+      </div>
+    </header>
+    <ol class="milestone-rail">
+      ${milestones
+        .map((m, i) => {
+          const due = m.deadline ? formatMilestoneDeadline(String(m.deadline)) : "";
+          return `<li class="milestone-rail-item">
+          <div class="milestone-rail-marker" aria-hidden="true">${i + 1}</div>
+          <div class="milestone-rail-body">
+            <div class="milestone-rail-meta">
+              <span class="milestone-rail-sats sats">${escapeHtml(formatSats(m.allocation_sats))}</span>
+              ${due ? `<time class="milestone-rail-due" datetime="${escapeHtml(String(m.deadline))}">Due ${escapeHtml(due)}</time>` : ""}
+            </div>
+            <p class="milestone-rail-deliverable">${escapeHtml(m.deliverable)}</p>
+            ${
+              m.verification
+                ? `<p class="milestone-rail-verify"><span class="milestone-rail-k">Verify</span> ${escapeHtml(m.verification)}</p>`
+                : ""
+            }
           </div>
-          <p class="milestone-deadline">${escapeHtml(m.deadline)}</p>
-          <p class="milestone-text">${escapeHtml(m.deliverable)}</p>
-        </article>`,
-      )
-      .join("")}</div>
-  </div>`;
+        </li>`;
+        })
+        .join("")}
+    </ol>
+  </section>`;
 }
 
 function verificationStepsHtml(body: string): string | null {

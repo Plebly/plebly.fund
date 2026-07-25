@@ -1,5 +1,8 @@
 import { PROPOSALS_API, PROPOSALS_RAW } from "./config";
+import { parseFrontMatter } from "./frontmatter";
 import type { Proposal, ProposalMilestone, ProposalProposer } from "./types";
+
+export { parseFrontMatter };
 
 type GhContent = {
   name: string;
@@ -14,43 +17,6 @@ function parseMilestones(value: unknown): ProposalMilestone[] {
     (m): m is ProposalMilestone =>
       !!m && typeof m === "object" && "deliverable" in m,
   );
-}
-
-export function parseFrontMatter(raw: string): {
-  data: Record<string, unknown>;
-  body: string;
-} {
-  if (!raw.startsWith("---")) return { data: {}, body: raw };
-  const end = raw.indexOf("\n---", 3);
-  if (end === -1) return { data: {}, body: raw };
-  const fm = raw.slice(4, end).trim();
-  const body = raw.slice(end + 4).trim();
-  const data: Record<string, unknown> = {};
-  for (const line of fm.split("\n")) {
-    const i = line.indexOf(":");
-    if (i === -1) continue;
-    const key = line.slice(0, i).trim();
-    let value: unknown = line.slice(i + 1).trim();
-    if (value === "null") value = null;
-    else if (value === "[]") value = [];
-    else if (
-      typeof value === "string" &&
-      value.startsWith('"') &&
-      value.endsWith('"')
-    ) {
-      value = value.slice(1, -1);
-    } else if (typeof value === "string" && /^-?\d+$/.test(value)) {
-      value = Number(value);
-    } else if (typeof value === "string" && value.startsWith("{")) {
-      try {
-        value = JSON.parse(value);
-      } catch {
-        /* keep string */
-      }
-    }
-    data[key] = value;
-  }
-  return { data, body };
 }
 
 function parseProposer(data: Record<string, unknown>): ProposalProposer | null {

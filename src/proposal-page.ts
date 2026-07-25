@@ -1,9 +1,8 @@
 import { fetchWatches } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
-import { CLAIM_FLOOR_SATS } from "./config";
-import { profilePath, type AuthUser } from "./auth";
+import { authFetch, profilePath, type AuthUser } from "./auth";
+import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import { listListedProposals, proposalFromMarkdown } from "./github";
-import { socialAccountLink } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
@@ -18,6 +17,7 @@ import {
   onChainPanelHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
+  proposerBylineHtml,
   refundRegisterHtml,
   sectionBodyHtml,
   statusClass,
@@ -27,8 +27,6 @@ import type { Proposal } from "./types";
 import { safeHttpsImageUrl } from "./media";
 import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml } from "./util";
-import { WORKERS_API } from "./config";
-import { authFetch } from "./auth";
 
 export type ProposalShell = (inner: string) => string;
 
@@ -208,16 +206,7 @@ export async function renderProposalPage(
       }
     }
 
-    const proposer = match.proposer;
-    const proposerMeta = proposer?.username
-      ? `<a href="${profilePath(proposer.username)}">${escapeHtml(proposer.username)}</a>`
-      : proposer?.github
-        ? socialAccountLink(
-            "github",
-            `https://github.com/${proposer.github}`,
-            proposer.github,
-          )
-        : "";
+    const byline = proposerBylineHtml(match.proposer, profilePath);
 
     const wantsDonate =
       /(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
@@ -270,7 +259,7 @@ export async function renderProposalPage(
             <span class="pill pill-status ${statusClass(String(match.status))}">${escapeHtml(statusLabel(String(match.status)))}</span>
           </div>
           ${metaChipsHtml(match)}
-          ${proposerMeta ? `<div class="proposal-meta">Proposed by ${proposerMeta}</div>` : ""}
+          ${byline}
         </header>
 
         ${banners}
@@ -281,6 +270,8 @@ export async function renderProposalPage(
             : ""
         }
 
+        ${milestonesHtml(match.milestones)}
+
         <div class="proposal-layout">
           <aside class="proposal-sidebar">
             ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
@@ -288,7 +279,6 @@ export async function renderProposalPage(
             ${onChainPanelHtml(match)}
             ${String(match.status) === "refunding" ? refundRegisterHtml(match.id) : ""}
             ${String(match.status) === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
-            ${milestonesHtml(match.milestones)}
           </aside>
 
           <div class="proposal-sections">${sectionsHtml}</div>
