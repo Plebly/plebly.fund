@@ -13,7 +13,12 @@ import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
-import { statusClass, statusLabel } from "./proposal-ui";
+import {
+  fundingBarTrackHtml,
+  overfundRatioLabel,
+  statusClass,
+  statusLabel,
+} from "./proposal-ui";
 import type { Proposal } from "./types";
 import { href, proposalHref } from "./router";
 import { escapeHtml, formatSats } from "./util";
@@ -172,22 +177,27 @@ function discoverToolbarHtml(count: number): string {
 
 function progressHtml(p: Proposal, floor: number): string {
   const bal = p.balance_sats ?? 0;
-  const pct = Math.min(100, Math.round((bal / floor) * 100));
+  const pct = Math.min(100, Math.round((bal / Math.max(1, floor)) * 100));
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
-  const label = open
-    ? "Open to claim"
-    : near
-      ? "Near floor"
-      : isTakenStatus(String(p.status)) || p.claimer
-        ? "Taken"
-        : `${pct}% to claim floor`;
+  const over = bal > floor;
+  const overLabel = overfundRatioLabel(bal, floor);
+  const label = over
+    ? `Overfunded · ${overLabel}`
+    : open
+      ? "Open to claim"
+      : near
+        ? "Near floor"
+        : isTakenStatus(String(p.status)) || p.claimer
+          ? "Taken"
+          : `${pct}% to claim floor`;
+  const labelClass = over ? "overfunded" : open ? "claimable" : "";
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
-      <span class="${open ? "claimable" : ""}">${label}</span>
+      <span class="${labelClass}">${label}</span>
       <span class="sats">${formatSats(bal)} / ${formatSats(floor)}</span>
     </div>
-    <div class="progress"><span style="width:${pct}%"></span></div>
+    ${fundingBarTrackHtml(bal, floor, "progress")}
   </div>`;
 }
 

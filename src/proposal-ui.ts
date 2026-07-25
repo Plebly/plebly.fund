@@ -57,21 +57,64 @@ export function statusClass(status: string): string {
   return "status-neutral";
 }
 
+/** Green to claim floor; glowing orange for overfunding beyond the floor. */
+export function fundingBarTrackHtml(
+  funded: number,
+  floor: number,
+  variant: "progress" | "proposal-progress" = "proposal-progress",
+): string {
+  const safeFloor = Math.max(1, floor);
+  const over = funded > safeFloor;
+  if (!over) {
+    const pct = Math.min(100, Math.round((funded / safeFloor) * 100));
+    return `<div class="${variant}" role="progressbar" aria-valuemin="0" aria-valuemax="${safeFloor}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${pct}%"></span></div>`;
+  }
+  const greenPct = Math.max(0.5, (safeFloor / funded) * 100);
+  const orangePct = Math.max(0, 100 - greenPct);
+  return `<div class="${variant} is-overfunded" role="progressbar" aria-valuemin="0" aria-valuemax="${Math.round(funded)}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span><span class="progress-over" style="width:${orangePct}%"></span></div>`;
+}
+
+export function overfundRatioLabel(funded: number, floor: number): string {
+  const ratio = funded / Math.max(1, floor);
+  if (ratio < 1.05) return "";
+  const pretty =
+    ratio >= 100
+      ? `${Math.round(ratio)}×`
+      : ratio >= 10
+        ? `${ratio.toFixed(0)}×`
+        : `${ratio.toFixed(1)}×`;
+  return `${pretty} claim floor`;
+}
+
 export function fundingProgressHtml(
   balance: number | undefined,
   floor: number,
   target: number | null,
 ): string {
   const funded = balance ?? 0;
-  const goal = target && target > floor ? target : floor;
-  const pct = Math.min(100, Math.round((funded / goal) * 100));
   const claimable = funded >= floor;
+  const over = funded > floor;
+  const toFloorPct = Math.min(100, Math.round((funded / Math.max(1, floor)) * 100));
+  const overLabel = overfundRatioLabel(funded, floor);
+  const label = over
+    ? `Overfunded · ${overLabel}`
+    : claimable
+      ? "Open to claim"
+      : `${toFloorPct}% to claim floor`;
+  const labelClass = over
+    ? " overfunded"
+    : claimable
+      ? " claimable"
+      : "";
+  const goalLine = target != null && target > floor
+    ? `${formatSats(funded)} / target ${formatSats(target)}`
+    : `${formatSats(funded)} / ${formatSats(floor)} floor`;
   return `<div class="funding-meter">
       <div class="funding-meter-top">
-        <span class="funding-meter-label${claimable ? " claimable" : ""}">${claimable ? "Open to claim" : `${pct}% to claim floor`}</span>
-        <span class="funding-meter-goal sats">${formatSats(funded)} / ${formatSats(goal)}</span>
+        <span class="funding-meter-label${labelClass}">${label}</span>
+        <span class="funding-meter-goal sats">${goalLine}</span>
       </div>
-      <div class="proposal-progress"><span style="width:${pct}%"></span></div>
+      ${fundingBarTrackHtml(funded, floor, "proposal-progress")}
     </div>`;
 }
 
