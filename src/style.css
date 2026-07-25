@@ -486,9 +486,16 @@ a:hover {
 }
 
 .btn-icon .fa-solid,
-.btn-icon .fa-brands {
+.btn-icon .fa-brands,
+.btn-icon .icon-nostr {
   font-size: 0.85em;
   line-height: 1;
+  flex-shrink: 0;
+}
+
+.icon-nostr {
+  display: inline-block;
+  vertical-align: -0.125em;
 }
 
 .site-modal {
@@ -3924,7 +3931,8 @@ a.project-card-by:hover {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 13.5rem;
+  width: max-content;
+  min-width: 15.5rem;
   padding: 0.5rem;
   background: var(--bg-elevated);
   border: 1px solid var(--line);
@@ -3935,17 +3943,23 @@ a.project-card-by:hover {
 
 .login-menu-panel a,
 .login-menu-panel .login-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 0.45rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   text-align: left;
   text-decoration: none;
+  white-space: nowrap;
   font: inherit;
   color: var(--ink);
   cursor: pointer;
+}
+
+.login-menu-panel .btn-icon {
+  justify-content: flex-start;
 }
 
 .login-menu-panel a:hover,

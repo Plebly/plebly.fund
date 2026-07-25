@@ -1,5 +1,5 @@
 import { WORKERS_API } from "./config";
-import { btnWithBrandIcon } from "./icons";
+import { btnWithBrandIcon, btnWithNostrIcon } from "./icons";
 import {
   currentReturnPath,
   href,
@@ -174,7 +174,7 @@ export function loginChoicesHtml(prompt?: string, returnPath?: string): string {
     ${lead}
     <div class="login-choices-actions">
       <a class="btn" href="${escapeHtml(githubLoginUrl(returnPath))}">${btnWithBrandIcon("github", "GitHub")}</a>
-      <button type="button" class="btn ghost" data-nostr-login>Nostr</button>
+      <button type="button" class="btn ghost" data-nostr-login>${btnWithNostrIcon("Nostr")}</button>
     </div>
   </div>`;
 }
@@ -185,7 +185,7 @@ export function loginMenuHtml(returnPath?: string): string {
     <summary>Log in</summary>
     <div class="login-menu-panel">
       <a href="${escapeHtml(githubLoginUrl(returnPath))}">${btnWithBrandIcon("github", "Continue with GitHub")}</a>
-      <button type="button" class="login-menu-item" data-nostr-login>Continue with Nostr</button>
+      <button type="button" class="login-menu-item" data-nostr-login>${btnWithNostrIcon("Continue with Nostr")}</button>
     </div>
   </details>`;
 }
@@ -199,15 +199,22 @@ export function bindLoginHandlers(onAuthed: () => void): void {
       ev.preventDefault();
       ev.stopPropagation();
       const btn = el;
-      const prev = btn.textContent;
+      const label = btn.querySelector<HTMLElement>("[data-login-label]");
+      const prev = label?.textContent ?? btn.textContent;
       btn.setAttribute("disabled", "true");
-      if (btn.tagName === "BUTTON") btn.textContent = "Signing…";
+      if (btn.tagName === "BUTTON") {
+        if (label) label.textContent = "Signing…";
+        else btn.textContent = "Signing…";
+      }
       try {
         await loginWithNostr();
         onAuthed();
       } catch (err) {
         window.alert((err as Error).message || "Nostr login failed");
-        if (btn.tagName === "BUTTON" && prev) btn.textContent = prev;
+        if (btn.tagName === "BUTTON" && prev) {
+          if (label) label.textContent = prev;
+          else btn.textContent = prev;
+        }
       } finally {
         btn.removeAttribute("disabled");
       }

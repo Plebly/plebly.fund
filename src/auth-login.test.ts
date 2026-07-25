@@ -64,6 +64,7 @@ describe("login UX helpers", () => {
     expect(html).toContain("GitHub");
     expect(html).toContain('data-nostr-login');
     expect(html).toContain("Nostr");
+    expect(html).toContain("icon-nostr");
     expect(html).not.toContain("/auth/x");
     expect(html).not.toContain("fa-x-twitter");
   });
@@ -74,6 +75,8 @@ describe("login UX helpers", () => {
     expect(html).toContain("Continue with GitHub");
     expect(html).toContain("Continue with Nostr");
     expect(html).toContain('data-nostr-login');
+    expect(html).toContain("icon-nostr");
+    expect(html).toContain("fa-github");
     expect(html).not.toContain("Continue with X");
   });
 

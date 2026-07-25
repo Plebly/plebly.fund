@@ -15,6 +15,11 @@ export function brandIcon(className: BrandIcon | string): string {
   return `<i class="fa-brands fa-${className}" aria-hidden="true"></i>`;
 }
 
+/** Nostr face mark (nostr.com), monochrome for UI buttons. */
+export function nostrIcon(): string {
+  return `<svg class="icon-nostr" viewBox="0 0 1024 1024" width="1em" height="1em" aria-hidden="true" focusable="false"><g fill="currentColor"><circle cx="286" cy="382" r="86"/><circle cx="512" cy="352" r="110"/><circle cx="738" cy="382" r="86"/><rect x="135" y="480" width="302" height="226" rx="104"/><rect x="587" y="480" width="302" height="226" rx="104"/><rect x="319" y="476" width="386" height="305" rx="92"/></g></svg>`;
+}
+
 export function solidIcon(className: SolidIcon | string): string {
   return `<i class="fa-solid fa-${className}" aria-hidden="true"></i>`;
 }
@@ -25,6 +30,10 @@ export function btnWithIcon(icon: SolidIcon | string, label: string): string {
 
 export function btnWithBrandIcon(icon: BrandIcon, label: string): string {
   return `<span class="btn-icon">${brandIcon(icon)}<span>${escapeHtml(label)}</span></span>`;
+}
+
+export function btnWithNostrIcon(label: string): string {
+  return `<span class="btn-icon">${nostrIcon()}<span data-login-label>${escapeHtml(label)}</span></span>`;
 }
 
 export function iconLink(
