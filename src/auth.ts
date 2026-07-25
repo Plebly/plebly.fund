@@ -78,12 +78,94 @@ export function githubLoginUrl(returnPath?: string): string {
   return `${API()}/auth/github?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
 }
 
-/** Build X OAuth URL (PKCE handled by Workers). */
+/** @deprecated X OAuth hidden until secrets are configured. */
 export function xLoginUrl(returnPath?: string): string {
   return `${API()}/auth/x?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
 }
 
-/** Compact GitHub + X login choices for gates and empty states. */
+type Nip07 = {
+  getPublicKey: () => Promise<string>;
+  signEvent: (event: {
+    kind: number;
+    created_at: number;
+    tags: string[][];
+    content: string;
+  }) => Promise<{
+    id: string;
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+    sig: string;
+  }>;
+};
+
+function nip07(): Nip07 | null {
+  const w = window as Window & { nostr?: Nip07 };
+  return w.nostr ?? null;
+}
+
+function nostrAuthHeader(event: object): string {
+  const json = JSON.stringify(event);
+  // Event JSON is ASCII (hex ids/sigs); btoa is fine.
+  return `Nostr ${btoa(json)}`;
+}
+
+/**
+ * Challenge-wrapped NIP-98 login via NIP-07 extension (Alby, nos2x, etc.).
+ * Stores session token the same way as OAuth hash handoff.
+ */
+export async function loginWithNostr(): Promise<void> {
+  if (!WORKERS_API) throw new Error("API not configured");
+  const ext = nip07();
+  if (!ext?.signEvent) {
+    throw new Error(
+      "No Nostr extension found. Install a NIP-07 signer (Alby, nos2x, or similar), then try again.",
+    );
+  }
+
+  const chalRes = await fetch(`${API()}/auth/nostr/challenge`, {
+    credentials: "include",
+  });
+  if (!chalRes.ok) throw new Error("Could not start Nostr login");
+  const { challenge } = (await chalRes.json()) as { challenge?: string };
+  if (!challenge) throw new Error("Nostr challenge missing");
+
+  const authUrl = new URL(`${API()}/auth/nostr`);
+  authUrl.searchParams.set("challenge", challenge);
+  const url = authUrl.toString();
+
+  const unsigned = {
+    kind: 27235,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["u", url],
+      ["method", "POST"],
+    ],
+    content: "",
+  };
+  const signed = await ext.signEvent(unsigned);
+
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: nostrAuthHeader(signed),
+    },
+    body: JSON.stringify({ challenge }),
+  });
+  const data = (await res.json()) as {
+    token?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || `Nostr login failed (${res.status})`);
+  if (!data.token) throw new Error("Nostr login succeeded but no session token returned");
+  setStoredSession(data.token);
+}
+
+/** Compact GitHub + Nostr login choices for gates and empty states. */
 export function loginChoicesHtml(prompt?: string, returnPath?: string): string {
   const lead = prompt
     ? `<p class="login-choices-prompt">${escapeHtml(prompt)}</p>`
@@ -92,7 +174,7 @@ export function loginChoicesHtml(prompt?: string, returnPath?: string): string {
     ${lead}
     <div class="login-choices-actions">
       <a class="btn" href="${escapeHtml(githubLoginUrl(returnPath))}">${btnWithBrandIcon("github", "GitHub")}</a>
-      <a class="btn ghost" href="${escapeHtml(xLoginUrl(returnPath))}">${btnWithBrandIcon("x-twitter", "X")}</a>
+      <button type="button" class="btn ghost" data-nostr-login>Nostr</button>
     </div>
   </div>`;
 }
@@ -103,9 +185,34 @@ export function loginMenuHtml(returnPath?: string): string {
     <summary>Log in</summary>
     <div class="login-menu-panel">
       <a href="${escapeHtml(githubLoginUrl(returnPath))}">${btnWithBrandIcon("github", "Continue with GitHub")}</a>
-      <a href="${escapeHtml(xLoginUrl(returnPath))}">${btnWithBrandIcon("x-twitter", "Continue with X")}</a>
+      <button type="button" class="login-menu-item" data-nostr-login>Continue with Nostr</button>
     </div>
   </details>`;
+}
+
+/** Wire NIP-07 Nostr login buttons after each render. */
+export function bindLoginHandlers(onAuthed: () => void): void {
+  document.querySelectorAll<HTMLElement>("[data-nostr-login]").forEach((el) => {
+    if (el.dataset.nostrBound === "1") return;
+    el.dataset.nostrBound = "1";
+    el.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const btn = el;
+      const prev = btn.textContent;
+      btn.setAttribute("disabled", "true");
+      if (btn.tagName === "BUTTON") btn.textContent = "Signing…";
+      try {
+        await loginWithNostr();
+        onAuthed();
+      } catch (err) {
+        window.alert((err as Error).message || "Nostr login failed");
+        if (btn.tagName === "BUTTON" && prev) btn.textContent = prev;
+      } finally {
+        btn.removeAttribute("disabled");
+      }
+    });
+  });
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
@@ -207,6 +314,7 @@ export function userLabel(user: AuthUser): string {
 export function accountNavLabel(user: AuthUser): string {
   if (user.username) return user.username;
   if (user.github) return user.github;
+  if (user.nostr) return `${user.nostr.slice(0, 8)}…`;
   if (user.x) return user.x.replace(/^@/, "");
   return "Account";
 }

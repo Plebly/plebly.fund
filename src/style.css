@@ -3933,16 +3933,29 @@ a.project-card-by:hover {
   animation: login-panel-in 160ms ease-out;
 }
 
-.login-menu-panel a {
+.login-menu-panel a,
+.login-menu-panel .login-menu-item {
   display: block;
+  width: 100%;
   padding: 0.45rem 0.6rem;
+  border: none;
   border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
   text-decoration: none;
+  font: inherit;
   color: var(--ink);
+  cursor: pointer;
 }
 
-.login-menu-panel a:hover {
+.login-menu-panel a:hover,
+.login-menu-panel .login-menu-item:hover {
   background: var(--bg-hover);
+}
+
+.login-menu-panel .login-menu-item:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 @keyframes login-panel-in {

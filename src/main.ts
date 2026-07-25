@@ -9,6 +9,7 @@ import { renderHome } from "./home-page";
 import {
   consumeSessionFromHash,
   fetchCurrentUser,
+  bindLoginHandlers,
   loginMenuHtml,
   logout,
   accountNavLabel,
@@ -112,6 +113,7 @@ function bindAuthHandlers() {
     currentUser = null;
     void render();
   });
+  bindLoginHandlers(() => void render());
 }
 
 function scrollToHashTarget(): void {
