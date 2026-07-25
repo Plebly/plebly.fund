@@ -1,8 +1,8 @@
 ## About Plebly
 
-Plebly is a public funding platform for **Bitcoin development and research**. This site lists open projects, shows on-chain escrow balances, and connects builders with funded work — without a central gatekeeper holding the keys.
+Plebly is a public funding platform for **Bitcoin ecosystem work** that needs a non-custodial surface. Protocol work, tooling, research, legal analysis, documentation, and related open problems all belong here. This site lists open projects, shows on-chain escrow balances, and connects builders with funded work without a central gatekeeper holding the keys.
 
-We built it for people who want hard problems solved in the open: protocol work, tooling, research, and infrastructure that makes Bitcoin better for everyone.
+We built it for people who want hard problems solved in the open.
 
 ## What we believe
 

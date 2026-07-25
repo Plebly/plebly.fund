@@ -50,7 +50,7 @@ function landingHeroHtml(): string {
     <div class="wrap-wide landing-hero-inner">
       ${networkBadgeHtml()}
       <h1 class="landing-brand">Plebly</h1>
-      <p class="landing-title">Fund open Bitcoin projects.<br />Donate on-chain. Keep the record public.</p>
+      <p class="landing-title">Fund open Bitcoin work.<br />Protocol over platform.</p>
       <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
       <div class="landing-cta-row">
         <a class="btn landing-btn" href="${href("/", "", "#projects")}">Donate to a project</a>
@@ -63,30 +63,30 @@ function landingHeroHtml(): string {
 function audiencePathsHtml(): string {
   const paths = [
     {
-      kicker: "For donors",
-      title: "Fund a project",
-      body: "Pick a project, copy the escrow address or open your wallet — no account needed. Balances update from the mempool.",
+      kicker: "Creators",
+      title: "Name the problem",
+      body: "Describe what needs building and what counts as done. Pay the submission fee on-chain, then let the escrow fill in public.",
+      href: href("/propose"),
+      cta: "Start a project",
+    },
+    {
+      kicker: "Donors",
+      title: "Fund the escrow",
+      body: "Pick a project and send Bitcoin to its public address. No account required. Balances update from the mempool.",
       href: href("/", "", "#projects"),
       cta: "Browse projects",
     },
     {
-      kicker: "For builders",
-      title: "Claim funded work",
-      body: "When escrow hits the claim floor, builders can claim, deliver, and get paid through public review — not an admin button.",
+      kicker: "Builders",
+      title: "Claim and deliver",
+      body: "When escrow clears the claim floor, claim the work and ship the deliverable. Payment follows public review.",
       href: href("/", "?for=builders", "#projects"),
       cta: "See open projects",
-    },
-    {
-      kicker: "For creators",
-      title: "Start a project",
-      body: "Describe the problem and deliverable, pay the submission fee on-chain, and let donors fund the escrow.",
-      href: href("/propose"),
-      cta: "Start a project",
     },
   ];
   return `<section class="wrap-wide landing-paths">
     <div class="landing-section-head">
-      <h2>Choose your path</h2>
+      <h2>The funding loop</h2>
     </div>
     <div class="path-grid">${paths
       .map(
