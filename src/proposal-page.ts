@@ -12,6 +12,7 @@ import {
   donateModalHtml,
   donateTriggerHtml,
   ballotPanelHtml,
+  deliverableChipHtml,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
@@ -23,6 +24,12 @@ import {
   statusClass,
   statusLabel,
 } from "./proposal-ui";
+import {
+  bindRebuttalPanel,
+  bindReviewPanel,
+  rebuttalPanelHtml,
+  reviewPanelHtml,
+} from "./review-panel";
 import type { Proposal } from "./types";
 import { safeHttpsImageUrl } from "./media";
 import { applySeo, href, seoForRoute } from "./router";
@@ -275,6 +282,17 @@ export async function renderProposalPage(
         <div class="proposal-layout">
           <aside class="proposal-sidebar">
             ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
+            ${deliverableChipHtml(match.deliverable_url)}
+            ${
+              String(match.status) === "in_review" && match.id
+                ? reviewPanelHtml(match.id)
+                : ""
+            }
+            ${
+              String(match.status) === "rejected" && match.id
+                ? rebuttalPanelHtml()
+                : ""
+            }
             ${match.escrow_address ? donateTriggerHtml() : ""}
             ${onChainPanelHtml(match)}
             ${String(match.status) === "refunding" ? refundRegisterHtml(match.id) : ""}
@@ -306,6 +324,25 @@ export async function renderProposalPage(
       });
     }
     bindRefundAndBallot(app, match);
+    if (String(match.status) === "in_review" && match.id) {
+      await bindReviewPanel(app, { proposalId: match.id, user });
+    }
+    if (String(match.status) === "rejected" && match.id) {
+      const isFulfiller = Boolean(
+        user &&
+          match.claimer &&
+          (match.claimer === user.username ||
+            match.claimer === user.github ||
+            match.claimer === user.x ||
+            match.claimer === user.id),
+      );
+      await bindRebuttalPanel(app, {
+        proposalId: match.id,
+        proposalPath: match.path,
+        user,
+        isFulfiller,
+      });
+    }
   } catch (e) {
     app.innerHTML = shell(
       `<section class="wrap-wide detail proposal-page"><p class="error">${escapeHtml((e as Error).message)}</p></section>`,

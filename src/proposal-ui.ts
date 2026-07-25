@@ -111,6 +111,16 @@ export function proposalLifecycleBannersHtml(
       `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Ballot open</span><p>Contributor vote: extend, refund, or redirect (1 person = 1 vote)</p></div>`,
     );
   }
+  if (String(p.status) === "in_review") {
+    parts.push(
+      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>AI first-pass is complete. Active reviewers vote to approve or reject — ⌈⅔⌉ yes with at least five non-abstaining votes.</p></div>`,
+    );
+  }
+  if (String(p.status) === "rejected") {
+    parts.push(
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Rejected</span><p>The fulfiller may file one formal rebuttal within 14 days. One second review follows — no third appeal.</p></div>`,
+    );
+  }
   if (String(p.status) === "refunding") {
     parts.push(
       `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Refunds</span><p>Register a refund address for your contribution outpoint. No platform fee on refunds.</p></div>`,
@@ -815,14 +825,23 @@ export function refundRegisterHtml(proposalId: string | null): string {
 export function ballotPanelHtml(proposalId: string | null): string {
   if (!proposalId) return "";
   return `<div class="ballot-panel" id="ballot-panel" data-proposal-id="${escapeHtml(proposalId)}">
-    <h3 class="milestones-title">Contributor ballot</h3>
+    <h3 class="review-panel-title">Contributor ballot</h3>
     <p class="muted" id="ballot-status">Loading…</p>
-    <div id="ballot-actions" hidden>
+    <div id="ballot-actions" class="review-actions" hidden>
       <button type="button" class="btn" data-ballot-opt="extend">Extend</button>
       <button type="button" class="btn ghost" data-ballot-opt="refund">Refund</button>
       <button type="button" class="btn ghost" data-ballot-opt="redirect">Redirect…</button>
     </div>
-    <p class="muted" id="ballot-msg" hidden></p>
+    <p class="builder-msg" id="ballot-msg" hidden></p>
+  </div>`;
+}
+
+/** Deliverable link chip when present on the proposal record. */
+export function deliverableChipHtml(url: string | null | undefined): string {
+  if (!url?.startsWith("https://")) return "";
+  return `<div class="deliverable-chip">
+    <span class="lifecycle-k">Deliverable</span>
+    <a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(url.replace(/^https:\/\//, ""))}</a>
   </div>`;
 }
 

@@ -2,7 +2,7 @@ import {
   claimUsername,
   deleteAccount,
   fetchPublicProfile,
-  githubLoginUrl,
+  loginChoicesHtml,
   profilePath,
   updateProfile,
   accountNavLabel,
@@ -15,7 +15,8 @@ import {
   isOpenToClaim,
   type ClaimLedgerView,
 } from "./builder";
-import { btnWithBrandIcon, socialAccountLink } from "./icons";
+import { socialAccountLink } from "./icons";
+import { fetchReviewerMe } from "./reviewers";
 import {
   listAllPublicProposals,
   listListedProposals,
@@ -129,10 +130,24 @@ function claimsPaneHtml(
         .join("")}</ul>`
     : "";
 
+  const history = ledger?.history?.length
+    ? `<h3 class="section-title">History</h3><ul class="work-list">${ledger.history
+        .slice(0, 20)
+        .map(
+          (h) => `<li>
+            <a href="${proposalHref(`proposals/claimed/${h.proposal_id}.md`)}">${escapeHtml(h.proposal_id)}</a>
+            <span class="pill">${escapeHtml(h.outcome)}</span>
+            <span class="muted">${escapeHtml(new Date(h.at).toLocaleDateString())}</span>
+          </li>`,
+        )
+        .join("")}</ul>`
+    : "";
+
   return `${summaryHtml}
     ${pendingHtml}
     ${bonds}
-    ${cooldowns}`;
+    ${cooldowns}
+    ${history}`;
 }
 
 function linkRowHtml(links: ProfileLink[]): string {
@@ -158,8 +173,8 @@ export async function renderAccount(
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
         <h1>Account</h1>
-        <p class="lede">Sign in with GitHub to watch projects, claim funded work, and manage your profile.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl(loginReturn))}">${btnWithBrandIcon("github", "Log in with GitHub")}</a>
+        <p class="lede">Sign in to watch projects, claim funded work, and manage your profile.</p>
+        ${loginChoicesHtml(undefined, loginReturn)}
       </section>
     `);
     return;
@@ -167,10 +182,11 @@ export async function renderAccount(
 
   const user = ctx.user;
   const tab: AccountTab = initialTab || "profile";
-  const [watches, myClaims, allProps] = await Promise.all([
+  const [watches, myClaims, allProps, reviewerMe] = await Promise.all([
     fetchWatches().catch(() => []),
     fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
     listListedProposals().catch(() => [] as Proposal[]),
+    fetchReviewerMe().catch(() => null),
   ]);
   const pendingClaims = myClaims.pending;
   const ledger = myClaims.ledger;
@@ -199,6 +215,13 @@ export async function renderAccount(
       <div class="account-head">
         <div>
           <h1>${escapeHtml(accountNavLabel(user))}</h1>
+          ${
+            reviewerMe?.active
+              ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} seat</span> <a href="${href("/reviewers")}">Open governance</a></p>`
+              : reviewerMe?.funder_eligible
+                ? `<p class="reviewer-badge"><span class="pill status-good">Eligible funder</span> <a href="${href("/reviewers")}#removals">Removal ballots</a></p>`
+                : `<p class="reviewer-badge muted"><a href="${href("/reviewers")}">Reviewer governance</a></p>`
+          }
           ${user.username ? "" : `<p class="lede">Claim a username for your public profile URL.</p>`}
         </div>
         ${
@@ -524,6 +547,11 @@ export async function renderPublicProfile(
         ${profile.avatar_url ? `<img class="avatar" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" />` : ""}
         <div>
           <h1>${escapeHtml(profile.username || username)}</h1>
+          ${
+            profile.reviewer_active
+              ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(profile.reviewer_kind || "earned")} · <a href="${href("/reviewers")}">roster</a></span></p>`
+              : ""
+          }
         </div>
       </div>
       ${suspendHtml}

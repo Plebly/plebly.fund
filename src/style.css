@@ -3500,12 +3500,438 @@ a.project-card-by:hover {
   outline-offset: 2px;
 }
 
+/* —— Review / AI / login (resolution layer) —— */
+.login-menu {
+  position: relative;
+}
+
+.login-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.login-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.login-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 13.5rem;
+  padding: 0.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  animation: login-panel-in 160ms ease-out;
+}
+
+.login-menu-panel a {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.login-menu-panel a:hover {
+  background: var(--bg-hover);
+}
+
+@keyframes login-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+.login-choices-prompt {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.login-choices-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.review-panel,
+.rebuttal-panel,
+.ballot-panel {
+  margin-top: 0.75rem;
+  padding: 1.125rem 1.25rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  animation: review-panel-in 220ms ease-out;
+}
+
+@keyframes review-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.review-panel-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.review-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+  font-size: 0.8125rem;
+}
+
+.review-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.review-count.yes {
+  color: var(--good);
+}
+
+.review-count.no {
+  color: var(--bad-deep);
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.review-dissent {
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.lifecycle-banner.lifecycle-review {
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: var(--accent-soft);
+}
+
+.deliverable-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.deliverable-chip a {
+  color: var(--accent-text);
+}
+
+.ai-review-card {
+  margin-top: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  animation: review-panel-in 200ms ease-out;
+}
+
+.ai-review-card.is-compact {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+}
+
+.ai-review-card.ai-pass {
+  border-color: rgba(var(--good-rgb), 0.4);
+  background: rgba(var(--good-rgb), 0.06);
+}
+
+.ai-review-card.ai-fail {
+  border-color: rgba(180, 60, 50, 0.35);
+  background: rgba(180, 60, 50, 0.06);
+}
+
+.ai-review-card.ai-ambiguous {
+  border-color: rgba(180, 120, 40, 0.35);
+  background: rgba(180, 120, 40, 0.07);
+}
+
+.ai-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ai-k {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pill.ai-pass {
+  background: rgba(var(--good-rgb), 0.15);
+  color: var(--good);
+}
+
+.pill.ai-fail {
+  background: rgba(180, 60, 50, 0.12);
+  color: var(--bad-deep);
+}
+
+.pill.ai-ambiguous {
+  background: rgba(180, 120, 40, 0.14);
+  color: #8a5a18;
+}
+
+.ai-reasoning {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.ai-fail-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  color: var(--bad-deep);
+}
+
+.ai-next {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+.ai-meta {
+  margin: 0;
+  font-size: 0.6875rem;
+}
+
+.reviewer-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.gov-page {
+  padding-bottom: 3rem;
+}
+
+.gov-hero {
+  margin-bottom: 2rem;
+  animation: review-panel-in 240ms ease-out;
+}
+
+.gov-hero h1 {
+  margin: 0.15rem 0 0.5rem;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  letter-spacing: -0.03em;
+}
+
+.gov-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.gov-block {
+  margin: 2rem 0;
+  animation: review-panel-in 280ms ease-out;
+}
+
+.gov-block-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+}
+
+.gov-block-lede {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+}
+
+.gov-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.gov-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gov-roster-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.gov-roster-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.gov-user {
+  font-weight: 600;
+}
+
+.gov-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gov-card {
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.gov-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.gov-card-title {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.gov-card-title:hover {
+  color: var(--accent-text);
+}
+
+.gov-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  margin: 0.35rem 0;
+}
+
+.gov-closes,
+.gov-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+}
+
+.gov-evidence {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.gov-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.gov-form-panel {
+  padding: 1.125rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.gov-form-panel .donate-amount-label {
+  display: block;
+  margin-top: 0.85rem;
+}
+
+.gov-form-panel .donate-amount {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.gov-empty {
+  margin-top: 0;
+}
+
+.gov-foot {
+  margin-top: 2.5rem;
+  font-size: 0.8125rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-hero-bg,
   .landing-hero-inner,
   .landing-paths,
   .project-card,
-  .path-card {
+  .path-card,
+  .review-panel,
+  .rebuttal-panel,
+  .ballot-panel,
+  .ai-review-card,
+  .login-menu-panel,
+  .gov-hero,
+  .gov-block {
     animation: none !important;
   }
   .btn:hover,

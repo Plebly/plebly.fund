@@ -4,11 +4,12 @@ import "@fortawesome/fontawesome-free/css/brands.min.css";
 import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
 import { WORKERS_API } from "./config";
+import { renderGovernance } from "./governance-page";
 import { renderHome } from "./home-page";
 import {
   consumeSessionFromHash,
   fetchCurrentUser,
-  githubLoginUrl,
+  loginMenuHtml,
   logout,
   accountNavLabel,
   currentReturnPath,
@@ -47,7 +48,7 @@ function authNavHtml(): string {
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<span class="nav-divider" aria-hidden="true"></span>
-    <a href="${escapeHtml(githubLoginUrl(currentReturnPath()))}">Log in with GitHub</a>`;
+    ${loginMenuHtml(currentReturnPath())}`;
 }
 
 function shell(inner: string): string {
@@ -63,6 +64,7 @@ function shell(inner: string): string {
         <nav class="nav">
           <a href="${href("/")}" class="${active("home")}">Projects</a>
           <a href="${href("/propose")}" class="${active("propose")}">Start a project</a>
+          <a href="${href("/reviewers")}" class="${active("reviewers")}">Reviewers</a>
           <a href="${href("/about")}" class="${active("about")}">About</a>
           ${authNavHtml()}
         </nav>
@@ -145,6 +147,13 @@ async function render() {
   if (r.name === "about") {
     applySeo(seoForRoute(r));
     renderAbout(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "reviewers") {
+    applySeo(seoForRoute(r));
+    await renderGovernance(shell, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

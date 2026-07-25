@@ -34,6 +34,8 @@ export type PublicProfile = Pick<
   claim_suspend_reason?: string;
   claim_suspend_until?: string;
   claim_summary?: ClaimSummary;
+  reviewer_active?: boolean;
+  reviewer_kind?: "bootstrap" | "earned";
 };
 
 export type ProposalStatus =
@@ -101,5 +103,6 @@ export type Route =
   | { name: "account" }
   | { name: "work" }
   | { name: "propose" }
+  | { name: "reviewers" }
   | { name: "proposal"; id: string }
   | { name: "profile"; username: string };

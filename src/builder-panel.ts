@@ -13,10 +13,11 @@ import {
   type ClaimStatus,
 } from "./builder";
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
-import { githubLoginUrl } from "./auth";
+import { loginChoicesHtml } from "./auth";
 import type { AuthUser } from "./auth";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
-import { btnWithBrandIcon, btnWithIcon, solidIcon } from "./icons";
+import { btnWithIcon, solidIcon } from "./icons";
+import { aiReviewCardHtml } from "./review-panel";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -187,7 +188,8 @@ function renderStatusBody(
           <textarea id="deliv-desc" class="donate-amount" rows="3" placeholder="What to review…"></textarea>
           <label class="donate-amount-label" for="deliv-hash">Artifact hash (optional)</label>
           <input id="deliv-hash" class="donate-amount mono" type="text" />
-          <button type="button" class="btn" id="deliv-submit">Open deliverable PR</button>
+          <button type="button" class="btn" id="deliv-submit">Submit for review</button>
+          <div id="deliverable-ai-result" class="deliverable-ai-result" hidden></div>
         </div>`;
       } else {
         body.innerHTML = `${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
@@ -201,12 +203,12 @@ function renderStatusBody(
     case "in_review":
       body.innerHTML = `${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${escapeHtml(status.claimer)}` : ""
-      }.</p>`;
+      }. AI triage finished — reviewers confirm in the panel below.</p>`;
       break;
     case "completed":
       body.innerHTML = `${meta}<p class="builder-status">Completed${
         status.claimer ? ` · ${escapeHtml(status.claimer)}` : ""
-      }.</p>`;
+      }. Fulfiller earns a reviewer seat.</p>`;
       break;
     default:
       body.innerHTML = `<p class="builder-status muted">Not available for claim.</p>`;
@@ -274,24 +276,19 @@ export async function bindBuilderPanel(
     payoutInput.value = opts.user.payout_address;
   }
 
-  const loginHref = githubLoginUrl();
   const requireLogin = (reason: string) => {
-    setMsg(
-      msg,
-      null,
-    );
     if (msg) {
       msg.hidden = false;
       msg.className = "builder-msg";
-      msg.innerHTML = `${escapeHtml(reason)} <a class="btn" href="${escapeHtml(loginHref)}">${btnWithBrandIcon("github", "Log in with GitHub")}</a>`;
+      msg.innerHTML = loginChoicesHtml(reason);
     }
   };
 
   watchBtn?.addEventListener("click", async () => {
-    if (!opts.user) {
-      requireLogin("Sign in with GitHub to watch this project.");
-      return;
-    }
+      if (!opts.user) {
+        requireLogin("Sign in to watch this project.");
+        return;
+      }
     try {
       const watching = watchBtn.dataset.watching === "1";
       if (watching) {
@@ -305,7 +302,7 @@ export async function bindBuilderPanel(
       }
     } catch (e) {
       if ((e as Error).message === "login_required") {
-        requireLogin("Sign in with GitHub to watch this project.");
+        requireLogin("Sign in to watch this project.");
       } else setMsg(msg, (e as Error).message, "error");
     }
   });
@@ -354,7 +351,7 @@ export async function bindBuilderPanel(
       "click",
       () => {
         if (!opts.user) {
-          requireLogin("Sign in with GitHub to claim this project.");
+          requireLogin("Sign in to claim this project.");
           return;
         }
         openClaimModal();
@@ -372,7 +369,7 @@ export async function bindBuilderPanel(
 
   panel.querySelector("#claim-confirm")?.addEventListener("click", async () => {
     if (!opts.user) {
-      requireLogin("Sign in with GitHub to claim this project.");
+      requireLogin("Sign in to claim this project.");
       return;
     }
     const payout = payoutInput?.value.trim() || "";
@@ -406,7 +403,7 @@ export async function bindBuilderPanel(
     } catch (e) {
       if ((e as Error).message === "login_required") {
         closeClaimModal();
-        requireLogin("Sign in with GitHub to claim this project.");
+        requireLogin("Sign in to claim this project.");
       } else setMsg(modalMsg(), (e as Error).message, "error");
     }
   });
@@ -432,7 +429,7 @@ export async function bindBuilderPanel(
         setMsg(msg, "Checkpoint saved.", "success");
         await refreshStatus();
       } catch (e) {
-        if ((e as Error).message === "login_required") requireLogin("Sign in with GitHub to file a checkpoint.");
+        if ((e as Error).message === "login_required") requireLogin("Sign in to file a checkpoint.");
         else setMsg(msg, (e as Error).message, "error");
       }
     });
@@ -441,7 +438,7 @@ export async function bindBuilderPanel(
   const bindChallenge = () => {
     panel.querySelector("#builder-challenge")?.addEventListener("click", async () => {
       if (!opts.user) {
-        requireLogin("Sign in with GitHub to challenge this claim.");
+        requireLogin("Sign in to challenge this claim.");
         return;
       }
       const reason = window.prompt(
@@ -463,7 +460,7 @@ export async function bindBuilderPanel(
           "success",
         );
       } catch (e) {
-        if ((e as Error).message === "login_required") requireLogin("Sign in with GitHub to challenge this claim.");
+        if ((e as Error).message === "login_required") requireLogin("Sign in to challenge this claim.");
         else setMsg(msg, (e as Error).message, "error");
       }
     });
@@ -490,7 +487,7 @@ export async function bindBuilderPanel(
         setMsg(msg, "URL and description required.", "error");
         return;
       }
-      setMsg(msg, "Opening deliverable PR…");
+      setMsg(msg, "Running AI first-pass and opening PR…");
       try {
         const result = await submitDeliverable({
           proposal_path: opts.proposal.path,
@@ -498,10 +495,28 @@ export async function bindBuilderPanel(
           description,
           artifact_hash: hash || undefined,
         });
-        setMsg(msg, `Deliverable PR opened: ${result.pr_url}`, "success");
+        const aiSlot = panel.querySelector<HTMLElement>("#deliverable-ai-result");
+        if (result.ai_review && aiSlot) {
+          aiSlot.hidden = false;
+          aiSlot.innerHTML = aiReviewCardHtml(result.ai_review);
+        } else if (result.ai_review && body) {
+          const wrap = document.createElement("div");
+          wrap.id = "deliverable-ai-result";
+          wrap.className = "deliverable-ai-result";
+          wrap.innerHTML = aiReviewCardHtml(result.ai_review);
+          body.appendChild(wrap);
+        }
+        const next =
+          result.ai_review?.outcome === "fail"
+            ? "Clear fail — revise and resubmit."
+            : result.decision_id
+              ? "Reviewer ballot opened."
+              : "Submitted.";
+        setMsg(msg, `${next} PR: ${result.pr_url}`, "success");
+        await refreshStatus();
       } catch (e) {
         if ((e as Error).message === "login_required") {
-          requireLogin("Sign in with GitHub to submit a deliverable.");
+          requireLogin("Sign in to submit a deliverable.");
         } else setMsg(msg, (e as Error).message, "error");
       }
     });

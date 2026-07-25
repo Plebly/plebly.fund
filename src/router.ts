@@ -66,6 +66,7 @@ export function parseLocation(
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
   if (path === "propose" || path === "submit") return { name: "propose" };
+  if (path === "reviewers" || path === "governance") return { name: "reviewers" };
   if (path.startsWith("u/")) {
     return { name: "profile", username: decodeURIComponent(path.slice(2)) };
   }
@@ -266,6 +267,13 @@ export function seoForRoute(
         description:
           "Propose Bitcoin development or research work, pay the on-chain submission fee, and list it for public funding.",
         path: "/propose",
+      };
+    case "reviewers":
+      return {
+        title: "Reviewers",
+        description:
+          "Active reviewer roster, open decisions, and funder removal ballots on Plebly.",
+        path: "/reviewers",
       };
     case "account":
       return {

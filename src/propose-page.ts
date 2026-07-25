@@ -1,8 +1,7 @@
-import { githubLoginUrl, submitProposal } from "./auth";
+import { loginChoicesHtml, submitProposal } from "./auth";
 import { fetchClaimParams } from "./builder";
 import { BITCOIN_NETWORK, SUBMISSION_FEE_SATS } from "./config";
 import { bindFeePay, feePayHtml } from "./fee-pay";
-import { btnWithBrandIcon } from "./icons";
 import {
   clientCoverPrecheck,
   uploadProjectCover,
@@ -19,8 +18,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail propose-page">
         <h1>Start a project</h1>
-        <p class="lede">Sign in with GitHub to open a proposal pull request.</p>
-        <a class="btn" href="${escapeHtml(githubLoginUrl(PROPOSE_PATH))}">${btnWithBrandIcon("github", "Log in with GitHub")}</a>
+        <p class="lede">Sign in to open a proposal pull request.</p>
+        ${loginChoicesHtml(undefined, PROPOSE_PATH)}
         <p class="hint form-alt-link"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
       </section>
     `);

@@ -295,24 +295,40 @@ export async function submitAbandonedChallenge(input: {
   return { pr_url: data.challenge?.pr_url };
 }
 
+export type DeliverableResult = {
+  pr_url: string;
+  decision_id?: string;
+  ai_review?: {
+    outcome: "pass" | "fail" | "ambiguous";
+    reasoning: string;
+    failing_criteria?: string[];
+    prompt_version: string;
+    model: string;
+  };
+};
+
 export async function submitDeliverable(input: {
   proposal_path: string;
   deliverable_url: string;
   description: string;
   artifact_hash?: string;
-}): Promise<{ pr_url: string }> {
+}): Promise<DeliverableResult> {
   const res = await fetch(`${API()}/deliverables`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
     credentials: "include",
     body: JSON.stringify(input),
   });
-  const data = (await res.json()) as { pr_url?: string; error?: string };
+  const data = (await res.json()) as DeliverableResult & { error?: string };
   if (res.status === 401) throw new Error("login_required");
   if (!res.ok || !data.pr_url) {
     throw new Error(data.error || `Deliverable failed (${res.status})`);
   }
-  return { pr_url: data.pr_url };
+  return {
+    pr_url: data.pr_url,
+    decision_id: data.decision_id,
+    ai_review: data.ai_review,
+  };
 }
 
 export function claimWindowDaysLeft(

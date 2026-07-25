@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  deliverableChipHtml,
   milestonesHtml,
+  proposalLifecycleBannersHtml,
   proposerBylineHtml,
   statusClass,
   statusLabel,
 } from "./proposal-ui";
-import type { ProposalMilestone } from "./types";
+import type { Proposal, ProposalMilestone } from "./types";
 
 describe("proposal UI critical render helpers", () => {
   it("proposerBylineHtml links site username to profile", () => {
@@ -68,5 +70,30 @@ describe("proposal UI critical render helpers", () => {
     expect(statusClass("abandoned_vote")).toBe("status-active");
     expect(statusClass("refunding")).toBe("status-bad");
     expect(statusClass("underfunded")).toBe("status-bad");
+    expect(statusClass("in_review")).toBe("status-active");
+    expect(statusClass("rejected")).toBe("status-bad");
+  });
+
+  it("lifecycle banners cover in_review and rejected", () => {
+    const review = proposalLifecycleBannersHtml({
+      status: "in_review",
+      milestones: [],
+    } as Proposal);
+    expect(review).toContain("In review");
+    expect(review).toContain("AI first-pass");
+
+    const rejected = proposalLifecycleBannersHtml({
+      status: "rejected",
+      milestones: [],
+    } as Proposal);
+    expect(rejected).toContain("Rejected");
+    expect(rejected).toContain("rebuttal");
+  });
+
+  it("deliverableChipHtml only accepts https URLs", () => {
+    expect(deliverableChipHtml("http://insecure.example")).toBe("");
+    expect(deliverableChipHtml("https://example.com/out")).toContain(
+      "example.com/out",
+    );
   });
 });

@@ -1,10 +1,12 @@
 import { WORKERS_API } from "./config";
+import { btnWithBrandIcon } from "./icons";
 import {
   currentReturnPath,
   href,
   profileHref as profilePath,
 } from "./router";
 import type { ProfileLink, PublicProfile, UserProfile } from "./types";
+import { escapeHtml } from "./util";
 
 export { currentReturnPath, profilePath };
 
@@ -60,9 +62,7 @@ export function authFetch(input: string, init: RequestInit = {}): Promise<Respon
 
 export type AuthUser = UserProfile;
 
-/** Build GitHub OAuth URL; return_to is a full path URL (e.g. https://plebly.fund/propose). */
-export function githubLoginUrl(returnPath?: string): string {
-  const base = `${API()}/auth/github`;
+function oauthReturnTo(returnPath?: string): string {
   let path = returnPath ?? currentReturnPath();
   if (path.startsWith("#/")) path = path.slice(1);
   if (path.startsWith("#")) path = "/";
@@ -70,8 +70,42 @@ export function githubLoginUrl(returnPath?: string): string {
   const qIdx = path.indexOf("?");
   const pathname = qIdx === -1 ? path : path.slice(0, qIdx);
   const search = qIdx === -1 ? "" : path.slice(qIdx);
-  const returnTo = `${window.location.origin}${href(pathname, search)}`;
-  return `${base}?return_to=${encodeURIComponent(returnTo)}`;
+  return `${window.location.origin}${href(pathname, search)}`;
+}
+
+/** Build GitHub OAuth URL; return_to is a full path URL (e.g. https://plebly.fund/propose). */
+export function githubLoginUrl(returnPath?: string): string {
+  return `${API()}/auth/github?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
+}
+
+/** Build X OAuth URL (PKCE handled by Workers). */
+export function xLoginUrl(returnPath?: string): string {
+  return `${API()}/auth/x?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
+}
+
+/** Compact GitHub + X login choices for gates and empty states. */
+export function loginChoicesHtml(prompt?: string, returnPath?: string): string {
+  const lead = prompt
+    ? `<p class="login-choices-prompt">${escapeHtml(prompt)}</p>`
+    : "";
+  return `<div class="login-choices">
+    ${lead}
+    <div class="login-choices-actions">
+      <a class="btn" href="${escapeHtml(githubLoginUrl(returnPath))}">${btnWithBrandIcon("github", "GitHub")}</a>
+      <a class="btn ghost" href="${escapeHtml(xLoginUrl(returnPath))}">${btnWithBrandIcon("x-twitter", "X")}</a>
+    </div>
+  </div>`;
+}
+
+/** Nav login control — summary opens provider list. */
+export function loginMenuHtml(returnPath?: string): string {
+  return `<details class="login-menu">
+    <summary>Log in</summary>
+    <div class="login-menu-panel">
+      <a href="${escapeHtml(githubLoginUrl(returnPath))}">${btnWithBrandIcon("github", "Continue with GitHub")}</a>
+      <a href="${escapeHtml(xLoginUrl(returnPath))}">${btnWithBrandIcon("x-twitter", "Continue with X")}</a>
+    </div>
+  </details>`;
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
