@@ -12,17 +12,19 @@ export const BITCOIN_NETWORK =
   import.meta.env.VITE_BITCOIN_NETWORK || "signet";
 
 /**
- * Show Lightning donate UI when mainnet, or when explicitly staging
- * against Boltz testnet (`VITE_LIGHTNING_TESTNET=1`). Signet demos stay on-chain only.
+ * Show Lightning donate UI when mainnet/testnet.
+ * Signet stays on-chain only (Boltz has no signet pair).
+ * `VITE_LIGHTNING_TESTNET=1` / `VITE_LIGHTNING=1` are for testnet staging builds only.
  */
 export function lightningUiAllowed(): boolean {
+  const n = BITCOIN_NETWORK.toLowerCase();
+  if (n === "signet") return false;
   if (
     import.meta.env.VITE_LIGHTNING_TESTNET === "1" ||
     import.meta.env.VITE_LIGHTNING === "1"
   ) {
     return true;
   }
-  const n = BITCOIN_NETWORK.toLowerCase();
   return n === "mainnet" || n === "bitcoin" || n === "testnet";
 }
 

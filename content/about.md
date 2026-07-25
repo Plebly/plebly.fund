@@ -32,7 +32,7 @@ Lightning is a **funding rail into on-chain escrow**, not a separate balance. A 
 - Unpaid or in-flight invoices do **not** count toward the claim floor.
 - Escrow credit is the invoice amount minus Boltz service and claim fees; the donate UI shows the expected on-chain credit.
 - Minimum amounts follow the Boltz BTC/BTC reverse pair (often above the smallest on-chain presets).
-- Lightning is enabled on **mainnet** production; signet demos stay on-chain only unless a staging flag is set.
+- Lightning is enabled on **mainnet** production. Signet stays on-chain only (Boltz has no signet pair). Use `BITCOIN_NETWORK=testnet` for Lightning staging.
 
 ## Key parameters
 

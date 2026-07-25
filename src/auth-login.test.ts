@@ -1,11 +1,55 @@
-import { beforeAll, describe, expect, it } from "vitest";
-import { githubLoginUrl, loginChoicesHtml, loginMenuHtml, xLoginUrl } from "./auth";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  consumeSessionFromHash,
+  githubLoginUrl,
+  loginChoicesHtml,
+  loginMenuHtml,
+  xLoginUrl,
+} from "./auth";
+
+const locationState = {
+  origin: "https://plebly.fund",
+  pathname: "/",
+  search: "",
+  hash: "",
+};
 
 beforeAll(() => {
   Object.defineProperty(globalThis, "window", {
-    value: { location: { origin: "https://plebly.fund" } },
+    value: { location: locationState },
     configurable: true,
   });
+  Object.defineProperty(globalThis, "location", {
+    get: () => locationState,
+    configurable: true,
+  });
+  vi.stubGlobal("history", {
+    replaceState: (_s: unknown, _t: string, url: string) => {
+      const u = new URL(url, "https://plebly.fund");
+      locationState.pathname = u.pathname;
+      locationState.search = u.search;
+      locationState.hash = u.hash;
+    },
+  });
+  vi.stubGlobal("sessionStorage", {
+    store: new Map<string, string>(),
+    getItem(k: string) {
+      return this.store.get(k) ?? null;
+    },
+    setItem(k: string, v: string) {
+      this.store.set(k, v);
+    },
+    removeItem(k: string) {
+      this.store.delete(k);
+    },
+  });
+});
+
+beforeEach(() => {
+  locationState.pathname = "/";
+  locationState.search = "";
+  locationState.hash = "";
+  (sessionStorage as unknown as { store: Map<string, string> }).store.clear();
 });
 
 describe("login UX helpers", () => {
@@ -29,5 +73,12 @@ describe("login UX helpers", () => {
     expect(html).toContain("<details");
     expect(html).toContain("Continue with GitHub");
     expect(html).toContain("Continue with X");
+  });
+
+  it("consumeSessionFromHash stores Bearer token and strips the hash", () => {
+    locationState.hash = "#plebly_auth=tok%2B123";
+    expect(consumeSessionFromHash()).toBe(true);
+    expect(sessionStorage.getItem("plebly_session")).toBe("tok+123");
+    expect(locationState.hash).toBe("");
   });
 });
