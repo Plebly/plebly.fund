@@ -356,8 +356,17 @@ export async function renderProposalPage(
       });
     }
   } catch (e) {
-    app.innerHTML = shell(
-      `<section class="wrap-wide detail proposal-page"><p class="error">${escapeHtml((e as Error).message)}</p></section>`,
-    );
+    app.innerHTML = shell(`
+      <section class="wrap-wide detail proposal-page">
+        <a class="back-link" href="${href("/")}">← Projects</a>
+        <div class="empty-state">
+          <div class="empty-state-inner">
+            <p class="empty-state-title">Could not load proposal</p>
+            <p class="empty-state-body">${escapeHtml((e as Error).message)}</p>
+            <p><a class="btn ghost" href="${href("/")}">Browse projects</a></p>
+          </div>
+        </div>
+      </section>
+    `);
   }
 }

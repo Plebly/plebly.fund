@@ -51,7 +51,8 @@ function authNavHtml(): string {
     ${loginMenuHtml(currentReturnPath())}`;
 }
 
-function siteFooterHtml(): string {
+function siteFooterHtml(routeName: string): string {
+  const fa = (name: string) => (routeName === name ? ' class="active"' : "");
   return `<footer class="site-footer">
     <div class="wrap-wide footer-inner">
       <div class="footer-brand">
@@ -61,10 +62,10 @@ function siteFooterHtml(): string {
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
           <h2 class="footer-col-title">Explore</h2>
-          <a href="${href("/")}">Projects</a>
-          <a href="${href("/propose")}">Start a project</a>
-          <a href="${href("/about")}">About</a>
-          <a href="${href("/reviewers")}">Reviewers</a>
+          <a href="${href("/")}"${fa("home")}>Projects</a>
+          <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
+          <a href="${href("/about")}"${fa("about")}>About</a>
+          <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
         </div>
         <div class="footer-col">
           <h2 class="footer-col-title">Source</h2>
@@ -101,7 +102,7 @@ function shell(inner: string): string {
       </div>
     </header>
     <main>${inner}</main>
-    ${siteFooterHtml()}
+    ${siteFooterHtml(r.name)}
   `;
 }
 

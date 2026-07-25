@@ -669,10 +669,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           ...author,
           submission_fee_txid: feeTxid,
         });
-        msg.className = "form-msg success";
-        msg.innerHTML = result.pr_url
-          ? `PR opened: <a href="${escapeHtml(result.pr_url)}" target="_blank" rel="noreferrer">${escapeHtml(result.pr_url)}</a>`
-          : "Proposal submitted.";
+        showProposeSuccess({
+          title: "Proposal submitted",
+          body: "Your submission pull request is open. It becomes editable in-app after merge to main.",
+          prUrl: result.pr_url,
+          backHref: href("/"),
+          backLabel: "Browse projects",
+        });
       } catch (err) {
         msg.className = "form-msg error";
         msg.textContent = (err as Error).message;
@@ -688,13 +691,43 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         ...author,
         proposal_path: prefill!.path,
       });
-      msg.className = "form-msg success";
-      msg.innerHTML = result.pr_url
-        ? `Amend PR opened: <a href="${escapeHtml(result.pr_url)}" target="_blank" rel="noreferrer">${escapeHtml(result.pr_url)}</a>`
-        : "Amend submitted.";
+      showProposeSuccess({
+        title: "Amend submitted",
+        body: "Your amend pull request is open. Lifecycle fields stay intact until merge.",
+        prUrl: result.pr_url,
+        backHref: proposalHref(prefill!.path),
+        backLabel: "Back to project",
+      });
     } catch (err) {
       msg.className = "form-msg error";
       msg.textContent = (err as Error).message;
     }
   });
+}
+
+function showProposeSuccess(opts: {
+  title: string;
+  body: string;
+  prUrl?: string;
+  backHref: string;
+  backLabel: string;
+}): void {
+  const section = document.querySelector(".propose-page");
+  if (!section) return;
+  const pr = opts.prUrl
+    ? `<p class="propose-success-pr"><a href="${escapeHtml(opts.prUrl)}" target="_blank" rel="noreferrer">${escapeHtml(opts.prUrl)}</a></p>`
+    : "";
+  section.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-inner">
+        <p class="empty-state-title">${escapeHtml(opts.title)}</p>
+        <p class="empty-state-body">${escapeHtml(opts.body)}</p>
+        ${pr}
+        <p class="propose-success-actions">
+          <a class="btn" href="${opts.backHref}">${escapeHtml(opts.backLabel)}</a>
+          <a class="btn ghost" href="${href("/propose")}">Start another</a>
+        </p>
+      </div>
+    </div>
+  `;
 }

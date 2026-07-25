@@ -278,8 +278,8 @@ export async function renderGovernance(
       <p class="gov-foot muted">
         Rules live in
         <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>.
-        Project-level review UI stays on each
-        <a href="${href("/")}">proposal page</a>.
+        Project-level review UI stays on each project page —
+        <a href="${href("/")}">browse projects</a>.
       </p>
     </section>
   `);
