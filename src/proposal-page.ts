@@ -12,7 +12,9 @@ import {
   donateModalHtml,
   donateTriggerHtml,
   ballotPanelHtml,
+  canEditProposal,
   deliverableChipHtml,
+  dependsOnHtml,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
@@ -20,6 +22,7 @@ import {
   proposalLifecycleBannersHtml,
   proposerBylineHtml,
   refundRegisterHtml,
+  relatedWorkHtml,
   sectionBodyHtml,
   statusClass,
   statusLabel,
@@ -267,6 +270,11 @@ export async function renderProposalPage(
           </div>
           ${metaChipsHtml(match)}
           ${byline}
+          ${
+            canEditProposal(user, match.proposer, String(match.status))
+              ? `<p class="proposal-edit-cta"><a class="btn ghost" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">Edit proposal</a></p>`
+              : ""
+          }
         </header>
 
         ${banners}
@@ -277,6 +285,8 @@ export async function renderProposalPage(
             : ""
         }
 
+        ${dependsOnHtml(match.depends_on || [])}
+        ${relatedWorkHtml(match.related_work || [])}
         ${milestonesHtml(match.milestones)}
 
         <div class="proposal-layout">

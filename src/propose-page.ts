@@ -1,52 +1,175 @@
-import { loginChoicesHtml, submitProposal } from "./auth";
+import {
+  loginChoicesHtml,
+  submitProposal,
+  updateProposal,
+} from "./auth";
 import { fetchClaimParams } from "./builder";
-import { BITCOIN_NETWORK, SUBMISSION_FEE_SATS } from "./config";
+import { BITCOIN_NETWORK, PROPOSALS_RAW, SUBMISSION_FEE_SATS } from "./config";
 import { bindFeePay, feePayHtml } from "./fee-pay";
+import { extractBodySections, parseFrontMatter } from "./frontmatter";
 import {
   clientCoverPrecheck,
   uploadProjectCover,
 } from "./media";
 import type { ShellContext } from "./profile-pages";
-import { href } from "./router";
+import {
+  collectDependsOn,
+  collectRelatedWork,
+  dependsOnRowHtml,
+  dependsOnSectionHtml,
+  relatedWorkRowHtml,
+  relatedWorkSectionHtml,
+  syncDependsOnKindUi,
+  validateDependsOnDrafts,
+  validateRelatedWorkDrafts,
+} from "./propose-deps";
+import {
+  collectMilestoneDrafts,
+  milestoneEditorSectionHtml,
+  milestoneRowHtml,
+  milestonesAllocatedTotal,
+  milestonesFundingHint,
+  refreshMilestoneDepSlots,
+  validateMilestoneDrafts,
+  type MilestoneDraft,
+} from "./propose-milestones";
+import { href, proposalHref } from "./router";
+import type {
+  DependsOnEntry,
+  ProposalMilestone,
+  RelatedWorkEntry,
+} from "./types";
+import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
 const PROPOSE_PATH = "/propose";
 
+type Prefill = {
+  path: string;
+  title: string;
+  problem: string;
+  deliverable: string;
+  verification: string;
+  out_of_scope: string;
+  notes: string;
+  target_sats: number | null;
+  cover_image: string | null;
+  milestones: ProposalMilestone[];
+  depends_on: DependsOnEntry[];
+  related_work: RelatedWorkEntry[];
+  status: string;
+};
+
+async function loadPrefill(editPath: string): Promise<Prefill | null> {
+  let path = editPath.replace(/^\/+/, "");
+  if (!path.startsWith("proposals/")) path = `proposals/${path}`;
+  if (!path.endsWith(".md")) path = `${path}.md`;
+  const res = await fetch(`${PROPOSALS_RAW}/${path}`);
+  if (!res.ok) return null;
+  const raw = await res.text();
+  const { data, body } = parseFrontMatter(raw);
+  const sections = extractBodySections(body);
+  const status = String(data.status || "");
+  if (!EDITABLE_PROPOSAL_STATUSES.has(status)) return null;
+  const milestones = Array.isArray(data.milestones)
+    ? (data.milestones as ProposalMilestone[])
+    : [];
+  const depends_on = Array.isArray(data.depends_on)
+    ? (data.depends_on as DependsOnEntry[])
+    : [];
+  const related_work = Array.isArray(data.related_work)
+    ? (data.related_work as RelatedWorkEntry[])
+    : [];
+  return {
+    path,
+    title: String(data.title || ""),
+    problem: sections.problem || "",
+    deliverable: sections.deliverable || "",
+    verification: sections.verification || "",
+    out_of_scope: sections["out of scope"] || "",
+    notes: sections.notes || "",
+    target_sats:
+      typeof data.target_sats === "number" ? data.target_sats : null,
+    cover_image:
+      typeof data.cover_image === "string" ? data.cover_image : null,
+    milestones,
+    depends_on,
+    related_work,
+    status,
+  };
+}
+
 export async function renderPropose(ctx: ShellContext): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
+  const editParam = new URLSearchParams(location.search).get("edit");
+  const returnPath = editParam
+    ? `${PROPOSE_PATH}?edit=${encodeURIComponent(editParam)}`
+    : PROPOSE_PATH;
+
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail propose-page">
-        <h1>Start a project</h1>
-        <p class="lede">Sign in to open a proposal pull request.</p>
-        ${loginChoicesHtml(undefined, PROPOSE_PATH)}
+        <h1>${editParam ? "Edit proposal" : "Start a project"}</h1>
+        <p class="lede">Sign in to ${editParam ? "open an amend pull request" : "open a proposal pull request"}.</p>
+        ${loginChoicesHtml(undefined, returnPath)}
         <p class="hint form-alt-link"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
       </section>
     `);
     return;
   }
 
+  let prefill: Prefill | null = null;
+  if (editParam) {
+    app.innerHTML = ctx.shell(
+      `<section class="wrap detail propose-page"><p class="loading">Loading proposal…</p></section>`,
+    );
+    prefill = await loadPrefill(editParam);
+    if (!prefill) {
+      app.innerHTML = ctx.shell(`
+        <section class="wrap detail propose-page">
+          <h1>Cannot edit</h1>
+          <p class="lede">This proposal is not on main yet, is past claim, or was not found. In-app edit works after the submission PR merges and before claim.</p>
+          <p><a class="btn" href="${href("/")}">Browse projects</a></p>
+        </section>
+      `);
+      return;
+    }
+  }
+
+  const isEdit = Boolean(prefill);
   const feeLabel = formatSats(SUBMISSION_FEE_SATS);
   const networkLabel = BITCOIN_NETWORK === "signet" ? "signet" : "mainnet";
   let feeAddress: string | null = null;
-  try {
-    const params = await fetchClaimParams();
-    feeAddress = params.fee_address;
-  } catch {
-    /* address optional until API configured */
+  if (!isEdit) {
+    try {
+      const params = await fetchClaimParams();
+      feeAddress = params.fee_address;
+    } catch {
+      /* optional */
+    }
   }
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail propose-page">
-      <h1>Start a project</h1>
-      <p class="lede">Describe the work and pay the ${escapeHtml(feeLabel)} submission fee on ${escapeHtml(networkLabel)}.</p>
+      <h1>${isEdit ? "Edit proposal" : "Start a project"}</h1>
+      ${
+        isEdit
+          ? `<div class="edit-banner" role="status">
+              <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span> · no second fee</p>
+              <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
+              <p class="edit-banner-actions">
+                <a href="${proposalHref(prefill!.path)}">← Back to project</a>
+              </p>
+            </div>`
+          : `<p class="lede">Describe the work and pay the ${escapeHtml(feeLabel)} submission fee on ${escapeHtml(networkLabel)}.</p>`
+      }
 
       <form id="propose-form" class="form-panel form-panel-wide">
         <fieldset class="form-block">
           <legend>Proposal</legend>
           <label class="field">
             <span>Title</span>
-            <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" />
+            <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" value="${escapeHtml(prefill?.title || "")}" />
           </label>
           <div class="field cover-field">
             <span>Cover image <em class="optional">(optional)</em></span>
@@ -71,30 +194,38 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </div>
           <label class="field">
             <span>Problem &amp; audience</span>
-            <textarea name="problem" required minlength="40" rows="4" placeholder="What problem are you solving? Who benefits? Why is this good for Bitcoin?"></textarea>
+            <textarea name="problem" required minlength="40" rows="4" placeholder="What problem are you solving? Who benefits? Why is this good for Bitcoin?">${escapeHtml(prefill?.problem || "")}</textarea>
           </label>
           <label class="field">
             <span>Plan &amp; deliverables</span>
-            <textarea name="deliverable" required minlength="40" rows="5" placeholder="Concrete artifacts you will produce: code, docs, research, designs. Include license intent (FOSS)."></textarea>
+            <textarea name="deliverable" required minlength="40" rows="5" placeholder="Concrete artifacts you will produce: code, docs, research, designs. Include license intent (FOSS).">${escapeHtml(prefill?.deliverable || "")}</textarea>
           </label>
           <label class="field">
             <span>Verification</span>
-            <textarea name="verification" required minlength="40" rows="4" placeholder="Steps a reviewer can follow to confirm completion — commands, URLs, acceptance criteria."></textarea>
-            <span class="field-hint">Two independent reviewers should reach the same yes/no conclusion.</span>
+            <textarea name="verification" required minlength="40" rows="4" placeholder="Steps a reviewer can follow to confirm completion — commands, URLs, acceptance criteria.">${escapeHtml(prefill?.verification || "")}</textarea>
+            <span class="field-hint">Two independent reviewers should reach the same yes/no conclusion. Numbered steps (1. 2.) render as a checklist on the project page.</span>
           </label>
           <label class="field">
             <span>Out of scope</span>
-            <textarea name="out_of_scope" required minlength="10" rows="3" placeholder="What this project explicitly does not include."></textarea>
+            <textarea name="out_of_scope" required minlength="10" rows="3" placeholder="What this project explicitly does not include.">${escapeHtml(prefill?.out_of_scope || "")}</textarea>
+          </label>
+          <label class="field">
+            <span>Notes <em class="optional">(optional)</em></span>
+            <textarea name="notes" maxlength="4000" rows="3" placeholder="Freeform context. Prefer Related work below for structured https links.">${escapeHtml(prefill?.notes || "")}</textarea>
           </label>
         </fieldset>
 
         <fieldset class="form-block">
           <legend>Funding</legend>
           <label class="field">
-            <span>Target funding (optional)</span>
-            <input name="target_sats" type="number" min="0" step="1" placeholder="e.g. 5000000" />
+            <span>Target funding <em class="optional">(optional)</em></span>
+            <input name="target_sats" id="propose-target-sats" type="number" min="0" step="1" placeholder="e.g. 5000000" value="${prefill?.target_sats != null ? escapeHtml(String(prefill.target_sats)) : ""}" />
+            <span class="field-hint">Targets ≥ 1,000,000 sats require at least one milestone.</span>
           </label>
-          <div class="field">
+          ${
+            isEdit
+              ? `<p class="field-hint">Submission fee already paid — amend opens a PR without a new fee.</p>`
+              : `<div class="field">
             <span>Submission fee</span>
             ${feePayHtml({
               id: "propose-fee",
@@ -103,21 +234,177 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               txidName: "submission_fee_txid",
               note: "Required to open a proposal PR. Exact amount on-chain.",
             })}
-          </div>
+          </div>`
+          }
         </fieldset>
 
+        ${milestoneEditorSectionHtml()}
+        ${dependsOnSectionHtml()}
+        ${relatedWorkSectionHtml()}
+
         <div class="form-actions">
-          <button type="submit" class="btn">Open proposal PR</button>
+          <button type="submit" class="btn">${isEdit ? "Open amend PR" : "Open proposal PR"}</button>
+          ${isEdit ? `<a class="btn ghost" href="${proposalHref(prefill!.path)}">Cancel</a>` : ""}
         </div>
         <p class="form-msg" id="propose-msg" hidden></p>
       </form>
     </section>
   `);
 
-  const feePay = await bindFeePay(document, "propose-fee");
-
+  const feePay = isEdit ? null : await bindFeePay(document, "propose-fee");
   const form = document.getElementById("propose-form") as HTMLFormElement;
   const msg = document.getElementById("propose-msg")!;
+  const milestonesList = document.getElementById("milestones-list")!;
+  const milestonesEmpty = document.getElementById("milestones-empty");
+  const milestonesTotal = document.getElementById("milestones-total");
+  const milestonesHint = document.getElementById("milestones-funding-hint");
+  const targetInput = document.getElementById(
+    "propose-target-sats",
+  ) as HTMLInputElement | null;
+  const dependsList = document.getElementById("depends-on-list")!;
+  const dependsEmpty = document.getElementById("depends-on-empty");
+  const relatedList = document.getElementById("related-work-list")!;
+  const relatedEmpty = document.getElementById("related-work-empty");
+
+  const syncEmpty = (list: HTMLElement, empty: HTMLElement | null) => {
+    if (!empty) return;
+    empty.hidden = list.children.length > 0;
+  };
+
+  const readTargetSats = (): number | null => {
+    const raw = targetInput?.value.trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const renumberMilestones = () => {
+    milestonesList
+      .querySelectorAll<HTMLElement>(".milestone-editor-row")
+      .forEach((row, i) => {
+        row.dataset.index = String(i);
+        const label = row.querySelector(".milestone-editor-n");
+        if (label) label.textContent = `Milestone ${i + 1}`;
+      });
+    refreshMilestoneDepSlots(milestonesList);
+  };
+
+  const refreshMilestoneTotal = () => {
+    const drafts = collectMilestoneDrafts(milestonesList);
+    const total = milestonesAllocatedTotal(drafts);
+    if (milestonesTotal) {
+      milestonesTotal.textContent = drafts.length
+        ? `${drafts.length} stage${drafts.length === 1 ? "" : "s"} · ${formatSats(total)} allocated`
+        : "";
+    }
+    if (milestonesHint) {
+      const hint = milestonesFundingHint(readTargetSats(), total, drafts.length);
+      milestonesHint.hidden = !hint;
+      milestonesHint.textContent = hint;
+    }
+    syncEmpty(milestonesList, milestonesEmpty);
+  };
+
+  const bindMilestoneRow = (row: HTMLElement) => {
+    row.querySelector(".remove-milestone")?.addEventListener("click", () => {
+      row.remove();
+      renumberMilestones();
+      refreshMilestoneTotal();
+    });
+    row
+      .querySelectorAll("input, textarea")
+      .forEach((el) => el.addEventListener("input", refreshMilestoneTotal));
+  };
+
+  const addMilestone = (draft?: Partial<MilestoneDraft>) => {
+    const index = milestonesList.querySelectorAll(".milestone-editor-row").length;
+    if (index >= 12) return;
+    milestonesList.insertAdjacentHTML("beforeend", milestoneRowHtml(index, draft));
+    const row = milestonesList.lastElementChild as HTMLElement | null;
+    if (row) bindMilestoneRow(row);
+    refreshMilestoneDepSlots(milestonesList);
+    refreshMilestoneTotal();
+  };
+
+  document.getElementById("add-milestone-btn")?.addEventListener("click", () => {
+    addMilestone();
+  });
+  targetInput?.addEventListener("input", refreshMilestoneTotal);
+
+  const renumberDeps = (list: HTMLElement, label: string) => {
+    list.querySelectorAll<HTMLElement>(".dep-editor-row").forEach((row, i) => {
+      row.dataset.index = String(i);
+      const n = row.querySelector(".milestone-editor-n");
+      if (n) n.textContent = `${label} ${i + 1}`;
+    });
+  };
+
+  const bindDepRow = (row: HTMLElement, list: HTMLElement, label: string) => {
+    row.querySelector(".remove-dep")?.addEventListener("click", () => {
+      row.remove();
+      renumberDeps(list, label);
+      syncEmpty(list, list === dependsList ? dependsEmpty : relatedEmpty);
+    });
+    row.querySelector(".dep-kind")?.addEventListener("change", () => {
+      syncDependsOnKindUi(row);
+    });
+  };
+
+  document.getElementById("add-depends-on-btn")?.addEventListener("click", () => {
+    const index = dependsList.querySelectorAll(".dep-editor-row").length;
+    if (index >= 20) return;
+    dependsList.insertAdjacentHTML("beforeend", dependsOnRowHtml(index));
+    const row = dependsList.lastElementChild as HTMLElement | null;
+    if (row) bindDepRow(row, dependsList, "Dependency");
+    syncEmpty(dependsList, dependsEmpty);
+  });
+
+  document.getElementById("add-related-work-btn")?.addEventListener("click", () => {
+    const index = relatedList.querySelectorAll(".dep-editor-row").length;
+    if (index >= 20) return;
+    relatedList.insertAdjacentHTML("beforeend", relatedWorkRowHtml(index));
+    const row = relatedList.lastElementChild as HTMLElement | null;
+    if (row) bindDepRow(row, relatedList, "Related");
+    syncEmpty(relatedList, relatedEmpty);
+  });
+
+  if (prefill?.milestones.length) {
+    prefill.milestones.forEach((m, i) => {
+      addMilestone({
+        id: m.id || `m${i + 1}`,
+        deliverable: m.deliverable,
+        verification: m.verification,
+        out_of_scope: m.out_of_scope,
+        allocation_sats: m.allocation_sats,
+        deadline: String(m.deadline || "").slice(0, 10),
+        dependencies: m.dependencies,
+      });
+    });
+  } else {
+    refreshMilestoneTotal();
+  }
+
+  if (prefill?.depends_on.length) {
+    prefill.depends_on.forEach((d, i) => {
+      dependsList.insertAdjacentHTML("beforeend", dependsOnRowHtml(i, d));
+      const row = dependsList.lastElementChild as HTMLElement | null;
+      if (row) {
+        bindDepRow(row, dependsList, "Dependency");
+        syncDependsOnKindUi(row);
+      }
+    });
+  }
+  syncEmpty(dependsList, dependsEmpty);
+
+  if (prefill?.related_work.length) {
+    prefill.related_work.forEach((d, i) => {
+      relatedList.insertAdjacentHTML("beforeend", relatedWorkRowHtml(i, d));
+      const row = relatedList.lastElementChild as HTMLElement | null;
+      if (row) bindDepRow(row, relatedList, "Related");
+    });
+  }
+  syncEmpty(relatedList, relatedEmpty);
+
   const coverInput = document.getElementById(
     "propose-cover-input",
   ) as HTMLInputElement;
@@ -128,10 +415,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   ) as HTMLImageElement;
   const coverStatus = document.getElementById("propose-cover-status")!;
   const coverHint = document.getElementById("propose-cover-hint")!;
-  const coverPick = document.getElementById("propose-cover-pick");
-  const coverReplace = document.getElementById("propose-cover-replace");
-  const coverClear = document.getElementById("propose-cover-clear");
-  let coverUrl: string | null = null;
+  let coverUrl: string | null = prefill?.cover_image || null;
   let coverObjectUrl: string | null = null;
   let coverUploading = false;
 
@@ -174,6 +458,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     coverPreview.hidden = false;
   };
 
+  if (coverUrl) {
+    coverImg.src = coverUrl;
+    coverImg.alt = "Cover";
+    showPreview();
+  }
+
   const clearCover = () => {
     coverUrl = null;
     coverUploading = false;
@@ -194,43 +484,22 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     coverInput.click();
   };
 
-  coverPick?.addEventListener("click", openFilePicker);
-  coverReplace?.addEventListener("click", openFilePicker);
-  coverClear?.addEventListener("click", () => {
+  document.getElementById("propose-cover-pick")?.addEventListener("click", openFilePicker);
+  document.getElementById("propose-cover-replace")?.addEventListener("click", openFilePicker);
+  document.getElementById("propose-cover-clear")?.addEventListener("click", () => {
     if (coverUploading) return;
     clearCover();
-  });
-
-  coverPicker.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    coverPicker.classList.add("is-dragover");
-  });
-  coverPicker.addEventListener("dragleave", () => {
-    coverPicker.classList.remove("is-dragover");
-  });
-  coverPicker.addEventListener("drop", (e) => {
-    e.preventDefault();
-    coverPicker.classList.remove("is-dragover");
-    if (coverUploading) return;
-    const file = e.dataTransfer?.files?.[0];
-    if (!file) return;
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    coverInput.files = dt.files;
-    coverInput.dispatchEvent(new Event("change"));
   });
 
   coverInput.addEventListener("change", async () => {
     const file = coverInput.files?.[0];
     if (!file) return;
-
     const pre = clientCoverPrecheck(file);
     if (pre) {
       clearCover();
       setHint(pre, "error");
       return;
     }
-
     if (coverObjectUrl) URL.revokeObjectURL(coverObjectUrl);
     coverObjectUrl = URL.createObjectURL(file);
     coverImg.src = coverObjectUrl;
@@ -240,21 +509,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     showPreview();
     setHint("");
     setPreviewStatus("Uploading…", "busy");
-
     try {
       const uploaded = await uploadProjectCover(file);
       coverUrl = uploaded.url;
       coverUploading = false;
       setPreviewStatus("");
-      setHint("Cover ready — it will be included when you open the PR.", "ok");
+      setHint("Cover ready.", "ok");
     } catch (err) {
       const e = err as Error & { code?: string };
       coverUploading = false;
       clearCover();
       if (e.code === "MEDIA_DISABLED") {
-        setHint(
-          "Cover uploads are not enabled yet — you can still submit without an image.",
-        );
+        setHint("Cover uploads are not enabled yet — continue without an image.");
         return;
       }
       setHint(e.message, "error");
@@ -269,36 +535,96 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       msg.textContent = "Wait for the cover upload to finish, or remove it.";
       return;
     }
-    const feeTxid = feePay?.getTxid() || "";
-    if (!/^[0-9a-fA-F]{64}$/.test(feeTxid)) {
-      feePay?.setStep("txid");
-      msg.hidden = false;
-      msg.className = "form-msg error";
-      msg.textContent =
-        "Paste the 64-character submission fee txid after you've sent the payment.";
-      return;
-    }
-    msg.hidden = false;
-    msg.className = "form-msg";
-    msg.textContent = "Opening pull request…";
+
     const fd = new FormData(form);
     const targetRaw = fd.get("target_sats");
+    const target_sats =
+      targetRaw && String(targetRaw).length ? Number(targetRaw) : null;
+    const drafts = collectMilestoneDrafts(milestonesList);
+    const checked = validateMilestoneDrafts(drafts, target_sats);
+    if (!checked.ok) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = checked.error;
+      document.getElementById("milestones-block")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    const depDrafts = collectDependsOn(dependsList);
+    const depOk = validateDependsOnDrafts(depDrafts);
+    if (!depOk.ok) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = depOk.error;
+      return;
+    }
+    const relDrafts = collectRelatedWork(relatedList);
+    const relOk = validateRelatedWorkDrafts(relDrafts);
+    if (!relOk.ok) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = relOk.error;
+      return;
+    }
+
+    const author = {
+      title: String(fd.get("title") || ""),
+      problem: String(fd.get("problem") || ""),
+      deliverable: String(fd.get("deliverable") || ""),
+      verification: String(fd.get("verification") || ""),
+      out_of_scope: String(fd.get("out_of_scope") || ""),
+      target_sats,
+      cover_image: coverUrl,
+      notes: String(fd.get("notes") || "").trim() || null,
+      milestones: checked.milestones,
+      depends_on: depOk.value,
+      related_work: relOk.value,
+    };
+
+    if (!isEdit) {
+      const feeTxid = feePay?.getTxid() || "";
+      if (!/^[0-9a-fA-F]{64}$/.test(feeTxid)) {
+        feePay?.setStep("txid");
+        msg.hidden = false;
+        msg.className = "form-msg error";
+        msg.textContent =
+          "Paste the 64-character submission fee txid after you've sent the payment.";
+        return;
+      }
+      msg.hidden = false;
+      msg.className = "form-msg";
+      msg.textContent = "Opening pull request…";
+      try {
+        const result = await submitProposal({
+          ...author,
+          submission_fee_txid: feeTxid,
+        });
+        msg.className = "form-msg success";
+        msg.innerHTML = result.pr_url
+          ? `PR opened: <a href="${escapeHtml(result.pr_url)}" target="_blank" rel="noreferrer">${escapeHtml(result.pr_url)}</a>`
+          : "Proposal submitted.";
+      } catch (err) {
+        msg.className = "form-msg error";
+        msg.textContent = (err as Error).message;
+      }
+      return;
+    }
+
+    msg.hidden = false;
+    msg.className = "form-msg";
+    msg.textContent = "Opening amend pull request…";
     try {
-      const result = await submitProposal({
-        title: String(fd.get("title") || ""),
-        problem: String(fd.get("problem") || ""),
-        deliverable: String(fd.get("deliverable") || ""),
-        verification: String(fd.get("verification") || ""),
-        out_of_scope: String(fd.get("out_of_scope") || ""),
-        submission_fee_txid: feeTxid,
-        target_sats:
-          targetRaw && String(targetRaw).length ? Number(targetRaw) : null,
-        cover_image: coverUrl,
+      const result = await updateProposal({
+        ...author,
+        proposal_path: prefill!.path,
       });
       msg.className = "form-msg success";
       msg.innerHTML = result.pr_url
-        ? `PR opened: <a href="${escapeHtml(result.pr_url)}" target="_blank" rel="noreferrer">${escapeHtml(result.pr_url)}</a>`
-        : "Proposal submitted.";
+        ? `Amend PR opened: <a href="${escapeHtml(result.pr_url)}" target="_blank" rel="noreferrer">${escapeHtml(result.pr_url)}</a>`
+        : "Amend submitted.";
     } catch (err) {
       msg.className = "form-msg error";
       msg.textContent = (err as Error).message;

@@ -55,6 +55,8 @@ describe("proposal UI critical render helpers", () => {
     const html = milestonesHtml(milestones);
     expect(html).toContain("proposal-milestones");
     expect(html).toContain("milestone-rail");
+    expect(html).toContain("Out of scope");
+    expect(html).toContain("Mainnet");
     expect(html).toContain("Ship checklist");
     expect(html).toContain("Verify");
     expect(html).toContain("Page loads");

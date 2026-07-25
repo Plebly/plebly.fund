@@ -211,21 +211,48 @@ export function accountNavLabel(user: AuthUser): string {
   return "Account";
 }
 
-export type SubmitProposalInput = {
+export type ProposalMilestoneInput = {
+  id?: string;
+  deliverable: string;
+  verification: string;
+  out_of_scope: string;
+  allocation_sats: number;
+  deadline: string;
+  dependencies?: string[];
+};
+
+export type ProposalAuthorInput = {
   title: string;
   problem: string;
   deliverable: string;
   verification: string;
   out_of_scope: string;
-  submission_fee_txid: string;
   target_sats?: number | null;
   cover_image?: string | null;
+  notes?: string | null;
+  milestones?: ProposalMilestoneInput[];
+  depends_on?: {
+    kind: "plebly" | "external";
+    label: string;
+    ref?: string;
+    note?: string;
+  }[];
+  related_work?: { label: string; url: string; note?: string }[];
 };
 
-export async function submitProposal(
-  input: SubmitProposalInput,
-): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
-  const res = await authFetch(`${API()}/proposals/submit`, {
+export type SubmitProposalInput = ProposalAuthorInput & {
+  submission_fee_txid: string;
+};
+
+export type UpdateProposalInput = ProposalAuthorInput & {
+  proposal_path: string;
+};
+
+async function proposalMutation(
+  path: "/proposals/submit" | "/proposals/update",
+  input: unknown,
+): Promise<{ pr_url?: string; branch?: string; ok?: boolean }> {
+  const res = await authFetch(`${API()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -242,4 +269,16 @@ export async function submitProposal(
     throw new Error(data.error || data.detail || `HTTP ${res.status}`);
   }
   return data;
+}
+
+export async function submitProposal(
+  input: SubmitProposalInput,
+): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
+  return proposalMutation("/proposals/submit", input);
+}
+
+export async function updateProposal(
+  input: UpdateProposalInput,
+): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
+  return proposalMutation("/proposals/update", input);
 }

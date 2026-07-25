@@ -176,3 +176,18 @@ export function parseFrontMatter(raw: string): {
   const body = raw.slice(end + 4).trim();
   return { data: parseYamlFrontMatter(fm), body };
 }
+
+/** Lowercased ## section title → body text. */
+export function extractBodySections(body: string): Record<string, string> {
+  const text = body.replace(/^\s*#[^\n]*\n?/, "").trim();
+  const sections: Record<string, string> = {};
+  const re = /^##\s+(.+)$/gm;
+  const matches = [...text.matchAll(re)];
+  for (let i = 0; i < matches.length; i++) {
+    const title = matches[i]![1]!.trim().toLowerCase();
+    const start = matches[i]!.index! + matches[i]![0]!.length;
+    const end = i + 1 < matches.length ? matches[i + 1]!.index! : text.length;
+    sections[title] = text.slice(start, end).trim();
+  }
+  return sections;
+}

@@ -9,7 +9,10 @@ import {
   type LightningStatus,
   type LightningSwapView,
 } from "./lightning";
+import { depKindLabel, pleblyDepHref } from "./propose-deps";
+import { proposalHref } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
+import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { bitcoinUri, escapeHtml, formatSats, themeQrColors } from "./util";
 
 export { bitcoinUri };
@@ -908,12 +911,116 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
                 ? `<p class="milestone-rail-verify"><span class="milestone-rail-k">Verify</span> ${escapeHtml(m.verification)}</p>`
                 : ""
             }
+            ${
+              m.out_of_scope
+                ? `<p class="milestone-rail-oos"><span class="milestone-rail-k">Out of scope</span> ${escapeHtml(m.out_of_scope)}</p>`
+                : ""
+            }
+            ${
+              m.dependencies?.length
+                ? `<p class="milestone-rail-deps"><span class="milestone-rail-k">Depends on</span> ${escapeHtml(m.dependencies.join(", "))}</p>`
+                : ""
+            }
           </div>
         </li>`;
         })
         .join("")}
     </ol>
   </section>`;
+}
+
+export function dependsOnHtml(
+  items: { kind: string; label: string; ref?: string; note?: string }[],
+): string {
+  if (!items?.length) return "";
+  return `<section class="proposal-deps" aria-labelledby="depends-on-heading">
+    <h2 id="depends-on-heading" class="proposal-milestones-title">Depends on</h2>
+    <p class="proposal-milestones-lede">Blocking work this project needs first</p>
+    <ul class="dep-list">${items
+      .map((d) => {
+        const kind = d.kind === "external" ? "external" : "plebly";
+        let ref = "";
+        if (d.ref) {
+          if (d.ref.startsWith("https://")) {
+            ref = `<a href="${escapeHtml(d.ref)}" target="_blank" rel="noreferrer">${escapeHtml(d.ref)}</a>`;
+          } else if (kind === "plebly") {
+            const path = pleblyDepHref(d.ref);
+            ref = path
+              ? `<a class="mono" href="${proposalHref(path)}">${escapeHtml(d.ref)}</a>`
+              : `<span class="mono">${escapeHtml(d.ref)}</span>`;
+          } else {
+            ref = `<span class="mono">${escapeHtml(d.ref)}</span>`;
+          }
+        }
+        return `<li class="dep-list-item">
+          <div class="dep-list-head">
+            <span class="pill">${escapeHtml(depKindLabel(kind))}</span>
+            <strong>${escapeHtml(d.label)}</strong>
+          </div>
+          ${ref ? `<p class="dep-list-ref">${ref}</p>` : ""}
+          ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
+        </li>`;
+      })
+      .join("")}</ul>
+  </section>`;
+}
+
+export function relatedWorkHtml(
+  items: { label: string; url: string; note?: string }[],
+): string {
+  if (!items?.length) return "";
+  return `<section class="proposal-deps" aria-labelledby="related-work-heading">
+    <h2 id="related-work-heading" class="proposal-milestones-title">Related work</h2>
+    <p class="proposal-milestones-lede">Prior art and external context</p>
+    <ul class="dep-list">${items
+      .map((d) => {
+        const labelMatchesUrl =
+          d.label.trim().toLowerCase() === d.url.trim().toLowerCase();
+        return `<li class="dep-list-item">
+          <div class="dep-list-head">
+            <a href="${escapeHtml(d.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(d.label)}</strong></a>
+          </div>
+          ${
+            labelMatchesUrl
+              ? ""
+              : `<p class="dep-list-ref muted mono">${escapeHtml(d.url)}</p>`
+          }
+          ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
+        </li>`;
+      })
+      .join("")}</ul>
+  </section>`;
+}
+
+export function canEditProposal(
+  user: {
+    username?: string;
+    github?: string;
+    x?: string;
+    nostr?: string;
+  } | null,
+  proposer: {
+    username?: string | null;
+    github?: string | null;
+    x?: string | null;
+    nostr?: string | null;
+  } | null | undefined,
+  status: string,
+): boolean {
+  if (!user || !proposer) return false;
+  if (!EDITABLE_PROPOSAL_STATUSES.has(status)) return false;
+  const norm = (v: unknown) =>
+    String(v || "")
+      .toLowerCase()
+      .replace(/^@/, "")
+      .trim();
+  const pairs: [string, string][] = [
+    [norm(user.username), norm(proposer.username)],
+    [norm(user.github), norm(proposer.github)],
+    [norm(user.x), norm(proposer.x)],
+    [norm(user.nostr), norm(proposer.nostr)],
+  ];
+  return pairs.some(([a, b]) => Boolean(a && b && a === b));
 }
 
 function verificationStepsHtml(body: string): string | null {

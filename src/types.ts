@@ -69,6 +69,20 @@ export type ProposalProposer = {
   github?: string | null;
   username?: string | null;
   nostr?: string | null;
+  x?: string | null;
+};
+
+export type DependsOnEntry = {
+  kind: "plebly" | "external";
+  label: string;
+  ref?: string;
+  note?: string;
+};
+
+export type RelatedWorkEntry = {
+  label: string;
+  url: string;
+  note?: string;
 };
 
 export type Proposal = {
@@ -83,6 +97,8 @@ export type Proposal = {
   created_at: string | null;
   escrow_index: number | null;
   milestones: ProposalMilestone[];
+  depends_on?: DependsOnEntry[];
+  related_work?: RelatedWorkEntry[];
   body: string;
   balance_sats?: number;
   proposer?: ProposalProposer | null;
@@ -95,6 +111,16 @@ export type Proposal = {
   milestones_due_at?: string | null;
   release_blocked_reason?: string | null;
 };
+
+/** Statuses editable in-app after the file is on main (pre-claim). */
+export const EDITABLE_PROPOSAL_STATUSES = new Set([
+  "unindexed",
+  "listed",
+  "funding",
+  "underfunded",
+  "claimable",
+  "declined_fundable",
+]);
 
 export type Route =
   | { name: "home" }

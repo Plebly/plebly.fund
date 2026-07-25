@@ -3004,7 +3004,189 @@ a.project-card-by:hover {
 }
 
 .form-panel-wide {
-  max-width: 36rem;
+  max-width: 40rem;
+}
+
+.milestone-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.milestone-editor-row {
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.milestone-editor-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.milestone-editor-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.milestone-editor-n {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.milestone-editor-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 520px) {
+  .milestone-editor-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+.milestone-editor-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.ms-dep-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.ms-dep-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.dep-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.dep-editor-row {
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.dep-editor-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.editor-empty {
+  margin: 0.65rem 0 0.35rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.editor-empty[hidden] {
+  display: none;
+}
+
+.edit-banner {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.edit-banner p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.edit-banner-path {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.edit-banner-actions a {
+  font-size: 0.875rem;
+}
+
+#milestones-funding-hint:not([hidden]) {
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.proposal-deps {
+  margin: 1.5rem 0;
+}
+
+.dep-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.dep-list-item {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.dep-list-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dep-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dep-list-ref,
+.dep-list-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary, var(--muted));
+  word-break: break-word;
+}
+
+.milestone-rail-deps {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.proposal-edit-cta {
+  margin: 0.75rem 0 0;
+}
+
+.milestone-rail-oos {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--ink-secondary, var(--muted));
 }
 
 .field-hint {
@@ -3021,7 +3203,7 @@ a.project-card-by:hover {
   color: var(--accent-text);
 }
 
-.cover-field .optional {
+.optional {
   font-style: normal;
   font-weight: 400;
   color: var(--muted);
@@ -3198,9 +3380,13 @@ a.project-card-by:hover {
 
 .field input,
 .field textarea,
+.field select,
 .form-block textarea,
 .form-block input[type="text"],
-.form-block input[type="url"] {
+.form-block input[type="url"],
+.form-block input[type="number"],
+.form-block input[type="date"],
+.form-block select {
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--line);
@@ -3213,8 +3399,10 @@ a.project-card-by:hover {
 }
 .field input:focus,
 .field textarea:focus,
+.field select:focus,
 .form-block textarea:focus,
-.form-block input:focus {
+.form-block input:focus,
+.form-block select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);

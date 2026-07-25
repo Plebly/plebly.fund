@@ -1,6 +1,12 @@
 import { PROPOSALS_API, PROPOSALS_RAW } from "./config";
 import { parseFrontMatter } from "./frontmatter";
-import type { Proposal, ProposalMilestone, ProposalProposer } from "./types";
+import type {
+  DependsOnEntry,
+  Proposal,
+  ProposalMilestone,
+  ProposalProposer,
+  RelatedWorkEntry,
+} from "./types";
 
 export { parseFrontMatter };
 
@@ -27,7 +33,31 @@ function parseProposer(data: Record<string, unknown>): ProposalProposer | null {
     github: (o.github as string) || null,
     username: (o.username as string) || null,
     nostr: (o.nostr as string) || null,
+    x: (o.x as string) || null,
   };
+}
+
+function parseDependsOn(value: unknown): DependsOnEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (d): d is DependsOnEntry =>
+      !!d &&
+      typeof d === "object" &&
+      ((d as DependsOnEntry).kind === "plebly" ||
+        (d as DependsOnEntry).kind === "external") &&
+      typeof (d as DependsOnEntry).label === "string",
+  );
+}
+
+function parseRelatedWork(value: unknown): RelatedWorkEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (d): d is RelatedWorkEntry =>
+      !!d &&
+      typeof d === "object" &&
+      typeof (d as RelatedWorkEntry).label === "string" &&
+      typeof (d as RelatedWorkEntry).url === "string",
+  );
 }
 
 export function proposalFromMarkdown(raw: string, path: string, dir = "unknown"): Proposal {
@@ -44,6 +74,8 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     created_at: (data.created_at as string) || null,
     escrow_index: typeof data.escrow_index === "number" ? data.escrow_index : null,
     milestones: parseMilestones(data.milestones),
+    depends_on: parseDependsOn(data.depends_on),
+    related_work: parseRelatedWork(data.related_work),
     proposer: parseProposer(data),
     claimer: (data.claimer as string) || null,
     claimed_at: (data.claimed_at as string) || null,
