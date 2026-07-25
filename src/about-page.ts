@@ -76,8 +76,24 @@ export function renderAbout(shell: AboutShell): void {
         ${processStepsHtml()}
         <p class="about-links">
           Browse <a href="${href("/")}">open projects</a>,
-          <a href="${href("/propose")}">start a project</a>, or read the full rules in the
+          <a href="${href("/propose")}">start a project</a>,
+          open <a href="${href("/reviewers")}">reviewer governance</a>,
+          or read the full rules in the
           <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">proposals repo</a>.
+        </p>
+      </section>
+
+      <section class="about-block" id="governance">
+        <h2 class="about-block-title">Reviewers</h2>
+        <p class="about-block-lede">
+          After AI triage, a human quorum of active reviewers confirms deliverables.
+          Eligible funders may open removal ballots for a documented pattern of bad faith;
+          bootstrap seats stay permanent.
+        </p>
+        <p class="about-links">
+          <a href="${href("/reviewers")}">Open reviewer governance →</a>
+          <span class="about-links-sep" aria-hidden="true">·</span>
+          <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>
         </p>
       </section>
 

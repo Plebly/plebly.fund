@@ -51,6 +51,36 @@ function authNavHtml(): string {
     ${loginMenuHtml(currentReturnPath())}`;
 }
 
+function siteFooterHtml(): string {
+  return `<footer class="site-footer">
+    <div class="wrap-wide footer-inner">
+      <div class="footer-brand">
+        <a class="footer-brand-name" href="${href("/")}">Plebly</a>
+        <p class="footer-tagline">Non-custodial Bitcoin bounties.<br />Protocol over platform.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Site">
+        <div class="footer-col">
+          <h2 class="footer-col-title">Explore</h2>
+          <a href="${href("/")}">Projects</a>
+          <a href="${href("/propose")}">Start a project</a>
+          <a href="${href("/about")}">About</a>
+          <a href="${href("/reviewers")}">Reviewers</a>
+        </div>
+        <div class="footer-col">
+          <h2 class="footer-col-title">Source</h2>
+          <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals</a>
+          <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">Reviewer rules</a>
+          <a href="https://github.com/Plebly/proposals/blob/main/PARAMETERS.md" target="_blank" rel="noreferrer">Parameters</a>
+        </div>
+      </nav>
+      <div class="footer-aside">
+        <p class="footer-aside-label">Follow</p>
+        ${pleblySocialAccountsHtml()}
+      </div>
+    </div>
+  </footer>`;
+}
+
 function shell(inner: string): string {
   const r = route();
   const active = (name: string) => (r.name === name ? "active" : "");
@@ -64,7 +94,6 @@ function shell(inner: string): string {
         <nav class="nav">
           <a href="${href("/")}" class="${active("home")}">Projects</a>
           <a href="${href("/propose")}" class="${active("propose")}">Start a project</a>
-          <a href="${href("/reviewers")}" class="${active("reviewers")}">Reviewers</a>
           <a href="${href("/about")}" class="${active("about")}">About</a>
           ${authNavHtml()}
         </nav>
@@ -72,13 +101,7 @@ function shell(inner: string): string {
       </div>
     </header>
     <main>${inner}</main>
-    <footer class="wrap-wide site-footer">
-      <span>Non-custodial · Protocol over platform</span>
-      <span class="footer-links">
-        <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals</a>
-        ${pleblySocialAccountsHtml()}
-      </span>
-    </footer>
+    ${siteFooterHtml()}
   `;
 }
 
