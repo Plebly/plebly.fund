@@ -5,13 +5,16 @@
   "scripts": {
     "dev": "node scripts/build-about.mjs && vite",
     "build": "node scripts/build-about.mjs && tsc && vite build && node scripts/spa-fallback.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",
     "marked": "^15.0.7",
     "typescript": "^5.8.2",
-    "vite": "^6.2.2"
+    "vite": "^6.2.2",
+    "vitest": "^3.0.9"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
