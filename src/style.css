@@ -2359,23 +2359,70 @@ body.modal-open {
 }
 
 .builder-claim-card {
-  width: min(26rem, 100%);
-  max-height: min(90vh, 40rem);
-  overflow: auto;
-  padding: 1.25rem 1.25rem 1rem;
+  width: min(36rem, 100%);
+  max-height: none;
+  overflow: visible;
+  padding: 1.5rem 1.5rem 1.25rem;
 }
 
 .builder-claim-card h3 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.4rem;
   padding-right: 2rem;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
 }
 
 .builder-claim-card > p {
-  margin: 0 0 0.75rem;
+  margin: 0 0 1rem;
   font-size: 0.8125rem;
   color: var(--ink-secondary);
   line-height: 1.5;
+}
+
+/* Fee workflow needs room — compact QR/spacing inside claim modal only */
+.builder-claim-card .fee-pay {
+  gap: 0.65rem;
+  padding: 0.875rem;
+}
+
+.builder-claim-card .fee-pay-qr-wrap {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+}
+
+.builder-claim-card .fee-pay-qr-wrap .donate-qr {
+  width: 140px;
+  height: 140px;
+}
+
+.builder-claim-card .fee-pay-step-title {
+  margin-bottom: 0.35rem;
+}
+
+.builder-claim-card .fee-pay-amount-line,
+.builder-claim-card .fee-pay-note {
+  margin-bottom: 0.4rem;
+}
+
+.builder-claim-card .fee-pay-nav {
+  margin-top: 0.65rem;
+}
+
+.builder-claim-card .claim-modal-section {
+  margin-bottom: 0.85rem;
+}
+
+@media (max-height: 720px) {
+  .site-modal:has(.builder-claim-card) {
+    align-items: flex-start;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+    overflow-y: auto;
+  }
+
+  .builder-claim-card {
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 
