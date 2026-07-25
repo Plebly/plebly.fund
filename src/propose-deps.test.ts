@@ -15,14 +15,18 @@ import {
 } from "./proposal-ui";
 
 describe("propose deps helpers", () => {
-  it("rows expose required fields and kind-aware placeholders", () => {
+  it("rows expose required fields, Remove controls, and kind-aware placeholders", () => {
     expect(dependsOnRowHtml(0)).toContain("dep-kind");
     expect(dependsOnRowHtml(0)).toContain("dep-label");
+    expect(dependsOnRowHtml(0)).toContain("remove-dep");
+    expect(dependsOnRowHtml(0)).toContain('type="button"');
     expect(dependsOnRowHtml(0)).toContain(depRefPlaceholder("plebly"));
     expect(dependsOnRowHtml(0, { kind: "external" })).toContain(
       depRefPlaceholder("external"),
     );
     expect(relatedWorkRowHtml(0)).toContain("rel-url");
+    expect(relatedWorkRowHtml(0)).toContain("remove-dep");
+    expect(relatedWorkRowHtml(0)).not.toContain('type="url"');
   });
 
   it("maps kind labels and plebly refs to listed paths", () => {

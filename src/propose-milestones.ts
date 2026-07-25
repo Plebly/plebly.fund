@@ -2,6 +2,8 @@ import { MILESTONE_THRESHOLD_SATS } from "./config";
 import type { ProposalMilestone } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
+export const MAX_MILESTONES = 12;
+
 export type MilestoneDraft = {
   id?: string;
   deliverable: string;
@@ -17,7 +19,7 @@ export function milestoneEditorSectionHtml(): string {
     <legend>Milestones <em class="optional">(optional unless target ≥ ${escapeHtml(formatSats(MILESTONE_THRESHOLD_SATS))})</em></legend>
     <p class="field-hint">
       Stage the work with sats and due dates. Leave empty for small bounties.
-      Intra-stage dependencies use earlier ids (m1, m2…).
+      Use <strong>Remove</strong> on any stage you do not want — including ones you just added.
     </p>
     <div id="milestones-empty" class="editor-empty">No milestones yet — add stages if you want phased delivery.</div>
     <div id="milestones-list" class="milestone-editor-list"></div>
@@ -64,6 +66,26 @@ export function milestonesFundingHint(
   return "";
 }
 
+/**
+ * Remap `mN` dependency ids after deleting the milestone at `deletedIndex` (0-based).
+ * Drops deps that pointed at the deleted stage; shifts later ids down.
+ */
+export function remapDepIdsAfterDelete(
+  deps: string[],
+  deletedIndex: number,
+): string[] {
+  const out: string[] = [];
+  for (const id of deps) {
+    const m = /^m(\d+)$/.exec(id);
+    if (!m) continue;
+    const oldIndex0 = Number(m[1]) - 1;
+    if (oldIndex0 === deletedIndex) continue;
+    if (oldIndex0 > deletedIndex) out.push(`m${oldIndex0}`);
+    else out.push(`m${oldIndex0 + 1}`);
+  }
+  return out;
+}
+
 export function milestoneRowHtml(
   index: number,
   draft?: Partial<MilestoneDraft>,
@@ -72,15 +94,15 @@ export function milestoneRowHtml(
   return `<div class="milestone-editor-row" data-index="${index}">
     <div class="milestone-editor-row-head">
       <span class="milestone-editor-n">Milestone ${index + 1}</span>
-      <button type="button" class="link-btn remove-milestone" aria-label="Remove milestone ${index + 1}">Remove</button>
+      <button type="button" class="editor-remove remove-milestone" aria-label="Remove milestone ${index + 1}">Remove</button>
     </div>
     <label class="field">
       <span>Deliverable</span>
-      <textarea class="ms-deliverable" rows="2" minlength="10" maxlength="2000" placeholder="What ships in this stage">${escapeHtml(d.deliverable || "")}</textarea>
+      <textarea class="ms-deliverable" rows="2" maxlength="2000" placeholder="What ships in this stage">${escapeHtml(d.deliverable || "")}</textarea>
     </label>
     <label class="field">
       <span>Verification</span>
-      <textarea class="ms-verification" rows="2" minlength="10" maxlength="2000" placeholder="How a reviewer confirms this stage">${escapeHtml(d.verification || "")}</textarea>
+      <textarea class="ms-verification" rows="2" maxlength="2000" placeholder="How a reviewer confirms this stage">${escapeHtml(d.verification || "")}</textarea>
     </label>
     <label class="field">
       <span>Out of scope</span>
@@ -89,7 +111,7 @@ export function milestoneRowHtml(
     <div class="field-row milestone-editor-meta">
       <label class="field">
         <span>Allocation (sats)</span>
-        <input class="ms-sats" type="number" min="1" step="1" placeholder="50000" value="${d.allocation_sats ? escapeHtml(String(d.allocation_sats)) : ""}" />
+        <input class="ms-sats" type="number" min="0" step="1" placeholder="50000" value="${d.allocation_sats ? escapeHtml(String(d.allocation_sats)) : ""}" />
       </label>
       <label class="field">
         <span>Deadline</span>
@@ -100,18 +122,59 @@ export function milestoneRowHtml(
   </div>`;
 }
 
-/** Rebuild prior-milestone checkboxes after add/remove/renumber. */
-export function refreshMilestoneDepSlots(list: ParentNode): void {
+/** Rebuild prior-milestone checkboxes. Optional per-row selected overrides (same order as rows). */
+export function refreshMilestoneDepSlots(
+  list: ParentNode,
+  selectedByRow?: string[][],
+): void {
   const rows = [...list.querySelectorAll<HTMLElement>(".milestone-editor-row")];
   rows.forEach((row, index) => {
-    const selected = [
-      ...row.querySelectorAll<HTMLInputElement>(".ms-dep:checked"),
-    ].map((el) => el.value);
+    const selected =
+      selectedByRow?.[index] ??
+      [...row.querySelectorAll<HTMLInputElement>(".ms-dep:checked")].map(
+        (el) => el.value,
+      );
     const slot = row.querySelector("[data-ms-dep-slot]");
     const html = priorDepsHtml(index, selected);
     if (slot) slot.outerHTML = html;
     else row.insertAdjacentHTML("beforeend", html);
   });
+}
+
+/**
+ * Remove a milestone row, renumber survivors, and remap intra-stage dependency checkboxes.
+ * Returns false if `row` is not a milestone editor row in `list`.
+ */
+export function removeMilestoneRow(list: ParentNode, row: HTMLElement): boolean {
+  const rows = [...list.querySelectorAll<HTMLElement>(".milestone-editor-row")];
+  const deletedIndex = rows.indexOf(row);
+  if (deletedIndex < 0) return false;
+
+  const depsBefore = rows.map((r) =>
+    [...r.querySelectorAll<HTMLInputElement>(".ms-dep:checked")].map(
+      (el) => el.value,
+    ),
+  );
+  row.remove();
+
+  const remaining = [
+    ...list.querySelectorAll<HTMLElement>(".milestone-editor-row"),
+  ];
+  const selectedByRow = depsBefore
+    .filter((_, i) => i !== deletedIndex)
+    .map((deps) => remapDepIdsAfterDelete(deps, deletedIndex));
+
+  remaining.forEach((r, i) => {
+    r.dataset.index = String(i);
+    const label = r.querySelector(".milestone-editor-n");
+    if (label) label.textContent = `Milestone ${i + 1}`;
+    const removeBtn = r.querySelector(".remove-milestone");
+    if (removeBtn) {
+      removeBtn.setAttribute("aria-label", `Remove milestone ${i + 1}`);
+    }
+  });
+  refreshMilestoneDepSlots(list, selectedByRow);
+  return true;
 }
 
 /** Read milestone drafts from the editor DOM. Skips fully empty rows. */
@@ -200,7 +263,13 @@ export function validateMilestoneDrafts(
         error: `Milestone ${n}: pick a deadline date.`,
       };
     }
-    const id = d.id || `m${n}`;
+    const id = `m${n}`;
+    const deps = (d.dependencies || []).filter((dep) => {
+      const m = /^m(\d+)$/.exec(dep);
+      if (!m) return false;
+      const idx = Number(m[1]);
+      return idx >= 1 && idx < n;
+    });
     milestones.push({
       id,
       deliverable: d.deliverable,
@@ -208,7 +277,7 @@ export function validateMilestoneDrafts(
       out_of_scope: d.out_of_scope,
       allocation_sats: Math.floor(d.allocation_sats),
       deadline: d.deadline,
-      ...(d.dependencies?.length ? { dependencies: d.dependencies } : {}),
+      ...(deps.length ? { dependencies: deps } : {}),
     });
   }
   return { ok: true, milestones };

@@ -1,10 +1,13 @@
 import type { DependsOnEntry, RelatedWorkEntry } from "./types";
 import { escapeHtml } from "./util";
 
+export const MAX_DEPENDS_ON = 20;
+export const MAX_RELATED_WORK = 20;
+
 export function dependsOnSectionHtml(): string {
   return `<fieldset class="form-block" id="depends-on-block">
     <legend>Depends on <em class="optional">(optional)</em></legend>
-    <p class="field-hint">Blocking work this project cannot finish without — another Plebly proposal or an external initiative.</p>
+    <p class="field-hint">Blocking work this project cannot finish without — another Plebly proposal or an external initiative. Remove any row you do not want.</p>
     <div id="depends-on-empty" class="editor-empty">No blocking dependencies.</div>
     <div id="depends-on-list" class="dep-editor-list"></div>
     <button type="button" class="btn ghost" id="add-depends-on-btn">Add dependency</button>
@@ -14,7 +17,7 @@ export function dependsOnSectionHtml(): string {
 export function relatedWorkSectionHtml(): string {
   return `<fieldset class="form-block" id="related-work-block">
     <legend>Related work <em class="optional">(optional)</em></legend>
-    <p class="field-hint">Non-blocking prior art and external links for context.</p>
+    <p class="field-hint">Non-blocking prior art and external links for context. Remove any row you do not want.</p>
     <div id="related-work-empty" class="editor-empty">No related links yet.</div>
     <div id="related-work-list" class="dep-editor-list"></div>
     <button type="button" class="btn ghost" id="add-related-work-btn">Add link</button>
@@ -44,7 +47,7 @@ export function dependsOnRowHtml(
   return `<div class="dep-editor-row" data-kind="depends" data-index="${index}">
     <div class="milestone-editor-row-head">
       <span class="milestone-editor-n">Dependency ${index + 1}</span>
-      <button type="button" class="link-btn remove-dep" aria-label="Remove dependency">Remove</button>
+      <button type="button" class="editor-remove remove-dep" aria-label="Remove dependency">Remove</button>
     </div>
     <div class="field-row milestone-editor-meta">
       <label class="field">
@@ -78,7 +81,7 @@ export function relatedWorkRowHtml(
   return `<div class="dep-editor-row" data-kind="related" data-index="${index}">
     <div class="milestone-editor-row-head">
       <span class="milestone-editor-n">Related ${index + 1}</span>
-      <button type="button" class="link-btn remove-dep" aria-label="Remove related work">Remove</button>
+      <button type="button" class="editor-remove remove-dep" aria-label="Remove related work">Remove</button>
     </div>
     <label class="field">
       <span>Label</span>
@@ -86,7 +89,7 @@ export function relatedWorkRowHtml(
     </label>
     <label class="field">
       <span>URL</span>
-      <input class="rel-url mono" type="url" maxlength="500" placeholder="https://…" value="${escapeHtml(d.url || "")}" />
+      <input class="rel-url mono" type="text" inputmode="url" maxlength="500" placeholder="https://…" value="${escapeHtml(d.url || "")}" />
     </label>
     <label class="field">
       <span>Note</span>

@@ -17,6 +17,8 @@ import {
   collectRelatedWork,
   dependsOnRowHtml,
   dependsOnSectionHtml,
+  MAX_DEPENDS_ON,
+  MAX_RELATED_WORK,
   relatedWorkRowHtml,
   relatedWorkSectionHtml,
   syncDependsOnKindUi,
@@ -25,11 +27,12 @@ import {
 } from "./propose-deps";
 import {
   collectMilestoneDrafts,
+  MAX_MILESTONES,
   milestoneEditorSectionHtml,
   milestoneRowHtml,
   milestonesAllocatedTotal,
   milestonesFundingHint,
-  refreshMilestoneDepSlots,
+  removeMilestoneRow,
   validateMilestoneDrafts,
   type MilestoneDraft,
 } from "./propose-milestones";
@@ -278,23 +281,56 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     return Number.isFinite(n) ? n : null;
   };
 
-  const renumberMilestones = () => {
-    milestonesList
-      .querySelectorAll<HTMLElement>(".milestone-editor-row")
-      .forEach((row, i) => {
-        row.dataset.index = String(i);
-        const label = row.querySelector(".milestone-editor-n");
-        if (label) label.textContent = `Milestone ${i + 1}`;
-      });
-    refreshMilestoneDepSlots(milestonesList);
+  const addMilestoneBtn = document.getElementById(
+    "add-milestone-btn",
+  ) as HTMLButtonElement | null;
+  const addDependsBtn = document.getElementById(
+    "add-depends-on-btn",
+  ) as HTMLButtonElement | null;
+  const addRelatedBtn = document.getElementById(
+    "add-related-work-btn",
+  ) as HTMLButtonElement | null;
+
+  const syncAddButtons = () => {
+    const msCount = milestonesList.querySelectorAll(".milestone-editor-row").length;
+    if (addMilestoneBtn) {
+      addMilestoneBtn.disabled = msCount >= MAX_MILESTONES;
+      addMilestoneBtn.title =
+        msCount >= MAX_MILESTONES
+          ? `Maximum ${MAX_MILESTONES} milestones`
+          : "";
+    }
+    const depCount = dependsList.querySelectorAll(".dep-editor-row").length;
+    if (addDependsBtn) {
+      addDependsBtn.disabled = depCount >= MAX_DEPENDS_ON;
+      addDependsBtn.title =
+        depCount >= MAX_DEPENDS_ON
+          ? `Maximum ${MAX_DEPENDS_ON} dependencies`
+          : "";
+    }
+    const relCount = relatedList.querySelectorAll(".dep-editor-row").length;
+    if (addRelatedBtn) {
+      addRelatedBtn.disabled = relCount >= MAX_RELATED_WORK;
+      addRelatedBtn.title =
+        relCount >= MAX_RELATED_WORK
+          ? `Maximum ${MAX_RELATED_WORK} related links`
+          : "";
+    }
   };
 
   const refreshMilestoneTotal = () => {
     const drafts = collectMilestoneDrafts(milestonesList);
     const total = milestonesAllocatedTotal(drafts);
+    const rowCount = milestonesList.querySelectorAll(
+      ".milestone-editor-row",
+    ).length;
     if (milestonesTotal) {
-      milestonesTotal.textContent = drafts.length
-        ? `${drafts.length} stage${drafts.length === 1 ? "" : "s"} · ${formatSats(total)} allocated`
+      milestonesTotal.textContent = rowCount
+        ? `${rowCount} stage${rowCount === 1 ? "" : "s"}${
+            drafts.length
+              ? ` · ${formatSats(total)} allocated`
+              : ""
+          }`
         : "";
     }
     if (milestonesHint) {
@@ -303,33 +339,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       milestonesHint.textContent = hint;
     }
     syncEmpty(milestonesList, milestonesEmpty);
+    syncAddButtons();
   };
-
-  const bindMilestoneRow = (row: HTMLElement) => {
-    row.querySelector(".remove-milestone")?.addEventListener("click", () => {
-      row.remove();
-      renumberMilestones();
-      refreshMilestoneTotal();
-    });
-    row
-      .querySelectorAll("input, textarea")
-      .forEach((el) => el.addEventListener("input", refreshMilestoneTotal));
-  };
-
-  const addMilestone = (draft?: Partial<MilestoneDraft>) => {
-    const index = milestonesList.querySelectorAll(".milestone-editor-row").length;
-    if (index >= 12) return;
-    milestonesList.insertAdjacentHTML("beforeend", milestoneRowHtml(index, draft));
-    const row = milestonesList.lastElementChild as HTMLElement | null;
-    if (row) bindMilestoneRow(row);
-    refreshMilestoneDepSlots(milestonesList);
-    refreshMilestoneTotal();
-  };
-
-  document.getElementById("add-milestone-btn")?.addEventListener("click", () => {
-    addMilestone();
-  });
-  targetInput?.addEventListener("input", refreshMilestoneTotal);
 
   const renumberDeps = (list: HTMLElement, label: string) => {
     list.querySelectorAll<HTMLElement>(".dep-editor-row").forEach((row, i) => {
@@ -339,33 +350,93 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     });
   };
 
-  const bindDepRow = (row: HTMLElement, list: HTMLElement, label: string) => {
-    row.querySelector(".remove-dep")?.addEventListener("click", () => {
-      row.remove();
-      renumberDeps(list, label);
-      syncEmpty(list, list === dependsList ? dependsEmpty : relatedEmpty);
-    });
-    row.querySelector(".dep-kind")?.addEventListener("change", () => {
-      syncDependsOnKindUi(row);
-    });
-  };
+  // Event delegation so Remove always works for newly added rows.
+  milestonesList.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement | null;
+    const btn = t?.closest?.(".remove-milestone");
+    if (!btn || !milestonesList.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const row = btn.closest(".milestone-editor-row") as HTMLElement | null;
+    if (!row) return;
+    removeMilestoneRow(milestonesList, row);
+    refreshMilestoneTotal();
+  });
+  milestonesList.addEventListener("input", () => refreshMilestoneTotal());
 
-  document.getElementById("add-depends-on-btn")?.addEventListener("click", () => {
-    const index = dependsList.querySelectorAll(".dep-editor-row").length;
-    if (index >= 20) return;
-    dependsList.insertAdjacentHTML("beforeend", dependsOnRowHtml(index));
-    const row = dependsList.lastElementChild as HTMLElement | null;
-    if (row) bindDepRow(row, dependsList, "Dependency");
+  dependsList.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement | null;
+    const btn = t?.closest?.(".remove-dep");
+    if (!btn || !dependsList.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    btn.closest(".dep-editor-row")?.remove();
+    renumberDeps(dependsList, "Dependency");
     syncEmpty(dependsList, dependsEmpty);
+    syncAddButtons();
+  });
+  dependsList.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement | null;
+    const row = t?.closest?.(".dep-editor-row") as HTMLElement | null;
+    if (row && t?.classList.contains("dep-kind")) syncDependsOnKindUi(row);
   });
 
-  document.getElementById("add-related-work-btn")?.addEventListener("click", () => {
-    const index = relatedList.querySelectorAll(".dep-editor-row").length;
-    if (index >= 20) return;
-    relatedList.insertAdjacentHTML("beforeend", relatedWorkRowHtml(index));
-    const row = relatedList.lastElementChild as HTMLElement | null;
-    if (row) bindDepRow(row, relatedList, "Related");
+  relatedList.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement | null;
+    const btn = t?.closest?.(".remove-dep");
+    if (!btn || !relatedList.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    btn.closest(".dep-editor-row")?.remove();
+    renumberDeps(relatedList, "Related");
     syncEmpty(relatedList, relatedEmpty);
+    syncAddButtons();
+  });
+
+  const addMilestone = (draft?: Partial<MilestoneDraft>) => {
+    const index = milestonesList.querySelectorAll(".milestone-editor-row").length;
+    if (index >= MAX_MILESTONES) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = `At most ${MAX_MILESTONES} milestones.`;
+      return;
+    }
+    milestonesList.insertAdjacentHTML(
+      "beforeend",
+      milestoneRowHtml(index, draft),
+    );
+    refreshMilestoneTotal();
+  };
+
+  addMilestoneBtn?.addEventListener("click", () => {
+    addMilestone();
+  });
+  targetInput?.addEventListener("input", refreshMilestoneTotal);
+
+  addDependsBtn?.addEventListener("click", () => {
+    const index = dependsList.querySelectorAll(".dep-editor-row").length;
+    if (index >= MAX_DEPENDS_ON) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = `At most ${MAX_DEPENDS_ON} dependencies.`;
+      return;
+    }
+    dependsList.insertAdjacentHTML("beforeend", dependsOnRowHtml(index));
+    syncEmpty(dependsList, dependsEmpty);
+    syncAddButtons();
+  });
+
+  addRelatedBtn?.addEventListener("click", () => {
+    const index = relatedList.querySelectorAll(".dep-editor-row").length;
+    if (index >= MAX_RELATED_WORK) {
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent = `At most ${MAX_RELATED_WORK} related links.`;
+      return;
+    }
+    relatedList.insertAdjacentHTML("beforeend", relatedWorkRowHtml(index));
+    syncEmpty(relatedList, relatedEmpty);
+    syncAddButtons();
   });
 
   if (prefill?.milestones.length) {
@@ -388,10 +459,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     prefill.depends_on.forEach((d, i) => {
       dependsList.insertAdjacentHTML("beforeend", dependsOnRowHtml(i, d));
       const row = dependsList.lastElementChild as HTMLElement | null;
-      if (row) {
-        bindDepRow(row, dependsList, "Dependency");
-        syncDependsOnKindUi(row);
-      }
+      if (row) syncDependsOnKindUi(row);
     });
   }
   syncEmpty(dependsList, dependsEmpty);
@@ -399,11 +467,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   if (prefill?.related_work.length) {
     prefill.related_work.forEach((d, i) => {
       relatedList.insertAdjacentHTML("beforeend", relatedWorkRowHtml(i, d));
-      const row = relatedList.lastElementChild as HTMLElement | null;
-      if (row) bindDepRow(row, relatedList, "Related");
     });
   }
   syncEmpty(relatedList, relatedEmpty);
+  syncAddButtons();
 
   const coverInput = document.getElementById(
     "propose-cover-input",

@@ -156,8 +156,8 @@ function linkRowHtml(links: ProfileLink[]): string {
       (l, i) => `
     <div class="link-row" data-index="${i}">
       <input type="text" class="link-label" placeholder="Custom label (optional)" value="${escapeHtml(l.label)}" maxlength="40" />
-      <input type="url" class="link-url" placeholder="https://…" value="${escapeHtml(l.url)}" maxlength="300" />
-      <button type="button" class="link-btn remove-link">Remove</button>
+      <input type="text" class="link-url" inputmode="url" placeholder="https://…" value="${escapeHtml(l.url)}" maxlength="300" />
+      <button type="button" class="editor-remove remove-link">Remove</button>
     </div>`,
     )
     .join("");
@@ -363,29 +363,34 @@ export async function renderAccount(
   const msg = document.getElementById("account-msg");
   const linksList = document.getElementById("links-list");
 
+  linksList?.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement | null;
+    const btn = t?.closest?.(".remove-link");
+    if (!btn || !linksList.contains(btn)) return;
+    e.preventDefault();
+    btn.closest(".link-row")?.remove();
+  });
+
   document.getElementById("add-link-btn")?.addEventListener("click", () => {
     if (!linksList) return;
     const rows = linksList.querySelectorAll(".link-row");
-    if (rows.length >= 8) return;
+    if (rows.length >= 8) {
+      if (msg) {
+        msg.hidden = false;
+        msg.className = "form-msg error";
+        msg.textContent = "At most 8 profile links.";
+      }
+      return;
+    }
     linksList.insertAdjacentHTML(
       "beforeend",
       `<div class="link-row" data-index="${rows.length}">
         <input type="text" class="link-label" placeholder="Custom label (optional)" maxlength="40" />
-        <input type="url" class="link-url" placeholder="https://…" maxlength="300" />
-        <button type="button" class="link-btn remove-link">Remove</button>
+        <input type="text" class="link-url" inputmode="url" placeholder="https://…" maxlength="300" />
+        <button type="button" class="editor-remove remove-link">Remove</button>
       </div>`,
     );
-    bindLinkRemove();
   });
-
-  function bindLinkRemove() {
-    linksList?.querySelectorAll(".remove-link").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        btn.closest(".link-row")?.remove();
-      });
-    });
-  }
-  bindLinkRemove();
 
   document.getElementById("claim-username-btn")?.addEventListener("click", async () => {
     if (!msg) return;
@@ -415,10 +420,8 @@ export async function renderAccount(
       linksList.querySelectorAll(".link-row").forEach((row) => {
         const label = (row.querySelector(".link-label") as HTMLInputElement).value.trim();
         const url = (row.querySelector(".link-url") as HTMLInputElement).value.trim();
-        if (!label && !url) return;
-        if (!url) {
-          throw new Error("Each link needs a URL.");
-        }
+        // Empty URL = discard the row (same as Remove). Label-only drafts are not saved.
+        if (!url) return;
         if (!url.startsWith("https://")) {
           throw new Error("Link URLs must start with https://");
         }
