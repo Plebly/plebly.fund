@@ -9,7 +9,8 @@ type SolidIcon =
   | "eye-slash"
   | "handshake"
   | "bitcoin-sign"
-  | "xmark";
+  | "xmark"
+  | "link";
 
 export function brandIcon(className: BrandIcon | string): string {
   return `<i class="fa-brands fa-${className}" aria-hidden="true"></i>`;

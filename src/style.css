@@ -2668,6 +2668,44 @@ a.project-card-by:hover {
   border-top: 1px solid var(--line-soft);
 }
 
+.proposal-share-slot {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.proposal-share-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.proposal-share-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.proposal-share-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.proposal-share-social {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.proposal-share-social .proposal-share-btn {
+  white-space: nowrap;
+}
+
 .proposal-onchain {
   padding: 0.65rem 0.85rem;
   background: var(--bg-elevated);

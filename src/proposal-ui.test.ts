@@ -5,7 +5,9 @@ import {
   proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
+  proposalShareUrl,
   proposerBylineHtml,
+  shareSlotHtml,
   statusClass,
   statusLabel,
 } from "./proposal-ui";
@@ -132,5 +134,17 @@ describe("proposal UI critical render helpers", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
     expect(html).not.toContain("proposal-stats");
+  });
+
+  it("shareSlotHtml offers copy, X, and Nostr", () => {
+    const path = "proposals/listed/knots-spam-heuristics.md";
+    const html = shareSlotHtml("Knots spam heuristics", path);
+    expect(proposalShareUrl(path)).toContain("/proposal/");
+    expect(html).toContain("proposal-share-slot");
+    expect(html).toContain('data-share="copy"');
+    expect(html).toContain("intent/post");
+    expect(html).toContain('data-share="nostr"');
+    expect(html).toContain("icon-nostr");
+    expect(html).toContain("fa-x-twitter");
   });
 });

@@ -9,8 +9,10 @@ import {
   bindDonateModal,
   bindDonatePanel,
   bindProposalCopyButtons,
+  bindShareButtons,
   donateModalHtml,
   donateTriggerHtml,
+  shareSlotHtml,
   ballotPanelHtml,
   canEditProposal,
   deliverableChipHtml,
@@ -304,6 +306,7 @@ export async function renderProposalPage(
             <div class="proposal-actions">
               ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
               ${match.escrow_address ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
+              ${shareSlotHtml(match.title, match.path)}
             </div>
             ${deliverableChipHtml(match.deliverable_url)}
             ${status === "in_review" && match.id ? reviewPanelHtml(match.id) : ""}
@@ -318,6 +321,7 @@ export async function renderProposalPage(
     `);
 
     bindProposalCopyButtons(app);
+    bindShareButtons(app);
     await bindBuilderPanel(app, {
       proposal: { ...match, balance_sats: balance },
       balance,

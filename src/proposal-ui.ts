@@ -1,5 +1,10 @@
 import QRCode from "qrcode";
-import { btnWithIcon, solidIcon } from "./icons";
+import {
+  btnWithBrandIcon,
+  btnWithIcon,
+  btnWithNostrIcon,
+  solidIcon,
+} from "./icons";
 import { BITCOIN_NETWORK, lightningUiAllowed } from "./config";
 import {
   createLightningInvoice,
@@ -10,7 +15,7 @@ import {
   type LightningSwapView,
 } from "./lightning";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
-import { proposalHref } from "./router";
+import { proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { bitcoinUri, escapeHtml, formatSats, themeQrColors } from "./util";
@@ -215,6 +220,74 @@ function explorerLink(href: string, label: string): string {
 /** Compact control — opens donate modal (lives in the actions group). */
 export function donateTriggerHtml(): string {
   return `<button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>`;
+}
+
+/** Absolute canonical URL for sharing a project page. */
+export function proposalShareUrl(repoPath: string): string {
+  return new URL(proposalHref(repoPath), SITE_ORIGIN).toString();
+}
+
+/** Share controls under the primary actions (copy / X / Nostr). */
+export function shareSlotHtml(title: string, repoPath: string): string {
+  const url = proposalShareUrl(repoPath);
+  const text = `${title} — fund open Bitcoin work on Plebly`;
+  const xHref = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+  const nostrNote = `${text}\n\n${url}`;
+  return `<div class="proposal-share-slot">
+    <p class="proposal-share-label">Share</p>
+    <div class="proposal-share-actions">
+      <button type="button" class="btn ghost proposal-share-btn" data-share="copy" data-share-url="${escapeHtml(url)}">${btnWithIcon("link", "Copy link")}</button>
+      <div class="proposal-share-social">
+        <a class="btn ghost proposal-share-btn" href="${escapeHtml(xHref)}" target="_blank" rel="noreferrer noopener">${btnWithBrandIcon("x-twitter", "X")}</a>
+        <button type="button" class="btn ghost proposal-share-btn" data-share="nostr" data-share-note="${escapeHtml(nostrNote)}">${btnWithNostrIcon("Nostr")}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+export function bindShareButtons(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>("[data-share]").forEach((el) => {
+    if (el.dataset.shareBound === "1") return;
+    el.dataset.shareBound = "1";
+    el.addEventListener("click", async (ev) => {
+      const kind = el.dataset.share;
+      if (kind === "copy") {
+        ev.preventDefault();
+        const url = el.dataset.shareUrl;
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url);
+          const label = el.querySelector("[data-login-label], .btn-icon > span:last-child");
+          const target = label ?? el;
+          const prev = target.textContent;
+          target.textContent = "Copied";
+          setTimeout(() => {
+            if (prev) target.textContent = prev;
+          }, 1200);
+        } catch {
+          window.alert("Could not copy link");
+        }
+        return;
+      }
+      if (kind === "nostr") {
+        ev.preventDefault();
+        const note = el.dataset.shareNote;
+        if (!note) return;
+        try {
+          await navigator.clipboard.writeText(note);
+          const label = el.querySelector("[data-login-label]");
+          const target = label ?? el;
+          const prev = target.textContent;
+          target.textContent = "Copied note";
+          setTimeout(() => {
+            if (prev) target.textContent = prev;
+          }, 1400);
+        } catch {
+          window.alert("Could not copy Nostr note — paste the project URL into your client.");
+        }
+      }
+    });
+  });
 }
 
 /** Full donate flow inside a modal shell. */
