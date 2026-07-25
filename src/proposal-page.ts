@@ -12,10 +12,13 @@ import {
   bindProposalCopyButtons,
   donateModalHtml,
   donateTriggerHtml,
+  ballotPanelHtml,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
   proposalFundingBarHtml,
+  proposalLifecycleBannersHtml,
+  refundRegisterHtml,
   sectionBodyHtml,
   statusClass,
   statusLabel,
@@ -24,8 +27,107 @@ import type { Proposal } from "./types";
 import { safeHttpsImageUrl } from "./media";
 import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml } from "./util";
+import { WORKERS_API } from "./config";
+import { authFetch } from "./auth";
 
 export type ProposalShell = (inner: string) => string;
+
+function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
+  const api = WORKERS_API.replace(/\/$/, "");
+  root.querySelector("#refund-submit")?.addEventListener("click", async () => {
+    const msg = root.querySelector<HTMLElement>("#refund-msg");
+    const txid = (
+      root.querySelector("#refund-txid") as HTMLInputElement | null
+    )?.value.trim();
+    const vout = Number(
+      (root.querySelector("#refund-vout") as HTMLInputElement | null)?.value,
+    );
+    const refund_address = (
+      root.querySelector("#refund-address") as HTMLInputElement | null
+    )?.value.trim();
+    if (!match.id || !txid || !refund_address) return;
+    try {
+      const res = await authFetch(`${api}/refunds/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposal_id: match.id,
+          txid,
+          vout,
+          refund_address,
+        }),
+      });
+      const body = await res.json();
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = res.ok
+          ? "Refund address registered."
+          : String(body.error || "failed");
+      }
+    } catch (e) {
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = (e as Error).message;
+      }
+    }
+  });
+
+  const panel = root.querySelector<HTMLElement>("#ballot-panel");
+  if (!panel || !match.id) return;
+  const statusEl = panel.querySelector<HTMLElement>("#ballot-status");
+  const actions = panel.querySelector<HTMLElement>("#ballot-actions");
+  const bmsg = panel.querySelector<HTMLElement>("#ballot-msg");
+  void (async () => {
+    try {
+      const res = await fetch(
+        `${api}/ballots/proposal/${encodeURIComponent(match.id!)}`,
+      );
+      const data = (await res.json()) as {
+        ballot?: { id: string; vote_count: number; closes_at: string } | null;
+      };
+      if (!data.ballot) {
+        if (statusEl) statusEl.textContent = "No open ballot.";
+        return;
+      }
+      if (statusEl) {
+        statusEl.textContent = `${data.ballot.vote_count} vote(s) · closes ${new Date(data.ballot.closes_at).toLocaleDateString()}`;
+      }
+      if (actions) {
+        actions.hidden = false;
+        actions.querySelectorAll<HTMLButtonElement>("[data-ballot-opt]").forEach(
+          (btn) => {
+            btn.addEventListener("click", async () => {
+              let option = btn.dataset.ballotOpt || "";
+              let redirect_target: string | undefined;
+              if (option === "redirect") {
+                redirect_target =
+                  window.prompt("Redirect target proposal id") || undefined;
+                if (!redirect_target) return;
+              }
+              const voteRes = await authFetch(
+                `${api}/ballots/${encodeURIComponent(data.ballot!.id)}/vote`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ option, redirect_target }),
+                },
+              );
+              const voteBody = await voteRes.json();
+              if (bmsg) {
+                bmsg.hidden = false;
+                bmsg.textContent = voteRes.ok
+                  ? "Vote recorded."
+                  : String(voteBody.error || "vote failed");
+              }
+            });
+          },
+        );
+      }
+    } catch {
+      if (statusEl) statusEl.textContent = "Could not load ballot.";
+    }
+  })();
+}
 
 function stripLeadingTitle(markdown: string): string {
   return markdown.replace(/^#\s+.+\n+/, "").trim();
@@ -136,6 +238,27 @@ export async function renderProposalPage(
       ? `<div class="proposal-cover"><img src="${escapeHtml(coverUrl)}" alt="" decoding="async" /></div>`
       : "";
 
+    if (match.id && WORKERS_API) {
+      try {
+        const stallRes = await fetch(
+          `${WORKERS_API.replace(/\/$/, "")}/escrow/stall/${encodeURIComponent(match.id)}`,
+        );
+        if (stallRes.ok) {
+          const stall = (await stallRes.json()) as {
+            blocked?: boolean;
+            reason?: string;
+          };
+          if (stall.blocked && stall.reason) {
+            match.release_blocked_reason = stall.reason;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const banners = proposalLifecycleBannersHtml(match, balance);
+
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
         <a class="back-link" href="${href("/")}">← Projects</a>
@@ -150,6 +273,8 @@ export async function renderProposalPage(
           ${proposerMeta ? `<div class="proposal-meta">Proposed by ${proposerMeta}</div>` : ""}
         </header>
 
+        ${banners}
+
         ${
           match.escrow_address
             ? proposalFundingBarHtml(balance, CLAIM_FLOOR_SATS, match.target_sats)
@@ -161,6 +286,8 @@ export async function renderProposalPage(
             ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
             ${match.escrow_address ? donateTriggerHtml() : ""}
             ${onChainPanelHtml(match)}
+            ${String(match.status) === "refunding" ? refundRegisterHtml(match.id) : ""}
+            ${String(match.status) === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
             ${milestonesHtml(match.milestones)}
           </aside>
 
@@ -188,6 +315,7 @@ export async function renderProposalPage(
         rail: wantsLnRail ? "lightning" : undefined,
       });
     }
+    bindRefundAndBallot(app, match);
   } catch (e) {
     app.innerHTML = shell(
       `<section class="wrap-wide detail proposal-page"><p class="error">${escapeHtml((e as Error).message)}</p></section>`,

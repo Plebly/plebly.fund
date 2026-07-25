@@ -15,6 +15,7 @@ import {
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
 import { githubLoginUrl } from "./auth";
 import type { AuthUser } from "./auth";
+import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithBrandIcon, btnWithIcon, solidIcon } from "./icons";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
@@ -63,17 +64,26 @@ export function builderPanelHtml(
         <button type="button" class="site-modal-close" id="claim-close" aria-label="Close">${solidIcon("xmark")}</button>
         <h3 id="claim-modal-title">Claim this project</h3>
         <p>Exclusive after merge. One active claim per identity.</p>
-        <p class="builder-bond-hint muted" id="claim-bond-hint">Send claim bond of ${formatSats(CLAIM_BOND_SATS)} to the submission-fee address (refunded on completion; forfeited on expiry or abandoned checkpoint).</p>
-        <label class="donate-amount-label" for="claim-payout">Payout address</label>
-        <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
-        <label class="donate-amount-label" for="claim-bond-txid">Claim bond txid</label>
-        <input id="claim-bond-txid" class="donate-amount mono" type="text" maxlength="64" placeholder="64-char txid" />
-        <label class="donate-amount-label" for="claim-note">Note (optional)</label>
-        <input id="claim-note" class="donate-amount" type="text" maxlength="200" placeholder="Short note for reviewers" />
-        <p class="builder-msg" id="claim-modal-msg" hidden></p>
-        <div class="donate-actions">
-          <button type="button" class="btn" id="claim-confirm">Open claim PR</button>
-          <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
+
+        <div class="claim-modal-section">
+          <label class="donate-amount-label" for="claim-payout">Payout address</label>
+          <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
+        </div>
+
+        <div class="claim-modal-section" id="claim-bond-slot"></div>
+
+        <div class="claim-modal-section" id="claim-finalize" hidden>
+          <label class="donate-amount-label" for="claim-note">Note (optional)</label>
+          <input id="claim-note" class="donate-amount" type="text" maxlength="200" placeholder="Short note for reviewers" />
+          <p class="builder-msg" id="claim-modal-msg" hidden></p>
+          <div class="donate-actions">
+            <button type="button" class="btn" id="claim-confirm">Open claim PR</button>
+            <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
+          </div>
+        </div>
+        <p class="builder-msg" id="claim-modal-msg-early" hidden></p>
+        <div class="claim-modal-section" id="claim-cancel-early">
+          <button type="button" class="btn ghost" id="claim-cancel-top">Cancel</button>
         </div>
       </div>
     </div>
@@ -220,8 +230,9 @@ export async function bindBuilderPanel(
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
-  const bondInput = panel.querySelector<HTMLInputElement>("#claim-bond-txid");
-  const bondHint = panel.querySelector<HTMLElement>("#claim-bond-hint");
+  const bondSlot = panel.querySelector<HTMLElement>("#claim-bond-slot");
+  const finalize = panel.querySelector<HTMLElement>("#claim-finalize");
+  const cancelEarly = panel.querySelector<HTMLElement>("#claim-cancel-early");
 
   let params: ClaimParams = {
     claim_bond_sats: CLAIM_BOND_SATS,
@@ -233,15 +244,31 @@ export async function bindBuilderPanel(
   };
   try {
     params = await fetchClaimParams();
-    if (bondHint) {
-      const addr = params.fee_address
-        ? ` to <code class="mono">${escapeHtml(params.fee_address)}</code>`
-        : " to the submission-fee address";
-      bondHint.innerHTML = `Send claim bond of <strong>${formatSats(params.claim_bond_sats)}</strong>${addr} (same as submission fee; refunded on completion).`;
-    }
   } catch {
     /* defaults */
   }
+
+  let feePay: FeePayBinding | null = null;
+
+  const syncClaimFeeStep = (step: "pay" | "txid") => {
+    if (finalize) finalize.hidden = step !== "txid";
+    if (cancelEarly) cancelEarly.hidden = step === "txid";
+  };
+
+  const mountClaimFeePay = async () => {
+    if (!bondSlot) return;
+    bondSlot.innerHTML = feePayHtml({
+      id: "claim-bond",
+      amountSats: params.claim_bond_sats,
+      address: params.fee_address,
+      note: "Same address as the submission fee · refunded on completion · forfeited on expiry or abandoned checkpoint",
+    });
+    feePay = await bindFeePay(panel, "claim-bond", {
+      onStep: syncClaimFeeStep,
+    });
+    syncClaimFeeStep("pay");
+  };
+  await mountClaimFeePay();
 
   if (payoutInput && opts.user?.payout_address) {
     payoutInput.value = opts.user.payout_address;
@@ -294,14 +321,17 @@ export async function bindBuilderPanel(
     }
   };
 
-  const modalMsg = panel.querySelector<HTMLElement>("#claim-modal-msg");
+  const modalMsg = () =>
+    panel.querySelector<HTMLElement>("#claim-modal-msg") ||
+    panel.querySelector<HTMLElement>("#claim-modal-msg-early");
 
   const closeClaimModal = () => {
     if (!modal) return;
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     window.removeEventListener("keydown", onClaimEscape);
-    setMsg(modalMsg, null);
+    setMsg(modalMsg(), null);
+    feePay?.setStep("pay");
     panel.querySelector<HTMLButtonElement>("#builder-claim")?.focus();
   };
 
@@ -314,8 +344,9 @@ export async function bindBuilderPanel(
     modal.hidden = false;
     document.body.classList.add("modal-open");
     window.addEventListener("keydown", onClaimEscape);
-    setMsg(modalMsg, null);
-    panel.querySelector<HTMLButtonElement>("#claim-close")?.focus();
+    setMsg(modalMsg(), null);
+    feePay?.setStep("pay");
+    payoutInput?.focus();
   };
 
   const bindClaimButton = () => {
@@ -333,6 +364,7 @@ export async function bindBuilderPanel(
   bindClaimButton();
 
   panel.querySelector("#claim-cancel")?.addEventListener("click", closeClaimModal);
+  panel.querySelector("#claim-cancel-top")?.addEventListener("click", closeClaimModal);
   panel.querySelector("#claim-close")?.addEventListener("click", closeClaimModal);
   panel
     .querySelector("[data-close-claim]")
@@ -344,16 +376,19 @@ export async function bindBuilderPanel(
       return;
     }
     const payout = payoutInput?.value.trim() || "";
-    const bond = bondInput?.value.trim() || "";
+    const bond = feePay?.getTxid() || "";
     if (!payout) {
-      setMsg(modalMsg, "Enter a payout address.", "error");
+      feePay?.setStep("pay");
+      setMsg(modalMsg(), "Enter a payout address.", "error");
+      payoutInput?.focus();
       return;
     }
     if (!bond || bond.length !== 64) {
-      setMsg(modalMsg, "Enter the 64-character claim bond txid.", "error");
+      feePay?.setStep("txid");
+      setMsg(modalMsg(), "Enter the 64-character claim bond txid.", "error");
       return;
     }
-    setMsg(modalMsg, "Opening claim PR…");
+    setMsg(modalMsg(), "Opening claim PR…");
     try {
       const result = await submitClaim({
         proposal_path: opts.proposal.path,
@@ -372,7 +407,7 @@ export async function bindBuilderPanel(
       if ((e as Error).message === "login_required") {
         closeClaimModal();
         requireLogin("Sign in with GitHub to claim this project.");
-      } else setMsg(modalMsg, (e as Error).message, "error");
+      } else setMsg(modalMsg(), (e as Error).message, "error");
     }
   });
 

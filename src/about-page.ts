@@ -109,6 +109,17 @@ export function renderAbout(shell: AboutShell): void {
 
       ${networkBannerHtml()}
 
+      <section class="about-block" id="residual-trust">
+        <h2 class="about-block-title">Residual trust</h2>
+        <p class="about-block-lede">
+          Escrow is 3-of-5 multisig with no on-chain timelock in v1. If keyholders stall after a
+          reviewer-approved release, the public process in
+          <a href="https://github.com/Plebly/proposals/blob/main/docs/keyholder-stall-runbook.md" target="_blank" rel="noreferrer">KEYHOLDERS stall runbook</a>
+          applies (7-day log / 14-day incident). See
+          <a href="https://github.com/Plebly/proposals/blob/main/PARAMETERS.md" target="_blank" rel="noreferrer">PARAMETERS</a>.
+        </p>
+      </section>
+
       <section class="about-involve">
         <h2 class="about-block-title">Get involved</h2>
         <p>Follow updates and send questions, proposals, and corrections in the open.</p>

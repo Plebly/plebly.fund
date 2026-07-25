@@ -83,6 +83,10 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     claimed_at: (data.claimed_at as string) || null,
     payout_address: (data.payout_address as string) || null,
     deliverable_url: (data.deliverable_url as string) || null,
+    escrow_allocated_at: (data.escrow_allocated_at as string) || null,
+    funding_window_ends_at: (data.funding_window_ends_at as string) || null,
+    milestones_due_at: (data.milestones_due_at as string) || null,
+    release_blocked_reason: (data.release_blocked_reason as string) || null,
     body,
   };
 }

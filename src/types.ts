@@ -88,6 +88,10 @@ export type Proposal = {
   claimed_at?: string | null;
   payout_address?: string | null;
   deliverable_url?: string | null;
+  escrow_allocated_at?: string | null;
+  funding_window_ends_at?: string | null;
+  milestones_due_at?: string | null;
+  release_blocked_reason?: string | null;
 };
 
 export type Route =

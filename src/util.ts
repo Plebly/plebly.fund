@@ -22,6 +22,15 @@ export function formatSats(n: number): string {
   return `${n.toLocaleString("en-US")} sats`;
 }
 
+/** BIP21 URI; optional amount in sats → BTC. */
+export function bitcoinUri(address: string, amountSats?: number | null): string {
+  if (amountSats != null && amountSats > 0) {
+    const btc = (amountSats / 1e8).toFixed(8).replace(/\.?0+$/, "");
+    return `bitcoin:${address}?amount=${btc}`;
+  }
+  return `bitcoin:${address}`;
+}
+
 const PROPOSALS_PREFIX = "proposals/";
 
 /** Repo path → URL slug, e.g. proposals/listed/foo.md → listed/foo */

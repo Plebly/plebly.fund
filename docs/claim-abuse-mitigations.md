@@ -24,9 +24,14 @@ Plebly’s claim market is permissionless: anyone authenticated may claim when e
 
 | Surface | Enforces |
 |---------|----------|
-| **Workers** | Active cap, pending TTL, bond txid verify, spent-txid set, daily rate limit, cooldowns, checkpoints, suspension flag, claim ledger |
-| **Git merge** | Exclusive claim acceptance (first merge wins); deliverable / reject status |
+| **Workers** | Active cap, pending TTL, exact bond/fee verify, `paytxid:` anti-replay, durable `claimactive:` + cron lifecycle, daily rate limit, cooldowns, HTTPS checkpoint reachability, suspension flag, claim ledger (retained on delete-account) |
+| **Git merge** | Exclusive claim acceptance (first merge wins); `claimed_at` from merge; CI fee/bond gate |
 | **Keyholders** | Bond refunds on `completed`; forfeit accounting; published suspension when criteria met |
+| **HOOK_SECRET** | `/claims/outcome`, `/claims/challenge/accept`, `/escrow/allocate`, refundable bonds — not session-auth |
+
+### Delete-account tombstone
+
+`deleteProfile` removes profile, username, watches, and pending-user index, but **retains** `claimledger:{userId}` (opaque audit / bond history). Orphan keys such as `claimowner:*`, `claimactive:*`, and `claimpending:*` are left for the builder-claim lifecycle cron to clear when windows expire or challenges are accepted.
 
 ## Bond economics
 

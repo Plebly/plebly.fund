@@ -10,7 +10,9 @@ import {
   type LightningSwapView,
 } from "./lightning";
 import type { Proposal, ProposalMilestone } from "./types";
-import { escapeHtml, formatSats, themeQrColors } from "./util";
+import { bitcoinUri, escapeHtml, formatSats, themeQrColors } from "./util";
+
+export { bitcoinUri };
 
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
@@ -26,14 +28,6 @@ export type DonateBindOpts = {
   proposalId: string | null;
   proposalPath: string;
 };
-
-export function bitcoinUri(address: string, amountSats?: number | null): string {
-  if (amountSats != null && amountSats > 0) {
-    const btc = (amountSats / 1e8).toFixed(8).replace(/\.?0+$/, "");
-    return `bitcoin:${address}?amount=${btc}`;
-  }
-  return `bitcoin:${address}`;
-}
 
 export function formatProposalDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -52,9 +46,77 @@ export function statusLabel(status: string): string {
 
 export function statusClass(status: string): string {
   if (["listed", "claimable", "completed"].includes(status)) return "status-good";
-  if (["claimed", "in_review", "funding"].includes(status)) return "status-active";
-  if (["declined", "rejected", "underfunded"].includes(status)) return "status-bad";
+  if (["claimed", "in_review", "funding", "abandoned_vote"].includes(status)) {
+    return "status-active";
+  }
+  if (
+    ["declined", "rejected", "underfunded", "refunding", "redirected"].includes(
+      status,
+    )
+  ) {
+    return "status-bad";
+  }
   return "status-neutral";
+}
+
+/** Lifecycle banners: funding window, milestones grace, keyholder stall, ballot. */
+export function proposalLifecycleBannersHtml(
+  p: Proposal,
+  balance?: number | null,
+): string {
+  const parts: string[] = [];
+  if (p.release_blocked_reason) {
+    parts.push(
+      `<div class="lifecycle-banner lifecycle-stall" role="status"><span class="lifecycle-k">Release stalled</span><p>${escapeHtml(p.release_blocked_reason)}</p></div>`,
+    );
+  }
+  if (p.funding_window_ends_at) {
+    const end = new Date(p.funding_window_ends_at);
+    if (!Number.isNaN(end.getTime())) {
+      const days = Math.ceil((end.getTime() - Date.now()) / 86400_000);
+      if (days >= 0 && days <= 30) {
+        parts.push(
+          `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Funding window</span><p>${days} day${days === 1 ? "" : "s"} remaining</p></div>`,
+        );
+      } else if (days < 0 && ["listed", "funding", "declined_fundable"].includes(String(p.status))) {
+        parts.push(
+          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended — underfunded / refund path may open</p></div>`,
+        );
+      }
+    }
+  }
+  if (p.milestones_due_at && !p.milestones.length) {
+    const due = new Date(p.milestones_due_at);
+    if (!Number.isNaN(due.getTime())) {
+      const overdue = Date.now() > due.getTime();
+      parts.push(
+        `<div class="lifecycle-banner ${overdue ? "lifecycle-warn" : ""}" role="status"><span class="lifecycle-k">Milestones</span><p>${
+          overdue
+            ? "Grace ended — claims and outcomes blocked until milestones are published (Q12)"
+            : `Milestones due by ${due.toLocaleDateString()} (escrow crossed 1M sats)`
+        }</p></div>`,
+      );
+    }
+  } else if (
+    !p.milestones.length &&
+    balance != null &&
+    balance >= 1_000_000
+  ) {
+    parts.push(
+      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Milestones</span><p>Escrow ≥ 1M sats — milestones required (Q12)</p></div>`,
+    );
+  }
+  if (String(p.status) === "abandoned_vote") {
+    parts.push(
+      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Ballot open</span><p>Contributor vote: extend, refund, or redirect (1 person = 1 vote)</p></div>`,
+    );
+  }
+  if (String(p.status) === "refunding") {
+    parts.push(
+      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Refunds</span><p>Register a refund address for your contribution outpoint. No platform fee on refunds.</p></div>`,
+    );
+  }
+  return parts.join("");
 }
 
 /** Green to claim floor; glowing orange for overfunding beyond the floor. */
@@ -500,8 +562,11 @@ function bindLightningDonate(
         settled: swap.claim_txid
           ? `Settled on-chain. Claim tx: ${swap.claim_txid.slice(0, 12)}…`
           : "Settled on-chain.",
-        failed: swap.error || "Swap failed.",
-        expired: "Invoice expired. Create a new one.",
+        failed:
+          swap.error ||
+          "Swap failed. On mainnet the claimer waits for lockup confirmation; try again or use on-chain.",
+        expired:
+          "Invoice or swap expired. Create a new Lightning invoice — lockup timeout is set by Boltz.",
       };
       statusEl.textContent = map[swap.status] || swap.status;
       const live = ["pending", "invoice_paid", "claiming"].includes(swap.status);
@@ -729,6 +794,36 @@ export function metaChipsHtml(p: Proposal): string {
   }
   if (!chips.length) return "";
   return `<div class="meta-chips">${chips.join("")}</div>`;
+}
+
+export function refundRegisterHtml(proposalId: string | null): string {
+  if (!proposalId) return "";
+  return `<div class="refund-panel" id="refund-panel">
+    <h3 class="milestones-title">Register refund</h3>
+    <p class="muted">Prove your funding outpoint and set a refund address. No platform fee.</p>
+    <label class="donate-amount-label" for="refund-txid">Funding txid</label>
+    <input id="refund-txid" class="donate-amount mono" type="text" maxlength="64" />
+    <label class="donate-amount-label" for="refund-vout">Vout</label>
+    <input id="refund-vout" class="donate-amount mono" type="number" min="0" value="0" />
+    <label class="donate-amount-label" for="refund-address">Refund address</label>
+    <input id="refund-address" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
+    <button type="button" class="btn" id="refund-submit">Register</button>
+    <p class="muted" id="refund-msg" hidden></p>
+  </div>`;
+}
+
+export function ballotPanelHtml(proposalId: string | null): string {
+  if (!proposalId) return "";
+  return `<div class="ballot-panel" id="ballot-panel" data-proposal-id="${escapeHtml(proposalId)}">
+    <h3 class="milestones-title">Contributor ballot</h3>
+    <p class="muted" id="ballot-status">Loading…</p>
+    <div id="ballot-actions" hidden>
+      <button type="button" class="btn" data-ballot-opt="extend">Extend</button>
+      <button type="button" class="btn ghost" data-ballot-opt="refund">Refund</button>
+      <button type="button" class="btn ghost" data-ballot-opt="redirect">Redirect…</button>
+    </div>
+    <p class="muted" id="ballot-msg" hidden></p>
+  </div>`;
 }
 
 export function milestonesHtml(milestones: ProposalMilestone[]): string {

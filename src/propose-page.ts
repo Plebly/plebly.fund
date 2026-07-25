@@ -1,6 +1,7 @@
 import { githubLoginUrl, submitProposal } from "./auth";
 import { fetchClaimParams } from "./builder";
 import { BITCOIN_NETWORK, SUBMISSION_FEE_SATS } from "./config";
+import { bindFeePay, feePayHtml } from "./fee-pay";
 import { btnWithBrandIcon } from "./icons";
 import {
   clientCoverPrecheck,
@@ -35,16 +36,6 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   } catch {
     /* address optional until API configured */
   }
-
-  const feeAddressHtml = feeAddress
-    ? `<div class="fee-pay-block">
-        <code class="donate-address mono" id="propose-fee-address" title="${escapeHtml(feeAddress)}">${escapeHtml(feeAddress)}</code>
-        <div class="donate-actions donate-ln-create-row">
-          <button type="button" class="btn" id="propose-fee-copy" data-copy="${escapeHtml(feeAddress)}">Copy address</button>
-        </div>
-        <span class="field-hint">Send exactly ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}, then paste the txid below.</span>
-      </div>`
-    : `<span class="field-hint">Pay exactly ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)} to the published submission-fee address, then paste the txid below.</span>`;
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail propose-page">
@@ -106,12 +97,14 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           <div class="field">
             <span>Submission fee</span>
-            ${feeAddressHtml}
+            ${feePayHtml({
+              id: "propose-fee",
+              amountSats: SUBMISSION_FEE_SATS,
+              address: feeAddress,
+              txidName: "submission_fee_txid",
+              note: "Required to open a proposal PR. Exact amount on-chain.",
+            })}
           </div>
-          <label class="field">
-            <span>Submission fee txid</span>
-            <input name="submission_fee_txid" required pattern="[0-9a-fA-F]{64}" placeholder="64-character transaction id" class="mono" />
-          </label>
         </fieldset>
 
         <div class="form-actions">
@@ -122,20 +115,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     </section>
   `);
 
-  const copyBtn = document.getElementById("propose-fee-copy");
-  copyBtn?.addEventListener("click", async () => {
-    const text = copyBtn.getAttribute("data-copy") || "";
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      copyBtn.textContent = "Copied";
-      setTimeout(() => {
-        copyBtn.textContent = "Copy address";
-      }, 1500);
-    } catch {
-      /* ignore */
-    }
-  });
+  const feePay = await bindFeePay(document, "propose-fee");
 
   const form = document.getElementById("propose-form") as HTMLFormElement;
   const msg = document.getElementById("propose-msg")!;
@@ -290,6 +270,15 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       msg.textContent = "Wait for the cover upload to finish, or remove it.";
       return;
     }
+    const feeTxid = feePay?.getTxid() || "";
+    if (!/^[0-9a-fA-F]{64}$/.test(feeTxid)) {
+      feePay?.setStep("txid");
+      msg.hidden = false;
+      msg.className = "form-msg error";
+      msg.textContent =
+        "Paste the 64-character submission fee txid after you've sent the payment.";
+      return;
+    }
     msg.hidden = false;
     msg.className = "form-msg";
     msg.textContent = "Opening pull request…";
@@ -302,7 +291,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         deliverable: String(fd.get("deliverable") || ""),
         verification: String(fd.get("verification") || ""),
         out_of_scope: String(fd.get("out_of_scope") || ""),
-        submission_fee_txid: String(fd.get("submission_fee_txid") || ""),
+        submission_fee_txid: feeTxid,
         target_sats:
           targetRaw && String(targetRaw).length ? Number(targetRaw) : null,
         cover_image: coverUrl,

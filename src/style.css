@@ -1320,6 +1320,41 @@ body.modal-open {
   color: var(--muted);
 }
 
+.lifecycle-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+  border: 1px solid rgba(var(--ink-rgb, 20, 20, 20), 0.12);
+  border-radius: var(--radius);
+  background: rgba(var(--ink-rgb, 20, 20, 20), 0.03);
+}
+
+.lifecycle-banner.lifecycle-warn,
+.lifecycle-banner.lifecycle-stall {
+  border-color: rgba(180, 90, 40, 0.35);
+  background: rgba(180, 90, 40, 0.08);
+}
+
+.lifecycle-k {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.lifecycle-banner p {
+  flex: 1;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
 .network-banner {
   display: flex;
   flex-wrap: wrap;
@@ -2202,12 +2237,121 @@ body.modal-open {
   grid-template-columns: 1fr;
 }
 
-.fee-pay-block {
-  margin: 0 0 0.75rem;
+.fee-pay {
+  display: grid;
+  gap: 0.875rem;
+  margin-top: 0.25rem;
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
 }
 
-.fee-pay-block .donate-address {
+.fee-pay-progress {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fee-pay-progress-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.fee-pay-progress-item.is-current {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.fee-pay-progress-item.is-done {
+  color: var(--good);
+}
+
+.fee-pay-progress-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.fee-pay-progress-item.is-current .fee-pay-progress-num {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.fee-pay-progress-item.is-done .fee-pay-progress-num {
+  border-color: rgba(var(--good-rgb), 0.5);
+  color: var(--good);
+  background: rgba(var(--good-rgb), 0.12);
+}
+
+.fee-pay-step-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fee-pay-amount-line {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  line-height: 1.45;
+}
+
+.fee-pay-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.fee-pay-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.fee-pay-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+}
+
+.fee-pay .donate-address {
   margin-bottom: 0.5rem;
+}
+
+.fee-pay .donate-actions {
+  margin-bottom: 0.5rem;
+}
+
+.fee-pay-step[hidden] {
+  display: none !important;
+}
+
+.claim-modal-section {
+  margin-bottom: 1rem;
+}
+
+.claim-modal-section:last-child {
+  margin-bottom: 0;
 }
 
 .form-alt-link {
@@ -2215,7 +2359,9 @@ body.modal-open {
 }
 
 .builder-claim-card {
-  width: min(28rem, 100%);
+  width: min(26rem, 100%);
+  max-height: min(90vh, 40rem);
+  overflow: auto;
   padding: 1.25rem 1.25rem 1rem;
 }
 
@@ -2232,9 +2378,6 @@ body.modal-open {
   line-height: 1.5;
 }
 
-.builder-bond-hint {
-  margin: 0 0 1rem !important;
-}
 
 .donate-copy.copied {
   filter: brightness(1.05);
