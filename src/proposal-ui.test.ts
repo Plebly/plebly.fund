@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   deliverableChipHtml,
   milestonesHtml,
+  proposalContextHtml,
+  proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
   proposerBylineHtml,
   statusClass,
@@ -15,7 +17,7 @@ describe("proposal UI critical render helpers", () => {
       { username: "secsovereign", github: null },
       (u) => `/u/${u}`,
     );
-    expect(html).toContain("Created by");
+    expect(html).toContain(">by<");
     expect(html).toContain('href="/u/secsovereign"');
     expect(html).toContain(">secsovereign<");
   });
@@ -97,5 +99,38 @@ describe("proposal UI critical render helpers", () => {
     expect(deliverableChipHtml("https://example.com/out")).toContain(
       "example.com/out",
     );
+  });
+
+  it("milestonesHtml tucks verify/oos behind details", () => {
+    const html = milestonesHtml([
+      {
+        id: "m1",
+        deliverable: "Ship checklist",
+        verification: "Page loads",
+        out_of_scope: "Mainnet",
+        allocation_sats: 50_000,
+        deadline: "2026-08-15",
+      },
+    ]);
+    expect(html).toContain("milestone-more");
+    expect(html).toContain("<summary>Details</summary>");
+  });
+
+  it("proposalContextHtml merges deps and related work", () => {
+    const html = proposalContextHtml(
+      [{ kind: "plebly", label: "Prior", ref: "demo" }],
+      [{ label: "Spec", url: "https://example.com/spec" }],
+    );
+    expect(html).toContain("proposal-context");
+    expect(html).toContain("Depends on");
+    expect(html).toContain("Related work");
+    expect(html).toContain("Prior");
+    expect(html).toContain("Spec");
+  });
+
+  it("funding bar stays slim without duplicate stats", () => {
+    const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
+    expect(html).toContain("funding-meter");
+    expect(html).not.toContain("proposal-stats");
   });
 });

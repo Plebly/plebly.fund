@@ -14,15 +14,14 @@ import {
   ballotPanelHtml,
   canEditProposal,
   deliverableChipHtml,
-  dependsOnHtml,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
+  proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
   proposerBylineHtml,
   refundRegisterHtml,
-  relatedWorkHtml,
   sectionBodyHtml,
   statusClass,
   statusLabel,
@@ -258,6 +257,13 @@ export async function renderProposalPage(
 
     const banners = proposalLifecycleBannersHtml(match, balance);
 
+    const canEdit = canEditProposal(
+      user,
+      match.proposer,
+      String(match.status),
+    );
+    const status = String(match.status);
+
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
         <a class="back-link" href="${href("/")}">← Projects</a>
@@ -266,18 +272,18 @@ export async function renderProposalPage(
         <header class="proposal-hero">
           <div class="proposal-hero-top">
             <h1>${escapeHtml(match.title)}</h1>
-            <span class="pill pill-status ${statusClass(String(match.status))}">${escapeHtml(statusLabel(String(match.status)))}</span>
+            <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
           </div>
-          ${metaChipsHtml(match)}
-          ${byline}
-          ${
-            canEditProposal(user, match.proposer, String(match.status))
-              ? `<p class="proposal-edit-cta"><a class="btn ghost" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">Edit proposal</a></p>`
-              : ""
-          }
+          <div class="proposal-hero-meta">
+            ${byline}
+            ${metaChipsHtml(match)}
+            ${
+              canEdit
+                ? `<a class="proposal-edit-link" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">Edit</a>`
+                : ""
+            }
+          </div>
         </header>
-
-        ${banners}
 
         ${
           match.escrow_address
@@ -285,31 +291,27 @@ export async function renderProposalPage(
             : ""
         }
 
-        ${dependsOnHtml(match.depends_on || [])}
-        ${relatedWorkHtml(match.related_work || [])}
-        ${milestonesHtml(match.milestones)}
+        ${banners ? `<div class="proposal-banners">${banners}</div>` : ""}
 
         <div class="proposal-layout">
-          <aside class="proposal-sidebar">
-            ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
-            ${deliverableChipHtml(match.deliverable_url)}
-            ${
-              String(match.status) === "in_review" && match.id
-                ? reviewPanelHtml(match.id)
-                : ""
-            }
-            ${
-              String(match.status) === "rejected" && match.id
-                ? rebuttalPanelHtml()
-                : ""
-            }
-            ${match.escrow_address ? donateTriggerHtml() : ""}
-            ${onChainPanelHtml(match)}
-            ${String(match.status) === "refunding" ? refundRegisterHtml(match.id) : ""}
-            ${String(match.status) === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
-          </aside>
+          <div class="proposal-main">
+            <div class="proposal-sections">${sectionsHtml}</div>
+            ${milestonesHtml(match.milestones)}
+            ${proposalContextHtml(match.depends_on || [], match.related_work || [])}
+          </div>
 
-          <div class="proposal-sections">${sectionsHtml}</div>
+          <aside class="proposal-sidebar">
+            <div class="proposal-actions">
+              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
+              ${match.escrow_address ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
+            </div>
+            ${deliverableChipHtml(match.deliverable_url)}
+            ${status === "in_review" && match.id ? reviewPanelHtml(match.id) : ""}
+            ${status === "rejected" && match.id ? rebuttalPanelHtml() : ""}
+            ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
+            ${status === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
+            ${onChainPanelHtml(match)}
+          </aside>
         </div>
         ${match.escrow_address ? donateModalHtml(match) : ""}
       </section>

@@ -193,39 +193,13 @@ export function fundingProgressHtml(
     </div>`;
 }
 
-function fundingStatsHtml(
-  balance: number | undefined,
-  target: number | null,
-  floor: number,
-): string {
-  return `<div class="proposal-stats">
-      <div class="proposal-stat proposal-stat-primary">
-        <span class="proposal-stat-label">Funded</span>
-        <span class="proposal-stat-value sats">${balance != null ? formatSats(balance) : "—"}</span>
-      </div>
-      <div class="proposal-stat">
-        <span class="proposal-stat-label">Claim floor</span>
-        <span class="proposal-stat-value sats">${formatSats(floor)}</span>
-      </div>
-      ${
-        target != null
-          ? `<div class="proposal-stat">
-        <span class="proposal-stat-label">Target</span>
-        <span class="proposal-stat-value sats">${formatSats(target)}</span>
-      </div>`
-          : ""
-      }
-    </div>`;
-}
-
-/** Full-width funding summary — sits above proposal body, not in sidebar. */
+/** Slim funding strip under the hero — progress only, no duplicate stat cards. */
 export function proposalFundingBarHtml(
   balance: number | undefined,
   floor: number,
   target: number | null,
 ): string {
   return `<div class="proposal-funding-bar">
-    ${fundingStatsHtml(balance, target, floor)}
     ${fundingProgressHtml(balance, floor, target)}
   </div>`;
 }
@@ -238,11 +212,9 @@ function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
 }
 
-/** Compact sidebar control — opens donate modal. */
+/** Compact control — opens donate modal (lives in the actions group). */
 export function donateTriggerHtml(): string {
-  return `<div class="donate-trigger-card">
-    <button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>
-  </div>`;
+  return `<button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>`;
 }
 
 /** Full donate flow inside a modal shell. */
@@ -793,20 +765,22 @@ export function onChainPanelHtml(p: Proposal): string {
   }
 
   if (!rows.length) return "";
-  return `<div class="onchain-panel">${rows.join("")}</div>`;
+  return `<details class="proposal-onchain">
+    <summary>On-chain details</summary>
+    <div class="onchain-panel">${rows.join("")}</div>
+  </details>`;
 }
 
+/** Quiet meta line: created date + id (status/byline live elsewhere in the hero). */
 export function metaChipsHtml(p: Proposal): string {
-  const chips: string[] = [];
-  if (p.id) {
-    chips.push(`<span class="meta-chip"><span class="meta-chip-k">ID</span>${escapeHtml(p.id)}</span>`);
-  }
+  const bits: string[] = [];
   const created = formatProposalDate(p.created_at);
-  if (created) {
-    chips.push(`<span class="meta-chip"><span class="meta-chip-k">Created</span>${escapeHtml(created)}</span>`);
+  if (created) bits.push(`<span>${escapeHtml(created)}</span>`);
+  if (p.id) {
+    bits.push(`<span class="mono proposal-meta-id">${escapeHtml(p.id)}</span>`);
   }
-  if (!chips.length) return "";
-  return `<div class="meta-chips">${chips.join("")}</div>`;
+  if (!bits.length) return "";
+  return `<div class="proposal-meta-line">${bits.join('<span class="proposal-meta-sep" aria-hidden="true">·</span>')}</div>`;
 }
 
 export function refundRegisterHtml(proposalId: string | null): string {
@@ -866,17 +840,17 @@ export function proposerBylineHtml(
   if (!proposer) return "";
   const username = proposer.username?.trim();
   if (username) {
-    return `<div class="proposal-byline">
-      <span class="proposal-byline-label">Created by</span>
+    return `<span class="proposal-byline">
+      <span class="proposal-byline-label">by</span>
       <a class="proposal-byline-link" href="${profileHref(username)}">${escapeHtml(username)}</a>
-    </div>`;
+    </span>`;
   }
   const github = proposer.github?.trim();
   if (github) {
-    return `<div class="proposal-byline">
-      <span class="proposal-byline-label">Created by</span>
+    return `<span class="proposal-byline">
+      <span class="proposal-byline-label">by</span>
       <a class="proposal-byline-link" href="https://github.com/${escapeHtml(github)}" target="_blank" rel="noreferrer noopener">${escapeHtml(github)}</a>
-    </div>`;
+    </span>`;
   }
   return "";
 }
@@ -889,15 +863,29 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
   );
   return `<section class="proposal-milestones" aria-labelledby="milestones-heading">
     <header class="proposal-milestones-head">
-      <div>
-        <h2 id="milestones-heading" class="proposal-milestones-title">Milestones</h2>
-        <p class="proposal-milestones-lede">Work lands in stages · ${escapeHtml(formatSats(total))} allocated</p>
-      </div>
+      <h2 id="milestones-heading" class="proposal-block-title">Milestones</h2>
+      <p class="proposal-block-lede">${escapeHtml(formatSats(total))} allocated across ${milestones.length} stage${milestones.length === 1 ? "" : "s"}</p>
     </header>
     <ol class="milestone-rail">
       ${milestones
         .map((m, i) => {
           const due = m.deadline ? formatMilestoneDeadline(String(m.deadline)) : "";
+          const moreBits: string[] = [];
+          if (m.verification) {
+            moreBits.push(
+              `<p class="milestone-rail-verify"><span class="milestone-rail-k">Verify</span> ${escapeHtml(m.verification)}</p>`,
+            );
+          }
+          if (m.out_of_scope) {
+            moreBits.push(
+              `<p class="milestone-rail-oos"><span class="milestone-rail-k">Out of scope</span> ${escapeHtml(m.out_of_scope)}</p>`,
+            );
+          }
+          if (m.dependencies?.length) {
+            moreBits.push(
+              `<p class="milestone-rail-deps"><span class="milestone-rail-k">Depends on</span> ${escapeHtml(m.dependencies.join(", "))}</p>`,
+            );
+          }
           return `<li class="milestone-rail-item">
           <div class="milestone-rail-marker" aria-hidden="true">${i + 1}</div>
           <div class="milestone-rail-body">
@@ -907,18 +895,8 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
             </div>
             <p class="milestone-rail-deliverable">${escapeHtml(m.deliverable)}</p>
             ${
-              m.verification
-                ? `<p class="milestone-rail-verify"><span class="milestone-rail-k">Verify</span> ${escapeHtml(m.verification)}</p>`
-                : ""
-            }
-            ${
-              m.out_of_scope
-                ? `<p class="milestone-rail-oos"><span class="milestone-rail-k">Out of scope</span> ${escapeHtml(m.out_of_scope)}</p>`
-                : ""
-            }
-            ${
-              m.dependencies?.length
-                ? `<p class="milestone-rail-deps"><span class="milestone-rail-k">Depends on</span> ${escapeHtml(m.dependencies.join(", "))}</p>`
+              moreBits.length
+                ? `<details class="milestone-more"><summary>Details</summary>${moreBits.join("")}</details>`
                 : ""
             }
           </div>
@@ -929,39 +907,67 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
   </section>`;
 }
 
+function dependsOnItemsHtml(
+  items: { kind: string; label: string; ref?: string; note?: string }[],
+): string {
+  return `<ul class="dep-list">${items
+    .map((d) => {
+      const kind = d.kind === "external" ? "external" : "plebly";
+      let ref = "";
+      if (d.ref) {
+        if (d.ref.startsWith("https://")) {
+          ref = `<a href="${escapeHtml(d.ref)}" target="_blank" rel="noreferrer">${escapeHtml(d.ref)}</a>`;
+        } else if (kind === "plebly") {
+          const path = pleblyDepHref(d.ref);
+          ref = path
+            ? `<a class="mono" href="${proposalHref(path)}">${escapeHtml(d.ref)}</a>`
+            : `<span class="mono">${escapeHtml(d.ref)}</span>`;
+        } else {
+          ref = `<span class="mono">${escapeHtml(d.ref)}</span>`;
+        }
+      }
+      return `<li class="dep-list-item">
+        <div class="dep-list-head">
+          <span class="pill">${escapeHtml(depKindLabel(kind))}</span>
+          <strong>${escapeHtml(d.label)}</strong>
+        </div>
+        ${ref ? `<p class="dep-list-ref">${ref}</p>` : ""}
+        ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
+      </li>`;
+    })
+    .join("")}</ul>`;
+}
+
+function relatedWorkItemsHtml(
+  items: { label: string; url: string; note?: string }[],
+): string {
+  return `<ul class="dep-list">${items
+    .map((d) => {
+      const labelMatchesUrl =
+        d.label.trim().toLowerCase() === d.url.trim().toLowerCase();
+      return `<li class="dep-list-item">
+        <div class="dep-list-head">
+          <a href="${escapeHtml(d.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(d.label)}</strong></a>
+        </div>
+        ${
+          labelMatchesUrl
+            ? ""
+            : `<p class="dep-list-ref muted mono">${escapeHtml(d.url)}</p>`
+        }
+        ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
+      </li>`;
+    })
+    .join("")}</ul>`;
+}
+
 export function dependsOnHtml(
   items: { kind: string; label: string; ref?: string; note?: string }[],
 ): string {
   if (!items?.length) return "";
   return `<section class="proposal-deps" aria-labelledby="depends-on-heading">
-    <h2 id="depends-on-heading" class="proposal-milestones-title">Depends on</h2>
-    <p class="proposal-milestones-lede">Blocking work this project needs first</p>
-    <ul class="dep-list">${items
-      .map((d) => {
-        const kind = d.kind === "external" ? "external" : "plebly";
-        let ref = "";
-        if (d.ref) {
-          if (d.ref.startsWith("https://")) {
-            ref = `<a href="${escapeHtml(d.ref)}" target="_blank" rel="noreferrer">${escapeHtml(d.ref)}</a>`;
-          } else if (kind === "plebly") {
-            const path = pleblyDepHref(d.ref);
-            ref = path
-              ? `<a class="mono" href="${proposalHref(path)}">${escapeHtml(d.ref)}</a>`
-              : `<span class="mono">${escapeHtml(d.ref)}</span>`;
-          } else {
-            ref = `<span class="mono">${escapeHtml(d.ref)}</span>`;
-          }
-        }
-        return `<li class="dep-list-item">
-          <div class="dep-list-head">
-            <span class="pill">${escapeHtml(depKindLabel(kind))}</span>
-            <strong>${escapeHtml(d.label)}</strong>
-          </div>
-          ${ref ? `<p class="dep-list-ref">${ref}</p>` : ""}
-          ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
-        </li>`;
-      })
-      .join("")}</ul>
+    <h2 id="depends-on-heading" class="proposal-block-title">Depends on</h2>
+    <p class="proposal-block-lede">Blocking work this project needs first</p>
+    ${dependsOnItemsHtml(items)}
   </section>`;
 }
 
@@ -970,25 +976,38 @@ export function relatedWorkHtml(
 ): string {
   if (!items?.length) return "";
   return `<section class="proposal-deps" aria-labelledby="related-work-heading">
-    <h2 id="related-work-heading" class="proposal-milestones-title">Related work</h2>
-    <p class="proposal-milestones-lede">Prior art and external context</p>
-    <ul class="dep-list">${items
-      .map((d) => {
-        const labelMatchesUrl =
-          d.label.trim().toLowerCase() === d.url.trim().toLowerCase();
-        return `<li class="dep-list-item">
-          <div class="dep-list-head">
-            <a href="${escapeHtml(d.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(d.label)}</strong></a>
-          </div>
-          ${
-            labelMatchesUrl
-              ? ""
-              : `<p class="dep-list-ref muted mono">${escapeHtml(d.url)}</p>`
-          }
-          ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
-        </li>`;
-      })
-      .join("")}</ul>
+    <h2 id="related-work-heading" class="proposal-block-title">Related work</h2>
+    <p class="proposal-block-lede">Prior art and external context</p>
+    ${relatedWorkItemsHtml(items)}
+  </section>`;
+}
+
+/** Combined context band — blocking deps + related work, one section. */
+export function proposalContextHtml(
+  dependsOn: { kind: string; label: string; ref?: string; note?: string }[],
+  relatedWork: { label: string; url: string; note?: string }[],
+): string {
+  if (!dependsOn?.length && !relatedWork?.length) return "";
+  return `<section class="proposal-context" aria-labelledby="context-heading">
+    <h2 id="context-heading" class="proposal-block-title">Context</h2>
+    ${
+      dependsOn.length
+        ? `<div class="proposal-context-group">
+      <h3 class="proposal-context-sub">Depends on</h3>
+      <p class="proposal-block-lede">Blocking work this project needs first</p>
+      ${dependsOnItemsHtml(dependsOn)}
+    </div>`
+        : ""
+    }
+    ${
+      relatedWork.length
+        ? `<div class="proposal-context-group">
+      <h3 class="proposal-context-sub">Related work</h3>
+      <p class="proposal-block-lede">Prior art and external context</p>
+      ${relatedWorkItemsHtml(relatedWork)}
+    </div>`
+        : ""
+    }
   </section>`;
 }
 
