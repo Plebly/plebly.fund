@@ -1455,7 +1455,7 @@ a.project-card-by:hover {
 
 /* —— About page —— */
 .about-page {
-  max-width: 40rem;
+  width: 100%;
   padding-bottom: 3rem;
 }
 
@@ -1476,7 +1476,7 @@ a.project-card-by:hover {
 }
 
 .about-lede {
-  max-width: 36rem;
+  max-width: none;
 }
 
 .about-lede p {
@@ -1555,7 +1555,7 @@ a.project-card-by:hover {
 }
 
 .about-prose {
-  max-width: 36rem;
+  max-width: none;
 }
 
 .about-prose p {
@@ -1586,7 +1586,6 @@ a.project-card-by:hover {
 
 .about-belief dd {
   margin: 0;
-  max-width: 36rem;
   font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--ink-secondary);
@@ -2294,7 +2293,7 @@ a.project-card-by:hover {
   color: var(--ink-secondary);
   font-size: 0.9375rem;
   margin: 0 0 1.5rem;
-  max-width: 40rem;
+  max-width: none;
   line-height: 1.6;
 }
 
@@ -3582,7 +3581,8 @@ a.project-card-by:hover {
 
 /* —— Forms —— */
 .form-panel {
-  max-width: 28rem;
+  width: 100%;
+  max-width: none;
   margin: 1.5rem 0;
   display: grid;
   gap: 1.5rem;
@@ -3597,7 +3597,15 @@ a.project-card-by:hover {
 }
 
 .form-panel-wide {
-  max-width: 40rem;
+  width: 100%;
+  max-width: none;
+}
+
+.propose-page,
+.about-page,
+.stats-page,
+.gov-page {
+  width: 100%;
 }
 
 .milestone-editor-list {

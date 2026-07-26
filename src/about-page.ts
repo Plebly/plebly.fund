@@ -85,7 +85,7 @@ export function renderAbout(shell: AboutShell): void {
     .join("");
 
   app.innerHTML = shell(`
-    <section class="wrap-wide detail about-page">
+    <section class="wrap detail about-page">
       <header class="about-hero">
         <h1>Plebly</h1>
         <div class="about-lede prose-rich">${ABOUT_INTRO_HTML}</div>
