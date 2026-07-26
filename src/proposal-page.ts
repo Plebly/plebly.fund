@@ -391,7 +391,7 @@ export async function renderProposalPage(
             ${onChainPanelHtml(match)}
           </aside>
         </div>
-        ${match.escrow_address ? donateModalHtml(match) : ""}
+        ${match.escrow_address ? donateModalHtml(match, { signedIn: Boolean(user) }) : ""}
       </section>
     `);
 
@@ -404,11 +404,17 @@ export async function renderProposalPage(
       watching,
       evaluating,
     });
+    let reloadEngagement: (() => Promise<void>) | null = null;
     if (match.escrow_address) {
       await bindDonatePanel(app, {
         address: match.escrow_address,
         proposalId: match.id,
         proposalPath: match.path,
+        signedIn: Boolean(user),
+        onAuthed,
+        onCreditLinked: () => {
+          void reloadEngagement?.();
+        },
       });
       bindDonateModal(app, {
         open: wantsDonate,
@@ -416,7 +422,7 @@ export async function renderProposalPage(
       });
     }
     bindRefundAndBallot(app, match);
-    await bindProposalEngagement(app, Boolean(user), onAuthed);
+    reloadEngagement = await bindProposalEngagement(app, Boolean(user), onAuthed);
     if (match.id) {
       void recordProposalView(match.id).then((count) => {
         const el = app.querySelector("#proposal-view-count");

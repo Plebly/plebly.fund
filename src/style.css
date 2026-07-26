@@ -2558,6 +2558,103 @@ a.project-card-by:hover {
   color: var(--bad-deep);
 }
 
+.donate-credit {
+  margin-top: 1.35rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.donate-credit-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.donate-credit-lede,
+.donate-credit-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.donate-credit-login {
+  margin-top: 0.75rem;
+}
+
+.donate-credit .funder-credit-options {
+  margin-top: 0.85rem;
+}
+
+.donate-credit-status {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+.donate-credit-status.live {
+  color: var(--accent-text);
+}
+
+.donate-credit-status.ok {
+  color: var(--status-good, #2f8f5b);
+}
+
+.donate-credit-status.bad {
+  color: var(--danger, #c44);
+}
+
+.donate-credit-claim {
+  margin-top: 0.85rem;
+}
+
+.donate-credit-seen {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.donate-credit-utxos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.donate-credit-utxos li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.donate-credit-utxos .btn {
+  margin-left: auto;
+}
+
+.funder-credit-advanced {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.funder-credit-advanced summary {
+  cursor: pointer;
+  color: var(--ink-secondary);
+}
+
+.funder-credit-advanced-lede {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.funder-credit-advanced .funder-credit-outpoint {
+  margin-top: 0.35rem;
+}
+
 .donate-ln-error {
   margin: 0.625rem 0 0;
   font-size: 0.75rem;

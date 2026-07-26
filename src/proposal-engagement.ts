@@ -5,6 +5,13 @@ import {
   loginChoicesHtml,
 } from "./auth";
 import { WORKERS_API } from "./config";
+import {
+  bindCreditPreferenceGates,
+  claimContribution,
+  creditPreferenceFieldsHtml,
+  readCreditPreferences,
+  updateCreditPreferences,
+} from "./funder-credit";
 import { profileHref } from "./router";
 import { escapeHtml, formatSats, linkifyText } from "./util";
 
@@ -37,34 +44,28 @@ const api = () => WORKERS_API.replace(/\/$/, "");
 
 function creditPrefsHtml(): string {
   return `<div class="funder-credit-prefs" id="funder-credit-prefs">
-    <h3 class="funder-credit-prefs-title">Your credit preference</h3>
-    <p class="muted funder-credit-prefs-lede">Link a confirmed donation, then choose how you appear. Amounts stay private unless you opt in.</p>
+    <h3 class="funder-credit-prefs-title">Your funder credit</h3>
+    <p class="muted funder-credit-prefs-lede">Credit is linked from the Donate flow. Change display prefs here anytime.</p>
     <div id="funder-credit-mine" class="funder-credit-mine" aria-live="polite">
       <p class="muted">Loading your contributions…</p>
     </div>
     <form id="funder-credit-form" class="funder-credit-form">
-      <div class="funder-credit-outpoint">
-        <div class="funder-credit-field funder-credit-field-txid">
-          <label class="donate-amount-label" for="credit-txid">Funding txid</label>
-          <input id="credit-txid" class="donate-amount mono" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64-char hex" />
+      ${creditPreferenceFieldsHtml({ idPrefix: "credit" })}
+      <button type="submit" class="btn" id="credit-save">Update display</button>
+      <details class="funder-credit-advanced">
+        <summary>Link an older donation</summary>
+        <p class="muted funder-credit-advanced-lede">If Donate didn’t catch it, enter the on-chain outpoint after it confirms.</p>
+        <div class="funder-credit-outpoint">
+          <div class="funder-credit-field funder-credit-field-txid">
+            <label class="donate-amount-label" for="credit-txid">Funding txid</label>
+            <input id="credit-txid" class="donate-amount mono" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64-char hex" />
+          </div>
+          <div class="funder-credit-field funder-credit-field-vout">
+            <label class="donate-amount-label" for="credit-vout">Vout</label>
+            <input id="credit-vout" class="donate-amount mono" type="number" min="0" value="0" />
+          </div>
         </div>
-        <div class="funder-credit-field funder-credit-field-vout">
-          <label class="donate-amount-label" for="credit-vout">Vout</label>
-          <input id="credit-vout" class="donate-amount mono" type="number" min="0" value="0" />
-        </div>
-      </div>
-      <fieldset class="funder-credit-options">
-        <legend class="donate-amount-label">Display</legend>
-        <label class="funder-credit-check">
-          <input type="checkbox" id="credit-public" checked />
-          <span>Show my identity on the funder list</span>
-        </label>
-        <label class="funder-credit-check funder-credit-check-nested">
-          <input type="checkbox" id="credit-amount" />
-          <span>Also show my amount</span>
-        </label>
-      </fieldset>
-      <button type="submit" class="btn" id="credit-save">Save credit preference</button>
+      </details>
       <p class="builder-msg" id="credit-msg" hidden></p>
     </form>
   </div>`;
@@ -169,7 +170,7 @@ function renderComments(el: HTMLElement, comments: ProposalComment[]): void {
 /** Pure HTML for the signed-in donor's linked rows (exported for tests). */
 export function mineContributionsHtml(mine: MineContribution[]): string {
   if (!mine.length) {
-    return `<p class="muted">No linked donations yet. Enter the on-chain outpoint below after your payment confirms and is indexed.</p>`;
+    return `<p class="muted">No linked donations yet. Open Donate to pay and claim credit there.</p>`;
   }
   return `<ul class="proposal-engagement-list funder-credit-mine-list">${mine
     .map((entry) => {
@@ -193,20 +194,23 @@ export async function bindProposalEngagement(
   root: ParentNode,
   signedIn = false,
   onAuthed: () => void = () => undefined,
-): Promise<void> {
-  if (!WORKERS_API) return;
+): Promise<() => Promise<void>> {
+  const noop = async () => undefined;
+  if (!WORKERS_API) return noop;
   const funder = root.querySelector<HTMLElement>("#funder-credit");
   const comments = root.querySelector<HTMLElement>("#proposal-comments");
   const proposalId = funder?.dataset.proposalId || comments?.dataset.proposalId;
-  if (!proposalId) return;
+  if (!proposalId) return noop;
 
   // Bind here too: engagement HTML is often injected after the global auth pass.
   bindLoginHandlers(onAuthed);
+  bindCreditPreferenceGates(root, "credit");
 
   const funderList = root.querySelector<HTMLElement>("#funder-credit-list");
   const funderTitle = root.querySelector<HTMLElement>("#funder-credit-title");
   const commentList = root.querySelector<HTMLElement>("#proposal-comment-list");
   const mineEl = root.querySelector<HTMLElement>("#funder-credit-mine");
+  const prefsEl = root.querySelector<HTMLElement>("#funder-credit-prefs");
 
   const loadFunders = async () => {
     const res = await fetch(`${api()}/contributions/${encodeURIComponent(proposalId)}`);
@@ -242,16 +246,13 @@ export async function bindProposalEngagement(
     const data = (await res.json()) as { contributions?: MineContribution[] };
     const mine = data.contributions || [];
     renderMine(mineEl, mine);
+    if (prefsEl) prefsEl.hidden = false;
     const first = mine[0];
     const publicBox = root.querySelector<HTMLInputElement>("#credit-public");
     const amountBox = root.querySelector<HTMLInputElement>("#credit-amount");
-    const txidInput = root.querySelector<HTMLInputElement>("#credit-txid");
-    const voutInput = root.querySelector<HTMLInputElement>("#credit-vout");
     if (first) {
       if (publicBox) publicBox.checked = first.public_credit && !first.anonymous;
       if (amountBox) amountBox.checked = first.show_amount;
-      if (txidInput && first.txid) txidInput.value = first.txid;
-      if (voutInput && first.vout != null) voutInput.value = String(first.vout);
     }
     return mine;
   };
@@ -271,16 +272,22 @@ export async function bindProposalEngagement(
     }
   };
 
+  const reload = async () => {
+    await Promise.all([
+      loadFunders().catch(() => {
+        if (funder) funder.hidden = !signedIn;
+        if (funderList && signedIn) {
+          funderList.innerHTML = `<p class="muted">Could not load funder credit.</p>`;
+        }
+      }),
+      loadMine().catch(() => {
+        if (mineEl) mineEl.innerHTML = `<p class="muted">Could not load your contributions.</p>`;
+      }),
+    ]);
+  };
+
   await Promise.all([
-    loadFunders().catch(() => {
-      if (funder) funder.hidden = !signedIn;
-      if (funderList && signedIn) {
-        funderList.innerHTML = `<p class="muted">Could not load funder credit.</p>`;
-      }
-    }),
-    loadMine().catch(() => {
-      if (mineEl) mineEl.innerHTML = `<p class="muted">Could not load your contributions.</p>`;
-    }),
+    reload(),
     loadComments().catch(() => {
       if (commentList) {
         commentList.innerHTML = `<p class="muted">Could not load comments. The API may still be deploying.</p>`;
@@ -295,54 +302,37 @@ export async function bindProposalEngagement(
     const txid = root.querySelector<HTMLInputElement>("#credit-txid")?.value.trim() || "";
     const voutRaw = root.querySelector<HTMLInputElement>("#credit-vout")?.value || "0";
     const vout = Number(voutRaw);
-    const publicCredit =
-      root.querySelector<HTMLInputElement>("#credit-public")?.checked !== false;
-    const showAmount =
-      root.querySelector<HTMLInputElement>("#credit-amount")?.checked === true;
+    const prefs = {
+      proposal_id: proposalId,
+      ...readCreditPreferences(root, "credit"),
+    };
     const saveBtn = root.querySelector<HTMLButtonElement>("#credit-save");
     if (saveBtn) saveBtn.disabled = true;
     try {
       const mine = await loadMine().catch(() => [] as MineContribution[]);
-      const prefs = {
-        proposal_id: proposalId,
-        public_credit: publicCredit,
-        anonymous: !publicCredit,
-        show_amount: showAmount && publicCredit,
-      };
-      let res: Response;
       if (txid) {
-        res = await authFetch(`${api()}/contributions/claim`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...prefs,
-            txid,
-            vout: Number.isFinite(vout) ? vout : 0,
-          }),
+        await claimContribution({
+          ...prefs,
+          txid,
+          vout: Number.isFinite(vout) ? vout : 0,
         });
       } else if (mine.length) {
         const first = mine[0]!;
-        res = await authFetch(`${api()}/contributions/credit`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...prefs,
-            ...(first.txid != null && first.vout != null
-              ? { txid: first.txid, vout: first.vout }
-              : {}),
-            ...(first.swap_id ? { swap_id: first.swap_id } : {}),
-          }),
+        await updateCreditPreferences({
+          ...prefs,
+          ...(first.txid != null && first.vout != null
+            ? { txid: first.txid, vout: first.vout }
+            : {}),
+          ...(first.swap_id ? { swap_id: first.swap_id } : {}),
         });
       } else {
-        throw new Error("Enter the funding txid (and vout) for your donation.");
+        throw new Error("Open Donate to claim credit, or expand Link an older donation.");
       }
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Could not save credit preference.");
       if (msg) {
         msg.hidden = false;
         msg.textContent = "Credit preference saved.";
       }
-      await Promise.all([loadMine(), loadFunders()]);
+      await reload();
     } catch (error) {
       if (msg) {
         msg.hidden = false;
@@ -383,4 +373,6 @@ export async function bindProposalEngagement(
       submit.disabled = false;
     }
   });
+
+  return reload;
 }

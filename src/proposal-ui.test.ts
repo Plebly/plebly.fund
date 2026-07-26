@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   canEditProposal,
   deliverableChipHtml,
+  donatePanelHtml,
   metaChipsHtml,
   milestonesHtml,
   proposalContextHtml,
@@ -15,6 +16,24 @@ import {
   userMatchesProposer,
 } from "./proposal-ui";
 import type { Proposal, ProposalMilestone } from "./types";
+
+const locationState = {
+  origin: "https://plebly.fund",
+  pathname: "/p/PLEBLY-1",
+  search: "",
+  hash: "",
+};
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, "window", {
+    value: { location: locationState },
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, "location", {
+    get: () => locationState,
+    configurable: true,
+  });
+});
 
 describe("proposal UI critical render helpers", () => {
   it("proposerBylineHtml links site username to profile", () => {
@@ -111,6 +130,23 @@ describe("proposal UI critical render helpers", () => {
     } as Proposal);
     expect(html).toContain("Delivery window");
     expect(html).toContain("Window ended");
+  });
+
+  it("donate panel includes funder credit step", () => {
+    const signedOut = donatePanelHtml({
+      escrow_address: "tb1qtest",
+    } as Proposal);
+    expect(signedOut).toContain("donate-credit");
+    expect(signedOut).toContain("Sign in");
+    expect(signedOut).not.toContain("donate-credit-public");
+
+    const signedIn = donatePanelHtml(
+      { escrow_address: "tb1qtest" } as Proposal,
+      { signedIn: true },
+    );
+    expect(signedIn).toContain("donate-credit-public");
+    expect(signedIn).toContain("donate-credit-amount");
+    expect(signedIn).toContain("you confirm it was yours");
   });
 
   it("meta chips show type and tags", () => {

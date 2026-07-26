@@ -37,10 +37,12 @@ describe("funderCreditHtml", () => {
     expect(html).not.toContain("funder-credit-form");
   });
 
-  it("renders preference form structure when signed in", () => {
+  it("renders manage prefs with advanced outpoint link when signed in", () => {
     const html = funderCreditHtml("PLEBLY-1", true);
     expect(html).toContain('data-proposal-id="PLEBLY-1"');
     expect(html).toContain("funder-credit-prefs");
+    expect(html).toContain("Donate flow");
+    expect(html).toContain("funder-credit-advanced");
     expect(html).toContain("funder-credit-outpoint");
     expect(html).toContain('id="credit-txid"');
     expect(html).toContain('id="credit-vout"');
@@ -100,8 +102,10 @@ describe("fundersListHtml", () => {
 });
 
 describe("mineContributionsHtml", () => {
-  it("shows empty guidance", () => {
-    expect(mineContributionsHtml([])).toContain("No linked donations yet");
+  it("shows empty guidance pointing at Donate", () => {
+    const html = mineContributionsHtml([]);
+    expect(html).toContain("No linked donations yet");
+    expect(html).toContain("Donate");
   });
 
   it("summarizes linked outpoints and prefs", () => {

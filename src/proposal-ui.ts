@@ -1,5 +1,18 @@
 import QRCode from "qrcode";
 import {
+  bindLoginHandlers,
+  currentReturnPath,
+  loginChoicesHtml,
+} from "./auth";
+import {
+  bindCreditPreferenceGates,
+  claimContributionWithRetry,
+  creditPreferenceFieldsHtml,
+  readCreditPreferences,
+  recordContribution,
+  watchNewUtxos,
+} from "./funder-credit";
+import {
   btnWithBrandIcon,
   btnWithIcon,
   btnWithNostrIcon,
@@ -41,7 +54,31 @@ export type DonateBindOpts = {
   address: string;
   proposalId: string | null;
   proposalPath: string;
+  signedIn?: boolean;
+  onAuthed?: () => void;
+  onCreditLinked?: () => void;
+  /** Override UTXO poll interval (tests use a short value). */
+  utxoPollMs?: number;
 };
+
+function donateCreditHtml(signedIn: boolean): string {
+  return `<div class="donate-credit" id="donate-credit">
+    <h3 class="donate-credit-title">Funder credit</h3>
+    <p class="donate-credit-lede muted">Optional. After your payment is seen, link it so you can appear on the funder list.</p>
+    ${
+      signedIn
+        ? `${creditPreferenceFieldsHtml({ idPrefix: "donate-credit" })}
+           <p class="donate-credit-hint muted">On-chain: we watch for a new payment to this address, then you confirm it was yours. Lightning: we link automatically when the swap settles.</p>`
+        : `<div class="donate-credit-login">
+             <p class="muted">Sign in before or after paying to claim credit. Donations still work without an account.</p>
+             ${loginChoicesHtml(undefined, currentReturnPath())}
+             <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
+           </div>`
+    }
+    <div id="donate-credit-status" class="donate-credit-status" aria-live="polite" hidden></div>
+    <div id="donate-credit-claim" class="donate-credit-claim" hidden></div>
+  </div>`;
+}
 
 export function formatProposalDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -322,21 +359,28 @@ export function bindShareButtons(root: ParentNode): void {
 }
 
 /** Full donate flow inside a modal shell. */
-export function donateModalHtml(p: Proposal): string {
+export function donateModalHtml(
+  p: Proposal,
+  opts?: { signedIn?: boolean },
+): string {
   if (!p.escrow_address) return "";
   return `<div class="site-modal donate-modal" id="donate-modal" hidden>
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
     <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
       <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
-      ${donatePanelHtml(p)}
+      ${donatePanelHtml(p, opts)}
     </div>
   </div>`;
 }
 
 /** Prominent funder panel: Bitcoin on-chain and Lightning as equal rails. */
-export function donatePanelHtml(p: Proposal): string {
+export function donatePanelHtml(
+  p: Proposal,
+  opts?: { signedIn?: boolean },
+): string {
   if (!p.escrow_address) return "";
   const addr = p.escrow_address;
+  const signedIn = Boolean(opts?.signedIn);
   const networkNote =
     BITCOIN_NETWORK === "signet"
       ? `<p class="donate-network-note">This project is on <strong>signet</strong>. Use a signet wallet for on-chain donations.</p>`
@@ -412,6 +456,7 @@ export function donatePanelHtml(p: Proposal): string {
         <p class="donate-ln-wait muted" id="donate-ln-wait">Checking availability…</p>
       </div>
     </div>
+    ${donateCreditHtml(signedIn)}
   </div>`;
 }
 
@@ -538,6 +583,131 @@ function setLightningReady(panel: Element): void {
     ?.classList.remove("donate-rail-limited");
 }
 
+function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
+  const el = panel.querySelector<HTMLElement>("#donate-credit-status");
+  if (!el) return;
+  if (!message) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("ok", "bad", "live");
+    return;
+  }
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle("ok", kind === "ok");
+  el.classList.toggle("bad", kind === "bad");
+  el.classList.toggle("live", kind === "live");
+}
+
+function bindDonateCredit(panel: Element, opts: DonateBindOpts): () => void {
+  bindCreditPreferenceGates(panel, "donate-credit");
+  if (opts.onAuthed) bindLoginHandlers(opts.onAuthed);
+
+  const claimWrap = panel.querySelector<HTMLElement>("#donate-credit-claim");
+  if (!opts.proposalId || !opts.signedIn) {
+    return () => undefined;
+  }
+
+  const proposalId = opts.proposalId;
+  let linking = false;
+
+  const linkOutpoint = async (utxo: {
+    txid: string;
+    vout: number;
+    value: number;
+  }) => {
+    if (linking) return;
+    linking = true;
+    setDonateCreditStatus(panel, "Linking funder credit…", "live");
+    try {
+      await recordContribution({
+        proposal_id: proposalId,
+        txid: utxo.txid,
+        vout: utxo.vout,
+        address: opts.address,
+      });
+      await claimContributionWithRetry({
+        proposal_id: proposalId,
+        txid: utxo.txid,
+        vout: utxo.vout,
+        ...readCreditPreferences(panel, "donate-credit"),
+      });
+      setDonateCreditStatus(
+        panel,
+        `Credit linked for ${formatSats(utxo.value)}.`,
+        "ok",
+      );
+      if (claimWrap) claimWrap.hidden = true;
+      opts.onCreditLinked?.();
+    } catch (e) {
+      setDonateCreditStatus(panel, (e as Error).message, "bad");
+    } finally {
+      linking = false;
+    }
+  };
+
+  const showClaimable = (utxos: { txid: string; vout: number; value: number }[]) => {
+    if (!claimWrap || !utxos.length) return;
+    claimWrap.hidden = false;
+    claimWrap.innerHTML = `<p class="donate-credit-seen">New payment detected.</p>
+      <ul class="donate-credit-utxos">${utxos
+        .map(
+          (u) => `<li>
+            <span class="mono">${escapeHtml(u.txid.slice(0, 12))}…:${u.vout}</span>
+            <span>${escapeHtml(formatSats(u.value))}</span>
+            <button type="button" class="btn" data-claim-txid="${escapeHtml(u.txid)}" data-claim-vout="${u.vout}" data-claim-value="${u.value}">This was me</button>
+          </li>`,
+        )
+        .join("")}</ul>`;
+    claimWrap.querySelectorAll<HTMLButtonElement>("[data-claim-txid]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const txid = btn.dataset.claimTxid || "";
+        const vout = Number(btn.dataset.claimVout);
+        const value = Number(btn.dataset.claimValue);
+        if (!txid || !Number.isFinite(vout)) return;
+        void linkOutpoint({ txid, vout, value: Number.isFinite(value) ? value : 0 });
+      });
+    });
+  };
+
+  const watcher = watchNewUtxos(opts.address, showClaimable, {
+    intervalMs: opts.utxoPollMs ?? 8000,
+  });
+  void watcher.ready.then(() => {
+    setDonateCreditStatus(
+      panel,
+      "Watching for a new on-chain payment to this address…",
+      "live",
+    );
+  });
+
+  return watcher.stop;
+}
+
+async function linkLightningCredit(
+  panel: Element,
+  opts: DonateBindOpts,
+  swapId: string,
+): Promise<void> {
+  if (!opts.signedIn || !opts.proposalId) return;
+  setDonateCreditStatus(panel, "Linking Lightning funder credit…", "live");
+  try {
+    await claimContributionWithRetry({
+      proposal_id: opts.proposalId,
+      swap_id: swapId,
+      ...readCreditPreferences(panel, "donate-credit"),
+    });
+    setDonateCreditStatus(panel, "Lightning credit linked.", "ok");
+    opts.onCreditLinked?.();
+  } catch (e) {
+    setDonateCreditStatus(
+      panel,
+      `${(e as Error).message} You can retry from Funders after the swap indexes.`,
+      "bad",
+    );
+  }
+}
+
 function bindLightningDonate(
   panel: Element,
   opts: DonateBindOpts,
@@ -555,6 +725,7 @@ function bindLightningDonate(
   const weblnBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-webln");
   const statusEl = panel.querySelector<HTMLElement>("#donate-ln-status");
   const errorEl = panel.querySelector<HTMLElement>("#donate-ln-error");
+  let settledLinked = false;
 
   const min = status.limits?.minimal ?? 25_000;
   if (amountInput) {
@@ -670,12 +841,19 @@ function bindLightningDonate(
 
   const startPoll = (swapId: string) => {
     stopPoll();
+    settledLinked = false;
     pollTimer = setInterval(() => {
       void (async () => {
         try {
           const swap = await fetchLightningSwap(swapId);
           await renderSwap(swap);
-          if (["settled", "failed", "expired"].includes(swap.status)) {
+          if (swap.status === "settled" && !settledLinked) {
+            settledLinked = true;
+            stopPoll();
+            void linkLightningCredit(panel, opts, swapId);
+            return;
+          }
+          if (["failed", "expired"].includes(swap.status)) {
             stopPoll();
           }
         } catch {
@@ -759,6 +937,7 @@ export async function bindDonatePanel(
 
   bindDonateRails(panel);
   await bindOnchainDonate(panel, normalized.address);
+  bindDonateCredit(panel, normalized);
 
   if (!normalized.proposalPath) {
     setLightningUnavailable(
