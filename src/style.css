@@ -1455,7 +1455,6 @@ a.project-card-by:hover {
 
 /* —— About page —— */
 .about-page {
-  width: 100%;
   padding-bottom: 3rem;
 }
 
@@ -1473,10 +1472,6 @@ a.project-card-by:hover {
   font-weight: 600;
   letter-spacing: -0.04em;
   line-height: 1;
-}
-
-.about-lede {
-  max-width: none;
 }
 
 .about-lede p {
@@ -1555,7 +1550,6 @@ a.project-card-by:hover {
 }
 
 .about-prose {
-  max-width: none;
 }
 
 .about-prose p {
@@ -2293,7 +2287,6 @@ a.project-card-by:hover {
   color: var(--ink-secondary);
   font-size: 0.9375rem;
   margin: 0 0 1.5rem;
-  max-width: none;
   line-height: 1.6;
 }
 
@@ -3581,8 +3574,7 @@ a.project-card-by:hover {
 
 /* —— Forms —— */
 .form-panel {
-  width: 100%;
-  max-width: none;
+  max-width: 28rem;
   margin: 1.5rem 0;
   display: grid;
   gap: 1.5rem;
@@ -3597,15 +3589,7 @@ a.project-card-by:hover {
 }
 
 .form-panel-wide {
-  width: 100%;
   max-width: none;
-}
-
-.propose-page,
-.about-page,
-.stats-page,
-.gov-page {
-  width: 100%;
 }
 
 .milestone-editor-list {
@@ -3952,7 +3936,6 @@ a.project-card-by:hover {
 }
 
 .propose-guide {
-  max-width: none;
   margin: 0 0 1.75rem;
   padding: 1rem 1.125rem;
   background: var(--bg-elevated);
