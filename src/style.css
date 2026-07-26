@@ -996,6 +996,11 @@ body.modal-open {
   border-bottom: 1px solid var(--line-soft);
 }
 
+/* display:flex above overrides the UA [hidden] { display: none } */
+.activity-strip[hidden] {
+  display: none;
+}
+
 .activity-strip-label {
   flex: 0 0 auto;
   font-size: 0.6875rem;
