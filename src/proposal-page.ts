@@ -1,4 +1,4 @@
-import { fetchEvaluating, fetchWatches } from "./builder";
+import { fetchWatches } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import { authFetch, profilePath, type AuthUser } from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
@@ -298,16 +298,6 @@ export async function renderProposalPage(
         w.proposal_id === match.id ||
         w.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
     );
-    const evaluatingEntries = user
-      ? await fetchEvaluating().catch(() => [])
-      : [];
-    const evaluating = evaluatingEntries.some(
-      (entry) =>
-        entry.proposal_path === match.path ||
-        entry.proposal_id === match.id ||
-        entry.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
-    );
-
     const coverHtml = coverUrl
       ? `<div class="proposal-cover"><img src="${escapeHtml(coverUrl)}" alt="" decoding="async" /></div>`
       : "";
@@ -385,7 +375,7 @@ export async function renderProposalPage(
 
           <aside class="proposal-sidebar">
             <div class="proposal-actions">
-              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching, evaluating)}
+              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
               ${match.escrow_address ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
               ${shareSlotHtml(match.title, match.path, match.id)}
             </div>
@@ -420,7 +410,6 @@ export async function renderProposalPage(
       balance,
       user,
       watching,
-      evaluating,
     });
     let reloadEngagement: (() => Promise<void>) | null = null;
     if (match.escrow_address) {

@@ -26,7 +26,6 @@ describe("builderPanelHtml proposal types", () => {
       proposal({ proposal_type: "direct" }),
       200_000,
       false,
-      false,
     );
     expect(html).toContain("Direct funding");
     expect(html).toContain("direct-deliverable-slot");
@@ -36,14 +35,15 @@ describe("builderPanelHtml proposal types", () => {
   });
 
   it("keeps claim modal for bounty proposals", () => {
-    const html = builderPanelHtml(proposal({ proposal_type: "bounty" }), 200_000, false, false);
+    const html = builderPanelHtml(proposal({ proposal_type: "bounty" }), 200_000, false);
     expect(html).toContain("builder-claim-modal");
     expect(html).toContain("Claim this project");
     expect(html).not.toContain("direct-deliverable-slot");
+    expect(html).not.toContain("builder-evaluating");
   });
 
   it("uses progress copy instead of a disabled claim below floor", () => {
-    const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false, false);
+    const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false);
     expect(html).toContain("Needs");
     expect(html).not.toContain('id="builder-claim" disabled');
   });

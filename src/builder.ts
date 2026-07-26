@@ -13,12 +13,6 @@ export type WatchEntry = {
   watched_at: string;
 };
 
-export type EvaluatingEntry = {
-  proposal_id: string;
-  proposal_path: string;
-  evaluating_at: string;
-};
-
 export type ClaimStatus = {
   proposal_id: string;
   proposal_path: string;
@@ -158,48 +152,6 @@ export async function removeWatch(proposalPath: string): Promise<void> {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || `Unwatch failed (${res.status})`);
   }
-}
-
-export async function fetchEvaluating(): Promise<EvaluatingEntry[]> {
-  if (!WORKERS_API) return [];
-  const res = await fetch(`${API()}/evaluating`, {
-    headers: authHeaders(),
-    credentials: "include",
-  });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { evaluating?: EvaluatingEntry[] };
-  return data.evaluating || [];
-}
-
-async function setEvaluating(
-  proposalPath: string,
-  method: "POST" | "DELETE",
-): Promise<void> {
-  const id = proposalPath.replace(/\.md$/, "").split("/").pop() || proposalPath;
-  const res = await fetch(`${API()}/evaluating/${encodeURIComponent(id)}`, {
-    method,
-    headers:
-      method === "POST"
-        ? { "content-type": "application/json", ...authHeaders() }
-        : authHeaders(),
-    credentials: "include",
-    ...(method === "POST"
-      ? { body: JSON.stringify({ proposal_path: proposalPath }) }
-      : {}),
-  });
-  if (res.status === 401) throw new Error("login_required");
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || `Evaluating update failed (${res.status})`);
-  }
-}
-
-export function addEvaluating(proposalPath: string): Promise<void> {
-  return setEvaluating(proposalPath, "POST");
-}
-
-export function removeEvaluating(proposalPath: string): Promise<void> {
-  return setEvaluating(proposalPath, "DELETE");
 }
 
 export async function fetchClaimStatus(

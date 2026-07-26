@@ -1,12 +1,10 @@
 import {
   addWatch,
-  addEvaluating,
   claimWindowDaysLeft,
   fetchClaimParams,
   fetchClaimStatus,
   isOpenToClaim,
   removeWatch,
-  removeEvaluating,
   requestClaimExtension,
   submitAbandonedChallenge,
   submitCheckpoint,
@@ -44,10 +42,6 @@ function watchBtnHtml(watching: boolean): string {
     : btnWithIcon("eye", "Watch");
 }
 
-function evaluatingBtnHtml(evaluating: boolean): string {
-  return evaluating ? "Stop considering" : "Considering claiming";
-}
-
 function claimBtnHtml(disabled = false): string {
   return `<button type="button" class="btn" id="builder-claim"${disabled ? " disabled" : ""}>${btnWithIcon("handshake", "Claim this project")}</button>`;
 }
@@ -56,7 +50,6 @@ export function builderPanelHtml(
   p: Proposal,
   balance: number | undefined,
   watching: boolean,
-  evaluating: boolean,
 ): string {
   const floor = CLAIM_FLOOR_SATS;
   const bal = balance ?? p.balance_sats ?? 0;
@@ -91,7 +84,6 @@ export function builderPanelHtml(
     </div>
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
-      <button type="button" class="btn ghost" id="builder-evaluating" data-evaluating="${evaluating ? "1" : "0"}">${evaluatingBtnHtml(evaluating)}</button>
     </div>
     <div id="builder-body" class="builder-body">
       ${
@@ -147,11 +139,6 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
 function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
   btn.dataset.watching = watching ? "1" : "0";
   btn.innerHTML = watchBtnHtml(watching);
-}
-
-function setEvaluatingBtn(btn: HTMLButtonElement, evaluating: boolean): void {
-  btn.dataset.evaluating = evaluating ? "1" : "0";
-  btn.textContent = evaluatingBtnHtml(evaluating);
 }
 
 function metaBits(status: ClaimStatus): string {
@@ -270,7 +257,6 @@ export async function bindBuilderPanel(
     balance?: number;
     user: AuthUser | null;
     watching: boolean;
-    evaluating: boolean;
   },
 ): Promise<void> {
   const panel = root.querySelector("#builder");
@@ -278,7 +264,6 @@ export async function bindBuilderPanel(
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
-  const evaluatingBtn = panel.querySelector<HTMLButtonElement>("#builder-evaluating");
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
@@ -313,28 +298,6 @@ export async function bindBuilderPanel(
     } catch (e) {
       if ((e as Error).message === "login_required") {
         requireLogin("Sign in to watch this project.");
-      } else setMsg(msg, (e as Error).message, "error");
-    }
-  });
-
-  evaluatingBtn?.addEventListener("click", async () => {
-    if (!opts.user) {
-      requireLogin("Sign in to mark a project you are considering claiming.");
-      return;
-    }
-    try {
-      const evaluating = evaluatingBtn.dataset.evaluating === "1";
-      if (evaluating) {
-        await removeEvaluating(opts.proposal.path);
-        setEvaluatingBtn(evaluatingBtn, false);
-      } else {
-        await addEvaluating(opts.proposal.path);
-        setEvaluatingBtn(evaluatingBtn, true);
-      }
-      setMsg(msg, null);
-    } catch (e) {
-      if ((e as Error).message === "login_required") {
-        requireLogin("Sign in to mark a project you are considering claiming.");
       } else setMsg(msg, (e as Error).message, "error");
     }
   });
