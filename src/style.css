@@ -201,6 +201,7 @@ a:hover {
   position: relative;
   padding: 3.25rem 0 3.5rem;
   overflow: hidden;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .landing-hero-bg {
@@ -368,7 +369,6 @@ a:hover {
   align-items: center;
   gap: 1.25rem;
   padding: 1rem 0;
-  border-bottom: 1px solid var(--line-soft);
   color: var(--ink-secondary);
 }
 
