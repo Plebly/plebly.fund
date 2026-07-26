@@ -5882,6 +5882,50 @@ a.proposal-comment-author:hover {
   margin: 0;
 }
 
+.share-menu-card {
+  width: min(22rem, 100%);
+  max-width: 22rem;
+  padding: 1.35rem 1.35rem 1.2rem;
+}
+
+.share-menu-card h2 {
+  margin: 0 0 0.55rem;
+  padding-right: 2.25rem;
+  font-size: 1.15rem;
+}
+
+.share-menu-url {
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  word-break: break-all;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.share-menu-actions {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.share-menu-copy {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.share-menu-social {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.share-menu-social .btn {
+  justify-content: center;
+  min-height: 2.35rem;
+}
+
 .listing-report-card h2 {
   margin: 0 0 0.45rem;
   padding-right: 2.25rem;
