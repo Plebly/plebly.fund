@@ -3739,18 +3739,18 @@ a.project-card-by:hover {
 .milestone-editor-list {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
   margin: 0.75rem 0 0.5rem;
 }
 
 .milestone-editor-row {
-  padding: 0.85rem 0 0;
-  border-top: 1px solid var(--line-soft);
-}
-
-.milestone-editor-row:first-child {
-  padding-top: 0;
-  border-top: 0;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.05rem 1.1rem;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .milestone-editor-row-head {
@@ -3758,7 +3758,9 @@ a.project-card-by:hover {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.15rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .editor-remove {
@@ -3786,9 +3788,14 @@ a.project-card-by:hover {
 }
 
 .milestone-editor-n {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.milestone-editor-row .field {
+  margin: 0;
 }
 
 .milestone-editor-meta {
