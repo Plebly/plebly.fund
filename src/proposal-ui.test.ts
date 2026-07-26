@@ -251,17 +251,18 @@ describe("proposal UI critical render helpers", () => {
     expect(html).not.toContain("proposal-stats");
   });
 
-  it("shareSlotHtml offers copy plus icon-only X, Reddit, HN, and Nostr", () => {
+  it("shareSlotHtml offers copy, native share, and icon-only X/Reddit/HN", () => {
     const path = "proposals/listed/knots-spam-heuristics.md";
     const html = shareSlotHtml("Knots spam heuristics", path, "PLEBLY-42");
     expect(proposalShareUrl(path, "PLEBLY-42")).toContain("/p/PLEBLY-42");
     expect(html).toContain("proposal-share-slot");
     expect(html).toContain('data-share="copy"');
+    expect(html).toContain('data-share="native"');
+    expect(html).toContain("fa-share-nodes");
     expect(html).toContain("intent/post");
     expect(html).toContain("reddit.com/submit");
     expect(html).toContain("news.ycombinator.com/submitlink");
-    expect(html).toContain('data-share="nostr"');
-    expect(html).toContain("icon-nostr");
+    expect(html).not.toContain('data-share="nostr"');
     expect(html).toContain("fa-x-twitter");
     expect(html).toContain("fa-reddit");
     expect(html).toContain("fa-hacker-news");

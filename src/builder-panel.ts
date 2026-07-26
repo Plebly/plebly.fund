@@ -45,7 +45,7 @@ function watchBtnHtml(watching: boolean): string {
 }
 
 function evaluatingBtnHtml(evaluating: boolean): string {
-  return evaluating ? "Stop evaluating" : "Mark evaluating";
+  return evaluating ? "Stop considering" : "Considering claiming";
 }
 
 function claimBtnHtml(disabled = false): string {
@@ -201,7 +201,6 @@ function renderStatusBody(
   const extensionTools = isYou
     ? `<div class="builder-extension">
         <button type="button" class="btn ghost" id="builder-request-extension">Request 30-day extension</button>
-        <p class="hint">Opens a reviewer ballot. Window updates after approve + tally.</p>
       </div>`
     : "";
 
@@ -320,7 +319,7 @@ export async function bindBuilderPanel(
 
   evaluatingBtn?.addEventListener("click", async () => {
     if (!opts.user) {
-      requireLogin("Sign in to track a project you are evaluating.");
+      requireLogin("Sign in to mark a project you are considering claiming.");
       return;
     }
     try {
@@ -335,7 +334,7 @@ export async function bindBuilderPanel(
       setMsg(msg, null);
     } catch (e) {
       if ((e as Error).message === "login_required") {
-        requireLogin("Sign in to track a project you are evaluating.");
+        requireLogin("Sign in to mark a project you are considering claiming.");
       } else setMsg(msg, (e as Error).message, "error");
     }
   });

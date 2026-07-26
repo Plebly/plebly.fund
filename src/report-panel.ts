@@ -32,7 +32,7 @@ export function listingReportControlHtml(
       <div class="site-modal-card listing-report-card" role="dialog" aria-modal="true" aria-labelledby="listing-report-title">
         <button type="button" class="site-modal-close" id="listing-report-close" aria-label="Close">${solidIcon("xmark")}</button>
         <h2 id="listing-report-title">Report listing</h2>
-        <p class="muted" id="listing-report-lede">Tell reviewers why this listing may be inappropriate. Reports are public to the reviewer roster.</p>
+        <p class="muted" id="listing-report-lede" hidden></p>
         <div id="listing-report-body"></div>
         <p class="builder-msg" id="listing-report-msg" hidden></p>
       </div>
@@ -42,16 +42,16 @@ export function listingReportControlHtml(
 
 function formHtml(funderEligible: boolean): string {
   return `<form id="listing-report-form" class="gov-form">
-    <label class="field"><span>Reason (min 8 characters)</span>
-      <textarea id="listing-report-reason" rows="4" required minlength="8" maxlength="500" placeholder="Spam, scam, off-topic, misleading deliverable…"></textarea>
+    <label class="field"><span>Reason</span>
+      <textarea id="listing-report-reason" rows="4" required minlength="8" maxlength="500" placeholder="Why this listing should be reviewed…"></textarea>
     </label>
     ${
       funderEligible
         ? `<label class="check-row">
             <input type="checkbox" id="listing-report-escalate" />
-            <span>Also open a reviewer <strong>listing challenge</strong> ballot (eligible funder · rationale should be detailed)</span>
+            <span>Also open a listing challenge ballot</span>
           </label>`
-        : `<p class="muted listing-report-hint">Anyone signed in can report. Eligible funders can also open a formal listing-challenge ballot from this form.</p>`
+        : ""
     }
     <div class="form-actions">
       <button type="submit" class="btn">Submit report</button>
@@ -125,8 +125,7 @@ export async function bindListingReportControl(
   }
 
   if (openChallenge) {
-    body.innerHTML = `<p class="muted">A listing challenge ballot is already open. Reviewers vote on the <a href="${href("/reviewers")}?tab=decisions">governance page</a>.</p>
-      <p class="muted">You can still file a moderation report if you want it on the reviewer inbox.</p>
+    body.innerHTML = `<p class="muted">A listing challenge is already open · <a href="${href("/reviewers")}?tab=decisions">Vote</a></p>
       ${formHtml(false)}`;
   } else {
     body.innerHTML = formHtml(funderEligible);

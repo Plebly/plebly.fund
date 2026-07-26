@@ -48,14 +48,13 @@ export function commentsHtml(proposalId: string | null, signedIn: boolean): stri
     <div id="proposal-comment-list"><p class="muted">Loading comments…</p></div>
     ${
       signedIn
-        ? `<label class="comment-input-label" for="proposal-comment-input">Add a comment</label>
-           <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Keep discussion constructive…"></textarea>
+        ? `<label class="sr-only" for="proposal-comment-input">Comment</label>
+           <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write a comment…"></textarea>
            <div class="comment-compose-actions">
              <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>
-             <p class="muted comment-compose-hint">Rate-limited · report abuse from any comment</p>
            </div>`
         : `<div class="proposal-engagement-empty">
-             <p>Sign in to comment and join the discussion.</p>
+             <p>Sign in to comment.</p>
              ${loginChoicesHtml(undefined, currentReturnPath())}
              <p class="builder-msg" id="comment-login-msg" hidden></p>
            </div>`
@@ -149,7 +148,7 @@ export function commentsListHtml(
   opts: { userId?: string | null; canModerate?: boolean } = {},
 ): string {
   if (!comments.length) {
-    return `<div class="proposal-engagement-empty"><p>No comments yet.</p><p class="muted">Start a constructive discussion about the work or its verification.</p></div>`;
+    return `<div class="proposal-engagement-empty"><p>No comments yet.</p></div>`;
   }
   return `<div class="proposal-comment-list">${comments
     .map((comment) => {

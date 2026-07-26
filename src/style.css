@@ -3437,7 +3437,7 @@ a.project-card-by:hover .project-card-by-text {
 
 .proposal-share-social {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
 }
 
@@ -3991,6 +3991,29 @@ a.project-card-by:hover .project-card-by-text {
 
 .form-panel-wide {
   max-width: none;
+}
+
+/* Propose: more air between fields/sections; keep add-row actions compact. */
+.propose-page .form-panel {
+  gap: 2.25rem;
+  margin-top: 1.75rem;
+}
+
+.propose-page .form-block {
+  gap: 1.15rem;
+}
+
+.propose-page .form-block legend {
+  margin: 0 0 0.15rem;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.propose-page .form-block > .btn,
+.propose-page .milestone-editor-foot > .btn {
+  justify-self: start;
+  width: auto;
 }
 
 .milestone-editor-list {
@@ -5283,24 +5306,11 @@ a.proposal-comment-author:hover {
   margin-top: 0.65rem;
 }
 
-.comment-compose-hint {
-  margin: 0;
-  font-size: 0.75rem;
-}
-
-.comment-input-label {
-  display: block;
-  margin-top: 1rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--ink-secondary);
-}
-
 .comment-input {
   box-sizing: border-box;
   display: block;
   width: 100%;
-  margin-top: 0.375rem;
+  margin-top: 1rem;
   padding: 0.7rem 0.8rem;
   resize: vertical;
   color: var(--ink);

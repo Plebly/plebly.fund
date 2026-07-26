@@ -19,12 +19,7 @@ import {
   watchNewUtxos,
   type CreditPreferences,
 } from "./funder-credit";
-import {
-  btnBrandIconOnly,
-  btnNostrIconOnly,
-  btnWithIcon,
-  solidIcon,
-} from "./icons";
+import { btnBrandIconOnly, btnWithIcon, solidIcon } from "./icons";
 import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
 import {
   createLightningInvoice,
@@ -404,7 +399,7 @@ export function proposalShareUrl(repoPath: string, id?: string | null): string {
   return new URL(proposalHref(repoPath, id), SITE_ORIGIN).toString();
 }
 
-/** Share controls under the primary actions (copy + social). */
+/** Share controls under the primary actions (copy + native share + social). */
 export function shareSlotHtml(
   title: string,
   repoPath: string,
@@ -415,16 +410,15 @@ export function shareSlotHtml(
   const xHref = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
   const redditHref = `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`;
   const hnHref = `https://news.ycombinator.com/submitlink?u=${encodeURIComponent(url)}&t=${encodeURIComponent(text)}`;
-  const nostrNote = `${text}\n\n${url}`;
   return `<div class="proposal-share-slot">
     <p class="proposal-share-label">Share</p>
     <div class="proposal-share-actions">
       <button type="button" class="btn ghost proposal-share-btn" data-share="copy" data-share-url="${escapeHtml(url)}">${btnWithIcon("link", "Copy link")}</button>
+      <button type="button" class="btn ghost proposal-share-btn" data-share="native" data-share-url="${escapeHtml(url)}" data-share-title="${escapeHtml(title)}" data-share-text="${escapeHtml(text)}">${btnWithIcon("share-nodes", "Share")}</button>
       <div class="proposal-share-social">
         <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(xHref)}" target="_blank" rel="noreferrer noopener" aria-label="Share on X" title="Share on X">${btnBrandIconOnly("x-twitter")}</a>
         <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(redditHref)}" target="_blank" rel="noreferrer noopener" aria-label="Share on Reddit" title="Share on Reddit">${btnBrandIconOnly("reddit")}</a>
         <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(hnHref)}" target="_blank" rel="noreferrer noopener" aria-label="Share on Hacker News" title="Share on Hacker News">${btnBrandIconOnly("hacker-news")}</a>
-        <button type="button" class="btn ghost proposal-share-btn proposal-share-icon" data-share="nostr" data-share-note="${escapeHtml(nostrNote)}" aria-label="Copy Nostr note" title="Copy Nostr note">${btnNostrIconOnly()}</button>
       </div>
     </div>
   </div>`;
@@ -442,46 +436,51 @@ export function bindShareButtons(root: ParentNode): void {
         if (!url) return;
         try {
           await navigator.clipboard.writeText(url);
-          const label = el.querySelector("[data-login-label], .btn-icon > span:last-child");
-          const target = label ?? el;
-          const prev = target.textContent;
-          target.textContent = "Copied";
-          setTimeout(() => {
-            if (prev) target.textContent = prev;
-          }, 1200);
+          flashShareLabel(el, "Copied");
         } catch {
           window.alert("Could not copy link");
         }
         return;
       }
-      if (kind === "nostr") {
+      if (kind === "native") {
         ev.preventDefault();
-        const note = el.dataset.shareNote;
-        if (!note) return;
+        const url = el.dataset.shareUrl;
+        if (!url) return;
+        const shareTitle = el.dataset.shareTitle || "Plebly";
+        const shareText = el.dataset.shareText || shareTitle;
         try {
-          await navigator.clipboard.writeText(note);
-          const label = el.querySelector("[data-login-label]:not(.btn-icon-only)");
-          if (label) {
-            const prev = label.textContent;
-            label.textContent = "Copied note";
-            setTimeout(() => {
-              if (prev) label.textContent = prev;
-            }, 1400);
-          } else {
-            const prevTitle = el.getAttribute("title") || "Copy Nostr note";
-            el.setAttribute("title", "Copied note");
-            el.setAttribute("aria-label", "Copied note");
-            setTimeout(() => {
-              el.setAttribute("title", prevTitle);
-              el.setAttribute("aria-label", prevTitle);
-            }, 1400);
+          if (typeof navigator.share === "function") {
+            await navigator.share({
+              title: shareTitle,
+              text: shareText,
+              url,
+            });
+            return;
           }
-        } catch {
-          window.alert("Could not copy Nostr note. Paste the project URL into your client.");
+          await navigator.clipboard.writeText(url);
+          flashShareLabel(el, "Link copied");
+        } catch (error) {
+          if ((error as Error).name === "AbortError") return;
+          try {
+            await navigator.clipboard.writeText(url);
+            flashShareLabel(el, "Link copied");
+          } catch {
+            window.alert("Could not share this project");
+          }
         }
       }
     });
   });
+}
+
+function flashShareLabel(el: HTMLElement, text: string): void {
+  const label = el.querySelector(".btn-icon > span:last-child");
+  const target = label ?? el;
+  const prev = target.textContent;
+  target.textContent = text;
+  setTimeout(() => {
+    if (prev) target.textContent = prev;
+  }, 1200);
 }
 
 /** Full donate flow inside a modal shell. */
