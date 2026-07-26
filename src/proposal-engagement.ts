@@ -112,11 +112,19 @@ function commentAuthorLabel(comment: ProposalComment): string {
   return (comment.username || comment.author || "anonymous").trim();
 }
 
+function avatarHandleFromComment(comment: ProposalComment): string | null {
+  const raw = (comment.username || comment.author || "").trim();
+  if (!raw) return null;
+  const handle = raw.replace(/^github:/i, "").replace(/^@/, "").toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(handle)) return null;
+  return handle;
+}
+
 function commentAvatarHtml(comment: ProposalComment): string {
   if (comment.avatar_url) {
     return `<img class="user-avatar proposal-comment-avatar" src="${escapeHtml(comment.avatar_url)}" alt="" width="32" height="32" loading="lazy" decoding="async" />`;
   }
-  const handle = (comment.username || "").trim().toLowerCase();
+  const handle = avatarHandleFromComment(comment);
   if (handle) {
     return `<span class="user-avatar-slot proposal-comment-avatar" data-avatar-user="${escapeHtml(handle)}" hidden></span>`;
   }

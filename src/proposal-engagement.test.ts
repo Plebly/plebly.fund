@@ -84,6 +84,19 @@ describe("commentsListHtml", () => {
     expect(html).toContain("bitcoin.org");
   });
 
+  it("hydrates avatar slots from author when username/avatar_url missing", () => {
+    const html = commentsListHtml([
+      {
+        id: "c-old",
+        author: "secsovereign",
+        body: "legacy comment",
+        created_at: "2026-07-26T16:40:00.000Z",
+      },
+    ]);
+    expect(html).toContain('data-avatar-user="secsovereign"');
+    expect(html).not.toContain("user-avatar-fallback");
+  });
+
   it("lets authors delete their own comments", () => {
     const html = commentsListHtml(
       [
