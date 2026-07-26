@@ -5327,19 +5327,6 @@ a.proposal-comment-author:hover {
   font-size: 0.8125rem;
 }
 
-.writing-help {
-  margin-top: 1rem;
-  padding-top: 0.875rem;
-  border-top: 1px solid var(--line-soft);
-}
-
-.writing-help-title {
-  margin: 0 0 0.2rem;
-  font-size: 0.8125rem;
-  font-weight: 650;
-  color: var(--ink-secondary);
-}
-
 .propose-type {
   display: grid;
   gap: 0.5rem;

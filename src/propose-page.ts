@@ -1,7 +1,5 @@
 import {
   loginChoicesHtml,
-  requestDraftAssist,
-  requestSubmissionCheck,
   submitProposal,
   updateProposal,
 } from "./auth";
@@ -268,15 +266,6 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             <span>Notes <em class="optional">(optional)</em></span>
             <textarea name="notes" maxlength="4000" rows="3" placeholder="Freeform context. Prefer Related work below for structured https links.">${escapeHtml(prefill?.notes || "")}</textarea>
           </label>
-          <div class="writing-help">
-            <p class="writing-help-title">Writing help</p>
-            <p class="field-hint">Suggestions and clarity checks warn only; you decide what to submit.</p>
-            <div class="form-actions ai-assist-actions">
-            <button type="button" class="btn ghost" id="draft-assist-btn">Draft assist</button>
-            <button type="button" class="btn ghost" id="submission-check-btn">Check clarity</button>
-            </div>
-          </div>
-          <div class="form-msg" id="ai-assist-result" hidden></div>
         </fieldset>
 
         <fieldset class="form-block">
@@ -329,35 +318,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const dependsEmpty = document.getElementById("depends-on-empty");
   const relatedList = document.getElementById("related-work-list")!;
   const relatedEmpty = document.getElementById("related-work-empty");
-  const aiResult = document.getElementById("ai-assist-result")!;
 
   const tagsInput = bindTagInput(document, "propose-tags");
-
-  const aiInput = () => {
-    const field = (name: string) =>
-      (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement)
-        ?.value.trim() || "";
-    return {
-      title: field("title"),
-      problem: field("problem"),
-      deliverable: field("deliverable"),
-      verification: field("verification"),
-      tags: tagsInput?.getTags() || parseTagList(field("tags")),
-    };
-  };
-
-  const showAiMessage = (lines: string[], kind: "success" | "error" = "success") => {
-    aiResult.hidden = false;
-    aiResult.className = `form-msg ${kind}`;
-    aiResult.replaceChildren();
-    const list = document.createElement("ul");
-    lines.forEach((line) => {
-      const item = document.createElement("li");
-      item.textContent = line;
-      list.append(item);
-    });
-    aiResult.append(list);
-  };
 
   const templateSelect = document.getElementById(
     "proposal-template",
@@ -387,66 +349,6 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     (form.elements.namedItem("verification") as HTMLTextAreaElement).value = template.verification;
     (form.elements.namedItem("out_of_scope") as HTMLTextAreaElement).value = template.out_of_scope;
     tagsInput?.setTags(template.tags);
-    aiResult.hidden = true;
-  });
-
-  document.getElementById("draft-assist-btn")?.addEventListener("click", async () => {
-    const button = document.getElementById("draft-assist-btn") as HTMLButtonElement;
-    button.disabled = true;
-    aiResult.hidden = false;
-    aiResult.className = "form-msg";
-    aiResult.textContent = "Preparing suggestions…";
-    try {
-      const result = await requestDraftAssist(aiInput());
-      const fields = ["title", "problem", "deliverable", "verification"] as const;
-      const changed = fields.filter((field) => result.suggestions[field]);
-      showAiMessage([
-        ...(result.notes.length ? result.notes : ["Review the suggested wording below."]),
-        ...(changed.length ? [`Suggestions ready for: ${changed.join(", ")}.`] : []),
-      ]);
-      if (changed.length) {
-        const apply = document.createElement("button");
-        apply.type = "button";
-        apply.className = "btn ghost";
-        apply.textContent = "Apply suggestions";
-        apply.addEventListener("click", () => {
-          changed.forEach((field) => {
-            const input = form.elements.namedItem(field) as HTMLInputElement | HTMLTextAreaElement;
-            input.value = result.suggestions[field];
-          });
-          showAiMessage(["Suggestions applied. Review them before submission."]);
-        });
-        aiResult.append(apply);
-      }
-    } catch (err) {
-      showAiMessage([(err as Error).message], "error");
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  document.getElementById("submission-check-btn")?.addEventListener("click", async () => {
-    const button = document.getElementById("submission-check-btn") as HTMLButtonElement;
-    button.disabled = true;
-    aiResult.hidden = false;
-    aiResult.className = "form-msg";
-    aiResult.textContent = "Checking clarity…";
-    try {
-      const result = await requestSubmissionCheck(aiInput());
-      showAiMessage([
-        ...(result.ok ? ["Clarity check passed."] : []),
-        ...result.hints.map((hint) => `Hint: ${hint}`),
-        ...result.warnings.map((warning) => `Warning: ${warning}`),
-        ...result.blockers.map((blocker) => `Needs attention: ${blocker}`),
-        ...(!result.ok && !result.hints.length && !result.warnings.length && !result.blockers.length
-          ? ["Review the proposal for a concrete deliverable and reproducible verification."]
-          : []),
-      ]);
-    } catch (err) {
-      showAiMessage([(err as Error).message], "error");
-    } finally {
-      button.disabled = false;
-    }
   });
 
   const syncEmpty = (list: HTMLElement, empty: HTMLElement | null) => {
