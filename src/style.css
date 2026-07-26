@@ -577,7 +577,15 @@ a:hover {
 }
 
 .builder-actions {
+  display: grid;
+  gap: 0.4rem;
   margin-bottom: 0.75rem;
+}
+
+.builder-actions .btn,
+.builder-body > .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .builder-body {
