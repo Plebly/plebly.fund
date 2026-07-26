@@ -3952,7 +3952,7 @@ a.project-card-by:hover {
 }
 
 .propose-guide {
-  max-width: 36rem;
+  max-width: none;
   margin: 0 0 1.75rem;
   padding: 1rem 1.125rem;
   background: var(--bg-elevated);
