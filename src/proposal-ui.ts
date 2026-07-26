@@ -37,6 +37,7 @@ import {
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
 import { proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
+import { avatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import {
   bitcoinUri,
@@ -44,6 +45,7 @@ import {
   formatSats,
   linkifyText,
   themeQrColors,
+  timeAgoHtml,
 } from "./util";
 
 export { bitcoinUri };
@@ -1219,8 +1221,8 @@ export function onChainPanelHtml(p: Proposal): string {
 /** Quiet meta line: created date, id, type, and tags (status/byline live elsewhere). */
 export function metaChipsHtml(p: Proposal): string {
   const bits: string[] = [];
-  const created = formatProposalDate(p.created_at);
-  if (created) bits.push(`<span>${escapeHtml(created)}</span>`);
+  const created = timeAgoHtml(p.created_at);
+  if (created) bits.push(created);
   if (p.id) {
     bits.push(`<span class="mono proposal-meta-id">${escapeHtml(p.id)}</span>`);
   }
@@ -1291,6 +1293,7 @@ export function proposerBylineHtml(
   const username = proposer.username?.trim();
   if (username) {
     return `<span class="proposal-byline">
+      ${avatarSlotHtml(username)}
       <span class="proposal-byline-label">by</span>
       <a class="proposal-byline-link" href="${profileHref(username)}">${escapeHtml(username)}</a>
     </span>`;

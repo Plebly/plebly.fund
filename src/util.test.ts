@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   bitcoinUri,
   escapeHtml,
+  formatTimeAgo,
   linkifyText,
   proposalRepoPath,
   proposalSlug,
+  timeAgoHtml,
 } from "./util";
 
 describe("bitcoinUri", () => {
@@ -64,5 +66,28 @@ describe("proposal path helpers", () => {
   it("round-trips slug and repo path", () => {
     expect(proposalSlug("proposals/listed/foo.md")).toBe("listed/foo");
     expect(proposalRepoPath("listed/foo")).toBe("proposals/listed/foo.md");
+  });
+});
+
+describe("formatTimeAgo", () => {
+  const now = Date.parse("2026-07-26T17:00:00.000Z");
+
+  it("returns relative labels with absolute title", () => {
+    expect(formatTimeAgo("2026-07-26T16:59:30.000Z", now)?.text).toBe(
+      "just now",
+    );
+    expect(formatTimeAgo("2026-07-26T16:40:00.000Z", now)?.text).toBe("20m ago");
+    expect(formatTimeAgo("2026-07-26T14:00:00.000Z", now)?.text).toBe("3h ago");
+    expect(formatTimeAgo("2026-07-24T17:00:00.000Z", now)?.text).toBe("2d ago");
+    const ago = formatTimeAgo("2026-07-26T16:40:00.000Z", now);
+    expect(ago?.title).toMatch(/2026/);
+  });
+
+  it("renders time element markup", () => {
+    const html = timeAgoHtml("2026-07-26T16:40:00.000Z", now);
+    expect(html).toContain("<time");
+    expect(html).toContain('datetime="2026-07-26T16:40:00.000Z"');
+    expect(html).toContain("title=");
+    expect(html).toContain("20m ago");
   });
 });

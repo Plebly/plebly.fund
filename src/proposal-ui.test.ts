@@ -44,6 +44,7 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain(">by<");
     expect(html).toContain('href="/u/secsovereign"');
     expect(html).toContain(">secsovereign<");
+    expect(html).toContain('data-avatar-user="secsovereign"');
   });
 
   it("proposerBylineHtml falls back to github link", () => {

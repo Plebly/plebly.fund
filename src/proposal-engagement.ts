@@ -3,10 +3,11 @@ import {
   bindLoginHandlers,
   currentReturnPath,
   loginChoicesHtml,
+  type AuthUser,
 } from "./auth";
 import { WORKERS_API } from "./config";
 import { profileHref } from "./router";
-import { escapeHtml, formatSats, linkifyText } from "./util";
+import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
 
 type PublicContribution = {
   identity: string | null;
@@ -15,11 +16,15 @@ type PublicContribution = {
   rail?: string;
 };
 
-type ProposalComment = {
+export type ProposalComment = {
   id: string;
   author: string;
   body: string;
   created_at: string;
+  user_id?: string;
+  username?: string;
+  avatar_url?: string;
+  deleted?: boolean;
 };
 
 const api = () => WORKERS_API.replace(/\/$/, "");
@@ -43,7 +48,10 @@ export function commentsHtml(proposalId: string | null, signedIn: boolean): stri
       signedIn
         ? `<label class="comment-input-label" for="proposal-comment-input">Add a comment</label>
            <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Keep discussion constructive…"></textarea>
-           <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>`
+           <div class="comment-compose-actions">
+             <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>
+             <p class="muted comment-compose-hint">Rate-limited · report abuse from any comment</p>
+           </div>`
         : `<div class="proposal-engagement-empty">
              <p>Sign in to comment and join the discussion.</p>
              ${loginChoicesHtml(undefined, currentReturnPath())}
@@ -54,7 +62,7 @@ export function commentsHtml(proposalId: string | null, signedIn: boolean): stri
   </section>`;
 }
 
-function profileUrlForIdentity(identity: string | null): string | null {
+export function profileUrlForIdentity(identity: string | null): string | null {
   if (!identity) return null;
   const raw = identity.trim();
   if (!raw || raw.toLowerCase() === "anonymous") return null;
@@ -99,27 +107,97 @@ function renderFunders(el: HTMLElement, contributions: PublicContribution[]): vo
   el.innerHTML = fundersListHtml(contributions);
 }
 
-function renderComments(el: HTMLElement, comments: ProposalComment[]): void {
-  if (!comments.length) {
-    el.innerHTML = `<div class="proposal-engagement-empty"><p>No comments yet.</p><p class="muted">Start a constructive discussion about the work or its verification.</p></div>`;
-    return;
+function commentAuthorLabel(comment: ProposalComment): string {
+  return (comment.username || comment.author || "anonymous").trim();
+}
+
+function commentAvatarHtml(comment: ProposalComment): string {
+  if (comment.avatar_url) {
+    return `<img class="user-avatar proposal-comment-avatar" src="${escapeHtml(comment.avatar_url)}" alt="" width="32" height="32" loading="lazy" decoding="async" />`;
   }
-  el.innerHTML = comments
+  const handle = (comment.username || "").trim().toLowerCase();
+  if (handle) {
+    return `<span class="user-avatar-slot proposal-comment-avatar" data-avatar-user="${escapeHtml(handle)}" hidden></span>`;
+  }
+  return `<span class="user-avatar-fallback proposal-comment-avatar" aria-hidden="true"></span>`;
+}
+
+function commentNameHtml(comment: ProposalComment): string {
+  const label = escapeHtml(commentAuthorLabel(comment));
+  const href =
+    profileUrlForIdentity(comment.username || null) ||
+    profileUrlForIdentity(comment.author);
+  if (href) {
+    return `<a class="proposal-comment-author" href="${escapeHtml(href)}">${label}</a>`;
+  }
+  return `<strong class="proposal-comment-author">${label}</strong>`;
+}
+
+/** Pure comment list HTML (exported for tests). */
+export function commentsListHtml(
+  comments: ProposalComment[],
+  opts: { userId?: string | null; canModerate?: boolean } = {},
+): string {
+  if (!comments.length) {
+    return `<div class="proposal-engagement-empty"><p>No comments yet.</p><p class="muted">Start a constructive discussion about the work or its verification.</p></div>`;
+  }
+  return `<div class="proposal-comment-list">${comments
     .map((comment) => {
-      const date = new Date(comment.created_at);
-      const when = Number.isNaN(date.getTime()) ? "" : ` · ${date.toLocaleDateString()}`;
-      return `<article class="proposal-comment">
-        <header><strong>${escapeHtml(comment.author)}</strong>${escapeHtml(when)}</header>
-        <p>${linkifyText(comment.body)}</p>
+      const when = timeAgoHtml(comment.created_at);
+      const own = Boolean(
+        opts.userId && comment.user_id && opts.userId === comment.user_id,
+      );
+      const actions: string[] = [];
+      if (!comment.deleted && opts.userId && !own) {
+        actions.push(
+          `<button type="button" class="btn ghost comment-action" data-comment-report="${escapeHtml(comment.id)}">Report</button>`,
+        );
+      }
+      if (!comment.deleted && (own || opts.canModerate)) {
+        actions.push(
+          `<button type="button" class="btn ghost comment-action" data-comment-delete="${escapeHtml(comment.id)}">Delete</button>`,
+        );
+      }
+      if (!comment.deleted && opts.canModerate && !own) {
+        actions.push(
+          `<button type="button" class="btn ghost comment-action" data-comment-hide="${escapeHtml(comment.id)}">Hide</button>`,
+        );
+      }
+      const body = comment.deleted
+        ? `<p class="muted proposal-comment-deleted">Comment removed.</p>`
+        : `<p>${linkifyText(comment.body)}</p>`;
+      return `<article class="proposal-comment${comment.deleted ? " is-deleted" : ""}" data-comment-id="${escapeHtml(comment.id)}">
+        ${commentAvatarHtml(comment)}
+        <div class="proposal-comment-body">
+          <header>
+            ${commentNameHtml(comment)}
+            ${when ? `<span class="proposal-comment-when"> · ${when}</span>` : ""}
+          </header>
+          ${body}
+          ${
+            actions.length
+              ? `<div class="proposal-comment-actions">${actions.join("")}</div>`
+              : ""
+          }
+        </div>
       </article>`;
     })
-    .join("");
+    .join("")}</div>`;
+}
+
+function renderComments(
+  el: HTMLElement,
+  comments: ProposalComment[],
+  opts: { userId?: string | null; canModerate?: boolean },
+): void {
+  el.innerHTML = commentsListHtml(comments, opts);
 }
 
 export async function bindProposalEngagement(
   root: ParentNode,
   signedIn = false,
   onAuthed: () => void = () => undefined,
+  opts: { user?: AuthUser | null; canModerate?: boolean } = {},
 ): Promise<() => Promise<void>> {
   const noop = async () => undefined;
   if (!WORKERS_API) return noop;
@@ -133,6 +211,9 @@ export async function bindProposalEngagement(
   const funderList = root.querySelector<HTMLElement>("#funder-credit-list");
   const funderTitle = root.querySelector<HTMLElement>("#funder-credit-title");
   const commentList = root.querySelector<HTMLElement>("#proposal-comment-list");
+  const userId = opts.user?.id || null;
+  const canModerate = Boolean(opts.canModerate);
+  const { hydrateAvatarSlots } = await import("./profile-avatars");
 
   const loadFunders = async () => {
     const res = await fetch(`${api()}/contributions/${encodeURIComponent(proposalId)}`);
@@ -159,7 +240,10 @@ export async function bindProposalEngagement(
       comments?: ProposalComment[];
       discussion_url?: string;
     };
-    if (commentList) renderComments(commentList, data.comments || []);
+    if (commentList) {
+      renderComments(commentList, data.comments || [], { userId, canModerate });
+      void hydrateAvatarSlots(commentList);
+    }
     const discussion = root.querySelector<HTMLElement>("#proposal-discussion-link");
     if (discussion && data.discussion_url) {
       discussion.innerHTML = `<a href="${escapeHtml(data.discussion_url)}" target="_blank" rel="noreferrer">Discuss on GitHub →</a>`;
@@ -185,9 +269,15 @@ export async function bindProposalEngagement(
     }),
   ]);
 
+  const commentMsg = root.querySelector<HTMLElement>("#proposal-comment-msg");
+  const setMsg = (text: string) => {
+    if (!commentMsg) return;
+    commentMsg.hidden = !text;
+    commentMsg.textContent = text;
+  };
+
   const submit = root.querySelector<HTMLButtonElement>("#proposal-comment-submit");
   const input = root.querySelector<HTMLTextAreaElement>("#proposal-comment-input");
-  const commentMsg = root.querySelector<HTMLElement>("#proposal-comment-msg");
   submit?.addEventListener("click", async () => {
     const body = input?.value.trim() || "";
     if (!body) return;
@@ -201,18 +291,90 @@ export async function bindProposalEngagement(
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Could not post comment.");
       if (input) input.value = "";
-      if (commentMsg) {
-        commentMsg.hidden = false;
-        commentMsg.textContent = "Comment posted.";
-      }
+      setMsg("Comment posted.");
       await loadComments();
     } catch (error) {
-      if (commentMsg) {
-        commentMsg.hidden = false;
-        commentMsg.textContent = (error as Error).message;
-      }
+      setMsg((error as Error).message);
     } finally {
       submit.disabled = false;
+    }
+  });
+
+  commentList?.addEventListener("click", async (ev) => {
+    const t = ev.target as Element | null;
+    const reportId = t
+      ?.closest<HTMLElement>("[data-comment-report]")
+      ?.getAttribute("data-comment-report");
+    const deleteId = t
+      ?.closest<HTMLElement>("[data-comment-delete]")
+      ?.getAttribute("data-comment-delete");
+    const hideId = t
+      ?.closest<HTMLElement>("[data-comment-hide]")
+      ?.getAttribute("data-comment-hide");
+
+    if (reportId) {
+      const reason = window.prompt(
+        "Why are you reporting this comment? (min 8 characters)",
+        "spam or harassment",
+      );
+      if (!reason || reason.trim().length < 8) return;
+      try {
+        const res = await authFetch(
+          `${api()}/comments/${encodeURIComponent(proposalId)}/${encodeURIComponent(reportId)}/report`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: reason.trim() }),
+          },
+        );
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          hidden?: boolean;
+        };
+        if (!res.ok) throw new Error(data.error || "Could not report comment.");
+        setMsg(
+          data.hidden
+            ? "Report received — comment was auto-hidden."
+            : "Report received. Thanks.",
+        );
+        await loadComments();
+      } catch (error) {
+        setMsg((error as Error).message);
+      }
+      return;
+    }
+
+    if (deleteId) {
+      if (!window.confirm("Delete this comment?")) return;
+      try {
+        const res = await authFetch(
+          `${api()}/comments/${encodeURIComponent(proposalId)}/${encodeURIComponent(deleteId)}`,
+          { method: "DELETE" },
+        );
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data.error || "Could not delete comment.");
+        setMsg("Comment deleted.");
+        await loadComments();
+      } catch (error) {
+        setMsg((error as Error).message);
+      }
+      return;
+    }
+
+    if (hideId) {
+      if (!window.confirm("Hide this comment for everyone?")) return;
+      try {
+        const res = await authFetch(
+          `${api()}/comments/${encodeURIComponent(proposalId)}/${encodeURIComponent(hideId)}/hide`,
+          { method: "POST" },
+        );
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data.error || "Could not hide comment.");
+        setMsg("Comment hidden.");
+        await loadComments();
+      } catch (error) {
+        setMsg((error as Error).message);
+      }
     }
   });
 

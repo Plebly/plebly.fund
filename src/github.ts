@@ -149,13 +149,17 @@ export async function findListedProposalById(
   if (!normalized) return null;
 
   // Prefer Worker id→path index (O(1)); fall back to GitHub directory walk.
+  // Lookup returns 200 with path:null when missing (avoids console 404 noise).
   if (WORKERS_API) {
     try {
       const res = await fetch(
         `${WORKERS_API.replace(/\/$/, "")}/proposals/lookup/${encodeURIComponent(normalized)}`,
       );
       if (res.ok) {
-        const data = (await res.json()) as { path?: string };
+        const data = (await res.json()) as {
+          path?: string | null;
+          found?: boolean;
+        };
         if (data.path) {
           const hit = await loadProposalByPath(data.path);
           if (hit) return hit;

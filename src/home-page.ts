@@ -22,6 +22,7 @@ import {
 } from "./proposal-ui";
 import type { Proposal } from "./types";
 import { href, profileHref, proposalHref } from "./router";
+import { hydrateAvatarSlots } from "./profile-avatars";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViews } from "./views";
 import { bindActivityStrip } from "./activity";
@@ -280,10 +281,14 @@ function proposalCardHtml(
 ): string {
   const status = String(p.status);
   const proposerName = p.proposer?.username || p.proposer?.github || "";
+  const proposerUsername = p.proposer?.username?.trim().toLowerCase() || "";
+  const proposerAvatar = proposerUsername
+    ? `<span class="user-avatar-slot" data-avatar-user="${escapeHtml(proposerUsername)}" hidden></span>`
+    : "";
   const proposer = proposerName
     ? p.proposer?.username
-      ? `<a class="project-card-by" href="${profileHref(p.proposer.username)}">by ${escapeHtml(proposerName)}</a>`
-      : `<span class="project-card-by">by ${escapeHtml(proposerName)}</span>`
+      ? `<a class="project-card-by" href="${profileHref(p.proposer.username)}">${proposerAvatar}<span class="project-card-by-text">by ${escapeHtml(proposerName)}</span></a>`
+      : `<span class="project-card-by"><span class="project-card-by-text">by ${escapeHtml(proposerName)}</span></span>`
     : "";
   const donateHref = `${proposalHref(p.path, p.id)}?donate`;
   const open = isOpenToClaim(p, floor);
@@ -594,13 +599,35 @@ function bindDiscover(
       .join("");
   };
 
-  searchEl?.addEventListener("input", renderList);
-  sortEl?.addEventListener("change", renderList);
-  tagEl?.addEventListener("change", renderList);
-  statusEl?.addEventListener("change", renderList);
-  sizeEl?.addEventListener("change", renderList);
-  windowEl?.addEventListener("change", renderList);
+  const scheduleAvatars = () => {
+    void hydrateAvatarSlots(root);
+  };
+  searchEl?.addEventListener("input", () => {
+    renderList();
+    scheduleAvatars();
+  });
+  sortEl?.addEventListener("change", () => {
+    renderList();
+    scheduleAvatars();
+  });
+  tagEl?.addEventListener("change", () => {
+    renderList();
+    scheduleAvatars();
+  });
+  statusEl?.addEventListener("change", () => {
+    renderList();
+    scheduleAvatars();
+  });
+  sizeEl?.addEventListener("change", () => {
+    renderList();
+    scheduleAvatars();
+  });
+  windowEl?.addEventListener("change", () => {
+    renderList();
+    scheduleAvatars();
+  });
   renderList();
+  scheduleAvatars();
 }
 
 export async function renderHome(shell: HomeShell): Promise<void> {
@@ -715,6 +742,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       return;
     }
     bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled, watchPaths);
+    void hydrateAvatarSlots(app);
   } catch (e) {
     listEl.className = "error";
     listEl.textContent = `Could not load projects: ${(e as Error).message}`;

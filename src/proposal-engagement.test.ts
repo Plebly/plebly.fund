@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   commentsHtml,
+  commentsListHtml,
   funderCreditHtml,
   fundersListHtml,
 } from "./proposal-engagement";
@@ -57,6 +58,47 @@ describe("commentsHtml", () => {
     expect(html).toContain("Sign in to comment");
     expect(html).toContain("login-choices");
     expect(html).toContain("comment-login-msg");
+  });
+});
+
+describe("commentsListHtml", () => {
+  it("links usernames to profiles and shows avatar + timeago", () => {
+    const html = commentsListHtml(
+      [
+        {
+          id: "c1",
+          author: "alice",
+          username: "alice",
+          avatar_url: "https://example.com/a.png",
+          body: "Looks solid https://bitcoin.org",
+          created_at: "2026-07-26T16:40:00.000Z",
+          user_id: "github:1",
+        },
+      ],
+      { userId: "github:2" },
+    );
+    expect(html).toContain('href="/u/alice"');
+    expect(html).toContain('src="https://example.com/a.png"');
+    expect(html).toContain("timeago");
+    expect(html).toContain("data-comment-report");
+    expect(html).toContain("bitcoin.org");
+  });
+
+  it("lets authors delete their own comments", () => {
+    const html = commentsListHtml(
+      [
+        {
+          id: "c2",
+          author: "bob",
+          body: "mine",
+          created_at: "2026-07-26T16:40:00.000Z",
+          user_id: "github:9",
+        },
+      ],
+      { userId: "github:9" },
+    );
+    expect(html).toContain("data-comment-delete");
+    expect(html).not.toContain("data-comment-report");
   });
 });
 

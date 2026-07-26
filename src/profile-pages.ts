@@ -666,6 +666,17 @@ export async function renderPublicProfile(
           : ""
       }.</p>`
     : "";
+  const muteHtml = profile.discussion_muted
+    ? `<p class="error">Discussion muted${
+        profile.discussion_mute_reason
+          ? `: ${escapeHtml(profile.discussion_mute_reason)}`
+          : ""
+      }${
+        profile.discussion_muted_until
+          ? ` until ${escapeHtml(new Date(profile.discussion_muted_until).toLocaleDateString())}`
+          : ""
+      }.</p>`
+    : "";
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail profile-page">
@@ -681,6 +692,7 @@ export async function renderPublicProfile(
         </div>
       </div>
       ${suspendHtml}
+      ${muteHtml}
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
       ${linksHtml}
       ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}

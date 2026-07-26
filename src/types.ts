@@ -41,6 +41,9 @@ export type PublicProfile = Pick<
   claim_suspended?: boolean;
   claim_suspend_reason?: string;
   claim_suspend_until?: string;
+  discussion_muted?: boolean;
+  discussion_mute_reason?: string;
+  discussion_muted_until?: string;
   claim_summary?: ClaimSummary;
   reviewer_active?: boolean;
   reviewer_kind?: "bootstrap" | "earned";

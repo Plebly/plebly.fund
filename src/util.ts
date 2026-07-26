@@ -41,6 +41,55 @@ export function formatSats(n: number): string {
   return `${n.toLocaleString("en-US")} sats`;
 }
 
+/** Exact local date/time for `title` tooltips. */
+export function formatAbsoluteDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * Relative time label with absolute `title` for hover.
+ * Pass `nowMs` in tests for stable output.
+ */
+export function formatTimeAgo(
+  iso: string,
+  nowMs = Date.now(),
+): { text: string; title: string } | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const title = formatAbsoluteDateTime(iso);
+  const deltaSec = Math.round((nowMs - d.getTime()) / 1000);
+  if (deltaSec < 45) return { text: "just now", title };
+  if (deltaSec < 90) return { text: "1m ago", title };
+  const deltaMin = Math.round(deltaSec / 60);
+  if (deltaMin < 60) return { text: `${deltaMin}m ago`, title };
+  const deltaHr = Math.round(deltaMin / 60);
+  if (deltaHr < 36) return { text: `${deltaHr}h ago`, title };
+  const deltaDay = Math.round(deltaHr / 24);
+  if (deltaDay < 14) return { text: `${deltaDay}d ago`, title };
+  const text = d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  return { text, title };
+}
+
+/** `<time datetime title>` markup for relative timestamps. */
+export function timeAgoHtml(iso: string | null | undefined, nowMs = Date.now()): string {
+  if (!iso) return "";
+  const ago = formatTimeAgo(iso, nowMs);
+  if (!ago) return "";
+  return `<time class="timeago" datetime="${escapeHtml(iso)}" title="${escapeHtml(ago.title)}">${escapeHtml(ago.text)}</time>`;
+}
+
 /** BIP21 URI; optional amount in sats → BTC. */
 export function bitcoinUri(address: string, amountSats?: number | null): string {
   if (amountSats != null && amountSats > 0) {

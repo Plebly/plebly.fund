@@ -41,11 +41,13 @@ import {
 } from "./review-panel";
 import type { Proposal } from "./types";
 import { safeHttpsImageUrl } from "./media";
+import { hydrateAvatarSlots } from "./profile-avatars";
 import {
   bindProposalEngagement,
   commentsHtml,
   funderCreditHtml,
 } from "./proposal-engagement";
+import { fetchReviewerMe } from "./reviewers";
 import {
   applySeo,
   href,
@@ -440,7 +442,19 @@ export async function renderProposalPage(
       });
     }
     bindRefundAndBallot(app, match);
-    reloadEngagement = await bindProposalEngagement(app, Boolean(user), onAuthed);
+    const reviewerMe = user
+      ? await fetchReviewerMe().catch(() => null)
+      : null;
+    reloadEngagement = await bindProposalEngagement(
+      app,
+      Boolean(user),
+      onAuthed,
+      {
+        user,
+        canModerate: Boolean(reviewerMe?.active),
+      },
+    );
+    void hydrateAvatarSlots(app);
     if (match.id) {
       void recordProposalView(match.id).then((count) => {
         const el = app.querySelector("#proposal-view-count");

@@ -1,6 +1,6 @@
 import { WORKERS_API } from "./config";
 import { proposalHref } from "./router";
-import { escapeHtml } from "./util";
+import { escapeHtml, timeAgoHtml } from "./util";
 
 type ActivityEvent = {
   type?: string;
@@ -39,16 +39,11 @@ export async function bindActivityStrip(root: ParentNode): Promise<void> {
     strip.innerHTML = `<span class="activity-strip-label">Recent</span>
       <ul>${visible
         .map((event) => {
-          const when = event.created_at
-            ? new Date(event.created_at).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-              })
-            : "";
+          const when = timeAgoHtml(event.created_at);
           const id = event.proposal_id || "";
           const shortId =
             id.length > 22 ? `${id.slice(0, 10)}…${id.slice(-6)}` : id;
-          return `<li><a href="${proposalHref(event.proposal_path || "", event.proposal_id)}"><span class="activity-event">${escapeHtml(eventLabel(event.type))}</span><span class="mono activity-id" title="${escapeHtml(id)}">${escapeHtml(shortId)}</span>${when ? `<span class="activity-strip-date">${escapeHtml(when)}</span>` : ""}</a></li>`;
+          return `<li><a href="${proposalHref(event.proposal_path || "", event.proposal_id)}"><span class="activity-event">${escapeHtml(eventLabel(event.type))}</span><span class="mono activity-id" title="${escapeHtml(id)}">${escapeHtml(shortId)}</span>${when ? `<span class="activity-strip-date">${when}</span>` : ""}</a></li>`;
         })
         .join("")}</ul>`;
     strip.hidden = false;
