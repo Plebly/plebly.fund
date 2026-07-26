@@ -62,6 +62,21 @@ export function authFetch(input: string, init: RequestInit = {}): Promise<Respon
 
 export type AuthUser = UserProfile;
 
+export type ProposalNotification = {
+  id: string;
+  type:
+    | "listed"
+    | "floor_reached"
+    | "target_reached"
+    | "claimed"
+    | "deliverable_submitted"
+    | "completed";
+  proposal_id: string;
+  proposal_path: string;
+  created_at: string;
+  read_at?: string;
+};
+
 function oauthReturnTo(returnPath?: string): string {
   let path = returnPath ?? currentReturnPath();
   if (path.startsWith("#/")) path = path.slice(1);
@@ -238,6 +253,24 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
+export async function fetchNotifications(): Promise<ProposalNotification[]> {
+  if (!WORKERS_API) return [];
+  const res = await authFetch(`${API()}/notifications`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { notifications?: ProposalNotification[] };
+  return data.notifications || [];
+}
+
+export async function markNotificationsRead(ids?: string[]): Promise<void> {
+  if (!WORKERS_API) return;
+  const res = await authFetch(`${API()}/notifications/read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ids?.length ? { ids } : {}),
+  });
+  if (!res.ok) throw new Error("Could not mark notifications read");
+}
+
 export async function fetchPublicProfile(
   username: string,
 ): Promise<PublicProfile | null> {
@@ -252,6 +285,7 @@ export async function updateProfile(input: {
   bio: string;
   links: ProfileLink[];
   payout_address?: string;
+  skills_tags?: string[];
 }): Promise<UserProfile> {
   let res: Response;
   try {
@@ -338,6 +372,9 @@ export type ProposalMilestoneInput = {
 
 export type ProposalAuthorInput = {
   title: string;
+  proposal_type?: "bounty" | "direct";
+  tags?: string[];
+  parent_initiative?: string | null;
   problem: string;
   deliverable: string;
   verification: string;
@@ -396,4 +433,42 @@ export async function updateProposal(
   input: UpdateProposalInput,
 ): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
   return proposalMutation("/proposals/update", input);
+}
+
+export type AiDraftInput = Pick<
+  ProposalAuthorInput,
+  "title" | "problem" | "deliverable" | "verification" | "tags"
+>;
+
+export type AiDraftAssist = {
+  suggestions: Required<Pick<AiDraftInput, "title" | "problem" | "deliverable" | "verification">>;
+  notes: string[];
+};
+
+export type AiSubmissionCheck = {
+  ok: boolean;
+  hints: string[];
+  warnings: string[];
+  blockers: string[];
+};
+
+async function aiRequest<T>(path: string, input: AiDraftInput): Promise<T> {
+  const res = await authFetch(`${API()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+export function requestDraftAssist(input: AiDraftInput): Promise<AiDraftAssist> {
+  return aiRequest("/ai/draft-assist", input);
+}
+
+export function requestSubmissionCheck(
+  input: AiDraftInput,
+): Promise<AiSubmissionCheck> {
+  return aiRequest("/ai/submission-check", input);
 }

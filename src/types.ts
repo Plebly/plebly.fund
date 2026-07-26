@@ -13,6 +13,7 @@ export type UserProfile = {
   nostr?: string;
   avatar_url?: string;
   payout_address?: string;
+  skills_tags?: string[];
   created_at?: string;
   updated_at?: string;
   username_claimed_at?: string;
@@ -85,10 +86,16 @@ export type RelatedWorkEntry = {
   note?: string;
 };
 
+export type ProposalType = "bounty" | "direct";
+
 export type Proposal = {
   id: string | null;
   title: string;
   status: ProposalStatus | string;
+  /** bounty (default) | direct — proposer is recipient */
+  proposal_type?: ProposalType | string | null;
+  tags?: string[];
+  parent_initiative?: string | null;
   path: string;
   target_sats: number | null;
   escrow_address: string | null;
@@ -108,8 +115,10 @@ export type Proposal = {
   deliverable_url?: string | null;
   escrow_allocated_at?: string | null;
   funding_window_ends_at?: string | null;
+  delivery_window_ends_at?: string | null;
   milestones_due_at?: string | null;
   release_blocked_reason?: string | null;
+  view_count?: number;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */
@@ -125,10 +134,11 @@ export const EDITABLE_PROPOSAL_STATUSES = new Set([
 export type Route =
   | { name: "home" }
   | { name: "about" }
+  | { name: "stats" }
   | { name: "params" }
   | { name: "account" }
   | { name: "work" }
   | { name: "propose" }
   | { name: "reviewers" }
-  | { name: "proposal"; id: string }
+  | { name: "proposal"; id: string; stable?: boolean }
   | { name: "profile"; username: string };

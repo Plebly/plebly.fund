@@ -19,7 +19,9 @@ import {
 import { renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
+import { renderStats } from "./stats-page";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
+import { findListedProposalById } from "./github";
 import {
   applySeo,
   bindSpaNavigation,
@@ -27,7 +29,6 @@ import {
   migrateHashRoute,
   navigate,
   parseLocation,
-  proposalHref,
   seoForRoute,
 } from "./router";
 import type { Route } from "./types";
@@ -66,6 +67,7 @@ function siteFooterHtml(routeName: string): string {
           <a href="${href("/")}"${fa("home")}>Projects</a>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/about")}"${fa("about")}>About</a>
+          <a href="${href("/stats")}"${fa("stats")}>Stats</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
         </div>
         <div class="footer-col">
@@ -177,6 +179,13 @@ async function render() {
     scrollToHashTarget();
     return;
   }
+  if (r.name === "stats") {
+    applySeo(seoForRoute(r));
+    await renderStats(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
   if (r.name === "reviewers") {
     applySeo(seoForRoute(r));
     await renderGovernance(shell, currentUser);
@@ -189,12 +198,8 @@ async function render() {
     return;
   }
   if (r.name === "proposal") {
-    const canonicalPath = new URL(proposalHref(r.id), location.origin);
-    if (location.pathname !== canonicalPath.pathname) {
-      navigate(`${canonicalPath.pathname}${location.search}`, { replace: true });
-      return;
-    }
-    await renderProposalPage(r.id, shell, currentUser);
+    const proposal = r.stable ? await findListedProposalById(r.id) : null;
+    await renderProposalPage(proposal?.path || r.id, shell, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

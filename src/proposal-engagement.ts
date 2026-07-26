@@ -1,0 +1,331 @@
+import { authFetch, currentReturnPath, loginChoicesHtml } from "./auth";
+import { WORKERS_API } from "./config";
+import { escapeHtml, formatSats, linkifyText } from "./util";
+
+type PublicContribution = {
+  identity: string | null;
+  anonymous: boolean;
+  amount_sats?: number;
+};
+
+type MineContribution = {
+  txid?: string;
+  vout?: number;
+  swap_id?: string;
+  amount_sats: number;
+  confirmed: boolean;
+  public_credit: boolean;
+  anonymous: boolean;
+  show_amount: boolean;
+};
+
+type ProposalComment = {
+  id: string;
+  author: string;
+  body: string;
+  created_at: string;
+};
+
+const api = () => WORKERS_API.replace(/\/$/, "");
+
+export function funderCreditHtml(
+  proposalId: string | null,
+  signedIn: boolean,
+): string {
+  if (!proposalId) return "";
+  return `<section class="proposal-engagement" id="funder-credit" data-proposal-id="${escapeHtml(proposalId)}">
+    <h2 class="proposal-block-title">Funders</h2>
+    <p class="proposal-block-lede">Public credit is optional — donors choose what appears here.</p>
+    <div id="funder-credit-list" class="funder-credit-list" aria-live="polite">
+      <p class="muted">Loading funder credit…</p>
+    </div>
+    ${
+      signedIn
+        ? `<div class="funder-credit-prefs" id="funder-credit-prefs">
+      <h3 class="funder-credit-prefs-title">Your credit preference</h3>
+      <p class="muted funder-credit-prefs-lede">Link a confirmed donation, then choose how you appear. Amounts stay private unless you opt in.</p>
+      <div id="funder-credit-mine" class="funder-credit-mine" aria-live="polite">
+        <p class="muted">Loading your contributions…</p>
+      </div>
+      <form id="funder-credit-form" class="funder-credit-form">
+        <div class="funder-credit-outpoint">
+          <div class="funder-credit-field funder-credit-field-txid">
+            <label class="donate-amount-label" for="credit-txid">Funding txid</label>
+            <input id="credit-txid" class="donate-amount mono" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64-char hex" />
+          </div>
+          <div class="funder-credit-field funder-credit-field-vout">
+            <label class="donate-amount-label" for="credit-vout">Vout</label>
+            <input id="credit-vout" class="donate-amount mono" type="number" min="0" value="0" />
+          </div>
+        </div>
+        <fieldset class="funder-credit-options">
+          <legend class="donate-amount-label">Display</legend>
+          <label class="funder-credit-check">
+            <input type="checkbox" id="credit-public" checked />
+            <span>Show my identity on the funder list</span>
+          </label>
+          <label class="funder-credit-check funder-credit-check-nested">
+            <input type="checkbox" id="credit-amount" />
+            <span>Also show my amount</span>
+          </label>
+        </fieldset>
+        <button type="submit" class="btn" id="credit-save">Save credit preference</button>
+        <p class="builder-msg" id="credit-msg" hidden></p>
+      </form>
+    </div>`
+        : `<div class="proposal-engagement-empty">
+      <p>Sign in to claim a donation and set credit preferences.</p>
+      ${loginChoicesHtml(undefined, currentReturnPath())}
+    </div>`
+    }
+  </section>`;
+}
+
+export function commentsHtml(proposalId: string | null, signedIn: boolean): string {
+  if (!proposalId) return "";
+  return `<section class="proposal-engagement" id="proposal-comments" data-proposal-id="${escapeHtml(proposalId)}">
+    <h2 class="proposal-block-title">Comments</h2>
+    <p id="proposal-discussion-link" class="proposal-discussion-link" hidden></p>
+    <div id="proposal-comment-list"><p class="muted">Loading comments…</p></div>
+    ${
+      signedIn
+        ? `<label class="comment-input-label" for="proposal-comment-input">Add a comment</label>
+           <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Keep discussion constructive…"></textarea>
+           <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>`
+        : `<div class="proposal-engagement-empty"><p>Sign in to comment and join the discussion.</p>${loginChoicesHtml(undefined, currentReturnPath())}</div>`
+    }
+    <p class="builder-msg" id="proposal-comment-msg" hidden></p>
+  </section>`;
+}
+
+/** Pure HTML for the public funder list — exported for tests. */
+export function fundersListHtml(contributions: PublicContribution[]): string {
+  if (!contributions.length) {
+    return `<p class="muted">No public funder credit yet — donors can opt in below after linking a contribution.</p>`;
+  }
+  return `<ul class="proposal-engagement-list">${contributions
+    .map((contribution) => {
+      const name = contribution.identity || "Anonymous funder";
+      const amount =
+        typeof contribution.amount_sats === "number"
+          ? escapeHtml(formatSats(contribution.amount_sats))
+          : "";
+      return `<li><span>${escapeHtml(name)}</span>${
+        amount ? `<span class="mono funder-credit-amount">${amount}</span>` : ""
+      }</li>`;
+    })
+    .join("")}</ul>`;
+}
+
+function renderFunders(el: HTMLElement, contributions: PublicContribution[]): void {
+  el.innerHTML = fundersListHtml(contributions);
+}
+
+function renderComments(el: HTMLElement, comments: ProposalComment[]): void {
+  if (!comments.length) {
+    el.innerHTML = `<div class="proposal-engagement-empty"><p>No comments yet.</p><p class="muted">Start a constructive discussion about the work or its verification.</p></div>`;
+    return;
+  }
+  el.innerHTML = comments
+    .map((comment) => {
+      const date = new Date(comment.created_at);
+      const when = Number.isNaN(date.getTime()) ? "" : ` · ${date.toLocaleDateString()}`;
+      return `<article class="proposal-comment">
+        <header><strong>${escapeHtml(comment.author)}</strong>${escapeHtml(when)}</header>
+        <p>${linkifyText(comment.body)}</p>
+      </article>`;
+    })
+    .join("");
+}
+
+/** Pure HTML for the signed-in donor's linked rows — exported for tests. */
+export function mineContributionsHtml(mine: MineContribution[]): string {
+  if (!mine.length) {
+    return `<p class="muted">No linked donations yet. Enter the on-chain outpoint below after your payment confirms and is indexed.</p>`;
+  }
+  return `<ul class="proposal-engagement-list funder-credit-mine-list">${mine
+    .map((entry) => {
+      const ref = entry.swap_id
+        ? `ln:${entry.swap_id.slice(0, 12)}…`
+        : `${(entry.txid || "").slice(0, 12)}…:${entry.vout ?? 0}`;
+      const prefs = [
+        entry.anonymous || !entry.public_credit ? "anonymous" : "public",
+        entry.show_amount ? "amount shown" : "amount hidden",
+      ].join(" · ");
+      return `<li><span class="mono">${escapeHtml(ref)}</span><span class="muted">${escapeHtml(formatSats(entry.amount_sats))} · ${escapeHtml(prefs)}</span></li>`;
+    })
+    .join("")}</ul>`;
+}
+
+function renderMine(el: HTMLElement, mine: MineContribution[]): void {
+  el.innerHTML = mineContributionsHtml(mine);
+}
+
+export async function bindProposalEngagement(
+  root: ParentNode,
+  signedIn = false,
+): Promise<void> {
+  if (!WORKERS_API) return;
+  const funder = root.querySelector<HTMLElement>("#funder-credit");
+  const comments = root.querySelector<HTMLElement>("#proposal-comments");
+  const proposalId = funder?.dataset.proposalId || comments?.dataset.proposalId;
+  if (!proposalId) return;
+
+  const funderList = root.querySelector<HTMLElement>("#funder-credit-list");
+  const commentList = root.querySelector<HTMLElement>("#proposal-comment-list");
+  const mineEl = root.querySelector<HTMLElement>("#funder-credit-mine");
+
+  const loadFunders = async () => {
+    if (!funderList) return;
+    const res = await fetch(`${api()}/contributions/${encodeURIComponent(proposalId)}`);
+    if (!res.ok) throw new Error("Could not load funder credit.");
+    const data = (await res.json()) as { contributions?: PublicContribution[] };
+    renderFunders(funderList, data.contributions || []);
+  };
+
+  const loadMine = async (): Promise<MineContribution[]> => {
+    if (!signedIn || !mineEl) return [];
+    const res = await authFetch(
+      `${api()}/contributions/mine/${encodeURIComponent(proposalId)}`,
+    );
+    if (!res.ok) throw new Error("Could not load your contributions.");
+    const data = (await res.json()) as { contributions?: MineContribution[] };
+    const mine = data.contributions || [];
+    renderMine(mineEl, mine);
+    const first = mine[0];
+    const publicBox = root.querySelector<HTMLInputElement>("#credit-public");
+    const amountBox = root.querySelector<HTMLInputElement>("#credit-amount");
+    const txidInput = root.querySelector<HTMLInputElement>("#credit-txid");
+    const voutInput = root.querySelector<HTMLInputElement>("#credit-vout");
+    if (first) {
+      if (publicBox) publicBox.checked = first.public_credit && !first.anonymous;
+      if (amountBox) amountBox.checked = first.show_amount;
+      if (txidInput && first.txid) txidInput.value = first.txid;
+      if (voutInput && first.vout != null) voutInput.value = String(first.vout);
+    }
+    return mine;
+  };
+
+  const loadComments = async () => {
+    const res = await fetch(`${api()}/comments/${encodeURIComponent(proposalId)}`);
+    if (!res.ok) throw new Error("Could not load comments.");
+    const data = (await res.json()) as {
+      comments?: ProposalComment[];
+      discussion_url?: string;
+    };
+    if (commentList) renderComments(commentList, data.comments || []);
+    const discussion = root.querySelector<HTMLElement>("#proposal-discussion-link");
+    if (discussion && data.discussion_url) {
+      discussion.innerHTML = `<a href="${escapeHtml(data.discussion_url)}" target="_blank" rel="noreferrer">Discuss on GitHub →</a>`;
+      discussion.hidden = false;
+    }
+  };
+
+  await Promise.all([
+    loadFunders().catch(() => {
+      if (funderList) funderList.textContent = "Could not load funder credit.";
+    }),
+    loadMine().catch(() => {
+      if (mineEl) mineEl.innerHTML = `<p class="muted">Could not load your contributions.</p>`;
+    }),
+    loadComments().catch(() => {
+      if (commentList) commentList.innerHTML = `<p class="muted">Could not load comments.</p>`;
+    }),
+  ]);
+
+  const form = root.querySelector<HTMLFormElement>("#funder-credit-form");
+  const msg = root.querySelector<HTMLElement>("#credit-msg");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const txid = root.querySelector<HTMLInputElement>("#credit-txid")?.value.trim() || "";
+    const voutRaw = root.querySelector<HTMLInputElement>("#credit-vout")?.value || "0";
+    const vout = Number(voutRaw);
+    const publicCredit =
+      root.querySelector<HTMLInputElement>("#credit-public")?.checked !== false;
+    const showAmount =
+      root.querySelector<HTMLInputElement>("#credit-amount")?.checked === true;
+    const saveBtn = root.querySelector<HTMLButtonElement>("#credit-save");
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const mine = await loadMine().catch(() => [] as MineContribution[]);
+      const prefs = {
+        proposal_id: proposalId,
+        public_credit: publicCredit,
+        anonymous: !publicCredit,
+        show_amount: showAmount && publicCredit,
+      };
+      let res: Response;
+      if (txid) {
+        res = await authFetch(`${api()}/contributions/claim`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...prefs,
+            txid,
+            vout: Number.isFinite(vout) ? vout : 0,
+          }),
+        });
+      } else if (mine.length) {
+        const first = mine[0]!;
+        res = await authFetch(`${api()}/contributions/credit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...prefs,
+            ...(first.txid != null && first.vout != null
+              ? { txid: first.txid, vout: first.vout }
+              : {}),
+            ...(first.swap_id ? { swap_id: first.swap_id } : {}),
+          }),
+        });
+      } else {
+        throw new Error("Enter the funding txid (and vout) for your donation.");
+      }
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Could not save credit preference.");
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = "Credit preference saved.";
+      }
+      await Promise.all([loadMine(), loadFunders()]);
+    } catch (error) {
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = (error as Error).message;
+      }
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  });
+
+  const submit = root.querySelector<HTMLButtonElement>("#proposal-comment-submit");
+  const input = root.querySelector<HTMLTextAreaElement>("#proposal-comment-input");
+  const commentMsg = root.querySelector<HTMLElement>("#proposal-comment-msg");
+  submit?.addEventListener("click", async () => {
+    const body = input?.value.trim() || "";
+    if (!body) return;
+    submit.disabled = true;
+    try {
+      const res = await authFetch(`${api()}/comments/${encodeURIComponent(proposalId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Could not post comment.");
+      if (input) input.value = "";
+      if (commentMsg) {
+        commentMsg.hidden = false;
+        commentMsg.textContent = "Comment posted.";
+      }
+      await loadComments();
+    } catch (error) {
+      if (commentMsg) {
+        commentMsg.hidden = false;
+        commentMsg.textContent = (error as Error).message;
+      }
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}

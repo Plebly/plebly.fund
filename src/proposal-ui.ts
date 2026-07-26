@@ -18,7 +18,13 @@ import { depKindLabel, pleblyDepHref } from "./propose-deps";
 import { proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
-import { bitcoinUri, escapeHtml, formatSats, themeQrColors } from "./util";
+import {
+  bitcoinUri,
+  escapeHtml,
+  formatSats,
+  linkifyText,
+  themeQrColors,
+} from "./util";
 
 export { bitcoinUri };
 
@@ -89,6 +95,27 @@ export function proposalLifecycleBannersHtml(
       } else if (days < 0 && ["listed", "funding", "declined_fundable"].includes(String(p.status))) {
         parts.push(
           `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended — underfunded / refund path may open</p></div>`,
+        );
+      }
+    }
+  }
+  if (
+    String(p.proposal_type || "bounty").toLowerCase() === "direct" &&
+    p.delivery_window_ends_at
+  ) {
+    const end = new Date(p.delivery_window_ends_at);
+    if (!Number.isNaN(end.getTime())) {
+      const days = Math.ceil((end.getTime() - Date.now()) / 86400_000);
+      if (days >= 0 && days <= 30) {
+        parts.push(
+          `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Delivery window</span><p>${days} day${days === 1 ? "" : "s"} remaining for proposer deliverable</p></div>`,
+        );
+      } else if (
+        days < 0 &&
+        ["listed", "funding", "claimable"].includes(String(p.status))
+      ) {
+        parts.push(
+          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Delivery window</span><p>Window ended — refund path may open</p></div>`,
         );
       }
     }
@@ -223,13 +250,17 @@ export function donateTriggerHtml(): string {
 }
 
 /** Absolute canonical URL for sharing a project page. */
-export function proposalShareUrl(repoPath: string): string {
-  return new URL(proposalHref(repoPath), SITE_ORIGIN).toString();
+export function proposalShareUrl(repoPath: string, id?: string | null): string {
+  return new URL(proposalHref(repoPath, id), SITE_ORIGIN).toString();
 }
 
 /** Share controls under the primary actions (copy / X / Nostr). */
-export function shareSlotHtml(title: string, repoPath: string): string {
-  const url = proposalShareUrl(repoPath);
+export function shareSlotHtml(
+  title: string,
+  repoPath: string,
+  id?: string | null,
+): string {
+  const url = proposalShareUrl(repoPath, id);
   const text = `${title} — fund open Bitcoin work on Plebly`;
   const xHref = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
   const nostrNote = `${text}\n\n${url}`;
@@ -844,13 +875,18 @@ export function onChainPanelHtml(p: Proposal): string {
   </details>`;
 }
 
-/** Quiet meta line: created date + id (status/byline live elsewhere in the hero). */
+/** Quiet meta line: created date, id, type, and tags (status/byline live elsewhere). */
 export function metaChipsHtml(p: Proposal): string {
   const bits: string[] = [];
   const created = formatProposalDate(p.created_at);
   if (created) bits.push(`<span>${escapeHtml(created)}</span>`);
   if (p.id) {
     bits.push(`<span class="mono proposal-meta-id">${escapeHtml(p.id)}</span>`);
+  }
+  const type = String(p.proposal_type || "bounty").toLowerCase();
+  bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Direct" : "Bounty")}</span>`);
+  for (const tag of (p.tags || []).map((item) => item.trim()).filter(Boolean).slice(0, 12)) {
+    bits.push(`<span class="proposal-meta-chip proposal-tag">${escapeHtml(tag)}</span>`);
   }
   if (!bits.length) return "";
   return `<div class="proposal-meta-line">${bits.join('<span class="proposal-meta-sep" aria-hidden="true">·</span>')}</div>`;
@@ -946,17 +982,17 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
           const moreBits: string[] = [];
           if (m.verification) {
             moreBits.push(
-              `<p class="milestone-rail-verify"><span class="milestone-rail-k">Verify</span> ${escapeHtml(m.verification)}</p>`,
+              `<p class="milestone-rail-verify"><span class="milestone-rail-k">Verify</span> ${linkifyText(m.verification)}</p>`,
             );
           }
           if (m.out_of_scope) {
             moreBits.push(
-              `<p class="milestone-rail-oos"><span class="milestone-rail-k">Out of scope</span> ${escapeHtml(m.out_of_scope)}</p>`,
+              `<p class="milestone-rail-oos"><span class="milestone-rail-k">Out of scope</span> ${linkifyText(m.out_of_scope)}</p>`,
             );
           }
           if (m.dependencies?.length) {
             moreBits.push(
-              `<p class="milestone-rail-deps"><span class="milestone-rail-k">Depends on</span> ${escapeHtml(m.dependencies.join(", "))}</p>`,
+              `<p class="milestone-rail-deps"><span class="milestone-rail-k">Depends on</span> ${linkifyText(m.dependencies.join(", "))}</p>`,
             );
           }
           return `<li class="milestone-rail-item">
@@ -966,7 +1002,7 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
               <span class="milestone-rail-sats sats">${escapeHtml(formatSats(m.allocation_sats))}</span>
               ${due ? `<time class="milestone-rail-due" datetime="${escapeHtml(String(m.deadline))}">Due ${escapeHtml(due)}</time>` : ""}
             </div>
-            <p class="milestone-rail-deliverable">${escapeHtml(m.deliverable)}</p>
+            <p class="milestone-rail-deliverable">${linkifyText(m.deliverable)}</p>
             ${
               moreBits.length
                 ? `<details class="milestone-more"><summary>Details</summary>${moreBits.join("")}</details>`
@@ -988,24 +1024,24 @@ function dependsOnItemsHtml(
       const kind = d.kind === "external" ? "external" : "plebly";
       let ref = "";
       if (d.ref) {
-        if (d.ref.startsWith("https://")) {
-          ref = `<a href="${escapeHtml(d.ref)}" target="_blank" rel="noreferrer">${escapeHtml(d.ref)}</a>`;
+        if (/^https?:\/\//i.test(d.ref)) {
+          ref = `<a href="${escapeHtml(d.ref)}" target="_blank" rel="noreferrer noopener">${escapeHtml(d.ref)}</a>`;
         } else if (kind === "plebly") {
           const path = pleblyDepHref(d.ref);
           ref = path
             ? `<a class="mono" href="${proposalHref(path)}">${escapeHtml(d.ref)}</a>`
             : `<span class="mono">${escapeHtml(d.ref)}</span>`;
         } else {
-          ref = `<span class="mono">${escapeHtml(d.ref)}</span>`;
+          ref = `<span class="mono">${linkifyText(d.ref)}</span>`;
         }
       }
       return `<li class="dep-list-item">
         <div class="dep-list-head">
           <span class="pill">${escapeHtml(depKindLabel(kind))}</span>
-          <strong>${escapeHtml(d.label)}</strong>
+          <strong>${linkifyText(d.label)}</strong>
         </div>
         ${ref ? `<p class="dep-list-ref">${ref}</p>` : ""}
-        ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
+        ${d.note ? `<p class="dep-list-note">${linkifyText(d.note)}</p>` : ""}
       </li>`;
     })
     .join("")}</ul>`;
@@ -1018,16 +1054,17 @@ function relatedWorkItemsHtml(
     .map((d) => {
       const labelMatchesUrl =
         d.label.trim().toLowerCase() === d.url.trim().toLowerCase();
+      const safeUrl = escapeHtml(d.url);
       return `<li class="dep-list-item">
         <div class="dep-list-head">
-          <a href="${escapeHtml(d.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(d.label)}</strong></a>
+          <a href="${safeUrl}" target="_blank" rel="noreferrer noopener"><strong>${escapeHtml(d.label)}</strong></a>
         </div>
         ${
           labelMatchesUrl
             ? ""
-            : `<p class="dep-list-ref muted mono">${escapeHtml(d.url)}</p>`
+            : `<p class="dep-list-ref muted mono"><a href="${safeUrl}" target="_blank" rel="noreferrer noopener">${safeUrl}</a></p>`
         }
-        ${d.note ? `<p class="dep-list-note">${escapeHtml(d.note)}</p>` : ""}
+        ${d.note ? `<p class="dep-list-note">${linkifyText(d.note)}</p>` : ""}
       </li>`;
     })
     .join("")}</ul>`;
@@ -1084,6 +1121,35 @@ export function proposalContextHtml(
   </section>`;
 }
 
+export function userMatchesProposer(
+  user: {
+    username?: string;
+    github?: string;
+    x?: string;
+    nostr?: string;
+  } | null,
+  proposer: {
+    username?: string | null;
+    github?: string | null;
+    x?: string | null;
+    nostr?: string | null;
+  } | null | undefined,
+): boolean {
+  if (!user || !proposer) return false;
+  const norm = (v: unknown) =>
+    String(v || "")
+      .toLowerCase()
+      .replace(/^@/, "")
+      .trim();
+  const pairs: [string, string][] = [
+    [norm(user.username), norm(proposer.username)],
+    [norm(user.github), norm(proposer.github)],
+    [norm(user.x), norm(proposer.x)],
+    [norm(user.nostr), norm(proposer.nostr)],
+  ];
+  return pairs.some(([a, b]) => Boolean(a && b && a === b));
+}
+
 export function canEditProposal(
   user: {
     username?: string;
@@ -1099,20 +1165,8 @@ export function canEditProposal(
   } | null | undefined,
   status: string,
 ): boolean {
-  if (!user || !proposer) return false;
   if (!EDITABLE_PROPOSAL_STATUSES.has(status)) return false;
-  const norm = (v: unknown) =>
-    String(v || "")
-      .toLowerCase()
-      .replace(/^@/, "")
-      .trim();
-  const pairs: [string, string][] = [
-    [norm(user.username), norm(proposer.username)],
-    [norm(user.github), norm(proposer.github)],
-    [norm(user.x), norm(proposer.x)],
-    [norm(user.nostr), norm(proposer.nostr)],
-  ];
-  return pairs.some(([a, b]) => Boolean(a && b && a === b));
+  return userMatchesProposer(user, proposer);
 }
 
 function verificationStepsHtml(body: string): string | null {
@@ -1124,15 +1178,8 @@ function verificationStepsHtml(body: string): string | null {
     .map((l) => l.replace(/^\d+\.\s+/, "").trim());
   if (items.length < 2) return null;
   return `<ol class="verify-steps">${items
-    .map((item) => `<li>${linkifyInline(item)}</li>`)
+    .map((item) => `<li>${linkifyText(item)}</li>`)
     .join("")}</ol>`;
-}
-
-function linkifyInline(text: string): string {
-  return escapeHtml(text).replace(
-    /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" target="_blank" rel="noreferrer noopener">$1</a>',
-  );
 }
 
 export function sectionBodyHtml(title: string, body: string, renderMd: (s: string) => string): string {

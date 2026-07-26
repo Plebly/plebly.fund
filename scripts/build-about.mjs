@@ -154,6 +154,12 @@ export const ABOUT_BUILDERS_HTML = ${JSON.stringify(
         : "",
     )};
 
+export const ABOUT_TRUST_HTML = ${JSON.stringify(
+      byId.trust_model
+        ? marked.parse(byId.trust_model.body, { async: false })
+        : "",
+    )};
+
 export const ABOUT_BELIEFS: AboutBelief[] = ${JSON.stringify(beliefs, null, 2)};
 
 export const ABOUT_STEPS: AboutStep[] = ${JSON.stringify(steps, null, 2)};
@@ -211,6 +217,7 @@ export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
     params.claim_abuse_escalation_threshold,
     2,
   );
+  const coreAnnualGapSats = parseSats(params.core_annual_gap) ?? 0;
   const maxSiteClaimPrsPerDay = firstInt(params.max_site_claim_prs_per_day, 10);
   const identityRelinkCooldownDays = firstInt(
     params.identity_relink_cooldown,
@@ -239,6 +246,7 @@ export const RECLAIM_COOLDOWN_DAYS = ${reclaimCooldownDays};
 export const CLAIM_CHECKPOINT_DAY = ${claimCheckpointDay};
 export const CLAIM_CHECKPOINT_GRACE_DAYS = ${claimCheckpointGraceDays};
 export const CLAIM_ABUSE_ESCALATION_THRESHOLD = ${claimAbuseEscalationThreshold};
+export const CORE_ANNUAL_GAP_SATS = ${coreAnnualGapSats};
 export const MAX_SITE_CLAIM_PRS_PER_DAY = ${maxSiteClaimPrsPerDay};
 export const IDENTITY_RELINK_COOLDOWN_DAYS = ${identityRelinkCooldownDays};`,
   );

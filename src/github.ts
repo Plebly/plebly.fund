@@ -1,4 +1,4 @@
-import { PROPOSALS_API, PROPOSALS_RAW } from "./config";
+import { PROPOSALS_API, PROPOSALS_RAW, WORKERS_API } from "./config";
 import { parseFrontMatter } from "./frontmatter";
 import type {
   DependsOnEntry,
@@ -63,9 +63,21 @@ function parseRelatedWork(value: unknown): RelatedWorkEntry[] {
 export function proposalFromMarkdown(raw: string, path: string, dir = "unknown"): Proposal {
   const { data, body } = parseFrontMatter(raw);
   return {
-    id: (data.id as string) || path.replace(/\.md$/, "").split("/").pop() || null,
+    id:
+      typeof data.id === "string" && data.id.trim()
+        ? data.id.trim()
+        : null,
     title: (data.title as string) || path,
     status: (data.status as string) || dir,
+    proposal_type:
+      String(data.proposal_type || "bounty").toLowerCase() === "direct"
+        ? "direct"
+        : "bounty",
+    tags: Array.isArray(data.tags)
+      ? data.tags.filter((t): t is string => typeof t === "string")
+      : [],
+    parent_initiative:
+      typeof data.parent_initiative === "string" ? data.parent_initiative : null,
     path,
     target_sats: typeof data.target_sats === "number" ? data.target_sats : null,
     escrow_address: (data.escrow_address as string) || null,
@@ -83,6 +95,7 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     deliverable_url: (data.deliverable_url as string) || null,
     escrow_allocated_at: (data.escrow_allocated_at as string) || null,
     funding_window_ends_at: (data.funding_window_ends_at as string) || null,
+    delivery_window_ends_at: (data.delivery_window_ends_at as string) || null,
     milestones_due_at: (data.milestones_due_at as string) || null,
     release_blocked_reason: (data.release_blocked_reason as string) || null,
     body,
@@ -115,6 +128,46 @@ export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {
 
 export async function listListedProposals(): Promise<Proposal[]> {
   return listProposalsInDirs(["listed", "claimed", "completed"]);
+}
+
+async function loadProposalByPath(path: string): Promise<Proposal | null> {
+  const normalized = path.replace(/^\//, "");
+  try {
+    const raw = await fetch(`${PROPOSALS_RAW}/${normalized}`);
+    if (!raw.ok) return null;
+    const dir = normalized.split("/")[1] || "unknown";
+    return proposalFromMarkdown(await raw.text(), normalized, dir);
+  } catch {
+    return null;
+  }
+}
+
+export async function findListedProposalById(
+  id: string,
+): Promise<Proposal | null> {
+  const normalized = id.trim();
+  if (!normalized) return null;
+
+  // Prefer Worker id→path index (O(1)); fall back to GitHub directory walk.
+  if (WORKERS_API) {
+    try {
+      const res = await fetch(
+        `${WORKERS_API.replace(/\/$/, "")}/proposals/lookup/${encodeURIComponent(normalized)}`,
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { path?: string };
+        if (data.path) {
+          const hit = await loadProposalByPath(data.path);
+          if (hit) return hit;
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const proposals = await listListedProposals();
+  return proposals.find((proposal) => proposal.id === normalized) || null;
 }
 
 export async function listAllPublicProposals(): Promise<Proposal[]> {

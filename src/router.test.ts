@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseLocation, seoForRoute } from "./router";
+import {
+  parseLocation,
+  proposalHref,
+  proposalJsonLd,
+  seoForRoute,
+} from "./router";
 
 describe("router governance paths", () => {
   it("parses /reviewers and /governance", () => {
@@ -12,4 +17,44 @@ describe("router governance paths", () => {
     expect(seo.path).toBe("/reviewers");
     expect(seo.title).toMatch(/Reviewers/i);
   });
+
+  it("parses and links stable proposal IDs", () => {
+    expect(parseLocation("/p/PLEBLY-42", "")).toEqual({
+      name: "proposal",
+      id: "PLEBLY-42",
+      stable: true,
+    });
+    expect(proposalHref("proposals/listed/example.md", "PLEBLY-42")).toBe(
+      "/p/PLEBLY-42",
+    );
+  });
+
+  it("keeps legacy folder URLs and adds /stats", () => {
+    expect(parseLocation("/proposal/listed/example", "")).toEqual({
+      name: "proposal",
+      id: "proposals/listed/example.md",
+    });
+    expect(proposalHref("proposals/listed/example.md")).toBe(
+      "/proposal/listed/example",
+    );
+    expect(parseLocation("/stats", "")).toEqual({ name: "stats" });
+  });
+
+  it("builds FundingCampaign JSON-LD for stable proposal URLs", () => {
+    const ld = proposalJsonLd({
+      id: "PLEBLY-42",
+      title: "Demo",
+      description: "Fund open work",
+      path: "/p/PLEBLY-42",
+      status: "listed",
+      target_sats: 100_000,
+      balance_sats: 25_000,
+    });
+    expect(ld["@type"]).toBe("FundingCampaign");
+    expect(ld.url).toBe("https://plebly.fund/p/PLEBLY-42");
+    expect(ld.fundingGoal).toMatchObject({ currency: "XBT" });
+    expect(ld.amount).toMatchObject({ currency: "XBT" });
+  });
 });
+
+

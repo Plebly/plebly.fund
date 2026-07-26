@@ -1,5 +1,7 @@
 import {
   loginChoicesHtml,
+  requestDraftAssist,
+  requestSubmissionCheck,
   submitProposal,
   updateProposal,
 } from "./auth";
@@ -44,12 +46,17 @@ import type {
 } from "./types";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { escapeHtml, formatSats } from "./util";
+import { PROPOSAL_TEMPLATES } from "./proposal-templates";
 
 const PROPOSE_PATH = "/propose";
 
 type Prefill = {
   path: string;
+  id: string | null;
   title: string;
+  proposal_type: "bounty" | "direct";
+  tags: string[];
+  parent_initiative: string | null;
   problem: string;
   deliverable: string;
   verification: string;
@@ -83,9 +90,22 @@ async function loadPrefill(editPath: string): Promise<Prefill | null> {
   const related_work = Array.isArray(data.related_work)
     ? (data.related_work as RelatedWorkEntry[])
     : [];
+  const tags = Array.isArray(data.tags)
+    ? data.tags.filter((t): t is string => typeof t === "string")
+    : [];
   return {
     path,
+    id: typeof data.id === "string" && data.id.trim() ? data.id.trim() : null,
     title: String(data.title || ""),
+    proposal_type:
+      String(data.proposal_type || "bounty").toLowerCase() === "direct"
+        ? "direct"
+        : "bounty",
+    tags,
+    parent_initiative:
+      typeof data.parent_initiative === "string"
+        ? data.parent_initiative
+        : null,
     problem: sections.problem || "",
     deliverable: sections.deliverable || "",
     verification: sections.verification || "",
@@ -161,7 +181,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span> · no second fee</p>
               <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
               <p class="edit-banner-actions">
-                <a href="${proposalHref(prefill!.path)}">← Back to project</a>
+                <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
               </p>
             </div>`
           : `<p class="lede">Describe the work and pay the ${escapeHtml(feeLabel)} submission fee on ${escapeHtml(networkLabel)}.</p>`
@@ -170,9 +190,35 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       <form id="propose-form" class="form-panel form-panel-wide">
         <fieldset class="form-block">
           <legend>Proposal</legend>
+          ${
+            isEdit
+              ? ""
+              : `<label class="field">
+              <span>Start from template <em class="optional">(optional)</em></span>
+              <select id="proposal-template">
+                <option value="">Choose a starter template (fills the draft)…</option>
+                ${PROPOSAL_TEMPLATES.map((template) => `<option value="${template.id}">${template.label}</option>`).join("")}
+              </select>
+            </label>`
+          }
           <label class="field">
             <span>Title</span>
             <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" value="${escapeHtml(prefill?.title || "")}" />
+          </label>
+          <fieldset class="field propose-type">
+            <span>Proposal type</span>
+            <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /> <strong>Bounty</strong> — open to claim by a builder</label>
+            <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /> <strong>Direct</strong> — you are the recipient (no claim step)</label>
+          </fieldset>
+          <label class="field">
+            <span>Tags <em class="optional">(optional)</em></span>
+            <input name="tags" maxlength="200" placeholder="e.g. knots, policy, docs" value="${escapeHtml((prefill?.tags || []).join(", "))}" />
+            <span class="field-hint">Suggested: see TAGS.md — comma-separated.</span>
+          </label>
+          <label class="field">
+            <span>Commons / parent initiative <em class="optional">(optional)</em></span>
+            <input name="parent_initiative" maxlength="200" placeholder="e.g. Bitcoin Core Commons" value="${escapeHtml(prefill?.parent_initiative || "")}" />
+            <span class="field-hint">Use a shared initiative name to group related proposals. This does not create governance authority.</span>
           </label>
           <div class="field cover-field">
             <span>Cover image <em class="optional">(optional)</em></span>
@@ -216,6 +262,15 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             <span>Notes <em class="optional">(optional)</em></span>
             <textarea name="notes" maxlength="4000" rows="3" placeholder="Freeform context. Prefer Related work below for structured https links.">${escapeHtml(prefill?.notes || "")}</textarea>
           </label>
+          <div class="writing-help">
+            <p class="writing-help-title">Writing help</p>
+            <p class="field-hint">Suggestions and clarity checks warn only; you decide what to submit.</p>
+            <div class="form-actions ai-assist-actions">
+            <button type="button" class="btn ghost" id="draft-assist-btn">Draft assist</button>
+            <button type="button" class="btn ghost" id="submission-check-btn">Check clarity</button>
+            </div>
+          </div>
+          <div class="form-msg" id="ai-assist-result" hidden></div>
         </fieldset>
 
         <fieldset class="form-block">
@@ -247,7 +302,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
         <div class="form-actions">
           <button type="submit" class="btn">${isEdit ? "Open amend PR" : "Open proposal PR"}</button>
-          ${isEdit ? `<a class="btn ghost" href="${proposalHref(prefill!.path)}">Cancel</a>` : ""}
+          ${isEdit ? `<a class="btn ghost" href="${proposalHref(prefill!.path, prefill!.id)}">Cancel</a>` : ""}
         </div>
         <p class="form-msg" id="propose-msg" hidden></p>
       </form>
@@ -268,6 +323,128 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const dependsEmpty = document.getElementById("depends-on-empty");
   const relatedList = document.getElementById("related-work-list")!;
   const relatedEmpty = document.getElementById("related-work-empty");
+  const aiResult = document.getElementById("ai-assist-result")!;
+
+  const aiInput = () => {
+    const field = (name: string) =>
+      (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement)
+        ?.value.trim() || "";
+    return {
+      title: field("title"),
+      problem: field("problem"),
+      deliverable: field("deliverable"),
+      verification: field("verification"),
+      tags: field("tags")
+        .split(",")
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 12),
+    };
+  };
+
+  const showAiMessage = (lines: string[], kind: "success" | "error" = "success") => {
+    aiResult.hidden = false;
+    aiResult.className = `form-msg ${kind}`;
+    aiResult.replaceChildren();
+    const list = document.createElement("ul");
+    lines.forEach((line) => {
+      const item = document.createElement("li");
+      item.textContent = line;
+      list.append(item);
+    });
+    aiResult.append(list);
+  };
+
+  const templateSelect = document.getElementById(
+    "proposal-template",
+  ) as HTMLSelectElement | null;
+  templateSelect?.addEventListener("change", () => {
+    const template = PROPOSAL_TEMPLATES.find(
+      (candidate) => candidate.id === templateSelect.value,
+    );
+    if (!template) return;
+    const overwrite = [
+      "title",
+      "problem",
+      "deliverable",
+      "verification",
+      "out_of_scope",
+      "tags",
+    ].some((name) => {
+      const input = form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
+      return Boolean(input?.value.trim());
+    });
+    if (overwrite && !window.confirm("Use this template to replace the draft fields?")) {
+      templateSelect.value = "";
+      return;
+    }
+    (form.elements.namedItem("title") as HTMLInputElement).value = template.title;
+    (form.elements.namedItem("problem") as HTMLTextAreaElement).value = template.problem;
+    (form.elements.namedItem("deliverable") as HTMLTextAreaElement).value = template.deliverable;
+    (form.elements.namedItem("verification") as HTMLTextAreaElement).value = template.verification;
+    (form.elements.namedItem("out_of_scope") as HTMLTextAreaElement).value = template.out_of_scope;
+    (form.elements.namedItem("tags") as HTMLInputElement).value = template.tags.join(", ");
+    aiResult.hidden = true;
+  });
+
+  document.getElementById("draft-assist-btn")?.addEventListener("click", async () => {
+    const button = document.getElementById("draft-assist-btn") as HTMLButtonElement;
+    button.disabled = true;
+    aiResult.hidden = false;
+    aiResult.className = "form-msg";
+    aiResult.textContent = "Preparing suggestions…";
+    try {
+      const result = await requestDraftAssist(aiInput());
+      const fields = ["title", "problem", "deliverable", "verification"] as const;
+      const changed = fields.filter((field) => result.suggestions[field]);
+      showAiMessage([
+        ...(result.notes.length ? result.notes : ["Review the suggested wording below."]),
+        ...(changed.length ? [`Suggestions ready for: ${changed.join(", ")}.`] : []),
+      ]);
+      if (changed.length) {
+        const apply = document.createElement("button");
+        apply.type = "button";
+        apply.className = "btn ghost";
+        apply.textContent = "Apply suggestions";
+        apply.addEventListener("click", () => {
+          changed.forEach((field) => {
+            const input = form.elements.namedItem(field) as HTMLInputElement | HTMLTextAreaElement;
+            input.value = result.suggestions[field];
+          });
+          showAiMessage(["Suggestions applied. Review them before submission."]);
+        });
+        aiResult.append(apply);
+      }
+    } catch (err) {
+      showAiMessage([(err as Error).message], "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.getElementById("submission-check-btn")?.addEventListener("click", async () => {
+    const button = document.getElementById("submission-check-btn") as HTMLButtonElement;
+    button.disabled = true;
+    aiResult.hidden = false;
+    aiResult.className = "form-msg";
+    aiResult.textContent = "Checking clarity…";
+    try {
+      const result = await requestSubmissionCheck(aiInput());
+      showAiMessage([
+        ...(result.ok ? ["Clarity check passed."] : []),
+        ...result.hints.map((hint) => `Hint: ${hint}`),
+        ...result.warnings.map((warning) => `Warning: ${warning}`),
+        ...result.blockers.map((blocker) => `Needs attention: ${blocker}`),
+        ...(!result.ok && !result.hints.length && !result.warnings.length && !result.blockers.length
+          ? ["Review the proposal for a concrete deliverable and reproducible verification."]
+          : []),
+      ]);
+    } catch (err) {
+      showAiMessage([(err as Error).message], "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   const syncEmpty = (list: HTMLElement, empty: HTMLElement | null) => {
     if (!empty) return;
@@ -637,8 +814,20 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       return;
     }
 
+    const tagsRaw = String(fd.get("tags") || "");
+    const tags = tagsRaw
+      .split(/[,]+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 12);
     const author = {
       title: String(fd.get("title") || ""),
+      proposal_type:
+        String(fd.get("proposal_type") || "bounty") === "direct"
+          ? ("direct" as const)
+          : ("bounty" as const),
+      tags,
+      parent_initiative: String(fd.get("parent_initiative") || "").trim() || null,
       problem: String(fd.get("problem") || ""),
       deliverable: String(fd.get("deliverable") || ""),
       verification: String(fd.get("verification") || ""),
@@ -695,7 +884,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         title: "Amend submitted",
         body: "Your amend pull request is open. Lifecycle fields stay intact until merge.",
         prUrl: result.pr_url,
-        backHref: proposalHref(prefill!.path),
+        backHref: proposalHref(prefill!.path, prefill!.id),
         backLabel: "Back to project",
       });
     } catch (err) {

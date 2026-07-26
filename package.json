@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/build-about.mjs && vite",
-    "build": "node scripts/build-about.mjs && tsc && vite build && node scripts/spa-fallback.mjs",
+    "build": "node scripts/build-about.mjs && node scripts/build-sitemap.mjs && tsc && vite build && node scripts/spa-fallback.mjs && node scripts/build-og-pages.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

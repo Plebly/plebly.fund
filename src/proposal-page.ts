@@ -1,4 +1,4 @@
-import { fetchWatches } from "./builder";
+import { fetchEvaluating, fetchWatches } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import { authFetch, profilePath, type AuthUser } from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
@@ -27,6 +27,7 @@ import {
   sectionBodyHtml,
   statusClass,
   statusLabel,
+  userMatchesProposer,
 } from "./proposal-ui";
 import {
   bindRebuttalPanel,
@@ -36,8 +37,20 @@ import {
 } from "./review-panel";
 import type { Proposal } from "./types";
 import { safeHttpsImageUrl } from "./media";
-import { applySeo, href, seoForRoute } from "./router";
-import { escapeHtml } from "./util";
+import {
+  bindProposalEngagement,
+  commentsHtml,
+  funderCreditHtml,
+} from "./proposal-engagement";
+import {
+  applySeo,
+  href,
+  proposalHref,
+  proposalJsonLd,
+  seoForRoute,
+} from "./router";
+import { escapeHtml, linkifyText, proposalStablePath } from "./util";
+import { recordProposalView } from "./views";
 
 export type ProposalShell = (inner: string) => string;
 
@@ -170,6 +183,27 @@ function proposalSectionsHtml(markdown: string): string {
     .join("");
 }
 
+function proposalSeoDescription(proposal: Proposal): string | undefined {
+  const sections = ["Problem", "Deliverable"]
+    .map((heading) =>
+      new RegExp(
+        `^##\\s+${heading}\\s*\\n([\\s\\S]*)`,
+        "im",
+      )
+        .exec(proposal.body)?.[1]
+        .split(/^##\s+/m)[0],
+    )
+    .filter((section): section is string => Boolean(section))
+    .map((section) => section.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const source = sections.join(" ") || proposal.body;
+  return source
+    .replace(/^#+\s+.+$/gm, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160) || undefined;
+}
+
 export async function renderProposalPage(
   path: string,
   shell: ProposalShell,
@@ -190,21 +224,12 @@ export async function renderProposalPage(
     const listed = proposals.find((p) => p.path === path);
     const match: Proposal = listed || proposalFromMarkdown(raw, path);
     const coverUrl = safeHttpsImageUrl(match.cover_image);
-    applySeo({
-      ...seoForRoute(
-        { name: "proposal", id: match.path || path },
-        {
-          title: match.title,
-          description:
-            match.body
-              ?.replace(/^#+\s+.+$/gm, "")
-              .replace(/\s+/g, " ")
-              .trim()
-              .slice(0, 160) || undefined,
-        },
-      ),
-      ...(coverUrl ? { image: coverUrl } : {}),
-    });
+    if (match.id) {
+      const canonical = new URL(proposalHref(match.path, match.id), location.origin);
+      if (location.pathname !== canonical.pathname) {
+        history.replaceState(history.state, "", `${canonical.pathname}${location.search}${location.hash}`);
+      }
+    }
     const bodyMd = match.body;
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
@@ -216,6 +241,34 @@ export async function renderProposalPage(
         /* ignore */
       }
     }
+
+    const seoDescription =
+      proposalSeoDescription(match) ||
+      "Fund open Bitcoin work with publicly verifiable on-chain escrow.";
+    const seoPath = match.id
+      ? proposalStablePath(match.id)
+      : `/proposal/${match.path.replace(/^proposals\//, "").replace(/\.md$/, "")}`;
+    applySeo({
+      ...seoForRoute(
+        { name: "proposal", id: match.path || path },
+        {
+          title: match.title,
+          description: seoDescription,
+          path: match.id ? proposalStablePath(match.id) : undefined,
+        },
+      ),
+      ...(coverUrl ? { image: coverUrl } : {}),
+      jsonLd: proposalJsonLd({
+        id: match.id,
+        title: match.title,
+        description: seoDescription,
+        path: seoPath,
+        status: String(match.status),
+        target_sats: match.target_sats,
+        balance_sats: balance ?? match.balance_sats,
+        cover_image: coverUrl,
+      }),
+    });
 
     const byline = proposerBylineHtml(match.proposer, profilePath);
 
@@ -232,6 +285,15 @@ export async function renderProposalPage(
         w.proposal_path === match.path ||
         w.proposal_id === match.id ||
         w.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
+    );
+    const evaluatingEntries = user
+      ? await fetchEvaluating().catch(() => [])
+      : [];
+    const evaluating = evaluatingEntries.some(
+      (entry) =>
+        entry.proposal_path === match.path ||
+        entry.proposal_id === match.id ||
+        entry.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
     );
 
     const coverHtml = coverUrl
@@ -279,6 +341,7 @@ export async function renderProposalPage(
           <div class="proposal-hero-meta">
             ${byline}
             ${metaChipsHtml(match)}
+            ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" aria-live="polite">Views: —</span>` : ""}
             ${
               canEdit
                 ? `<a class="proposal-edit-link" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">Edit</a>`
@@ -299,14 +362,25 @@ export async function renderProposalPage(
           <div class="proposal-main">
             <div class="proposal-sections">${sectionsHtml}</div>
             ${milestonesHtml(match.milestones)}
+            ${
+              match.parent_initiative
+                ? `<section class="proposal-context" aria-labelledby="commons-heading">
+                    <h2 id="commons-heading" class="proposal-block-title">Commons</h2>
+                    <p class="proposal-block-lede">Parent initiative</p>
+                    <p>${linkifyText(match.parent_initiative)}</p>
+                  </section>`
+                : ""
+            }
             ${proposalContextHtml(match.depends_on || [], match.related_work || [])}
+            ${funderCreditHtml(match.id, Boolean(user))}
+            ${commentsHtml(match.id, Boolean(user))}
           </div>
 
           <aside class="proposal-sidebar">
             <div class="proposal-actions">
-              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
+              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching, evaluating)}
               ${match.escrow_address ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
-              ${shareSlotHtml(match.title, match.path)}
+              ${shareSlotHtml(match.title, match.path, match.id)}
             </div>
             ${deliverableChipHtml(match.deliverable_url)}
             ${status === "in_review" && match.id ? reviewPanelHtml(match.id) : ""}
@@ -327,6 +401,7 @@ export async function renderProposalPage(
       balance,
       user,
       watching,
+      evaluating,
     });
     if (match.escrow_address) {
       await bindDonatePanel(app, {
@@ -340,18 +415,29 @@ export async function renderProposalPage(
       });
     }
     bindRefundAndBallot(app, match);
+    await bindProposalEngagement(app, Boolean(user));
+    if (match.id) {
+      void recordProposalView(match.id).then((count) => {
+        const el = app.querySelector("#proposal-view-count");
+        if (el && count != null) el.textContent = `Views: ${count.toLocaleString()}`;
+      });
+    }
     if (String(match.status) === "in_review" && match.id) {
       await bindReviewPanel(app, { proposalId: match.id, user });
     }
     if (String(match.status) === "rejected" && match.id) {
-      const isFulfiller = Boolean(
-        user &&
-          match.claimer &&
-          (match.claimer === user.username ||
-            match.claimer === user.github ||
-            match.claimer === user.x ||
-            match.claimer === user.id),
-      );
+      const isDirect =
+        String(match.proposal_type || "bounty").toLowerCase() === "direct";
+      const isFulfiller = isDirect
+        ? userMatchesProposer(user, match.proposer)
+        : Boolean(
+            user &&
+              match.claimer &&
+              (match.claimer === user.username ||
+                match.claimer === user.github ||
+                match.claimer === user.x ||
+                match.claimer === user.id),
+          );
       await bindRebuttalPanel(app, {
         proposalId: match.id,
         proposalPath: match.path,

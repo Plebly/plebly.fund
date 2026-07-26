@@ -1,5 +1,5 @@
 import type { Route } from "./types";
-import { proposalRepoPath, proposalSlug } from "./util";
+import { proposalRepoPath, proposalSlug, proposalStablePath } from "./util";
 
 export const SITE_ORIGIN = "https://plebly.fund";
 const DEFAULT_DESCRIPTION =
@@ -43,7 +43,8 @@ export function href(path: string, search = "", hash = ""): string {
   return `${prefixed}${q}${h}`;
 }
 
-export function proposalHref(repoPath: string): string {
+export function proposalHref(repoPath: string, id?: string | null): string {
+  if (id?.trim()) return href(proposalStablePath(id));
   const segments = proposalSlug(repoPath)
     .split("/")
     .filter(Boolean)
@@ -62,6 +63,7 @@ export function parseLocation(
   const path = pathname.replace(/^\/+/, "").split("?")[0];
   if (!path || path === "home") return { name: "home" };
   if (path === "about") return { name: "about" };
+  if (path === "stats") return { name: "stats" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
@@ -73,6 +75,10 @@ export function parseLocation(
   if (path.startsWith("proposal/")) {
     const slug = path.slice("proposal/".length);
     return { name: "proposal", id: proposalRepoPath(slug) };
+  }
+  if (path.startsWith("p/")) {
+    const id = decodeURIComponent(path.slice("p/".length)).trim();
+    if (id) return { name: "proposal", id, stable: true };
   }
   void search;
   return { name: "home" };
@@ -179,6 +185,8 @@ export type SeoInput = {
   path?: string;
   image?: string;
   noindex?: boolean;
+  /** JSON-LD graph objects (FundingCampaign, WebSite, etc.) */
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 };
 
 function ensureMeta(attr: "name" | "property", key: string): HTMLMetaElement {
@@ -212,6 +220,24 @@ function canonicalUrl(appPath: string): string {
   return p === "/" ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}${p}`;
 }
 
+function applyJsonLd(
+  data: Record<string, unknown> | Record<string, unknown>[] | undefined,
+): void {
+  const id = "plebly-jsonld";
+  const existing = document.getElementById(id);
+  if (!data) {
+    existing?.remove();
+    return;
+  }
+  const el =
+    (existing as HTMLScriptElement | null) ||
+    document.createElement("script");
+  el.id = id;
+  el.type = "application/ld+json";
+  el.textContent = JSON.stringify(data);
+  if (!existing) document.head.appendChild(el);
+}
+
 /** Update document title + Open Graph / Twitter / canonical for the active route. */
 export function applySeo(input: SeoInput): void {
   const title = input.title?.trim() || "Plebly";
@@ -241,11 +267,58 @@ export function applySeo(input: SeoInput): void {
   ensureMeta("name", "twitter:title").content = document.title;
   ensureMeta("name", "twitter:description").content = description;
   ensureMeta("name", "twitter:image").content = image;
+
+  applyJsonLd(input.jsonLd);
+}
+
+/** Build FundingCampaign JSON-LD for a proposal page. */
+export function proposalJsonLd(input: {
+  id: string | null;
+  title: string;
+  description: string;
+  path: string;
+  status: string;
+  target_sats?: number | null;
+  balance_sats?: number | null;
+  cover_image?: string | null;
+}): Record<string, unknown> {
+  const url = input.id
+    ? `${SITE_ORIGIN}/p/${encodeURIComponent(input.id)}`
+    : canonicalUrl(input.path.startsWith("/") ? input.path : `/${input.path}`);
+  const raised =
+    typeof input.balance_sats === "number" && input.balance_sats > 0
+      ? {
+          "@type": "MonetaryAmount",
+          currency: "XBT",
+          value: (input.balance_sats / 1e8).toFixed(8),
+        }
+      : undefined;
+  const goal =
+    typeof input.target_sats === "number" && input.target_sats > 0
+      ? {
+          "@type": "MonetaryAmount",
+          currency: "XBT",
+          value: (input.target_sats / 1e8).toFixed(8),
+        }
+      : undefined;
+  return {
+    "@context": "https://schema.org",
+    "@type": "FundingCampaign",
+    name: input.title,
+    description: input.description,
+    url,
+    identifier: input.id || undefined,
+    creativeWorkStatus: input.status,
+    ...(input.cover_image ? { image: input.cover_image } : {}),
+    ...(raised ? { amount: raised } : {}),
+    ...(goal ? { fundingGoal: goal } : {}),
+    funder: { "@type": "Organization", name: "Plebly", url: SITE_ORIGIN },
+  };
 }
 
 export function seoForRoute(
   route: Route,
-  extra?: { title?: string; description?: string },
+  extra?: { title?: string; description?: string; path?: string },
 ): SeoInput {
   switch (route.name) {
     case "home":
@@ -253,6 +326,13 @@ export function seoForRoute(
         title: "Plebly — Fund open Bitcoin work",
         description: DEFAULT_DESCRIPTION,
         path: "/",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Plebly",
+          url: SITE_ORIGIN,
+          description: DEFAULT_DESCRIPTION,
+        },
       };
     case "about":
       return {
@@ -260,6 +340,13 @@ export function seoForRoute(
         description:
           "Non-custodial escrow, uncensorable proposals, and protocol-over-platform rules for Bitcoin public goods funding.",
         path: "/about",
+      };
+    case "stats":
+      return {
+        title: "Funding stats",
+        description:
+          "Public, best-effort funding and completion totals for Plebly Bitcoin work.",
+        path: "/stats",
       };
     case "propose":
       return {
@@ -296,7 +383,7 @@ export function seoForRoute(
         description:
           extra?.description ||
           "Open Bitcoin project with publicly verifiable on-chain escrow on Plebly.",
-        path: `/proposal/${proposalSlug(route.id)}`,
+        path: extra?.path || `/proposal/${proposalSlug(route.id)}`,
       };
     default:
       return { title: "Plebly", description: DEFAULT_DESCRIPTION, path: "/" };

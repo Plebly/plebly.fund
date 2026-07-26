@@ -5,4 +5,6 @@ Allow: /
 # https://plebly.fund/llms.txt
 # https://plebly.fund/llms-full.txt
 
+# Static Pages sitemap (regenerated on deploy) + live Worker sitemap with /p/{id}
 Sitemap: https://plebly.fund/sitemap.xml
+Sitemap: https://plebly-api.securesovereigns.workers.dev/sitemap.xml

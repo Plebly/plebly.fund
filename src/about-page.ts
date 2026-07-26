@@ -6,6 +6,7 @@ import {
   ABOUT_LIGHTNING_HTML,
   ABOUT_PARAM_LABELS,
   ABOUT_STEPS,
+  ABOUT_TRUST_HTML,
 } from "./generated/about-data";
 import { pleblySocialAccountsHtml } from "./icons";
 import { href } from "./router";
@@ -13,133 +14,128 @@ import { escapeHtml } from "./util";
 
 export type AboutShell = (inner: string) => string;
 
-const BELIEF_ICONS = ["shield", "git", "rules"] as const;
-
-function beliefCardsHtml(): string {
+function beliefsHtml(): string {
   if (!ABOUT_BELIEFS.length) return "";
-  return `<div class="value-cards">${ABOUT_BELIEFS.map((b, i) => {
-    const icon = BELIEF_ICONS[i] ?? "shield";
-    return `<article class="value-card">
-      <span class="value-icon value-icon-${icon}" aria-hidden="true"></span>
-      <h3>${escapeHtml(b.title)}</h3>
-      <p>${b.body}</p>
-    </article>`;
-  }).join("")}</div>`;
+  return `<dl class="about-beliefs">${ABOUT_BELIEFS.map(
+    (b) => `<div class="about-belief">
+      <dt>${escapeHtml(b.title)}</dt>
+      <dd>${b.body}</dd>
+    </div>`,
+  ).join("")}</dl>`;
 }
 
-function processStepsHtml(): string {
+function flowHtml(): string {
   if (!ABOUT_STEPS.length) return "";
-  return `<ol class="process-steps">${ABOUT_STEPS.map(
+  return `<ol class="about-flow">${ABOUT_STEPS.map(
     (s) => `<li>
-      <span class="process-step-title">${escapeHtml(s.title)}</span>
-      <span class="process-step-body">${escapeHtml(s.body)}</span>
+      <span class="about-flow-title">${escapeHtml(s.title)}</span>
+      <span class="about-flow-body">${escapeHtml(s.body)}</span>
     </li>`,
   ).join("")}</ol>`;
 }
 
-function paramGridHtml(): string {
-  return `<div class="param-grid">${ABOUT_PARAM_LABELS.map(
-    (p) => `<article class="param-card">
-      <span class="param-label">${escapeHtml(p.label)}</span>
-      <span class="param-value">${escapeHtml(p.value)}</span>
-      <span class="param-hint">${escapeHtml(p.hint)}</span>
-    </article>`,
-  ).join("")}</div>`;
+function paramsHtml(): string {
+  return `<dl class="about-params">${ABOUT_PARAM_LABELS.map(
+    (p) => `<div class="about-param">
+      <dt>${escapeHtml(p.label)}</dt>
+      <dd>
+        <span class="about-param-value">${escapeHtml(p.value)}</span>
+        <span class="about-param-hint">${escapeHtml(p.hint)}</span>
+      </dd>
+    </div>`,
+  ).join("")}</dl>`;
 }
 
-function networkBannerHtml(): string {
+function networkNoteHtml(): string {
   if (ABOUT_BITCOIN_NETWORK !== "signet") return "";
-  return `<div class="network-banner">
-    <span class="network-banner-k">Testing</span>
-    <p>This deployment runs on <strong>signet</strong> for end-to-end testing. Launch will use <strong>mainnet only</strong> with 3-of-5 multisig escrow.</p>
-    <a href="https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md" target="_blank" rel="noreferrer">Keyholders →</a>
-  </div>`;
+  return `<p class="about-network-note">
+    Running on <strong>signet</strong> for testing.
+    Launch is <strong>mainnet</strong> with 3-of-5 multisig —
+    <a href="https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md" target="_blank" rel="noreferrer">keyholders</a>.
+  </p>`;
 }
 
 export function renderAbout(shell: AboutShell): void {
   const app = document.querySelector<HTMLDivElement>("#app")!;
+  const details = [
+    ABOUT_BUILDERS_HTML
+      ? `<div class="about-detail">
+          <h3>For builders</h3>
+          <div class="prose-rich">${ABOUT_BUILDERS_HTML}</div>
+        </div>`
+      : "",
+    ABOUT_LIGHTNING_HTML
+      ? `<div class="about-detail">
+          <h3>Lightning</h3>
+          <div class="prose-rich">${ABOUT_LIGHTNING_HTML}</div>
+        </div>`
+      : "",
+    `<div class="about-detail">
+      <h3>Reviewers</h3>
+      <p>After AI triage, active reviewers confirm deliverables.
+        Eligible funders may open removal ballots for documented bad faith; bootstrap seats stay permanent.
+        <a href="${href("/reviewers")}">Reviewer governance</a>
+        ·
+        <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>
+      </p>
+    </div>`,
+  ]
+    .filter(Boolean)
+    .join("");
+
   app.innerHTML = shell(`
     <section class="wrap-wide detail about-page">
       <header class="about-hero">
-        <p class="about-eyebrow">About</p>
         <h1>Plebly</h1>
         <div class="about-lede prose-rich">${ABOUT_INTRO_HTML}</div>
+        <div class="about-cta">
+          <a class="btn" href="${href("/")}">Browse projects</a>
+          <a class="btn ghost" href="${href("/propose")}">Start a project</a>
+        </div>
+        ${networkNoteHtml()}
       </header>
 
-      <section class="about-block" id="beliefs">
-        <h2 class="about-block-title">What we believe</h2>
-        ${beliefCardsHtml()}
-      </section>
-
-      <section class="about-block" id="how-it-works">
-        <h2 class="about-block-title">How it works</h2>
-        ${processStepsHtml()}
-        <p class="about-links">
-          Browse <a href="${href("/")}">open projects</a>,
-          <a href="${href("/propose")}">start a project</a>,
-          open <a href="${href("/reviewers")}">reviewer governance</a>,
-          or read the full rules in the
-          <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">proposals repo</a>.
-        </p>
-      </section>
-
-      <section class="about-block" id="governance">
-        <h2 class="about-block-title">Reviewers</h2>
-        <p class="about-block-lede">
-          After AI triage, a human quorum of active reviewers confirms deliverables.
-          Eligible funders may open removal ballots for a documented pattern of bad faith;
-          bootstrap seats stay permanent.
-        </p>
-        <p class="about-links">
-          <a href="${href("/reviewers")}">Open reviewer governance →</a>
-          <span class="about-links-sep" aria-hidden="true">·</span>
-          <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>
-        </p>
+      <section class="about-section" id="beliefs">
+        <h2>What we believe</h2>
+        ${beliefsHtml()}
       </section>
 
       ${
-        ABOUT_BUILDERS_HTML
-          ? `<section class="about-block" id="builders">
-        <h2 class="about-block-title">For builders</h2>
-        <div class="about-prose prose-rich">${ABOUT_BUILDERS_HTML}</div>
+        ABOUT_TRUST_HTML
+          ? `<section class="about-section" id="trust">
+        <h2>Trust model</h2>
+        <div class="about-prose prose-rich">${ABOUT_TRUST_HTML}</div>
       </section>`
           : ""
       }
 
-      ${
-        ABOUT_LIGHTNING_HTML
-          ? `<section class="about-block" id="lightning">
-        <h2 class="about-block-title">Lightning donations</h2>
-        <div class="about-prose prose-rich">${ABOUT_LIGHTNING_HTML}</div>
-      </section>`
-          : ""
-      }
-
-      <section class="about-block" id="parameters">
-        <h2 class="about-block-title">Key parameters</h2>
-        <p class="about-block-lede">Fixed at launch and pulled from
-          <a href="https://github.com/Plebly/proposals/blob/main/PARAMETERS.md" target="_blank" rel="noreferrer">PARAMETERS.md</a>
-          on every deploy.</p>
-        ${paramGridHtml()}
-      </section>
-
-      ${networkBannerHtml()}
-
-      <section class="about-block" id="residual-trust">
-        <h2 class="about-block-title">Residual trust</h2>
-        <p class="about-block-lede">
-          Escrow is 3-of-5 multisig with no on-chain timelock in v1. If keyholders stall after a
-          reviewer-approved release, the public process in
-          <a href="https://github.com/Plebly/proposals/blob/main/docs/keyholder-stall-runbook.md" target="_blank" rel="noreferrer">KEYHOLDERS stall runbook</a>
-          applies (7-day log / 14-day incident). See
-          <a href="https://github.com/Plebly/proposals/blob/main/PARAMETERS.md" target="_blank" rel="noreferrer">PARAMETERS</a>.
+      <section class="about-section" id="how-it-works">
+        <h2>How it works</h2>
+        ${flowHtml()}
+        <p class="about-section-foot">
+          <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Full rules in the proposals repo →</a>
         </p>
       </section>
 
-      <section class="about-involve">
-        <h2 class="about-block-title">Get involved</h2>
-        <p>Follow updates and send questions, proposals, and corrections in the open.</p>
-        <div class="about-involve-links">${pleblySocialAccountsHtml()}</div>
+      <section class="about-section" id="parameters">
+        <h2>Key parameters</h2>
+        <p class="about-section-lede">Fixed at launch from
+          <a href="https://github.com/Plebly/proposals/blob/main/PARAMETERS.md" target="_blank" rel="noreferrer">PARAMETERS.md</a>.
+          Browse vocabulary guidance in
+          <a href="https://github.com/Plebly/proposals/blob/main/TAGS.md" target="_blank" rel="noreferrer">TAGS.md</a>.
+        </p>
+        ${paramsHtml()}
+      </section>
+
+      <section class="about-section about-section-details" id="details">
+        <h2>Details</h2>
+        <div class="about-details">${details}</div>
+      </section>
+
+      <section class="about-section about-close" id="involve">
+        <h2>Get involved</h2>
+        <p class="about-section-lede">Follow updates. Questions and corrections belong in the open.</p>
+        <div class="about-close-links">${pleblySocialAccountsHtml()}</div>
       </section>
     </section>
   `);

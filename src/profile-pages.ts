@@ -2,7 +2,9 @@ import {
   claimUsername,
   deleteAccount,
   fetchPublicProfile,
+  fetchNotifications,
   loginChoicesHtml,
+  markNotificationsRead,
   profilePath,
   updateProfile,
   accountNavLabel,
@@ -41,7 +43,19 @@ export type ShellContext = {
   rerender: () => void;
 };
 
-type AccountTab = "profile" | "watching" | "claims" | "proposals";
+type AccountTab = "profile" | "watching" | "claims" | "proposals" | "notifications";
+
+function notificationLabel(type: string): string {
+  const labels: Record<string, string> = {
+    listed: "Project listed",
+    floor_reached: "Claim floor reached",
+    target_reached: "Funding target reached",
+    claimed: "Project claimed",
+    deliverable_submitted: "Deliverable submitted",
+    completed: "Project completed",
+  };
+  return labels[type] || type.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
 
 function claimsPaneHtml(
   pending: {
@@ -88,7 +102,7 @@ function claimsPaneHtml(
       : `<h3 class="section-title">Pending</h3><ul class="work-list">${pending
           .map(
             (c) => `<li>
-              <a href="${proposalHref(c.proposal_path)}">${escapeHtml(c.proposal_id)}</a>
+              <a href="${proposalHref(c.proposal_path, c.proposal_id)}">${escapeHtml(c.proposal_id)}</a>
               <span class="pill">Pending</span>
               ${
                 c.claim_bond_txid
@@ -109,7 +123,7 @@ function claimsPaneHtml(
         .slice(0, 20)
         .map(
           (b) => `<li>
-            <a href="${proposalHref(`proposals/listed/${b.proposal_id}.md`)}">${escapeHtml(b.proposal_id)}</a>
+            <a href="${proposalHref(`proposals/listed/${b.proposal_id}.md`, b.proposal_id)}">${escapeHtml(b.proposal_id)}</a>
             <span class="pill">${escapeHtml(b.status)}</span>
             <span class="mono muted">${escapeHtml(b.txid.slice(0, 10))}… · ${formatSats(b.amount_sats)}</span>
           </li>`,
@@ -135,7 +149,7 @@ function claimsPaneHtml(
         .slice(0, 20)
         .map(
           (h) => `<li>
-            <a href="${proposalHref(`proposals/claimed/${h.proposal_id}.md`)}">${escapeHtml(h.proposal_id)}</a>
+            <a href="${proposalHref(`proposals/claimed/${h.proposal_id}.md`, h.proposal_id)}">${escapeHtml(h.proposal_id)}</a>
             <span class="pill">${escapeHtml(h.outcome)}</span>
             <span class="muted">${escapeHtml(new Date(h.at).toLocaleDateString())}</span>
           </li>`,
@@ -182,11 +196,12 @@ export async function renderAccount(
 
   const user = ctx.user;
   const tab: AccountTab = initialTab || "profile";
-  const [watches, myClaims, allProps, reviewerMe] = await Promise.all([
+  const [watches, myClaims, allProps, reviewerMe, notifications] = await Promise.all([
     fetchWatches().catch(() => []),
     fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
     listListedProposals().catch(() => [] as Proposal[]),
     fetchReviewerMe().catch(() => null),
+    fetchNotifications().catch(() => []),
   ]);
   const pendingClaims = myClaims.pending;
   const ledger = myClaims.ledger;
@@ -236,6 +251,7 @@ export async function renderAccount(
         <button type="button" class="account-tab ${tab === "watching" ? "active" : ""}" data-tab="watching">Watching</button>
         <button type="button" class="account-tab ${tab === "claims" ? "active" : ""}" data-tab="claims">Claims</button>
         <button type="button" class="account-tab ${tab === "proposals" ? "active" : ""}" data-tab="proposals">Proposals</button>
+        <button type="button" class="account-tab ${tab === "notifications" ? "active" : ""}" data-tab="notifications">Notifications${notifications.some((n) => !n.read_at) ? ` <span class="pill">${notifications.filter((n) => !n.read_at).length}</span>` : ""}</button>
       </div>
 
       <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
@@ -253,6 +269,12 @@ export async function renderAccount(
         <fieldset class="form-block">
           <legend>Bio</legend>
           <textarea id="bio-input" rows="4" maxlength="500" placeholder="What you work on, Bitcoin interests…">${escapeHtml(user.bio || "")}</textarea>
+        </fieldset>
+
+        <fieldset class="form-block">
+          <legend>Skills &amp; interests</legend>
+          <input id="skills-tags-input" type="text" value="${escapeHtml((user.skills_tags || []).join(", "))}" placeholder="bitcoin core, rust, docs" maxlength="500" />
+          <p class="hint">Optional comma-separated tags. Matching listed projects may notify you.</p>
         </fieldset>
 
         <fieldset class="form-block">
@@ -301,7 +323,7 @@ export async function renderAccount(
             : `<ul class="work-list">${watchRows
                 .map(({ w, p, bal }) => {
                   const title = p?.title || w.proposal_id;
-                  const href = proposalHref(w.proposal_path);
+                  const href = proposalHref(w.proposal_path, p?.id || w.proposal_id);
                   const open =
                     p &&
                     isOpenToClaim(
@@ -332,10 +354,41 @@ export async function renderAccount(
             : `<ul class="work-list">${myProposals
                 .map(
                   (p) => `<li>
-                    <a href="${proposalHref(p.path)}">${escapeHtml(p.title)}</a>
+                    <a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a>
                     <span class="pill">${escapeHtml(String(p.status))}</span>
                   </li>`,
                 )
+                .join("")}</ul>`
+        }
+      </div>
+
+      <div class="account-pane" data-pane="notifications" ${tab === "notifications" ? "" : "hidden"}>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="notifications-read-btn" ${notifications.some((n) => !n.read_at) ? "" : "disabled"}>Mark all read</button>
+        </div>
+        ${
+          notifications.length === 0
+            ? `<div class="empty-state"><div class="empty-state-inner">
+                <p class="empty-state-title">No notifications</p>
+                <p class="empty-state-body">Watch projects to receive lifecycle updates here.</p>
+              </div></div>`
+            : `<ul class="work-list notify-list">${notifications
+                .map((notification) => {
+                  const label = notificationLabel(notification.type);
+                  const when = new Date(
+                    notification.created_at,
+                  ).toLocaleDateString();
+                  return `<li class="notify-row ${notification.read_at ? "is-read" : "is-new"}">
+                    <a class="notify-main" href="${proposalHref(notification.proposal_path, notification.proposal_id)}">
+                      <span class="notify-title">${escapeHtml(label)}</span>
+                      <span class="notify-id mono">${escapeHtml(notification.proposal_id)}</span>
+                    </a>
+                    <span class="notify-meta">
+                      ${notification.read_at ? "" : `<span class="pill status-good">New</span>`}
+                      <span class="muted">${escapeHtml(when)}</span>
+                    </span>
+                  </li>`;
+                })
                 .join("")}</ul>`
         }
       </div>
@@ -434,7 +487,10 @@ export async function renderAccount(
       const payout_address = (
         document.getElementById("payout-input") as HTMLInputElement
       ).value.trim();
-      await updateProfile({ bio, links, payout_address });
+      const skills_tags = (
+        document.getElementById("skills-tags-input") as HTMLInputElement
+      ).value.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+      await updateProfile({ bio, links, payout_address, skills_tags });
       msg.textContent = "Profile saved.";
       msg.className = "form-msg success";
       ctx.rerender();
@@ -464,6 +520,15 @@ export async function renderAccount(
         deleteMsg.textContent = (err as Error).message;
         deleteMsg.className = "form-msg error";
       }
+    }
+  });
+
+  document.getElementById("notifications-read-btn")?.addEventListener("click", async () => {
+    try {
+      await markNotificationsRead();
+      ctx.rerender();
+    } catch (err) {
+      window.alert((err as Error).message);
     }
   });
 }
@@ -518,7 +583,7 @@ export async function renderPublicProfile(
       : `<ul class="work-list">${work
           .map(
             (p) =>
-              `<li><a href="${proposalHref(p.path)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
           )
           .join("")}</ul>`;
 

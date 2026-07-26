@@ -6,6 +6,25 @@ export function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+const BARE_URL_RE = /(https?:\/\/[^\s<]+)/gi;
+
+/**
+ * Escape text, then turn bare http(s) URLs into external links.
+ * Safe for notes / labels / comments that are otherwise plain text.
+ */
+export function linkifyText(text: string): string {
+  return escapeHtml(text).replace(BARE_URL_RE, (raw) => {
+    let url = raw;
+    let trail = "";
+    while (/[.,;:!?)\]}'"]$/u.test(url)) {
+      trail = `${url.slice(-1)}${trail}`;
+      url = url.slice(0, -1);
+    }
+    if (!/^https?:\/\//i.test(url)) return raw;
+    return `<a href="${url}" target="_blank" rel="noreferrer noopener">${url}</a>${trail}`;
+  });
+}
+
 /** QR module colors from live CSS theme tokens. */
 export function themeQrColors(): { dark: string; light: string } {
   try {
@@ -32,6 +51,11 @@ export function bitcoinUri(address: string, amountSats?: number | null): string 
 }
 
 const PROPOSALS_PREFIX = "proposals/";
+
+/** Frontmatter ID → stable public proposal path. */
+export function proposalStablePath(id: string): string {
+  return `/p/${encodeURIComponent(id.trim())}`;
+}
 
 /** Repo path → URL slug, e.g. proposals/listed/foo.md → listed/foo */
 export function proposalSlug(repoPath: string): string {

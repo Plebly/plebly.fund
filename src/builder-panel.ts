@@ -1,10 +1,12 @@
 import {
   addWatch,
+  addEvaluating,
   claimWindowDaysLeft,
   fetchClaimParams,
   fetchClaimStatus,
   isOpenToClaim,
   removeWatch,
+  removeEvaluating,
   submitAbandonedChallenge,
   submitCheckpoint,
   submitClaim,
@@ -17,14 +19,32 @@ import { loginChoicesHtml } from "./auth";
 import type { AuthUser } from "./auth";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
+import { userMatchesProposer } from "./proposal-ui";
 import { aiReviewCardHtml } from "./review-panel";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
+
+function deliverableFormHtml(): string {
+  return `<div id="deliverable-form" class="deliverable-form">
+    <label class="donate-amount-label" for="deliv-url">Deliverable URL</label>
+    <input id="deliv-url" class="donate-amount" type="url" placeholder="https://…" />
+    <label class="donate-amount-label" for="deliv-desc">Description</label>
+    <textarea id="deliv-desc" class="donate-amount" rows="3" placeholder="What to review…"></textarea>
+    <label class="donate-amount-label" for="deliv-hash">Artifact hash (optional)</label>
+    <input id="deliv-hash" class="donate-amount mono" type="text" />
+    <button type="button" class="btn" id="deliv-submit">Submit for review</button>
+    <div id="deliverable-ai-result" class="deliverable-ai-result" hidden></div>
+  </div>`;
+}
 
 function watchBtnHtml(watching: boolean): string {
   return watching
     ? btnWithIcon("eye-slash", "Unwatch")
     : btnWithIcon("eye", "Watch");
+}
+
+function evaluatingBtnHtml(evaluating: boolean): string {
+  return evaluating ? "Stop evaluating" : "Mark evaluating";
 }
 
 function claimBtnHtml(disabled = false): string {
@@ -35,11 +55,34 @@ export function builderPanelHtml(
   p: Proposal,
   balance: number | undefined,
   watching: boolean,
+  evaluating: boolean,
 ): string {
   const floor = CLAIM_FLOOR_SATS;
   const bal = balance ?? p.balance_sats ?? 0;
   const need = Math.max(0, floor - bal);
   const open = isOpenToClaim({ ...p, balance_sats: bal }, floor);
+  const isDirect = String(p.proposal_type || "bounty") === "direct";
+
+  if (isDirect) {
+    return `<div class="builder-panel" id="builder">
+    <div class="builder-panel-head">
+      <h2 class="builder-title">Direct funding</h2>
+    </div>
+    <div class="builder-actions">
+      <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
+    </div>
+    <div id="builder-body" class="builder-body">
+      <p class="builder-status">This is a <strong>direct</strong> proposal — the proposer is the recipient. No claim bond. The proposer submits the deliverable when ready.</p>
+      ${
+        need > 0
+          ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the floor.</p>`
+          : `<p class="builder-status">Floor met — proposer may submit a deliverable.</p>`
+      }
+      <div id="direct-deliverable-slot"></div>
+    </div>
+    <p class="builder-msg" id="builder-msg" hidden></p>
+  </div>`;
+  }
 
   return `<div class="builder-panel" id="builder">
     <div class="builder-panel-head">
@@ -47,14 +90,14 @@ export function builderPanelHtml(
     </div>
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
+      <button type="button" class="btn ghost" id="builder-evaluating" data-evaluating="${evaluating ? "1" : "0"}">${evaluatingBtnHtml(evaluating)}</button>
     </div>
     <div id="builder-body" class="builder-body">
       ${
         open
           ? claimBtnHtml()
           : need > 0
-            ? `<p class="builder-status">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>
-               ${claimBtnHtml(true)}`
+            ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>`
             : `<p class="builder-status muted">Loading claim status…</p>`
       }
     </div>
@@ -76,15 +119,11 @@ export function builderPanelHtml(
         <div class="claim-modal-section" id="claim-finalize" hidden>
           <label class="donate-amount-label" for="claim-note">Note (optional)</label>
           <input id="claim-note" class="donate-amount" type="text" maxlength="200" placeholder="Short note for reviewers" />
-          <p class="builder-msg" id="claim-modal-msg" hidden></p>
-          <div class="donate-actions">
-            <button type="button" class="btn" id="claim-confirm">Open claim PR</button>
-            <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
-          </div>
         </div>
-        <p class="builder-msg" id="claim-modal-msg-early" hidden></p>
-        <div class="claim-modal-section" id="claim-cancel-early">
-          <button type="button" class="btn ghost" id="claim-cancel-top">Cancel</button>
+        <p class="builder-msg" id="claim-modal-msg" hidden></p>
+        <div class="donate-actions claim-modal-actions">
+          <button type="button" class="btn" id="claim-confirm" hidden>Open claim PR</button>
+          <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
         </div>
       </div>
     </div>
@@ -107,6 +146,11 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
 function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
   btn.dataset.watching = watching ? "1" : "0";
   btn.innerHTML = watchBtnHtml(watching);
+}
+
+function setEvaluatingBtn(btn: HTMLButtonElement, evaluating: boolean): void {
+  btn.dataset.evaluating = evaluating ? "1" : "0";
+  btn.textContent = evaluatingBtnHtml(evaluating);
 }
 
 function metaBits(status: ClaimStatus): string {
@@ -156,8 +200,7 @@ function renderStatusBody(
         0,
         status.claim_floor_sats - (status.confirmed_balance_sats ?? 0),
       );
-      body.innerHTML = `<p class="builder-status">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>
-        ${claimBtnHtml(true)}`;
+      body.innerHTML = `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>`;
       break;
     }
     case "claim_pending":
@@ -181,16 +224,10 @@ function renderStatusBody(
           <input id="checkpoint-url" class="donate-amount" type="url" placeholder="https://…" />
           <button type="button" class="btn" id="checkpoint-submit">Save checkpoint</button>
         </div>
-        <div id="deliverable-form" class="deliverable-form" hidden>
-          <label class="donate-amount-label" for="deliv-url">Deliverable URL</label>
-          <input id="deliv-url" class="donate-amount" type="url" placeholder="https://…" />
-          <label class="donate-amount-label" for="deliv-desc">Description</label>
-          <textarea id="deliv-desc" class="donate-amount" rows="3" placeholder="What to review…"></textarea>
-          <label class="donate-amount-label" for="deliv-hash">Artifact hash (optional)</label>
-          <input id="deliv-hash" class="donate-amount mono" type="text" />
-          <button type="button" class="btn" id="deliv-submit">Submit for review</button>
-          <div id="deliverable-ai-result" class="deliverable-ai-result" hidden></div>
-        </div>`;
+        ${deliverableFormHtml().replace(
+          'class="deliverable-form"',
+          'class="deliverable-form" hidden',
+        )}`;
       } else {
         body.innerHTML = `${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
           status.claimer || "another builder",
@@ -222,6 +259,7 @@ export async function bindBuilderPanel(
     balance?: number;
     user: AuthUser | null;
     watching: boolean;
+    evaluating: boolean;
   },
 ): Promise<void> {
   const panel = root.querySelector("#builder");
@@ -229,12 +267,154 @@ export async function bindBuilderPanel(
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
+  const evaluatingBtn = panel.querySelector<HTMLButtonElement>("#builder-evaluating");
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
   const bondSlot = panel.querySelector<HTMLElement>("#claim-bond-slot");
   const finalize = panel.querySelector<HTMLElement>("#claim-finalize");
-  const cancelEarly = panel.querySelector<HTMLElement>("#claim-cancel-early");
+  const claimConfirm = panel.querySelector<HTMLButtonElement>("#claim-confirm");
+
+  const requireLogin = (reason: string) => {
+    if (msg) {
+      msg.hidden = false;
+      msg.className = "builder-msg";
+      msg.innerHTML = loginChoicesHtml(reason);
+    }
+  };
+
+  watchBtn?.addEventListener("click", async () => {
+    if (!opts.user) {
+      requireLogin("Sign in to watch this project.");
+      return;
+    }
+    try {
+      const watching = watchBtn.dataset.watching === "1";
+      if (watching) {
+        await removeWatch(opts.proposal.path);
+        setWatchBtn(watchBtn, false);
+        setMsg(msg, null);
+      } else {
+        await addWatch(opts.proposal.path);
+        setWatchBtn(watchBtn, true);
+        setMsg(msg, null);
+      }
+    } catch (e) {
+      if ((e as Error).message === "login_required") {
+        requireLogin("Sign in to watch this project.");
+      } else setMsg(msg, (e as Error).message, "error");
+    }
+  });
+
+  evaluatingBtn?.addEventListener("click", async () => {
+    if (!opts.user) {
+      requireLogin("Sign in to track a project you are evaluating.");
+      return;
+    }
+    try {
+      const evaluating = evaluatingBtn.dataset.evaluating === "1";
+      if (evaluating) {
+        await removeEvaluating(opts.proposal.path);
+        setEvaluatingBtn(evaluatingBtn, false);
+      } else {
+        await addEvaluating(opts.proposal.path);
+        setEvaluatingBtn(evaluatingBtn, true);
+      }
+      setMsg(msg, null);
+    } catch (e) {
+      if ((e as Error).message === "login_required") {
+        requireLogin("Sign in to track a project you are evaluating.");
+      } else setMsg(msg, (e as Error).message, "error");
+    }
+  });
+
+  const bindDeliverable = (refresh?: () => Promise<void>) => {
+    panel
+      .querySelector("#builder-deliverable")
+      ?.addEventListener("click", () => {
+        const form = panel.querySelector<HTMLElement>("#deliverable-form");
+        if (form) form.hidden = !form.hidden;
+      });
+    panel.querySelector("#deliv-submit")?.addEventListener("click", async () => {
+      const url = (
+        panel.querySelector("#deliv-url") as HTMLInputElement | null
+      )?.value.trim();
+      const description = (
+        panel.querySelector("#deliv-desc") as HTMLTextAreaElement | null
+      )?.value.trim();
+      const hash = (
+        panel.querySelector("#deliv-hash") as HTMLInputElement | null
+      )?.value.trim();
+      if (!url || !description) {
+        setMsg(msg, "URL and description required.", "error");
+        return;
+      }
+      setMsg(msg, "Running AI first-pass and opening PR…");
+      try {
+        const result = await submitDeliverable({
+          proposal_path: opts.proposal.path,
+          deliverable_url: url,
+          description,
+          artifact_hash: hash || undefined,
+        });
+        const aiSlot = panel.querySelector<HTMLElement>("#deliverable-ai-result");
+        if (result.ai_review && aiSlot) {
+          aiSlot.hidden = false;
+          aiSlot.innerHTML = aiReviewCardHtml(result.ai_review);
+        } else if (result.ai_review && body) {
+          const wrap = document.createElement("div");
+          wrap.id = "deliverable-ai-result";
+          wrap.className = "deliverable-ai-result";
+          wrap.innerHTML = aiReviewCardHtml(result.ai_review);
+          body.appendChild(wrap);
+        }
+        const next =
+          result.ai_review?.outcome === "fail"
+            ? "Clear fail — revise and resubmit."
+            : result.decision_id
+              ? "Reviewer ballot opened."
+              : "Submitted.";
+        setMsg(msg, `${next} PR: ${result.pr_url}`, "success");
+        if (refresh) await refresh();
+      } catch (e) {
+        if ((e as Error).message === "login_required") {
+          requireLogin("Sign in to submit a deliverable.");
+        } else setMsg(msg, (e as Error).message, "error");
+      }
+    });
+  };
+
+  const isDirect =
+    String(opts.proposal.proposal_type || "bounty").toLowerCase() === "direct";
+  if (isDirect) {
+    const slot = panel.querySelector<HTMLElement>("#direct-deliverable-slot");
+    const bal = opts.balance ?? opts.proposal.balance_sats ?? 0;
+    const floorMet = bal >= CLAIM_FLOOR_SATS;
+    const status = String(opts.proposal.status || "");
+    const canSubmit = ["listed", "funding", "claimable", "in_review"].includes(
+      status,
+    );
+    const isProposer = userMatchesProposer(opts.user, opts.proposal.proposer);
+    if (slot) {
+      if (!floorMet) {
+        slot.innerHTML = "";
+      } else if (!canSubmit) {
+        slot.innerHTML = `<p class="builder-status muted">Deliverable not available in status ${escapeHtml(status)}.</p>`;
+      } else if (!opts.user) {
+        slot.innerHTML = `<p class="builder-status muted">Sign in as the proposer to submit a deliverable.</p>`;
+      } else if (!isProposer) {
+        slot.innerHTML = `<p class="builder-status muted">Only the proposer can submit the deliverable on a direct proposal.</p>`;
+      } else {
+        slot.innerHTML = `<button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
+          ${deliverableFormHtml().replace(
+            'class="deliverable-form"',
+            'class="deliverable-form" hidden',
+          )}`;
+        bindDeliverable();
+      }
+    }
+    return;
+  }
 
   let params: ClaimParams = {
     claim_bond_sats: CLAIM_BOND_SATS,
@@ -254,7 +434,7 @@ export async function bindBuilderPanel(
 
   const syncClaimFeeStep = (step: "pay" | "txid") => {
     if (finalize) finalize.hidden = step !== "txid";
-    if (cancelEarly) cancelEarly.hidden = step === "txid";
+    if (claimConfirm) claimConfirm.hidden = step !== "txid";
   };
 
   const mountClaimFeePay = async () => {
@@ -276,51 +456,18 @@ export async function bindBuilderPanel(
     payoutInput.value = opts.user.payout_address;
   }
 
-  const requireLogin = (reason: string) => {
-    if (msg) {
-      msg.hidden = false;
-      msg.className = "builder-msg";
-      msg.innerHTML = loginChoicesHtml(reason);
-    }
-  };
-
-  watchBtn?.addEventListener("click", async () => {
-      if (!opts.user) {
-        requireLogin("Sign in to watch this project.");
-        return;
-      }
-    try {
-      const watching = watchBtn.dataset.watching === "1";
-      if (watching) {
-        await removeWatch(opts.proposal.path);
-        setWatchBtn(watchBtn, false);
-        setMsg(msg, null);
-      } else {
-        await addWatch(opts.proposal.path);
-        setWatchBtn(watchBtn, true);
-        setMsg(msg, null);
-      }
-    } catch (e) {
-      if ((e as Error).message === "login_required") {
-        requireLogin("Sign in to watch this project.");
-      } else setMsg(msg, (e as Error).message, "error");
-    }
-  });
-
   const refreshStatus = async () => {
     const status = await fetchClaimStatus(opts.proposal.path);
     if (status && body) {
       renderStatusBody(body, status, opts.user, opts.proposal.path);
       bindClaimButton();
-      bindDeliverable();
+      bindDeliverable(refreshStatus);
       bindCheckpoint();
       bindChallenge();
     }
   };
 
-  const modalMsg = () =>
-    panel.querySelector<HTMLElement>("#claim-modal-msg") ||
-    panel.querySelector<HTMLElement>("#claim-modal-msg-early");
+  const modalMsg = () => panel.querySelector<HTMLElement>("#claim-modal-msg");
 
   const closeClaimModal = () => {
     if (!modal) return;
@@ -361,7 +508,6 @@ export async function bindBuilderPanel(
   bindClaimButton();
 
   panel.querySelector("#claim-cancel")?.addEventListener("click", closeClaimModal);
-  panel.querySelector("#claim-cancel-top")?.addEventListener("click", closeClaimModal);
   panel.querySelector("#claim-close")?.addEventListener("click", closeClaimModal);
   panel
     .querySelector("[data-close-claim]")
@@ -462,62 +608,6 @@ export async function bindBuilderPanel(
       } catch (e) {
         if ((e as Error).message === "login_required") requireLogin("Sign in to challenge this claim.");
         else setMsg(msg, (e as Error).message, "error");
-      }
-    });
-  };
-
-  const bindDeliverable = () => {
-    panel
-      .querySelector("#builder-deliverable")
-      ?.addEventListener("click", () => {
-        const form = panel.querySelector<HTMLElement>("#deliverable-form");
-        if (form) form.hidden = !form.hidden;
-      });
-    panel.querySelector("#deliv-submit")?.addEventListener("click", async () => {
-      const url = (
-        panel.querySelector("#deliv-url") as HTMLInputElement | null
-      )?.value.trim();
-      const description = (
-        panel.querySelector("#deliv-desc") as HTMLTextAreaElement | null
-      )?.value.trim();
-      const hash = (
-        panel.querySelector("#deliv-hash") as HTMLInputElement | null
-      )?.value.trim();
-      if (!url || !description) {
-        setMsg(msg, "URL and description required.", "error");
-        return;
-      }
-      setMsg(msg, "Running AI first-pass and opening PR…");
-      try {
-        const result = await submitDeliverable({
-          proposal_path: opts.proposal.path,
-          deliverable_url: url,
-          description,
-          artifact_hash: hash || undefined,
-        });
-        const aiSlot = panel.querySelector<HTMLElement>("#deliverable-ai-result");
-        if (result.ai_review && aiSlot) {
-          aiSlot.hidden = false;
-          aiSlot.innerHTML = aiReviewCardHtml(result.ai_review);
-        } else if (result.ai_review && body) {
-          const wrap = document.createElement("div");
-          wrap.id = "deliverable-ai-result";
-          wrap.className = "deliverable-ai-result";
-          wrap.innerHTML = aiReviewCardHtml(result.ai_review);
-          body.appendChild(wrap);
-        }
-        const next =
-          result.ai_review?.outcome === "fail"
-            ? "Clear fail — revise and resubmit."
-            : result.decision_id
-              ? "Reviewer ballot opened."
-              : "Submitted.";
-        setMsg(msg, `${next} PR: ${result.pr_url}`, "success");
-        await refreshStatus();
-      } catch (e) {
-        if ((e as Error).message === "login_required") {
-          requireLogin("Sign in to submit a deliverable.");
-        } else setMsg(msg, (e as Error).message, "error");
       }
     });
   };

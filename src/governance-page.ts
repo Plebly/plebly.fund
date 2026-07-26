@@ -20,10 +20,33 @@ import {
   type ReviewerPublic,
   type ReviewerRoster,
 } from "./reviewers";
+import { WORKERS_API } from "./config";
 import { href, proposalHref } from "./router";
 import { escapeHtml, formatSats } from "./util";
 
 export type GovernanceShell = (inner: string) => string;
+
+type OpsRole = { role?: string; name?: string; user_id?: string; holder?: string };
+
+async function fetchOpsRoles(): Promise<OpsRole[]> {
+  if (!WORKERS_API) return [];
+  const res = await fetch(`${WORKERS_API.replace(/\/$/, "")}/ops/roles`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { roles?: OpsRole[] } | OpsRole[];
+  return Array.isArray(data) ? data : data.roles || [];
+}
+
+function opsRolesHtml(roles: OpsRole[]): string {
+  if (!roles.length) {
+    return `<div class="empty-state gov-empty"><div class="empty-state-inner">
+      <p class="empty-state-title">Not active yet</p>
+      <p class="empty-state-body">Operational roles are volume-gated until the reviewer pool has meaningful activity. No role vote is live.</p>
+    </div></div>`;
+  }
+  return `<ul class="gov-roster">${roles
+    .map((role) => `<li class="gov-roster-row"><span>${escapeHtml(role.role || role.name || "Operational role")}</span><span class="mono muted">${escapeHtml(role.user_id || role.holder || "Assigned")}</span></li>`)
+    .join("")}</ul>`;
+}
 
 function decisionPath(d: ReviewDecisionView): string {
   if (d.proposal_path) return d.proposal_path;
@@ -113,10 +136,10 @@ export function decisionCardHtml(
         <button type="button" class="btn ghost" data-dec-vote="no" data-decision-id="${escapeHtml(d.id)}">${btnWithIcon("xmark", "Reject")}</button>
         <button type="button" class="btn ghost" data-dec-vote="abstain" data-decision-id="${escapeHtml(d.id)}">Abstain</button>
       </div>`
-    : `<p class="muted gov-hint">Active reviewers vote on the <a href="${proposalHref(path)}">project page</a>.</p>`;
+    : `<p class="muted gov-hint">Active reviewers vote on the <a href="${proposalHref(path, d.proposal_id)}">project page</a>.</p>`;
   return `<li class="gov-card" data-decision-id="${escapeHtml(d.id)}">
     <div class="gov-card-head">
-      <a class="gov-card-title" href="${proposalHref(path)}">${escapeHtml(d.proposal_id)}</a>
+      <a class="gov-card-title" href="${proposalHref(path, d.proposal_id)}">${escapeHtml(d.proposal_id)}</a>
       <span class="pill">${escapeHtml(decisionKindLabel(d.kind))}</span>
       ${d.round === 2 ? `<span class="pill">Round 2</span>` : ""}
     </div>
@@ -233,11 +256,12 @@ export async function renderGovernance(
     </section>
   `);
 
-  const [roster, decisions, removals, me] = await Promise.all([
+  const [roster, decisions, removals, me, opsRoles] = await Promise.all([
     fetchReviewerRoster().catch(() => null),
     fetchOpenReviewDecisions().catch(() => [] as ReviewDecisionView[]),
     fetchOpenRemovalBallots().catch(() => [] as RemovalBallotView[]),
     user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
+    fetchOpsRoles().catch(() => [] as OpsRole[]),
   ]);
 
   const isReviewer = Boolean(me?.active);
@@ -273,6 +297,11 @@ export async function renderGovernance(
       <section class="gov-block" id="open-removal">
         <h2 class="gov-block-title">Open a removal</h2>
         ${openRemovalFormHtml(me, Boolean(user))}
+      </section>
+
+      <section class="gov-block" id="ops-roles">
+        <h2 class="gov-block-title">Operational roles</h2>
+        ${opsRolesHtml(opsRoles)}
       </section>
 
       <p class="gov-foot muted">

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isNearFloor, isOpenToClaim, isTakenStatus } from "./builder";
+import {
+  isDirectProposal,
+  isNearFloor,
+  isOpenToClaim,
+  isTakenStatus,
+} from "./builder";
 import type { Proposal } from "./types";
 
 function proposal(partial: Partial<Proposal> = {}): Proposal {
@@ -63,5 +68,18 @@ describe("claim floor helpers", () => {
     expect(
       isNearFloor(proposal({ status: "listed", balance_sats: 100_000 }), floor),
     ).toBe(false);
+  });
+
+  it("direct proposals are never open-to-claim or near-floor claim filters", () => {
+    const floor = 100_000;
+    const direct = proposal({
+      proposal_type: "direct",
+      status: "listed",
+      balance_sats: floor,
+    });
+    expect(isDirectProposal(direct)).toBe(true);
+    expect(isDirectProposal(proposal({ proposal_type: undefined }))).toBe(false);
+    expect(isOpenToClaim(direct, floor)).toBe(false);
+    expect(isNearFloor(direct, floor)).toBe(false);
   });
 });
