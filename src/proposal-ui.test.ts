@@ -13,6 +13,7 @@ import {
   shareSlotHtml,
   statusClass,
   statusLabel,
+  statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
 import type { Proposal, ProposalMilestone } from "./types";
@@ -103,6 +104,12 @@ describe("proposal UI critical render helpers", () => {
     expect(statusClass("underfunded")).toBe("status-bad");
     expect(statusClass("in_review")).toBe("status-active");
     expect(statusClass("rejected")).toBe("status-bad");
+  });
+
+  it("statusPillHtml hides listed", () => {
+    expect(statusPillHtml("listed")).toBe("");
+    expect(statusPillHtml("funding")).toContain("funding");
+    expect(statusPillHtml("funding")).toContain("pill-status");
   });
 
   it("lifecycle banners cover in_review and rejected", () => {

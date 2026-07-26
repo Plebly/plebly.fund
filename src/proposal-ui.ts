@@ -215,6 +215,13 @@ export function statusClass(status: string): string {
   return "status-neutral";
 }
 
+/** Status pill for cards/hero. Hidden for `listed` — being on the site already implies that. */
+export function statusPillHtml(status: string): string {
+  const s = String(status || "").toLowerCase();
+  if (!s || s === "listed") return "";
+  return `<span class="pill pill-status ${statusClass(s)}">${escapeHtml(statusLabel(s))}</span>`;
+}
+
 /** Lifecycle banners: funding window, milestones grace, keyholder stall, ballot. */
 export function proposalLifecycleBannersHtml(
   p: Proposal,

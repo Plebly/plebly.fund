@@ -17,8 +17,8 @@ import { addressBalanceSats } from "./mempool";
 import {
   fundingBarTrackHtml,
   overfundRatioLabel,
-  statusClass,
   statusLabel,
+  statusPillHtml,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
 import { href, profileHref, proposalHref } from "./router";
@@ -326,7 +326,7 @@ function proposalCardHtml(
         ${coverHtml}
         <div class="project-card-body">
           <div class="project-card-head">
-            <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
+            ${statusPillHtml(status)}
             ${typeBadge}
             ${secondaryBadge}
           </div>

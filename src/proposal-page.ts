@@ -26,8 +26,7 @@ import {
   proposerBylineHtml,
   refundRegisterHtml,
   sectionBodyHtml,
-  statusClass,
-  statusLabel,
+  statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
 import {
@@ -349,7 +348,7 @@ export async function renderProposalPage(
         <header class="proposal-hero">
           <div class="proposal-hero-top">
             <h1>${escapeHtml(match.title)}</h1>
-            <span class="pill pill-status ${statusClass(status)}">${escapeHtml(statusLabel(status))}</span>
+            ${statusPillHtml(status)}
           </div>
           <div class="proposal-hero-meta">
             ${byline}
