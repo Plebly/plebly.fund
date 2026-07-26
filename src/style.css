@@ -1225,65 +1225,236 @@ a.project-card-by:hover {
 }
 
 .stats-page {
-  padding-top: 3rem;
-  padding-bottom: 4rem;
+  position: relative;
+  padding-top: 2.75rem;
+  padding-bottom: 4.5rem;
 }
 
-.stats-page h1 {
-  margin: 0.2rem 0 0.75rem;
+.stats-page::before {
+  content: "";
+  position: absolute;
+  inset: -2rem -1rem auto;
+  height: min(28rem, 70vh);
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 12% 0%,
+      rgba(var(--accent-rgb), 0.16),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 88% 18%,
+      rgba(var(--tertiary-rgb), 0.08),
+      transparent 72%
+    );
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0;
-  margin: 2.25rem 0;
-  border-top: 1px solid var(--line-soft);
+.stats-hero {
+  max-width: 40rem;
+  margin-bottom: 2.5rem;
+  animation: landing-rise 480ms ease-out both;
+}
+
+.stats-hero h1 {
+  margin: 0.15rem 0 0.65rem;
+  font-size: clamp(2rem, 4.5vw, 2.75rem);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.stats-hero .lede {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--ink-secondary);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.stats-primary {
+  margin: 0 0 2.25rem;
+  padding: 0 0 2rem;
   border-bottom: 1px solid var(--line-soft);
+  animation: landing-rise 560ms ease-out both;
+  animation-delay: 60ms;
+}
+
+.stats-primary-label {
+  margin: 0 0 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stats-primary-value {
+  margin: 0;
+  font-size: clamp(2.4rem, 7vw, 3.75rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-primary-detail {
+  margin: 0.85rem 0 0;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.stats-support {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.75rem 2rem;
+  margin: 0 0 2.75rem;
+  padding: 0;
+  animation: landing-rise 620ms ease-out both;
+  animation-delay: 120ms;
 }
 
 .stats-metric {
-  padding: 1.25rem;
-  border-left: 1px solid var(--line-soft);
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
-.stats-metric:first-child {
-  border-left: 0;
-}
-
-.stats-metric dt,
-.stats-metric p {
+.stats-metric dt {
+  margin: 0;
   font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
 .stats-metric dd {
-  margin: 0.4rem 0;
+  margin: 0.45rem 0 0.4rem;
+  font-family: var(--mono);
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-metric p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.stats-gap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 1.75rem 2.5rem;
+  align-items: end;
+  margin: 0 0 2.75rem;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--line-soft);
+  animation: landing-rise 680ms ease-out both;
+  animation-delay: 180ms;
+}
+
+.stats-gap-eyebrow {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.stats-gap-lede {
+  margin: 0 0 1rem;
+  max-width: 26rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.stats-gap-figures {
+  margin: 0;
   font-family: var(--mono);
   font-size: 1.05rem;
   color: var(--ink);
 }
 
-.stats-metric p {
-  margin: 0;
+.stats-gap-figures span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.stats-gap-percent {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--tertiary-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-gap-meter {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line-soft);
+}
+
+.stats-gap-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--accent-deep),
+    var(--tertiary)
+  );
+  transform-origin: left center;
+  animation: stats-meter-fill 900ms ease-out both;
+  animation-delay: 280ms;
+}
+
+.stats-gap-note {
+  margin: 0.7rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
   line-height: 1.45;
 }
 
-.stats-gap {
-  grid-template-columns: minmax(14rem, auto) 1fr;
-  border-top: 1px solid var(--line-soft);
-}
-
-.stats-gap p {
-  grid-column: 1 / -1;
-  margin: -0.5rem 0 0;
-  font-size: 0.75rem;
+.stats-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  padding-top: 0.25rem;
 }
 
 .stats-source {
-  margin-top: 1.5rem;
+  margin: 0;
   font-size: 0.8125rem;
   color: var(--muted);
+}
+
+.stats-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+@keyframes stats-meter-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .proposal-view-count {
@@ -4530,17 +4701,17 @@ a.project-card-by:hover {
   .project-rail-list {
     grid-auto-columns: minmax(15rem, 85vw);
   }
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .stats-support {
+    grid-template-columns: 1fr;
+    gap: 1.35rem;
   }
-  .stats-metric:nth-child(odd) {
-    border-left: 0;
+  .stats-gap {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
   }
-  .stats-metric:nth-child(n + 3) {
-    border-top: 1px solid var(--line-soft);
-  }
-  .stats-gap p {
-    display: block;
+  .stats-foot {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -4551,6 +4722,14 @@ a.project-card-by:hover {
   }
   .how-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .stats-support {
+    grid-template-columns: 1fr;
+    gap: 1.35rem;
+  }
+  .stats-gap {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
   }
 }
 
@@ -5725,7 +5904,12 @@ a.project-card-by:hover {
   .ai-review-card,
   .login-menu-panel,
   .gov-hero,
-  .gov-block {
+  .gov-block,
+  .stats-hero,
+  .stats-primary,
+  .stats-support,
+  .stats-gap,
+  .stats-gap-meter > span {
     animation: none !important;
   }
   .btn:hover,

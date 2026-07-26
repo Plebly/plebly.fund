@@ -53,16 +53,26 @@ export type OpsRolesGate = {
 export type OpsRolesPayload = {
   roles: OpsRoleView[];
   count: number;
-  kinds: string[];
-  gate: OpsRolesGate;
-  ballots: OpsRoleBallotView[];
+  /** Present on current workers; older deploys may omit. */
+  kinds?: string[];
+  gate?: OpsRolesGate;
+  ballots?: OpsRoleBallotView[];
 };
 
 export async function fetchOpsRoles(): Promise<OpsRolesPayload | null> {
   if (!WORKERS_API) return null;
   const res = await fetch(`${API()}/ops/roles`);
   if (!res.ok) return null;
-  return (await res.json()) as OpsRolesPayload;
+  const data = (await res.json()) as Partial<OpsRolesPayload>;
+  if (!data || typeof data !== "object") return null;
+  // Older deploys only returned { roles, count }.
+  return {
+    roles: Array.isArray(data.roles) ? data.roles : [],
+    count: typeof data.count === "number" ? data.count : 0,
+    kinds: Array.isArray(data.kinds) ? data.kinds : undefined,
+    gate: data.gate,
+    ballots: Array.isArray(data.ballots) ? data.ballots : undefined,
+  };
 }
 
 export async function nominateOpsRole(input: {

@@ -11,6 +11,7 @@ import {
   opsRoleLabel,
   voteOpsRoleBallot,
   type OpsRoleBallotView,
+  type OpsRolesGate,
   type OpsRolesPayload,
 } from "./ops-roles";
 import {
@@ -100,26 +101,70 @@ function opsGateProgressHtml(gate: OpsRolesPayload["gate"]): string {
   </div>`;
 }
 
+const DEFAULT_OPS_KINDS = [
+  "triage_steward",
+  "incident_scribe",
+  "comms",
+] as const;
+
+const DEFAULT_OPS_GATE: OpsRolesGate = {
+  open: false,
+  completions: 0,
+  min_completions: 10,
+  reviewers: 0,
+  min_reviewers: 5,
+  reason: "gate status unavailable",
+};
+
+/** Normalize partial `/ops/roles` payloads from older API deploys. */
+export function normalizeOpsRolesPayload(
+  payload: Partial<OpsRolesPayload> | null | undefined,
+): OpsRolesPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const roles = Array.isArray(payload.roles) ? payload.roles : [];
+  const kinds = Array.isArray(payload.kinds) && payload.kinds.length
+    ? payload.kinds
+    : [...DEFAULT_OPS_KINDS];
+  const ballots = Array.isArray(payload.ballots) ? payload.ballots : [];
+  const gate =
+    payload.gate && typeof payload.gate === "object"
+      ? {
+          open: Boolean(payload.gate.open),
+          completions: Number(payload.gate.completions) || 0,
+          min_completions: Number(payload.gate.min_completions) || 10,
+          reviewers: Number(payload.gate.reviewers) || 0,
+          min_reviewers: Number(payload.gate.min_reviewers) || 5,
+          reason: String(payload.gate.reason || ""),
+        }
+      : { ...DEFAULT_OPS_GATE };
+  return {
+    roles,
+    count: typeof payload.count === "number" ? payload.count : roles.length,
+    kinds,
+    gate,
+    ballots,
+  };
+}
+
 export function opsRolesSectionHtml(
   payload: OpsRolesPayload | null,
   isReviewer: boolean,
 ): string {
-  if (!payload) {
+  const normalized = normalizeOpsRolesPayload(payload);
+  if (!normalized) {
     return `<div class="empty-state gov-empty"><div class="empty-state-inner">
       <p class="empty-state-title">Roles unavailable</p>
       <p class="empty-state-body">Could not load operational roles from the API.</p>
     </div></div>`;
   }
-  const gate = payload.gate;
+  const gate = normalized.gate;
   const gatePill = gate.open
     ? `<span class="pill status-good">Votes open</span>`
     : `<span class="pill">Volume-gated</span>`;
 
-  const kinds = payload.kinds.length
-    ? payload.kinds
-    : ["triage_steward", "incident_scribe", "comms"];
+  const kinds = normalized.kinds;
   const byKind = new Map(
-    payload.roles.map((r) => [r.kind || r.role, r] as const),
+    normalized.roles.map((r) => [r.kind || r.role, r] as const),
   );
   const seats = `<ul class="gov-roster gov-ops-seats">${kinds
     .map((kind) => {
@@ -150,8 +195,8 @@ export function opsRolesSectionHtml(
     })
     .join("")}</ul>`;
 
-  const ballots = payload.ballots.length
-    ? `<ul class="gov-list" id="gov-ops-ballots">${payload.ballots
+  const ballots = normalized.ballots.length
+    ? `<ul class="gov-list" id="gov-ops-ballots">${normalized.ballots
         .map((b) => opsRoleBallotCardHtml(b, isReviewer))
         .join("")}</ul>`
     : `<div class="empty-state gov-empty gov-empty-compact"><div class="empty-state-inner">
@@ -202,7 +247,7 @@ export function opsRolesSectionHtml(
   }
 
   return `<div class="gov-meta">${gatePill}
-      <span class="pill">${payload.count} filled · ${kinds.length} seats</span>
+      <span class="pill">${normalized.count} filled · ${kinds.length} seats</span>
     </div>
     <p class="muted gov-block-lede">Coordination labels only — never escrow signing, fund movement, or parameter changes. Reviewers vote; ⅔ of cast with quorum.</p>
     <h3 class="gov-subhead">Seats</h3>
@@ -238,18 +283,19 @@ export function rosterSectionHtml(
       <p class="empty-state-body">Could not load active reviewers from the API.</p>
     </div></div>`;
   }
-  if (!roster.reviewers.length) {
+  const reviewers = Array.isArray(roster.reviewers) ? roster.reviewers : [];
+  if (!reviewers.length) {
     return `<div class="empty-state"><div class="empty-state-inner">
       <p class="empty-state-title">No active reviewers</p>
       <p class="empty-state-body">Bootstrap seats have not been seeded yet.</p>
     </div></div>`;
   }
-  const rows = roster.reviewers
+  const rows = reviewers
     .map((r) => reviewerRowHtml(r, opts?.selectable))
     .join("");
   return `<div class="gov-meta">
-      <span class="pill">${roster.count} active</span>
-      <span class="pill">Platform completions ${roster.platform_completions}</span>
+      <span class="pill">${roster.count ?? reviewers.length} active</span>
+      <span class="pill">Platform completions ${roster.platform_completions ?? 0}</span>
     </div>
     <ul class="gov-roster" id="gov-roster">${rows}</ul>`;
 }
@@ -443,7 +489,8 @@ export async function renderGovernance(
 
   const decisionCount = decisions.length;
   const removalCount = removals.length;
-  const opsBallotCount = opsRoles?.ballots.length ?? 0;
+  const opsNormalized = normalizeOpsRolesPayload(opsRoles);
+  const opsBallotCount = opsNormalized?.ballots.length ?? 0;
 
   app.innerHTML = shell(`
     <section class="wrap detail gov-page">
@@ -484,7 +531,7 @@ export async function renderGovernance(
 
       <section class="gov-block" id="ops-roles">
         <h2 class="gov-block-title">Operational roles</h2>
-        ${opsRolesSectionHtml(opsRoles, isReviewer)}
+        ${opsRolesSectionHtml(opsNormalized, isReviewer)}
       </section>
 
       <p class="gov-foot muted">

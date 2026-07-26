@@ -7,12 +7,26 @@ import { escapeHtml, formatSats } from "./util";
 
 export type StatsShell = (inner: string) => string;
 
+export type PublicStats = {
+  tracked: number;
+  open: number;
+  completed: number;
+  claimedLifecycle: number;
+  escrowed: number;
+  paidEstimate: number;
+  completionRate: number | null;
+  gapPercent: number | null;
+};
+
 async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (proposal) => {
       if (!proposal.escrow_address) return proposal;
       try {
-        return { ...proposal, balance_sats: await addressBalanceSats(proposal.escrow_address) };
+        return {
+          ...proposal,
+          balance_sats: await addressBalanceSats(proposal.escrow_address),
+        };
       } catch {
         return proposal;
       }
@@ -20,7 +34,53 @@ async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   );
 }
 
-function statHtml(label: string, value: string, detail: string): string {
+/** Pure totals for tests and rendering. */
+export function computePublicStats(proposals: Proposal[]): PublicStats {
+  const completed = proposals.filter(
+    (proposal) => String(proposal.status) === "completed",
+  );
+  const claimedLifecycle = proposals.filter((proposal) =>
+    ["claimed", "in_review", "completed"].includes(String(proposal.status)),
+  );
+  const open = proposals.filter((proposal) =>
+    ["listed", "funding", "claimable", "claimed", "in_review"].includes(
+      String(proposal.status),
+    ),
+  );
+  const escrowed = proposals.reduce(
+    (sum, proposal) => sum + (proposal.balance_sats || 0),
+    0,
+  );
+  const paidEstimate = completed.reduce(
+    (sum, proposal) =>
+      sum + (proposal.target_sats ?? proposal.balance_sats ?? 0),
+    0,
+  );
+  const completionRate = claimedLifecycle.length
+    ? Math.round((completed.length / claimedLifecycle.length) * 100)
+    : null;
+  const gapPercent =
+    CORE_ANNUAL_GAP_SATS > 0
+      ? Math.min(100, Math.round((escrowed / CORE_ANNUAL_GAP_SATS) * 100))
+      : null;
+
+  return {
+    tracked: proposals.length,
+    open: open.length,
+    completed: completed.length,
+    claimedLifecycle: claimedLifecycle.length,
+    escrowed,
+    paidEstimate,
+    completionRate,
+    gapPercent,
+  };
+}
+
+function supportMetricHtml(
+  label: string,
+  value: string,
+  detail: string,
+): string {
   return `<div class="stats-metric">
     <dt>${escapeHtml(label)}</dt>
     <dd>${escapeHtml(value)}</dd>
@@ -28,49 +88,105 @@ function statHtml(label: string, value: string, detail: string): string {
   </div>`;
 }
 
+function gapSectionHtml(stats: PublicStats): string {
+  if (!CORE_ANNUAL_GAP_SATS || stats.gapPercent == null) return "";
+  return `<section class="stats-gap" aria-labelledby="stats-gap-title">
+    <div class="stats-gap-copy">
+      <p class="stats-gap-eyebrow" id="stats-gap-title">Core annual gap</p>
+      <p class="stats-gap-lede">Escrowed across open projects versus the published Core annual funding gap.</p>
+      <p class="stats-gap-figures">
+        <strong>${escapeHtml(formatSats(stats.escrowed))}</strong>
+        <span>of ${escapeHtml(formatSats(CORE_ANNUAL_GAP_SATS))}</span>
+      </p>
+    </div>
+    <div class="stats-gap-visual">
+      <p class="stats-gap-percent mono">${stats.gapPercent}%</p>
+      <div
+        class="stats-gap-meter"
+        role="progressbar"
+        aria-label="Core annual gap represented by escrowed funds"
+        aria-valuemin="0"
+        aria-valuemax="${CORE_ANNUAL_GAP_SATS}"
+        aria-valuenow="${stats.escrowed}"
+      ><span style="width: ${stats.gapPercent}%"></span></div>
+      <p class="stats-gap-note">Best-effort public representation — not custody, not a pledge.</p>
+    </div>
+  </section>`;
+}
+
+function statsBodyHtml(stats: PublicStats): string {
+  const rateValue =
+    stats.completionRate == null ? "—" : `${stats.completionRate}%`;
+  const rateDetail =
+    stats.claimedLifecycle > 0
+      ? `${stats.completed} completed of ${stats.claimedLifecycle} that entered claim or review`
+      : "Shown once a project enters the claim lifecycle";
+
+  return `<section class="wrap detail stats-page">
+    <header class="stats-hero">
+      <p class="about-eyebrow">Public ledger</p>
+      <h1>Funding stats</h1>
+      <p class="lede">Best-effort totals from public proposal files and on-chain escrow balances. Plebly does not custody or settle these funds.</p>
+    </header>
+
+    <section class="stats-primary" aria-labelledby="stats-escrowed-label">
+      <p class="stats-primary-label" id="stats-escrowed-label">Currently escrowed</p>
+      <p class="stats-primary-value mono">${escapeHtml(formatSats(stats.escrowed))}</p>
+      <p class="stats-primary-detail">${
+        stats.escrowed
+          ? `Live confirmed balances across ${stats.tracked} tracked project${stats.tracked === 1 ? "" : "s"}`
+          : "No public escrow balance is tracked yet"
+      }</p>
+    </section>
+
+    <dl class="stats-support">
+      ${supportMetricHtml(
+        "Open projects",
+        String(stats.open),
+        stats.open
+          ? "Listed, funding, claimable, claimed, or in review"
+          : "No open projects in the public index yet",
+      )}
+      ${supportMetricHtml(
+        "Completed",
+        String(stats.completed),
+        stats.completed
+          ? `Targets sum to ${formatSats(stats.paidEstimate)} · payouts stay on-chain verifiable`
+          : "Completed work appears here after public review",
+      )}
+      ${supportMetricHtml("Claim completion", rateValue, rateDetail)}
+    </dl>
+
+    ${gapSectionHtml(stats)}
+
+    <footer class="stats-foot">
+      <p class="stats-source">Figures refresh when this page loads.</p>
+      <div class="stats-actions">
+        <a class="btn" href="${href("/")}">Browse projects</a>
+        <a class="btn ghost" href="${href("/about")}#trust">Trust model</a>
+      </div>
+    </footer>
+  </section>`;
+}
+
 export async function renderStats(shell: StatsShell): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
-  app.innerHTML = shell(`<section class="wrap detail stats-page"><p class="loading">Loading public totals…</p></section>`);
+  app.innerHTML = shell(
+    `<section class="wrap detail stats-page"><p class="loading">Loading public totals…</p></section>`,
+  );
 
   try {
     const proposals = await enrichBalances(await listListedProposals());
-    const completed = proposals.filter((proposal) => String(proposal.status) === "completed");
-    const claimed = proposals.filter((proposal) =>
-      ["claimed", "in_review", "completed"].includes(String(proposal.status)),
-    );
-    const escrowed = proposals.reduce((sum, proposal) => sum + (proposal.balance_sats || 0), 0);
-    const paidEstimate = completed.reduce(
-      (sum, proposal) => sum + (proposal.target_sats ?? proposal.balance_sats ?? 0),
-      0,
-    );
-    const gapPercent = CORE_ANNUAL_GAP_SATS
-      ? Math.min(100, Math.round((escrowed / CORE_ANNUAL_GAP_SATS) * 100))
-      : 0;
-
-    app.innerHTML = shell(`<section class="wrap detail stats-page">
-      <p class="eyebrow">Public ledger</p>
-      <h1>Funding stats</h1>
-      <p class="lede">Best-effort totals from public proposal files and on-chain escrow balances. Plebly does not custody or settle these funds.</p>
-      <dl class="stats-grid">
-        ${statHtml("Currently escrowed", formatSats(escrowed), escrowed ? "Live balances across listed projects" : "No public escrow balance is tracked yet")}
-        ${statHtml("Completed projects", String(completed.length), completed.length ? "Publicly marked completed" : "Completed work will appear here after public review")}
-        ${statHtml("Completed targets", formatSats(paidEstimate), completed.length ? "Target amounts for completed projects; actual payouts remain on-chain verifiable" : "No completed project target is recorded yet")}
-        ${statHtml("Claim completion rate", claimed.length ? `${Math.round((completed.length / claimed.length) * 100)}%` : "-", claimed.length ? "Completed among claimed and reviewed projects" : "Shown once a project enters the claim lifecycle")}
-      </dl>
-      <section class="gap-ticker stats-gap">
-        <div>
-          <span class="gap-ticker-label">Core annual gap</span>
-          <strong>${formatSats(escrowed)} <span>of ${formatSats(CORE_ANNUAL_GAP_SATS)}</span></strong>
-        </div>
-        <div class="gap-ticker-meter" role="progressbar" aria-label="Core annual gap funded" aria-valuemin="0" aria-valuemax="${CORE_ANNUAL_GAP_SATS}" aria-valuenow="${escrowed}"><span style="width: ${gapPercent}%"></span></div>
-        <p>${gapPercent}% represented by currently escrowed public funds.</p>
-      </section>
-      <p class="stats-source">Figures refresh when this page loads. <a href="${href("/")}">Browse projects</a> · <a href="${href("/about")}#trust">Read the trust model</a>.</p>
-    </section>`);
+    const stats = computePublicStats(proposals);
+    app.innerHTML = shell(statsBodyHtml(stats));
   } catch (error) {
     app.innerHTML = shell(`<section class="wrap detail stats-page">
-      <h1>Funding stats</h1>
+      <header class="stats-hero">
+        <p class="about-eyebrow">Public ledger</p>
+        <h1>Funding stats</h1>
+      </header>
       <div class="error">${escapeHtml((error as Error).message)}</div>
+      <p class="stats-source"><a href="${href("/")}">Browse projects</a></p>
     </section>`);
   }
 }
