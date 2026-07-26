@@ -3410,39 +3410,11 @@ a.project-card-by:hover .project-card-by-text {
 .proposal-share-slot {
   padding-top: 0.75rem;
   border-top: 1px solid var(--line-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.proposal-share-label {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.proposal-share-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
 }
 
 .proposal-share-btn {
   width: 100%;
   justify-content: flex-start;
-}
-
-.proposal-share-social {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
-.proposal-share-social .proposal-share-btn {
-  white-space: nowrap;
 }
 
 .proposal-share-icon {
@@ -5899,7 +5871,10 @@ a.proposal-comment-author:hover {
   padding: 0.55rem 0.65rem;
   font-size: 0.75rem;
   line-height: 1.4;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);

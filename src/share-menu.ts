@@ -56,7 +56,7 @@ export function openShareMenu(payload: SharePayload): Promise<void> {
     <div class="site-modal-card share-menu-card" role="dialog" aria-modal="true" aria-labelledby="share-menu-title">
       <button type="button" class="site-modal-close" data-share-close aria-label="Close">${solidIcon("xmark")}</button>
       <h2 id="share-menu-title">Share</h2>
-      <p class="muted share-menu-url mono">${escapeHtml(payload.url)}</p>
+      <p class="muted share-menu-url mono" title="${escapeHtml(payload.url)}">${escapeHtml(payload.url)}</p>
       <div class="share-menu-actions">
         <button type="button" class="btn ghost share-menu-copy" data-share-copy>${btnWithIcon("link", "Copy link")}</button>
         <div class="share-menu-social">

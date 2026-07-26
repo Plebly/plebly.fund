@@ -19,13 +19,9 @@ import {
   watchNewUtxos,
   type CreditPreferences,
 } from "./funder-credit";
-import { btnBrandIconOnly, btnWithIcon, solidIcon } from "./icons";
+import { btnWithIcon, solidIcon } from "./icons";
 import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
-import {
-  openShareMenu,
-  prefersNativeShare,
-  shareDestinations,
-} from "./share-menu";
+import { openShareMenu, prefersNativeShare } from "./share-menu";
 import {
   createLightningInvoice,
   fetchLightningStatus,
@@ -404,7 +400,7 @@ export function proposalShareUrl(repoPath: string, id?: string | null): string {
   return new URL(proposalHref(repoPath, id), SITE_ORIGIN).toString();
 }
 
-/** Share controls under the primary actions (copy + share + social). */
+/** Single Share control — destinations live in the share sheet / OS share. */
 export function shareSlotHtml(
   title: string,
   repoPath: string,
@@ -412,69 +408,34 @@ export function shareSlotHtml(
 ): string {
   const url = proposalShareUrl(repoPath, id);
   const text = `${title}: fund open Bitcoin work on Plebly`;
-  const dest = shareDestinations({ title, text, url });
   return `<div class="proposal-share-slot">
-    <p class="proposal-share-label">Share</p>
-    <div class="proposal-share-actions">
-      <button type="button" class="btn ghost proposal-share-btn" data-share="copy" data-share-url="${escapeHtml(url)}">${btnWithIcon("link", "Copy link")}</button>
-      <button type="button" class="btn ghost proposal-share-btn" data-share="native" data-share-url="${escapeHtml(url)}" data-share-title="${escapeHtml(title)}" data-share-text="${escapeHtml(text)}">${btnWithIcon("share-nodes", "Share")}</button>
-      <div class="proposal-share-social">
-        <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(dest.x)}" target="_blank" rel="noreferrer noopener" aria-label="Share on X" title="Share on X">${btnBrandIconOnly("x-twitter")}</a>
-        <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(dest.reddit)}" target="_blank" rel="noreferrer noopener" aria-label="Share on Reddit" title="Share on Reddit">${btnBrandIconOnly("reddit")}</a>
-        <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(dest.hn)}" target="_blank" rel="noreferrer noopener" aria-label="Share on Hacker News" title="Share on Hacker News">${btnBrandIconOnly("hacker-news")}</a>
-      </div>
-    </div>
+    <button type="button" class="btn ghost proposal-share-btn" data-share="native" data-share-url="${escapeHtml(url)}" data-share-title="${escapeHtml(title)}" data-share-text="${escapeHtml(text)}">${btnWithIcon("share-nodes", "Share")}</button>
   </div>`;
 }
 
 export function bindShareButtons(root: ParentNode): void {
-  root.querySelectorAll<HTMLElement>("[data-share]").forEach((el) => {
+  root.querySelectorAll<HTMLElement>('[data-share="native"]').forEach((el) => {
     if (el.dataset.shareBound === "1") return;
     el.dataset.shareBound = "1";
     el.addEventListener("click", async (ev) => {
-      const kind = el.dataset.share;
-      if (kind === "copy") {
-        ev.preventDefault();
-        const url = el.dataset.shareUrl;
-        if (!url) return;
+      ev.preventDefault();
+      const url = el.dataset.shareUrl;
+      if (!url) return;
+      const shareTitle = el.dataset.shareTitle || "Plebly";
+      const shareText = el.dataset.shareText || shareTitle;
+      const payload = { title: shareTitle, text: shareText, url };
+      if (prefersNativeShare()) {
         try {
-          await navigator.clipboard.writeText(url);
-          flashShareLabel(el, "Copied");
-        } catch {
-          window.alert("Could not copy link");
+          await navigator.share(payload);
+          return;
+        } catch (error) {
+          if ((error as Error).name === "AbortError") return;
+          // Fall through to desktop menu when the OS sheet fails.
         }
-        return;
       }
-      if (kind === "native") {
-        ev.preventDefault();
-        const url = el.dataset.shareUrl;
-        if (!url) return;
-        const shareTitle = el.dataset.shareTitle || "Plebly";
-        const shareText = el.dataset.shareText || shareTitle;
-        const payload = { title: shareTitle, text: shareText, url };
-        if (prefersNativeShare()) {
-          try {
-            await navigator.share(payload);
-            return;
-          } catch (error) {
-            if ((error as Error).name === "AbortError") return;
-            // Fall through to desktop menu when the OS sheet fails.
-          }
-        }
-        await openShareMenu(payload);
-      }
+      await openShareMenu(payload);
     });
   });
-}
-
-function flashShareLabel(el: HTMLElement, text: string): void {
-  const label = el.querySelector(".btn-icon > span:last-child");
-  const target = label ?? el;
-  const prev = target.textContent;
-  target.textContent = text;
-  setTimeout(() => {
-    if (prev) target.textContent = prev;
-  }, 1200);
 }
 
 /** Full donate flow inside a modal shell. */
