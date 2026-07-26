@@ -20,6 +20,7 @@ import { renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
+import { syncStoredCreditPreferencesFromProfile } from "./funder-credit";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
 import { findListedProposalById } from "./github";
 import {
@@ -130,6 +131,9 @@ function scrollToHashTarget(): void {
 
 async function render() {
   currentUser = await fetchCurrentUser();
+  if (currentUser?.funder_credit) {
+    syncStoredCreditPreferencesFromProfile(currentUser.funder_credit);
+  }
   const r = route();
   const ctx = {
     user: currentUser,

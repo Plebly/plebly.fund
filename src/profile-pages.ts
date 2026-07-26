@@ -17,6 +17,15 @@ import {
   isOpenToClaim,
   type ClaimLedgerView,
 } from "./builder";
+import {
+  applyCreditPreferencesToFields,
+  bindCreditPreferenceGates,
+  creditPreferenceFieldsHtml,
+  loadStoredCreditPreferences,
+  readCreditPreferences,
+  saveStoredCreditPreferences,
+  syncStoredCreditPreferencesFromProfile,
+} from "./funder-credit";
 import { socialAccountLink } from "./icons";
 import { fetchReviewerMe } from "./reviewers";
 import {
@@ -224,6 +233,13 @@ export async function renderAccount(
     }),
   );
   const myProposals = proposalsForProfile(allProps, user);
+  const creditPrefs =
+    syncStoredCreditPreferencesFromProfile(user.funder_credit) ||
+    loadStoredCreditPreferences() || {
+      public_credit: true,
+      anonymous: false,
+      show_amount: false,
+    };
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail account-page">
@@ -287,6 +303,12 @@ export async function renderAccount(
           <legend>Links</legend>
           <div id="links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
           <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
+        </fieldset>
+
+        <fieldset class="form-block account-funder-credit">
+          <legend>Funder appearance</legend>
+          <p class="hint">How you show up on project funder lists after a donation is linked to your account. Amounts stay private unless you opt in.</p>
+          ${creditPreferenceFieldsHtml({ idPrefix: "account-credit" })}
         </fieldset>
 
         <div class="form-actions">
@@ -416,6 +438,9 @@ export async function renderAccount(
   const msg = document.getElementById("account-msg");
   const linksList = document.getElementById("links-list");
 
+  bindCreditPreferenceGates(app, "account-credit");
+  applyCreditPreferencesToFields(app, creditPrefs, "account-credit");
+
   linksList?.addEventListener("click", (e) => {
     const t = e.target as HTMLElement | null;
     const btn = t?.closest?.(".remove-link");
@@ -490,7 +515,20 @@ export async function renderAccount(
       const skills_tags = (
         document.getElementById("skills-tags-input") as HTMLInputElement
       ).value.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
-      await updateProfile({ bio, links, payout_address, skills_tags });
+      const credit = readCreditPreferences(app, "account-credit");
+      const funder_credit = {
+        public_credit: credit.public_credit,
+        show_amount: credit.show_amount,
+      };
+      const saved = await updateProfile({
+        bio,
+        links,
+        payout_address,
+        skills_tags,
+        funder_credit,
+      });
+      saveStoredCreditPreferences(credit);
+      syncStoredCreditPreferencesFromProfile(saved.funder_credit || funder_credit);
       msg.textContent = "Profile saved.";
       msg.className = "form-msg success";
       ctx.rerender();

@@ -411,6 +411,13 @@ export async function renderProposalPage(
         proposalId: match.id,
         proposalPath: match.path,
         signedIn: Boolean(user),
+        creditPrefs: user?.funder_credit
+          ? {
+              public_credit: user.funder_credit.public_credit !== false,
+              anonymous: user.funder_credit.public_credit === false,
+              show_amount: Boolean(user.funder_credit.show_amount),
+            }
+          : null,
         onAuthed,
         onCreditLinked: () => {
           void reloadEngagement?.();

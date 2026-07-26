@@ -3,6 +3,11 @@ export type ProfileLink = {
   url: string;
 };
 
+export type FunderCreditPreferences = {
+  public_credit: boolean;
+  show_amount: boolean;
+};
+
 export type UserProfile = {
   id: string;
   username?: string;
@@ -14,6 +19,8 @@ export type UserProfile = {
   avatar_url?: string;
   payout_address?: string;
   skills_tags?: string[];
+  /** Default appearance on public funder lists. */
+  funder_credit?: FunderCreditPreferences;
   created_at?: string;
   updated_at?: string;
   username_claimed_at?: string;

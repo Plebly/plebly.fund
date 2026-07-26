@@ -305,6 +305,10 @@ export async function updateProfile(input: {
   links: ProfileLink[];
   payout_address?: string;
   skills_tags?: string[];
+  funder_credit?: {
+    public_credit: boolean;
+    show_amount: boolean;
+  };
 }): Promise<UserProfile> {
   let res: Response;
   try {

@@ -15,6 +15,7 @@ import {
   readCreditPreferences,
   recordContribution,
   saveStoredCreditPreferences,
+  syncStoredCreditPreferencesFromProfile,
   watchNewUtxos,
   type CreditPreferences,
 } from "./funder-credit";
@@ -63,6 +64,8 @@ export type DonateBindOpts = {
   signedIn?: boolean;
   onAuthed?: () => void;
   onCreditLinked?: () => void;
+  /** Account default prefs (skip credit step when present). */
+  creditPrefs?: CreditPreferences | null;
   /** Override UTXO poll interval (tests use a short value). */
   utxoPollMs?: number;
 };
@@ -674,6 +677,11 @@ function activeCreditPreferences(panel: Element): CreditPreferences {
 async function resolveInitialDonateStep(
   opts: DonateBindOpts,
 ): Promise<{ step: "credit" | "pay"; prefs: CreditPreferences | null }> {
+  if (opts.creditPrefs) {
+    const prefs = syncStoredCreditPreferencesFromProfile(opts.creditPrefs);
+    if (prefs) return { step: "pay", prefs };
+  }
+
   const stored = loadStoredCreditPreferences();
   if (stored) return { step: "pay", prefs: stored };
 

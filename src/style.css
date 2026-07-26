@@ -4206,6 +4206,10 @@ a.project-card-by:hover {
   color: var(--bad);
 }
 
+.account-funder-credit .funder-credit-options {
+  margin-top: 0.65rem;
+}
+
 .hint {
   color: var(--muted);
   font-size: 0.8125rem;

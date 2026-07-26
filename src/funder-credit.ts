@@ -45,6 +45,29 @@ export function hasStoredCreditPreferences(): boolean {
   return loadStoredCreditPreferences() != null;
 }
 
+/** Sync account/profile defaults into the donate wizard skip cache. */
+export function syncStoredCreditPreferencesFromProfile(input: {
+  public_credit?: boolean;
+  show_amount?: boolean;
+  anonymous?: boolean;
+} | null | undefined): CreditPreferences | null {
+  if (!input) return loadStoredCreditPreferences();
+  const publicCredit = input.public_credit !== false && input.anonymous !== true;
+  const prefs: CreditPreferences = {
+    public_credit: publicCredit,
+    anonymous: !publicCredit,
+    show_amount: Boolean(input.show_amount) && publicCredit,
+  };
+  saveStoredCreditPreferences(prefs);
+  return prefs;
+}
+
+export function profileHasCreditPreferences(input: {
+  funder_credit?: { public_credit?: boolean; show_amount?: boolean } | null;
+} | null | undefined): boolean {
+  return Boolean(input?.funder_credit);
+}
+
 export function applyCreditPreferencesToFields(
   root: ParentNode,
   prefs: CreditPreferences,
