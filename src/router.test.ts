@@ -24,8 +24,13 @@ describe("router governance paths", () => {
       id: "PLEBLY-42",
       stable: true,
     });
+    expect(parseLocation("/p/plebly-42", "")).toEqual({
+      name: "proposal",
+      id: "plebly-42",
+      stable: true,
+    });
     expect(proposalHref("proposals/listed/example.md", "PLEBLY-42")).toBe(
-      "/p/PLEBLY-42",
+      "/p/plebly-42",
     );
   });
 
@@ -45,13 +50,13 @@ describe("router governance paths", () => {
       id: "PLEBLY-42",
       title: "Demo",
       description: "Fund open work",
-      path: "/p/PLEBLY-42",
+      path: "/p/plebly-42",
       status: "listed",
       target_sats: 100_000,
       balance_sats: 25_000,
     });
     expect(ld["@type"]).toBe("FundingCampaign");
-    expect(ld.url).toBe("https://plebly.fund/p/PLEBLY-42");
+    expect(ld.url).toBe("https://plebly.fund/p/plebly-42");
     expect(ld.fundingGoal).toMatchObject({ currency: "XBT" });
     expect(ld.amount).toMatchObject({ currency: "XBT" });
   });

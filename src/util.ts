@@ -155,9 +155,9 @@ export function bitcoinUri(address: string, amountSats?: number | null): string 
 
 const PROPOSALS_PREFIX = "proposals/";
 
-/** Frontmatter ID → stable public proposal path. */
+/** Frontmatter ID → stable public proposal path (lowercase; resolve is case-insensitive). */
 export function proposalStablePath(id: string): string {
-  return `/p/${encodeURIComponent(id.trim())}`;
+  return `/p/${encodeURIComponent(id.trim().toLowerCase())}`;
 }
 
 /** Repo path → URL slug, e.g. proposals/listed/foo.md → listed/foo */

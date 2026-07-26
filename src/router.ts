@@ -283,7 +283,7 @@ export function proposalJsonLd(input: {
   cover_image?: string | null;
 }): Record<string, unknown> {
   const url = input.id
-    ? `${SITE_ORIGIN}/p/${encodeURIComponent(input.id)}`
+    ? `${SITE_ORIGIN}/p/${encodeURIComponent(input.id.trim().toLowerCase())}`
     : canonicalUrl(input.path.startsWith("/") ? input.path : `/${input.path}`);
   const raised =
     typeof input.balance_sats === "number" && input.balance_sats > 0

@@ -7,6 +7,7 @@ import {
   linkifyText,
   proposalRepoPath,
   proposalSlug,
+  proposalStablePath,
   timeAgoHtml,
 } from "./util";
 
@@ -67,6 +68,11 @@ describe("proposal path helpers", () => {
   it("round-trips slug and repo path", () => {
     expect(proposalSlug("proposals/listed/foo.md")).toBe("listed/foo");
     expect(proposalRepoPath("listed/foo")).toBe("proposals/listed/foo.md");
+  });
+
+  it("emits lowercase stable proposal URLs", () => {
+    expect(proposalStablePath("PLEBLY-42")).toBe("/p/plebly-42");
+    expect(proposalStablePath("  Mixed-Case-Id  ")).toBe("/p/mixed-case-id");
   });
 });
 

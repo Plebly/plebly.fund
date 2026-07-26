@@ -261,7 +261,7 @@ describe("proposal UI critical render helpers", () => {
   it("shareSlotHtml offers a single Share control", () => {
     const path = "proposals/listed/knots-spam-heuristics.md";
     const html = shareSlotHtml("Knots spam heuristics", path, "PLEBLY-42");
-    expect(proposalShareUrl(path, "PLEBLY-42")).toContain("/p/PLEBLY-42");
+    expect(proposalShareUrl(path, "PLEBLY-42")).toContain("/p/plebly-42");
     expect(html).toContain("proposal-share-slot");
     expect(html).toContain('data-share="native"');
     expect(html).toContain("fa-share-nodes");

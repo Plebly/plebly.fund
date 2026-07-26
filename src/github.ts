@@ -171,7 +171,13 @@ export async function findListedProposalById(
   }
 
   const proposals = await listListedProposals();
-  return proposals.find((proposal) => proposal.id === normalized) || null;
+  const needle = normalized.toLowerCase();
+  return (
+    proposals.find(
+      (proposal) =>
+        proposal.id?.toLowerCase() === needle || proposal.path === normalized,
+    ) || null
+  );
 }
 
 export async function listAllPublicProposals(): Promise<Proposal[]> {

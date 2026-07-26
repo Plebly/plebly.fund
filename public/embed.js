@@ -38,7 +38,7 @@
       const pct = hasFunding
         ? Math.max(0, Math.min(100, Number(proposal.funding_pct) || (balance / target) * 100))
         : 0;
-      const fallbackUrl = `${DEFAULT_SITE}/p/${encodeURIComponent(id)}`;
+      const fallbackUrl = `${DEFAULT_SITE}/p/${encodeURIComponent(String(id).trim().toLowerCase())}`;
       let url = fallbackUrl;
       try {
         const candidate = new URL(proposal.url || fallbackUrl);
