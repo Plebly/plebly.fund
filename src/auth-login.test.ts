@@ -170,4 +170,110 @@ describe("loginWithNostr", () => {
     };
     await expect(loginWithNostr()).rejects.toThrow(/cancelled/i);
   });
+
+  it("rejects when the signer alters u/method tags", async () => {
+    const challenge = "a".repeat(32);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ challenge }), { status: 200 }),
+      ),
+    );
+    (window as Window & { nostr?: unknown }).nostr = {
+      signEvent: async (event: {
+        kind: number;
+        tags: string[][];
+        content: string;
+        created_at: number;
+      }) => ({
+        ...event,
+        tags: [
+          ["u", "https://evil.example/auth"],
+          ["method", "POST"],
+        ],
+        id: "c".repeat(64),
+        pubkey: "b".repeat(64),
+        sig: "d".repeat(128),
+      }),
+    };
+    await expect(loginWithNostr()).rejects.toThrow(/altered the login request/i);
+  });
+
+  it("maps expired challenge and unavailable challenge service", async () => {
+    const challenge = "a".repeat(32);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "invalid or expired challenge" }), {
+          status: 401,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "SESSIONS unavailable" }), {
+          status: 503,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    (window as Window & { nostr?: unknown }).nostr = {
+      signEvent: async (event: {
+        kind: number;
+        tags: string[][];
+        content: string;
+        created_at: number;
+      }) => ({
+        ...event,
+        id: "c".repeat(64),
+        pubkey: "b".repeat(64),
+        sig: "d".repeat(128),
+      }),
+    };
+
+    await expect(loginWithNostr()).rejects.toThrow(/expired/i);
+    await expect(loginWithNostr()).rejects.toThrow(/temporarily unavailable/i);
+  });
+
+  it("includes a payload tag bound to the request body", async () => {
+    const challenge = "a".repeat(32);
+    let signedTags: string[][] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/nostr/challenge")) {
+        return new Response(JSON.stringify({ challenge }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ token: "tok" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    (window as Window & { nostr?: unknown }).nostr = {
+      signEvent: async (event: {
+        kind: number;
+        tags: string[][];
+        content: string;
+        created_at: number;
+      }) => {
+        signedTags = event.tags;
+        return {
+          ...event,
+          id: "c".repeat(64),
+          pubkey: "b".repeat(64),
+          sig: "d".repeat(128),
+        };
+      },
+    };
+
+    await loginWithNostr();
+    const payload = signedTags.find((tag) => tag[0] === "payload")?.[1];
+    expect(payload).toMatch(/^[0-9a-f]{64}$/);
+    const body = JSON.stringify({ challenge });
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(body),
+    );
+    const expected = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    expect(payload).toBe(expected);
+  });
 });
