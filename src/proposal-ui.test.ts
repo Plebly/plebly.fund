@@ -132,11 +132,13 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain("Window ended");
   });
 
-  it("donate panel includes funder credit step", () => {
+  it("donate panel is a credit-then-pay wizard", () => {
     const signedOut = donatePanelHtml({
       escrow_address: "tb1qtest",
     } as Proposal);
-    expect(signedOut).toContain("donate-credit");
+    expect(signedOut).toContain('id="donate-step-credit"');
+    expect(signedOut).toContain('id="donate-step-pay"');
+    expect(signedOut).toContain("Continue anonymously");
     expect(signedOut).toContain("Sign in");
     expect(signedOut).not.toContain("donate-credit-public");
 
@@ -146,7 +148,8 @@ describe("proposal UI critical render helpers", () => {
     );
     expect(signedIn).toContain("donate-credit-public");
     expect(signedIn).toContain("donate-credit-amount");
-    expect(signedIn).toContain("you confirm it was yours");
+    expect(signedIn).toContain("Continue to payment");
+    expect(signedIn).toContain("Change credit preferences");
   });
 
   it("meta chips show type and tags", () => {

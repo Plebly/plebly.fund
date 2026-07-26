@@ -10,6 +10,55 @@ export type CreditPreferences = {
   show_amount: boolean;
 };
 
+const CREDIT_PREFS_STORAGE_KEY = "plebly_funder_credit_prefs";
+
+/** Last chosen display prefs for the donate wizard (skip step 1 when present). */
+export function loadStoredCreditPreferences(): CreditPreferences | null {
+  try {
+    const raw = localStorage.getItem(CREDIT_PREFS_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as Partial<CreditPreferences> & { chosen?: boolean };
+    if (!data || data.chosen === false) return null;
+    const publicCredit = data.public_credit !== false && data.anonymous !== true;
+    return {
+      public_credit: publicCredit,
+      anonymous: !publicCredit,
+      show_amount: Boolean(data.show_amount) && publicCredit,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveStoredCreditPreferences(prefs: CreditPreferences): void {
+  try {
+    localStorage.setItem(
+      CREDIT_PREFS_STORAGE_KEY,
+      JSON.stringify({ ...prefs, chosen: true }),
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function hasStoredCreditPreferences(): boolean {
+  return loadStoredCreditPreferences() != null;
+}
+
+export function applyCreditPreferencesToFields(
+  root: ParentNode,
+  prefs: CreditPreferences,
+  idPrefix = "donate-credit",
+): void {
+  const publicBox = root.querySelector<HTMLInputElement>(`#${idPrefix}-public`);
+  const amountBox = root.querySelector<HTMLInputElement>(`#${idPrefix}-amount`);
+  if (publicBox) publicBox.checked = prefs.public_credit && !prefs.anonymous;
+  if (amountBox) {
+    amountBox.checked = prefs.show_amount && prefs.public_credit && !prefs.anonymous;
+    amountBox.disabled = !publicBox?.checked;
+  }
+}
+
 export function readCreditPreferences(
   root: ParentNode,
   idPrefix = "credit",

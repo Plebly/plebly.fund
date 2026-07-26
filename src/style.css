@@ -690,12 +690,19 @@ a:hover {
   border-color: var(--line);
 }
 
+.donate-modal-card {
+  overflow: hidden;
+  max-height: min(92vh, 40rem);
+}
+
 .donate-modal-card .donate-panel {
   margin: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   scroll-margin-top: 0;
+  max-height: min(88vh, 38rem);
+  overflow: hidden;
 }
 
 .donate-trigger-card {
@@ -2558,32 +2565,57 @@ a.project-card-by:hover {
   color: var(--bad-deep);
 }
 
-.donate-credit {
-  margin-top: 1.35rem;
-  padding-top: 1.15rem;
-  border-top: 1px solid var(--line-soft);
+.donate-step-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.donate-credit-title {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.donate-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.15rem;
 }
 
-.donate-credit-lede,
-.donate-credit-hint {
+.donate-credit-summary {
   margin: 0.35rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+
+.donate-credit-edit {
+  margin: 0.45rem 0 0.85rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--accent-text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.donate-credit-edit:hover {
+  color: var(--ink);
 }
 
 .donate-credit-login {
   margin-top: 0.75rem;
 }
 
-.donate-credit .funder-credit-options {
+.donate-step .funder-credit-options {
   margin-top: 0.85rem;
+}
+
+.donate-credit-link {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
 }
 
 .donate-credit-status {

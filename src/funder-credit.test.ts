@@ -19,15 +19,27 @@ import {
   claimContribution,
   claimContributionWithRetry,
   creditPreferenceFieldsHtml,
+  hasStoredCreditPreferences,
+  loadStoredCreditPreferences,
   readCreditPreferences,
   recordContribution,
+  saveStoredCreditPreferences,
   updateCreditPreferences,
   utxoKey,
   watchNewUtxos,
 } from "./funder-credit";
 
+const storage = new Map<string, string>();
+
 beforeEach(() => {
   addressUtxos.mockReset();
+  storage.clear();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => storage.get(k) ?? null,
+    setItem: (k: string, v: string) => storage.set(k, v),
+    removeItem: (k: string) => storage.delete(k),
+    clear: () => storage.clear(),
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })),
@@ -38,6 +50,36 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
+});
+
+describe("stored credit preferences", () => {
+  it("round-trips chosen prefs for the donate wizard skip", () => {
+    expect(hasStoredCreditPreferences()).toBe(false);
+    saveStoredCreditPreferences({
+      public_credit: true,
+      anonymous: false,
+      show_amount: true,
+    });
+    expect(hasStoredCreditPreferences()).toBe(true);
+    expect(loadStoredCreditPreferences()).toEqual({
+      public_credit: true,
+      anonymous: false,
+      show_amount: true,
+    });
+  });
+
+  it("forces amount off when anonymous", () => {
+    saveStoredCreditPreferences({
+      public_credit: false,
+      anonymous: true,
+      show_amount: true,
+    });
+    expect(loadStoredCreditPreferences()).toEqual({
+      public_credit: false,
+      anonymous: true,
+      show_amount: false,
+    });
+  });
 });
 
 describe("creditPreferenceFieldsHtml", () => {

@@ -1,16 +1,22 @@
 import QRCode from "qrcode";
 import {
+  authFetch,
   bindLoginHandlers,
   currentReturnPath,
   loginChoicesHtml,
 } from "./auth";
 import {
+  applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
   claimContributionWithRetry,
   creditPreferenceFieldsHtml,
+  hasStoredCreditPreferences,
+  loadStoredCreditPreferences,
   readCreditPreferences,
   recordContribution,
+  saveStoredCreditPreferences,
   watchNewUtxos,
+  type CreditPreferences,
 } from "./funder-credit";
 import {
   btnWithBrandIcon,
@@ -18,7 +24,7 @@ import {
   btnWithNostrIcon,
   solidIcon,
 } from "./icons";
-import { BITCOIN_NETWORK, lightningUiAllowed } from "./config";
+import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
 import {
   createLightningInvoice,
   fetchLightningStatus,
@@ -61,23 +67,117 @@ export type DonateBindOpts = {
   utxoPollMs?: number;
 };
 
-function donateCreditHtml(signedIn: boolean): string {
-  return `<div class="donate-credit" id="donate-credit">
-    <h3 class="donate-credit-title">Funder credit</h3>
-    <p class="donate-credit-lede muted">Optional. After your payment is seen, link it so you can appear on the funder list.</p>
+function donateCreditStepHtml(signedIn: boolean): string {
+  return `<section class="donate-step" data-donate-step="credit" id="donate-step-credit">
+    <div class="donate-panel-head">
+      <p class="donate-step-kicker">Step 1 of 2</p>
+      <h2 class="donate-title" id="donate-modal-title">Funder credit</h2>
+      <p class="donate-lede">Choose how you want to appear on the funder list after your payment is linked. Amounts stay private unless you opt in.</p>
+    </div>
     ${
       signedIn
         ? `${creditPreferenceFieldsHtml({ idPrefix: "donate-credit" })}
-           <p class="donate-credit-hint muted">On-chain: we watch for a new payment to this address, then you confirm it was yours. Lightning: we link automatically when the swap settles.</p>`
+           <div class="donate-step-actions">
+             <button type="button" class="btn" id="donate-credit-continue">Continue to payment</button>
+           </div>`
         : `<div class="donate-credit-login">
-             <p class="muted">Sign in before or after paying to claim credit. Donations still work without an account.</p>
+             <p class="muted">Sign in to claim public credit. You can also continue anonymously.</p>
              ${loginChoicesHtml(undefined, currentReturnPath())}
              <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
+           </div>
+           <div class="donate-step-actions">
+             <button type="button" class="btn" id="donate-credit-continue">Continue anonymously</button>
            </div>`
     }
-    <div id="donate-credit-status" class="donate-credit-status" aria-live="polite" hidden></div>
-    <div id="donate-credit-claim" class="donate-credit-claim" hidden></div>
-  </div>`;
+  </section>`;
+}
+
+function donatePayStepHtml(
+  addr: string,
+  networkNote: string,
+  onchainPresets: string,
+  lnPresets: string,
+): string {
+  return `<section class="donate-step" data-donate-step="pay" id="donate-step-pay" hidden>
+    <div class="donate-panel-head">
+      <p class="donate-step-kicker">Step 2 of 2</p>
+      <h2 class="donate-title" id="donate-pay-title">Donate</h2>
+      <p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
+      <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>
+    </div>
+    ${networkNote}
+    <div class="donate-rails" role="tablist" aria-label="How to donate">
+      <button type="button" class="donate-rail active" role="tab" aria-selected="true" data-tab="onchain" id="donate-rail-onchain">
+        <span class="donate-rail-kicker">Bitcoin</span>
+        <span class="donate-rail-name">On-chain</span>
+      </button>
+      <button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
+        <span class="donate-rail-kicker">Lightning</span>
+        <span class="donate-rail-name">Invoice</span>
+      </button>
+    </div>
+
+    <div class="donate-pane" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
+      <div class="donate-qr-wrap">
+        <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
+      </div>
+      <label class="donate-amount-label" for="donate-amount">Amount (optional, sats)</label>
+      <div class="donate-amount-row">
+        <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
+      </div>
+      <div class="donate-presets">${onchainPresets}<button type="button" class="donate-preset donate-preset-any" data-rail="onchain" data-sats="">Any</button></div>
+      <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+      <div class="donate-actions">
+        <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
+        <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
+      </div>
+      <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
+    </div>
+
+    <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
+      <div id="donate-ln-ready" hidden>
+        <p class="donate-pane-intro">Reverse swap to escrow. Fees apply.</p>
+        <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
+        <div class="donate-amount-row">
+          <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
+        </div>
+        <div class="donate-presets donate-ln-presets">${lnPresets}</div>
+        <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
+        <div class="donate-actions donate-ln-create-row">
+          <button type="button" class="btn" id="donate-ln-create">Create Lightning invoice</button>
+        </div>
+        <div class="donate-ln-invoice" id="donate-ln-invoice" hidden>
+          <div class="donate-qr-wrap donate-qr-wrap-ln">
+            <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
+          </div>
+          <code class="donate-address mono" id="donate-ln-bolt11"></code>
+          <div class="donate-actions">
+            <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
+            <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
+          </div>
+          <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
+        </div>
+        <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
+      </div>
+      <div id="donate-ln-unavailable" class="donate-ln-unavailable">
+        <p class="donate-ln-wait muted" id="donate-ln-wait">Checking availability…</p>
+      </div>
+    </div>
+
+    <div class="donate-credit-link" id="donate-credit">
+      <div id="donate-credit-status" class="donate-credit-status" aria-live="polite" hidden></div>
+      <div id="donate-credit-claim" class="donate-credit-claim" hidden></div>
+    </div>
+  </section>`;
+}
+
+function creditSummaryText(prefs: CreditPreferences): string {
+  if (prefs.anonymous || !prefs.public_credit) {
+    return "Credit preference: anonymous (identity hidden).";
+  }
+  return prefs.show_amount
+    ? "Credit preference: public identity + amount."
+    : "Credit preference: public identity, amount hidden.";
 }
 
 export function formatProposalDate(iso: string | null): string | null {
@@ -373,7 +473,7 @@ export function donateModalHtml(
   </div>`;
 }
 
-/** Prominent funder panel: Bitcoin on-chain and Lightning as equal rails. */
+/** Multi-step donate wizard: credit preferences, then payment rails. */
 export function donatePanelHtml(
   p: Proposal,
   opts?: { signedIn?: boolean },
@@ -394,69 +494,9 @@ export function donatePanelHtml(
       `<button type="button" class="donate-preset" data-rail="ln" data-sats="${sats}">${formatSats(sats)}</button>`,
   ).join("");
 
-  return `<div class="donate-panel" id="donate">
-    <div class="donate-panel-head">
-      <h2 class="donate-title" id="donate-modal-title">Donate</h2>
-    </div>
-    ${networkNote}
-    <div class="donate-rails" role="tablist" aria-label="How to donate">
-      <button type="button" class="donate-rail active" role="tab" aria-selected="true" data-tab="onchain" id="donate-rail-onchain">
-        <span class="donate-rail-kicker">Bitcoin</span>
-        <span class="donate-rail-name">On-chain</span>
-      </button>
-      <button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
-        <span class="donate-rail-kicker">Lightning</span>
-        <span class="donate-rail-name">Invoice</span>
-      </button>
-    </div>
-
-    <div class="donate-pane" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
-      <div class="donate-qr-wrap">
-        <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
-      </div>
-      <label class="donate-amount-label" for="donate-amount">Amount (optional, sats)</label>
-      <div class="donate-amount-row">
-        <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
-      </div>
-      <div class="donate-presets">${onchainPresets}<button type="button" class="donate-preset donate-preset-any" data-rail="onchain" data-sats="">Any</button></div>
-      <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
-      <div class="donate-actions">
-        <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
-        <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
-      </div>
-      <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
-    </div>
-
-    <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
-      <div id="donate-ln-ready" hidden>
-        <p class="donate-pane-intro">Reverse swap to escrow. Fees apply.</p>
-        <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
-        <div class="donate-amount-row">
-          <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
-        </div>
-        <div class="donate-presets donate-ln-presets">${lnPresets}</div>
-        <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
-        <div class="donate-actions donate-ln-create-row">
-          <button type="button" class="btn" id="donate-ln-create">Create Lightning invoice</button>
-        </div>
-        <div class="donate-ln-invoice" id="donate-ln-invoice" hidden>
-          <div class="donate-qr-wrap donate-qr-wrap-ln">
-            <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
-          </div>
-          <code class="donate-address mono" id="donate-ln-bolt11"></code>
-          <div class="donate-actions">
-            <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
-            <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
-          </div>
-          <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
-        </div>
-        <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
-      </div>
-      <div id="donate-ln-unavailable" class="donate-ln-unavailable">
-        <p class="donate-ln-wait muted" id="donate-ln-wait">Checking availability…</p>
-      </div>
-    </div>
-    ${donateCreditHtml(signedIn)}
+  return `<div class="donate-panel" id="donate" data-donate-step="credit">
+    ${donateCreditStepHtml(signedIn)}
+    ${donatePayStepHtml(addr, networkNote, onchainPresets, lnPresets)}
   </div>`;
 }
 
@@ -599,16 +639,83 @@ function setDonateCreditStatus(panel: Element, message: string | null, kind?: "o
   el.classList.toggle("live", kind === "live");
 }
 
-function bindDonateCredit(panel: Element, opts: DonateBindOpts): () => void {
+function setDonateStep(panel: Element, step: "credit" | "pay"): void {
+  panel.setAttribute("data-donate-step", step);
+  panel.querySelectorAll<HTMLElement>(".donate-step").forEach((el) => {
+    el.hidden = el.dataset.donateStep !== step;
+  });
+  const dialog = panel.closest<HTMLElement>("[aria-labelledby]");
+  if (dialog) {
+    dialog.setAttribute(
+      "aria-labelledby",
+      step === "credit" ? "donate-modal-title" : "donate-pay-title",
+    );
+  }
+}
+
+function syncCreditSummary(panel: Element, prefs: CreditPreferences): void {
+  const summary = panel.querySelector<HTMLElement>("#donate-credit-summary");
+  if (!summary) return;
+  summary.hidden = false;
+  summary.textContent = creditSummaryText(prefs);
+}
+
+function activeCreditPreferences(panel: Element): CreditPreferences {
+  const fromFields = panel.querySelector("#donate-credit-public")
+    ? readCreditPreferences(panel, "donate-credit")
+    : null;
+  return fromFields || loadStoredCreditPreferences() || {
+    public_credit: true,
+    anonymous: false,
+    show_amount: false,
+  };
+}
+
+async function resolveInitialDonateStep(
+  opts: DonateBindOpts,
+): Promise<{ step: "credit" | "pay"; prefs: CreditPreferences | null }> {
+  const stored = loadStoredCreditPreferences();
+  if (stored) return { step: "pay", prefs: stored };
+
+  if (opts.signedIn && opts.proposalId && WORKERS_API) {
+    try {
+      const res = await authFetch(
+        `${WORKERS_API.replace(/\/$/, "")}/contributions/mine/${encodeURIComponent(opts.proposalId)}`,
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          contributions?: Array<{
+            public_credit: boolean;
+            anonymous: boolean;
+            show_amount: boolean;
+          }>;
+        };
+        const first = data.contributions?.[0];
+        if (first) {
+          const prefs: CreditPreferences = {
+            public_credit: first.public_credit && !first.anonymous,
+            anonymous: first.anonymous || !first.public_credit,
+            show_amount: Boolean(first.show_amount),
+          };
+          saveStoredCreditPreferences(prefs);
+          return { step: "pay", prefs };
+        }
+      }
+    } catch {
+      /* fall through to credit step */
+    }
+  }
+
+  return { step: "credit", prefs: null };
+}
+
+/** Wire credit step + pay step navigation; starts UTXO watch on pay. */
+function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   bindCreditPreferenceGates(panel, "donate-credit");
   if (opts.onAuthed) bindLoginHandlers(opts.onAuthed);
 
   const claimWrap = panel.querySelector<HTMLElement>("#donate-credit-claim");
-  if (!opts.proposalId || !opts.signedIn) {
-    return () => undefined;
-  }
-
-  const proposalId = opts.proposalId;
+  let watcherStop: (() => void) | null = null;
   let linking = false;
 
   const linkOutpoint = async (utxo: {
@@ -616,21 +723,21 @@ function bindDonateCredit(panel: Element, opts: DonateBindOpts): () => void {
     vout: number;
     value: number;
   }) => {
-    if (linking) return;
+    if (!opts.proposalId || !opts.signedIn || linking) return;
     linking = true;
     setDonateCreditStatus(panel, "Linking funder credit…", "live");
     try {
       await recordContribution({
-        proposal_id: proposalId,
+        proposal_id: opts.proposalId,
         txid: utxo.txid,
         vout: utxo.vout,
         address: opts.address,
       });
       await claimContributionWithRetry({
-        proposal_id: proposalId,
+        proposal_id: opts.proposalId,
         txid: utxo.txid,
         vout: utxo.vout,
-        ...readCreditPreferences(panel, "donate-credit"),
+        ...activeCreditPreferences(panel),
       });
       setDonateCreditStatus(
         panel,
@@ -670,18 +777,65 @@ function bindDonateCredit(panel: Element, opts: DonateBindOpts): () => void {
     });
   };
 
-  const watcher = watchNewUtxos(opts.address, showClaimable, {
-    intervalMs: opts.utxoPollMs ?? 8000,
-  });
-  void watcher.ready.then(() => {
-    setDonateCreditStatus(
-      panel,
-      "Watching for a new on-chain payment to this address…",
-      "live",
-    );
-  });
+  const startWatching = () => {
+    if (watcherStop || !opts.signedIn || !opts.proposalId) return;
+    const watcher = watchNewUtxos(opts.address, showClaimable, {
+      intervalMs: opts.utxoPollMs ?? 8000,
+    });
+    watcherStop = watcher.stop;
+    void watcher.ready.then(() => {
+      if (panel.getAttribute("data-donate-step") === "pay") {
+        setDonateCreditStatus(
+          panel,
+          "Watching for a new on-chain payment to this address…",
+          "live",
+        );
+      }
+    });
+  };
 
-  return watcher.stop;
+  const goPay = (prefs: CreditPreferences) => {
+    saveStoredCreditPreferences(prefs);
+    applyCreditPreferencesToFields(panel, prefs, "donate-credit");
+    syncCreditSummary(panel, prefs);
+    setDonateStep(panel, "pay");
+    startWatching();
+  };
+
+  panel.querySelector<HTMLButtonElement>("#donate-credit-continue")?.addEventListener(
+    "click",
+    () => {
+      const prefs = opts.signedIn
+        ? readCreditPreferences(panel, "donate-credit")
+        : {
+            public_credit: false,
+            anonymous: true,
+            show_amount: false,
+          };
+      goPay(prefs);
+    },
+  );
+
+  panel.querySelector<HTMLButtonElement>("#donate-credit-edit")?.addEventListener(
+    "click",
+    () => {
+      const stored = loadStoredCreditPreferences();
+      if (stored) applyCreditPreferencesToFields(panel, stored, "donate-credit");
+      setDonateStep(panel, "credit");
+    },
+  );
+
+  void resolveInitialDonateStep(opts).then(({ step, prefs }) => {
+    if (prefs) {
+      applyCreditPreferencesToFields(panel, prefs, "donate-credit");
+      syncCreditSummary(panel, prefs);
+    }
+    if (step === "pay" && (prefs || hasStoredCreditPreferences())) {
+      goPay(prefs || loadStoredCreditPreferences()!);
+    } else {
+      setDonateStep(panel, "credit");
+    }
+  });
 }
 
 async function linkLightningCredit(
@@ -695,7 +849,7 @@ async function linkLightningCredit(
     await claimContributionWithRetry({
       proposal_id: opts.proposalId,
       swap_id: swapId,
-      ...readCreditPreferences(panel, "donate-credit"),
+      ...activeCreditPreferences(panel),
     });
     setDonateCreditStatus(panel, "Lightning credit linked.", "ok");
     opts.onCreditLinked?.();
@@ -937,7 +1091,7 @@ export async function bindDonatePanel(
 
   bindDonateRails(panel);
   await bindOnchainDonate(panel, normalized.address);
-  bindDonateCredit(panel, normalized);
+  bindDonateWizard(panel, normalized);
 
   if (!normalized.proposalPath) {
     setLightningUnavailable(

@@ -373,7 +373,7 @@ export async function renderProposalPage(
                 : ""
             }
             ${proposalContextHtml(match.depends_on || [], match.related_work || [])}
-            ${funderCreditHtml(match.id, Boolean(user))}
+            ${funderCreditHtml(match.id)}
             ${commentsHtml(match.id, Boolean(user))}
           </div>
 

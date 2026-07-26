@@ -3,7 +3,6 @@ import {
   commentsHtml,
   funderCreditHtml,
   fundersListHtml,
-  mineContributionsHtml,
 } from "./proposal-engagement";
 
 const locationState = {
@@ -26,30 +25,18 @@ beforeAll(() => {
 
 describe("funderCreditHtml", () => {
   it("is empty without a proposal id", () => {
-    expect(funderCreditHtml(null, true)).toBe("");
+    expect(funderCreditHtml(null)).toBe("");
   });
 
-  it("starts hidden for guests with no login gate card", () => {
-    const html = funderCreditHtml("PLEBLY-1", false);
+  it("is a public funders list only (no credit prefs form)", () => {
+    const html = funderCreditHtml("PLEBLY-1");
     expect(html).toContain('id="funder-credit"');
     expect(html).toContain("hidden");
+    expect(html).toContain("Funders");
     expect(html).not.toContain("login-choices");
     expect(html).not.toContain("funder-credit-form");
-  });
-
-  it("renders manage prefs with advanced outpoint link when signed in", () => {
-    const html = funderCreditHtml("PLEBLY-1", true);
-    expect(html).toContain('data-proposal-id="PLEBLY-1"');
-    expect(html).toContain("funder-credit-prefs");
-    expect(html).toContain("Donate flow");
-    expect(html).toContain("funder-credit-advanced");
-    expect(html).toContain("funder-credit-outpoint");
-    expect(html).toContain('id="credit-txid"');
-    expect(html).toContain('id="credit-vout"');
-    expect(html).toContain('id="credit-public"');
-    expect(html).toContain('id="credit-amount"');
-    expect(html).toContain('id="credit-save"');
-    expect(html).toContain("fieldset");
+    expect(html).not.toContain("funder-credit-prefs");
+    expect(html).not.toContain("credit-txid");
   });
 });
 
@@ -87,7 +74,6 @@ describe("fundersListHtml", () => {
     expect(html).toContain("funder-chip");
     expect(html).toContain("alice");
     expect(html).toContain('href="/u/alice"');
-    expect(html).toContain("21,000 sats");
     expect(html).toContain("Anonymous");
     expect(html).toContain("funder-chip-static");
   });
@@ -98,31 +84,5 @@ describe("fundersListHtml", () => {
     ]);
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
-  });
-});
-
-describe("mineContributionsHtml", () => {
-  it("shows empty guidance pointing at Donate", () => {
-    const html = mineContributionsHtml([]);
-    expect(html).toContain("No linked donations yet");
-    expect(html).toContain("Donate");
-  });
-
-  it("summarizes linked outpoints and prefs", () => {
-    const html = mineContributionsHtml([
-      {
-        txid: "a".repeat(64),
-        vout: 0,
-        amount_sats: 40_000,
-        confirmed: true,
-        public_credit: true,
-        anonymous: false,
-        show_amount: false,
-      },
-    ]);
-    expect(html).toContain("aaaaaaaaaaaa…:0");
-    expect(html).toContain("40,000 sats");
-    expect(html).toContain("public");
-    expect(html).toContain("amount hidden");
   });
 });
