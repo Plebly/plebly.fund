@@ -34,12 +34,14 @@ function parseParametersMarkdown(md) {
 }
 
 function parseSats(value) {
-  const m = value.replace(/,/g, "").match(/(\d+)\s*sats?/i);
+  if (value == null || value === "") return null;
+  const m = String(value).replace(/,/g, "").match(/(\d+)\s*sats?/i);
   return m ? Number(m[1]) : null;
 }
 
 function parsePercent(value) {
-  const m = value.match(/([\d.]+)\s*%/);
+  if (value == null || value === "") return null;
+  const m = String(value).match(/([\d.]+)\s*%/);
   return m ? Number(m[1]) : null;
 }
 
