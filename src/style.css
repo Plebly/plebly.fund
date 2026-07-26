@@ -691,8 +691,9 @@ a:hover {
 }
 
 .donate-modal-card {
-  overflow: hidden;
-  max-height: min(92vh, 40rem);
+  /* Keep the shared modal scroll behavior so tall pay steps are not clipped. */
+  max-height: min(92vh, 48rem);
+  overflow: auto;
 }
 
 .donate-modal-card .donate-panel {
@@ -701,8 +702,25 @@ a:hover {
   border-radius: 0;
   background: transparent;
   scroll-margin-top: 0;
-  max-height: min(88vh, 38rem);
-  overflow: hidden;
+}
+
+/* Slightly tighter pay-step chrome so common viewports fit without scrolling. */
+.donate-modal-card .donate-qr-wrap {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.5rem;
+}
+
+.donate-modal-card .donate-qr {
+  width: 140px;
+  height: 140px;
+}
+
+.donate-modal-card .donate-panel-head {
+  margin-bottom: 0.5rem;
+}
+
+.donate-modal-card .donate-rails {
+  margin-bottom: 0.75rem;
 }
 
 .donate-trigger-card {
