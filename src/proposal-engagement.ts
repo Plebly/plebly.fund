@@ -1,11 +1,18 @@
-import { authFetch, currentReturnPath, loginChoicesHtml } from "./auth";
+import {
+  authFetch,
+  bindLoginHandlers,
+  currentReturnPath,
+  loginChoicesHtml,
+} from "./auth";
 import { WORKERS_API } from "./config";
+import { profileHref } from "./router";
 import { escapeHtml, formatSats, linkifyText } from "./util";
 
 type PublicContribution = {
   identity: string | null;
   anonymous: boolean;
   amount_sats?: number;
+  rail?: string;
 };
 
 type MineContribution = {
@@ -28,56 +35,51 @@ type ProposalComment = {
 
 const api = () => WORKERS_API.replace(/\/$/, "");
 
+function creditPrefsHtml(): string {
+  return `<div class="funder-credit-prefs" id="funder-credit-prefs">
+    <h3 class="funder-credit-prefs-title">Your credit preference</h3>
+    <p class="muted funder-credit-prefs-lede">Link a confirmed donation, then choose how you appear. Amounts stay private unless you opt in.</p>
+    <div id="funder-credit-mine" class="funder-credit-mine" aria-live="polite">
+      <p class="muted">Loading your contributions…</p>
+    </div>
+    <form id="funder-credit-form" class="funder-credit-form">
+      <div class="funder-credit-outpoint">
+        <div class="funder-credit-field funder-credit-field-txid">
+          <label class="donate-amount-label" for="credit-txid">Funding txid</label>
+          <input id="credit-txid" class="donate-amount mono" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64-char hex" />
+        </div>
+        <div class="funder-credit-field funder-credit-field-vout">
+          <label class="donate-amount-label" for="credit-vout">Vout</label>
+          <input id="credit-vout" class="donate-amount mono" type="number" min="0" value="0" />
+        </div>
+      </div>
+      <fieldset class="funder-credit-options">
+        <legend class="donate-amount-label">Display</legend>
+        <label class="funder-credit-check">
+          <input type="checkbox" id="credit-public" checked />
+          <span>Show my identity on the funder list</span>
+        </label>
+        <label class="funder-credit-check funder-credit-check-nested">
+          <input type="checkbox" id="credit-amount" />
+          <span>Also show my amount</span>
+        </label>
+      </fieldset>
+      <button type="submit" class="btn" id="credit-save">Save credit preference</button>
+      <p class="builder-msg" id="credit-msg" hidden></p>
+    </form>
+  </div>`;
+}
+
 export function funderCreditHtml(
   proposalId: string | null,
   signedIn: boolean,
 ): string {
   if (!proposalId) return "";
-  return `<section class="proposal-engagement" id="funder-credit" data-proposal-id="${escapeHtml(proposalId)}">
-    <h2 class="proposal-block-title">Funders</h2>
-    <p class="proposal-block-lede">Public credit is optional. Donors choose what appears here.</p>
-    <div id="funder-credit-list" class="funder-credit-list" aria-live="polite">
-      <p class="muted">Loading funder credit…</p>
-    </div>
-    ${
-      signedIn
-        ? `<div class="funder-credit-prefs" id="funder-credit-prefs">
-      <h3 class="funder-credit-prefs-title">Your credit preference</h3>
-      <p class="muted funder-credit-prefs-lede">Link a confirmed donation, then choose how you appear. Amounts stay private unless you opt in.</p>
-      <div id="funder-credit-mine" class="funder-credit-mine" aria-live="polite">
-        <p class="muted">Loading your contributions…</p>
-      </div>
-      <form id="funder-credit-form" class="funder-credit-form">
-        <div class="funder-credit-outpoint">
-          <div class="funder-credit-field funder-credit-field-txid">
-            <label class="donate-amount-label" for="credit-txid">Funding txid</label>
-            <input id="credit-txid" class="donate-amount mono" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="64-char hex" />
-          </div>
-          <div class="funder-credit-field funder-credit-field-vout">
-            <label class="donate-amount-label" for="credit-vout">Vout</label>
-            <input id="credit-vout" class="donate-amount mono" type="number" min="0" value="0" />
-          </div>
-        </div>
-        <fieldset class="funder-credit-options">
-          <legend class="donate-amount-label">Display</legend>
-          <label class="funder-credit-check">
-            <input type="checkbox" id="credit-public" checked />
-            <span>Show my identity on the funder list</span>
-          </label>
-          <label class="funder-credit-check funder-credit-check-nested">
-            <input type="checkbox" id="credit-amount" />
-            <span>Also show my amount</span>
-          </label>
-        </fieldset>
-        <button type="submit" class="btn" id="credit-save">Save credit preference</button>
-        <p class="builder-msg" id="credit-msg" hidden></p>
-      </form>
-    </div>`
-        : `<div class="proposal-engagement-empty">
-      <p>Sign in to claim a donation and set credit preferences.</p>
-      ${loginChoicesHtml(undefined, currentReturnPath())}
-    </div>`
-    }
+  // Hidden until we know there are public funders (or a signed-in donor needs prefs).
+  return `<section class="proposal-engagement" id="funder-credit" data-proposal-id="${escapeHtml(proposalId)}" hidden>
+    <h2 class="proposal-block-title" id="funder-credit-title">Funders</h2>
+    <div id="funder-credit-list" class="funder-credit-list" aria-live="polite"></div>
+    ${signedIn ? creditPrefsHtml() : ""}
   </section>`;
 }
 
@@ -92,29 +94,55 @@ export function commentsHtml(proposalId: string | null, signedIn: boolean): stri
         ? `<label class="comment-input-label" for="proposal-comment-input">Add a comment</label>
            <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Keep discussion constructive…"></textarea>
            <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>`
-        : `<div class="proposal-engagement-empty"><p>Sign in to comment and join the discussion.</p>${loginChoicesHtml(undefined, currentReturnPath())}</div>`
+        : `<div class="proposal-engagement-empty">
+             <p>Sign in to comment and join the discussion.</p>
+             ${loginChoicesHtml(undefined, currentReturnPath())}
+             <p class="builder-msg" id="comment-login-msg" hidden></p>
+           </div>`
     }
     <p class="builder-msg" id="proposal-comment-msg" hidden></p>
   </section>`;
 }
 
-/** Pure HTML for the public funder list (exported for tests). */
-export function fundersListHtml(contributions: PublicContribution[]): string {
-  if (!contributions.length) {
-    return `<p class="muted">No public funder credit yet. Donors can opt in below after linking a contribution.</p>`;
+function profileUrlForIdentity(identity: string | null): string | null {
+  if (!identity) return null;
+  const raw = identity.trim();
+  if (!raw || raw.toLowerCase() === "anonymous") return null;
+  if (raw.startsWith("npub") || raw.includes("@")) return null;
+  const handle = raw.replace(/^github:/i, "").replace(/^@/, "");
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(handle)) {
+    return null;
   }
-  return `<ul class="proposal-engagement-list">${contributions
+  return profileHref(handle);
+}
+
+function funderTooltip(contribution: PublicContribution): string {
+  const bits = [
+    contribution.identity || "Anonymous funder",
+    contribution.anonymous ? "anonymous credit" : "public credit",
+    typeof contribution.amount_sats === "number"
+      ? formatSats(contribution.amount_sats)
+      : "amount hidden",
+    contribution.rail ? `${contribution.rail} rail` : "",
+  ].filter(Boolean);
+  return bits.join(" · ");
+}
+
+/** Pure HTML for the public funder chips (exported for tests). */
+export function fundersListHtml(contributions: PublicContribution[]): string {
+  if (!contributions.length) return "";
+  return `<div class="funder-chips">${contributions
     .map((contribution) => {
-      const name = contribution.identity || "Anonymous funder";
-      const amount =
-        typeof contribution.amount_sats === "number"
-          ? escapeHtml(formatSats(contribution.amount_sats))
-          : "";
-      return `<li><span>${escapeHtml(name)}</span>${
-        amount ? `<span class="mono funder-credit-amount">${amount}</span>` : ""
-      }</li>`;
+      const name = contribution.identity || "Anonymous";
+      const tip = escapeHtml(funderTooltip(contribution));
+      const label = escapeHtml(name);
+      const href = profileUrlForIdentity(contribution.identity);
+      if (href) {
+        return `<a class="funder-chip" href="${escapeHtml(href)}" title="${tip}">${label}</a>`;
+      }
+      return `<span class="funder-chip funder-chip-static" title="${tip}">${label}</span>`;
     })
-    .join("")}</ul>`;
+    .join("")}</div>`;
 }
 
 function renderFunders(el: HTMLElement, contributions: PublicContribution[]): void {
@@ -164,6 +192,7 @@ function renderMine(el: HTMLElement, mine: MineContribution[]): void {
 export async function bindProposalEngagement(
   root: ParentNode,
   signedIn = false,
+  onAuthed: () => void = () => undefined,
 ): Promise<void> {
   if (!WORKERS_API) return;
   const funder = root.querySelector<HTMLElement>("#funder-credit");
@@ -171,16 +200,37 @@ export async function bindProposalEngagement(
   const proposalId = funder?.dataset.proposalId || comments?.dataset.proposalId;
   if (!proposalId) return;
 
+  // Bind here too: engagement HTML is often injected after the global auth pass.
+  bindLoginHandlers(onAuthed);
+
   const funderList = root.querySelector<HTMLElement>("#funder-credit-list");
+  const funderTitle = root.querySelector<HTMLElement>("#funder-credit-title");
   const commentList = root.querySelector<HTMLElement>("#proposal-comment-list");
   const mineEl = root.querySelector<HTMLElement>("#funder-credit-mine");
 
   const loadFunders = async () => {
-    if (!funderList) return;
     const res = await fetch(`${api()}/contributions/${encodeURIComponent(proposalId)}`);
     if (!res.ok) throw new Error("Could not load funder credit.");
     const data = (await res.json()) as { contributions?: PublicContribution[] };
-    renderFunders(funderList, data.contributions || []);
+    const list = data.contributions || [];
+    if (list.length) {
+      if (funder) funder.hidden = false;
+      if (funderTitle) {
+        funderTitle.hidden = false;
+        funderTitle.textContent = "Funders";
+      }
+      if (funderList) renderFunders(funderList, list);
+    } else if (signedIn) {
+      // Prefs only — no empty Funders card for guests.
+      if (funder) funder.hidden = false;
+      if (funderTitle) {
+        funderTitle.hidden = false;
+        funderTitle.textContent = "Your funder credit";
+      }
+      if (funderList) funderList.innerHTML = "";
+    } else if (funder) {
+      funder.hidden = true;
+    }
   };
 
   const loadMine = async (): Promise<MineContribution[]> => {
@@ -223,13 +273,18 @@ export async function bindProposalEngagement(
 
   await Promise.all([
     loadFunders().catch(() => {
-      if (funderList) funderList.textContent = "Could not load funder credit.";
+      if (funder) funder.hidden = !signedIn;
+      if (funderList && signedIn) {
+        funderList.innerHTML = `<p class="muted">Could not load funder credit.</p>`;
+      }
     }),
     loadMine().catch(() => {
       if (mineEl) mineEl.innerHTML = `<p class="muted">Could not load your contributions.</p>`;
     }),
     loadComments().catch(() => {
-      if (commentList) commentList.innerHTML = `<p class="muted">Could not load comments.</p>`;
+      if (commentList) {
+        commentList.innerHTML = `<p class="muted">Could not load comments. The API may still be deploying.</p>`;
+      }
     }),
   ]);
 

@@ -199,7 +199,9 @@ async function render() {
   }
   if (r.name === "proposal") {
     const proposal = r.stable ? await findListedProposalById(r.id) : null;
-    await renderProposalPage(proposal?.path || r.id, shell, currentUser);
+    await renderProposalPage(proposal?.path || r.id, shell, currentUser, () => {
+      void render();
+    });
     bindAuthHandlers();
     scrollToHashTarget();
     return;

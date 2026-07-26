@@ -29,11 +29,11 @@ describe("funderCreditHtml", () => {
     expect(funderCreditHtml(null, true)).toBe("");
   });
 
-  it("shows sign-in choices when logged out", () => {
+  it("starts hidden for guests with no login gate card", () => {
     const html = funderCreditHtml("PLEBLY-1", false);
     expect(html).toContain('id="funder-credit"');
-    expect(html).toContain("Sign in to claim a donation");
-    expect(html).toContain("login-choices");
+    expect(html).toContain("hidden");
+    expect(html).not.toContain("login-choices");
     expect(html).not.toContain("funder-credit-form");
   });
 
@@ -48,7 +48,6 @@ describe("funderCreditHtml", () => {
     expect(html).toContain('id="credit-amount"');
     expect(html).toContain('id="credit-save"');
     expect(html).toContain("fieldset");
-    expect(html).toContain("Public credit is optional");
   });
 });
 
@@ -68,23 +67,27 @@ describe("commentsHtml", () => {
     const html = commentsHtml("PLEBLY-1", false);
     expect(html).toContain("Sign in to comment");
     expect(html).toContain("login-choices");
+    expect(html).toContain("comment-login-msg");
   });
 });
 
 describe("fundersListHtml", () => {
-  it("shows empty state", () => {
-    expect(fundersListHtml([])).toContain("No public funder credit yet");
+  it("returns empty string when there are no funders", () => {
+    expect(fundersListHtml([])).toBe("");
   });
 
-  it("renders identity and optional amount", () => {
+  it("renders profile chips with tooltips", () => {
     const html = fundersListHtml([
       { identity: "alice", anonymous: false, amount_sats: 21_000 },
       { identity: null, anonymous: true },
     ]);
+    expect(html).toContain("funder-chips");
+    expect(html).toContain("funder-chip");
     expect(html).toContain("alice");
+    expect(html).toContain('href="/u/alice"');
     expect(html).toContain("21,000 sats");
-    expect(html).toContain("Anonymous funder");
-    expect(html).toContain("funder-credit-amount");
+    expect(html).toContain("Anonymous");
+    expect(html).toContain("funder-chip-static");
   });
 
   it("escapes identity HTML", () => {

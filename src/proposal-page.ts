@@ -208,6 +208,7 @@ export async function renderProposalPage(
   path: string,
   shell: ProposalShell,
   user: AuthUser | null = null,
+  onAuthed: () => void = () => undefined,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(
@@ -415,7 +416,7 @@ export async function renderProposalPage(
       });
     }
     bindRefundAndBallot(app, match);
-    await bindProposalEngagement(app, Boolean(user));
+    await bindProposalEngagement(app, Boolean(user), onAuthed);
     if (match.id) {
       void recordProposalView(match.id).then((count) => {
         const el = app.querySelector("#proposal-view-count");

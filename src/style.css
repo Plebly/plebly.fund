@@ -4584,7 +4584,7 @@ a.project-card-by:hover {
   justify-self: start;
 }
 
-.proposal-engagement a,
+.proposal-engagement a:not(.btn):not(.funder-chip),
 .proposal-context a,
 .milestone-rail a,
 .dep-list-note a,
@@ -4594,12 +4594,82 @@ a.project-card-by:hover {
   text-underline-offset: 0.12em;
 }
 
-.proposal-engagement a:hover,
+.proposal-engagement a:not(.btn):not(.funder-chip):hover,
 .proposal-context a:hover,
 .milestone-rail a:hover,
 .dep-list-note a:hover,
 .dep-list-ref a:hover {
   color: var(--ink);
+}
+
+.proposal-engagement .login-choices-actions .btn,
+.proposal-engagement-empty .login-choices-actions .btn {
+  margin-top: 0;
+  text-decoration: none;
+}
+
+.proposal-engagement .login-choices-actions .btn:not(.ghost) {
+  color: var(--accent-on);
+  background: var(--accent);
+}
+
+.proposal-engagement .login-choices-actions .btn:not(.ghost):hover {
+  color: var(--accent-on);
+  background: var(--accent-hover);
+}
+
+.proposal-engagement .login-choices-actions .btn.ghost {
+  color: var(--ink-secondary);
+  background: transparent;
+}
+
+.proposal-engagement .login-choices-actions .btn.ghost:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+
+.funder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.funder-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 12rem;
+  padding: 0.35rem 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.funder-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.funder-chip-static {
+  cursor: default;
+  color: var(--ink-secondary);
+}
+
+.funder-chip-static:hover {
+  border-color: var(--line-soft);
+  background: var(--bg);
 }
 
 @media (max-width: 560px) {

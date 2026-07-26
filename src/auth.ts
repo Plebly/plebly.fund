@@ -216,16 +216,35 @@ export function bindLoginHandlers(onAuthed: () => void): void {
       const btn = el;
       const label = btn.querySelector<HTMLElement>("[data-login-label]");
       const prev = label?.textContent ?? btn.textContent;
+      const status =
+        btn
+          .closest(".proposal-engagement, .login-choices, .login-menu")
+          ?.querySelector<HTMLElement>(".builder-msg, [data-login-status]") ||
+        null;
       btn.setAttribute("disabled", "true");
       if (btn.tagName === "BUTTON") {
         if (label) label.textContent = "Signing…";
         else btn.textContent = "Signing…";
       }
+      if (status) {
+        status.hidden = false;
+        status.textContent = "Opening Nostr signer…";
+      }
       try {
         await loginWithNostr();
+        if (status) {
+          status.hidden = false;
+          status.textContent = "Signed in.";
+        }
         onAuthed();
       } catch (err) {
-        window.alert((err as Error).message || "Nostr login failed");
+        const message = (err as Error).message || "Nostr login failed";
+        if (status) {
+          status.hidden = false;
+          status.textContent = message;
+        } else {
+          window.alert(message);
+        }
         if (btn.tagName === "BUTTON" && prev) {
           if (label) label.textContent = prev;
           else btn.textContent = prev;
