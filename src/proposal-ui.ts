@@ -70,27 +70,30 @@ export type DonateBindOpts = {
 };
 
 function donateCreditStepHtml(signedIn: boolean): string {
+  if (!signedIn) {
+    return `<section class="donate-step" data-donate-step="credit" id="donate-step-credit">
+      <div class="donate-panel-head">
+        <h2 class="donate-title" id="donate-modal-title">Sign in</h2>
+      </div>
+      <div class="donate-credit-login">
+        ${loginChoicesHtml(undefined, currentReturnPath())}
+        <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
+      </div>
+      <div class="donate-step-actions">
+        <button type="button" class="btn ghost" id="donate-credit-continue">Continue anonymously</button>
+      </div>
+    </section>`;
+  }
   return `<section class="donate-step" data-donate-step="credit" id="donate-step-credit">
     <div class="donate-panel-head">
       <p class="donate-step-kicker">Step 1 of 2</p>
       <h2 class="donate-title" id="donate-modal-title">Funder credit</h2>
       <p class="donate-lede">Choose how you want to appear on the funder list after your payment is linked. Amounts stay private unless you opt in.</p>
     </div>
-    ${
-      signedIn
-        ? `${creditPreferenceFieldsHtml({ idPrefix: "donate-credit" })}
-           <div class="donate-step-actions">
-             <button type="button" class="btn" id="donate-credit-continue">Continue to payment</button>
-           </div>`
-        : `<div class="donate-credit-login">
-             <p class="muted">Sign in to claim public credit. You can also continue anonymously.</p>
-             ${loginChoicesHtml(undefined, currentReturnPath())}
-             <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
-           </div>
-           <div class="donate-step-actions">
-             <button type="button" class="btn" id="donate-credit-continue">Continue anonymously</button>
-           </div>`
-    }
+    ${creditPreferenceFieldsHtml({ idPrefix: "donate-credit" })}
+    <div class="donate-step-actions">
+      <button type="button" class="btn" id="donate-credit-continue">Continue to payment</button>
+    </div>
   </section>`;
 }
 

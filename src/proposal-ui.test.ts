@@ -152,12 +152,16 @@ describe("proposal UI critical render helpers", () => {
     expect(signedOut).toContain('id="donate-step-pay"');
     expect(signedOut).toContain("Continue anonymously");
     expect(signedOut).toContain("Sign in");
+    expect(signedOut).not.toContain("Funder credit");
+    expect(signedOut).not.toContain("Step 1 of 2");
     expect(signedOut).not.toContain("donate-credit-public");
 
     const signedIn = donatePanelHtml(
       { escrow_address: "tb1qtest" } as Proposal,
       { signedIn: true },
     );
+    expect(signedIn).toContain("Funder credit");
+    expect(signedIn).toContain("Step 1 of 2");
     expect(signedIn).toContain("donate-credit-public");
     expect(signedIn).toContain("donate-credit-amount");
     expect(signedIn).toContain("Continue to payment");
