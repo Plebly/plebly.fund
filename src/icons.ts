@@ -66,6 +66,13 @@ export function socialAccountLink(
   return `<a class="social-account" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${brandIcon(icon)}<span>@${escapeHtml(handle.replace(/^@/, ""))}</span></a>`;
 }
 
+/** Account identity row for a Nostr hex pubkey (links to njump). */
+export function nostrAccountLink(pubkey: string, label: string): string {
+  const pk = pubkey.trim().toLowerCase();
+  const href = `https://njump.me/${encodeURIComponent(pk)}`;
+  return `<a class="social-account" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${nostrIcon()}<span>${escapeHtml(label)}</span></a>`;
+}
+
 export function pleblySocialLinksHtml(): string {
   return `<span class="social-links">
     ${iconLink("github", PLEBLY_GITHUB_URL, "Plebly on GitHub")}

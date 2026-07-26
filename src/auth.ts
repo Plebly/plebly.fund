@@ -98,22 +98,24 @@ export function xLoginUrl(returnPath?: string): string {
   return `${API()}/auth/x?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
 }
 
+type Nip07Event = {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  kind: number;
+  tags: string[][];
+  content: string;
+  sig: string;
+};
+
 type Nip07 = {
-  getPublicKey: () => Promise<string>;
+  getPublicKey?: () => Promise<string>;
   signEvent: (event: {
     kind: number;
     created_at: number;
     tags: string[][];
     content: string;
-  }) => Promise<{
-    id: string;
-    pubkey: string;
-    created_at: number;
-    kind: number;
-    tags: string[][];
-    content: string;
-    sig: string;
-  }>;
+  }) => Promise<Nip07Event>;
 };
 
 function nip07(): Nip07 | null {
@@ -121,10 +123,36 @@ function nip07(): Nip07 | null {
   return w.nostr ?? null;
 }
 
-function nostrAuthHeader(event: object): string {
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+/** Encode a signed NIP-98 event for the Authorization header. */
+export function nostrAuthHeader(event: object): string {
   const json = JSON.stringify(event);
   // Event JSON is ASCII (hex ids/sigs); btoa is fine.
   return `Nostr ${btoa(json)}`;
+}
+
+/** Map extension / network failures to clear login copy. */
+export function formatNostrLoginError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err || "");
+  if (/user rejected|denied|cancel|rejected by user|approval/i.test(message)) {
+    return "Nostr signing was cancelled.";
+  }
+  if (/no nostr extension|nip-07|window\.nostr/i.test(message)) {
+    return message;
+  }
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "Could not reach the login API. Check your connection and try again.";
+  }
+  return message || "Nostr login failed";
 }
 
 /**
@@ -140,16 +168,28 @@ export async function loginWithNostr(): Promise<void> {
     );
   }
 
-  const chalRes = await fetch(`${API()}/auth/nostr/challenge`, {
-    credentials: "include",
-  });
+  let chalRes: Response;
+  try {
+    chalRes = await fetch(`${API()}/auth/nostr/challenge`, {
+      credentials: "include",
+    });
+  } catch (err) {
+    throw new Error(formatNostrLoginError(err));
+  }
+  if (chalRes.status === 503) {
+    throw new Error("Nostr login temporarily unavailable. Try again shortly.");
+  }
   if (!chalRes.ok) throw new Error("Could not start Nostr login");
   const { challenge } = (await chalRes.json()) as { challenge?: string };
-  if (!challenge) throw new Error("Nostr challenge missing");
+  if (!challenge || !/^[a-f0-9]{16,128}$/i.test(challenge)) {
+    throw new Error("Nostr challenge missing");
+  }
 
   const authUrl = new URL(`${API()}/auth/nostr`);
   authUrl.searchParams.set("challenge", challenge);
   const url = authUrl.toString();
+  const body = JSON.stringify({ challenge });
+  const payloadHash = await sha256Hex(body);
 
   const unsigned = {
     kind: 27235,
@@ -157,25 +197,63 @@ export async function loginWithNostr(): Promise<void> {
     tags: [
       ["u", url],
       ["method", "POST"],
+      ["payload", payloadHash],
     ],
     content: "",
   };
-  const signed = await ext.signEvent(unsigned);
 
-  const res = await fetch(url, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: nostrAuthHeader(signed),
-    },
-    body: JSON.stringify({ challenge }),
-  });
-  const data = (await res.json()) as {
+  let signed: Nip07Event;
+  try {
+    signed = await ext.signEvent(unsigned);
+  } catch (err) {
+    throw new Error(formatNostrLoginError(err));
+  }
+
+  if (!signed?.sig || !signed.pubkey) {
+    throw new Error("Nostr signer returned an incomplete event");
+  }
+  const pubkey = String(signed.pubkey).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(pubkey)) {
+    throw new Error("Nostr signer returned an invalid pubkey");
+  }
+  if (signed.kind !== 27235) {
+    throw new Error("Nostr signer returned the wrong event kind");
+  }
+  const signedUrl = signed.tags?.find((tag) => tag[0] === "u")?.[1];
+  const signedMethod = signed.tags?.find((tag) => tag[0] === "method")?.[1];
+  if (signedUrl !== url || String(signedMethod || "").toUpperCase() !== "POST") {
+    throw new Error("Nostr signer altered the login request");
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: nostrAuthHeader(signed),
+      },
+      body,
+    });
+  } catch (err) {
+    throw new Error(formatNostrLoginError(err));
+  }
+
+  const data = (await res.json().catch(() => ({}))) as {
     token?: string;
     error?: string;
   };
-  if (!res.ok) throw new Error(data.error || `Nostr login failed (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(
+        data.error === "invalid or expired challenge"
+          ? "Nostr login expired. Try again."
+          : "Nostr signature was rejected. Try again.",
+      );
+    }
+    throw new Error(data.error || `Nostr login failed (${res.status})`);
+  }
   if (!data.token) throw new Error("Nostr login succeeded but no session token returned");
   setStoredSession(data.token);
 }
@@ -214,6 +292,7 @@ export function bindLoginHandlers(onAuthed: () => void): void {
       ev.preventDefault();
       ev.stopPropagation();
       const btn = el;
+      if (btn.getAttribute("aria-busy") === "true") return;
       const label = btn.querySelector<HTMLElement>("[data-login-label]");
       const prev = label?.textContent ?? btn.textContent;
       const status =
@@ -222,6 +301,7 @@ export function bindLoginHandlers(onAuthed: () => void): void {
           ?.querySelector<HTMLElement>(".builder-msg, [data-login-status]") ||
         null;
       btn.setAttribute("disabled", "true");
+      btn.setAttribute("aria-busy", "true");
       if (btn.tagName === "BUTTON") {
         if (label) label.textContent = "Signing…";
         else btn.textContent = "Signing…";
@@ -232,13 +312,14 @@ export function bindLoginHandlers(onAuthed: () => void): void {
       }
       try {
         await loginWithNostr();
+        btn.closest("details.login-menu")?.removeAttribute("open");
         if (status) {
           status.hidden = false;
           status.textContent = "Signed in.";
         }
         onAuthed();
       } catch (err) {
-        const message = (err as Error).message || "Nostr login failed";
+        const message = formatNostrLoginError(err);
         if (status) {
           status.hidden = false;
           status.textContent = message;
@@ -251,6 +332,7 @@ export function bindLoginHandlers(onAuthed: () => void): void {
         }
       } finally {
         btn.removeAttribute("disabled");
+        btn.removeAttribute("aria-busy");
       }
     });
   });
@@ -366,10 +448,17 @@ export async function logout(): Promise<void> {
   await authFetch(`${API()}/auth/logout`, { method: "POST" });
 }
 
+/** Compact display for a hex pubkey (npub encoding stays optional without nostr-tools). */
+export function shortNostrPubkey(pubkey: string): string {
+  const pk = pubkey.trim().toLowerCase();
+  if (pk.length < 12) return pk || "nostr";
+  return `${pk.slice(0, 8)}…${pk.slice(-4)}`;
+}
+
 export function userLabel(user: AuthUser): string {
   if (user.username) return `@${user.username}`;
   if (user.github) return `@${user.github}`;
-  if (user.nostr) return `${user.nostr.slice(0, 8)}…`;
+  if (user.nostr) return shortNostrPubkey(user.nostr);
   if (user.x) return `@${user.x}`;
   return user.id;
 }
@@ -378,7 +467,7 @@ export function userLabel(user: AuthUser): string {
 export function accountNavLabel(user: AuthUser): string {
   if (user.username) return user.username;
   if (user.github) return user.github;
-  if (user.nostr) return `${user.nostr.slice(0, 8)}…`;
+  if (user.nostr) return shortNostrPubkey(user.nostr);
   if (user.x) return user.x.replace(/^@/, "");
   return "Account";
 }

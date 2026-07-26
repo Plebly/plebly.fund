@@ -8,6 +8,7 @@ import {
   profilePath,
   updateProfile,
   accountNavLabel,
+  shortNostrPubkey,
   type AuthUser,
 } from "./auth";
 import { CLAIM_FLOOR_SATS } from "./config";
@@ -26,7 +27,7 @@ import {
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
 } from "./funder-credit";
-import { socialAccountLink } from "./icons";
+import { nostrAccountLink, socialAccountLink } from "./icons";
 import { fetchReviewerMe } from "./reviewers";
 import {
   listAllPublicProposals,
@@ -192,6 +193,34 @@ function linkRowHtml(links: ProfileLink[]): string {
     .join("");
 }
 
+function identityPanelHtml(user: AuthUser): string {
+  const links: string[] = [];
+  if (user.github) {
+    links.push(
+      socialAccountLink(
+        "github",
+        `https://github.com/${user.github}`,
+        user.github,
+      ),
+    );
+  }
+  if (user.nostr) {
+    links.push(nostrAccountLink(user.nostr, shortNostrPubkey(user.nostr)));
+  }
+  if (user.x) {
+    links.push(
+      socialAccountLink("x-twitter", `https://x.com/${user.x.replace(/^@/, "")}`, user.x),
+    );
+  }
+  if (!links.length) return "";
+  return `<div class="identity-panel">
+        <p class="hint identity-panel-label">Signed in with</p>
+        <div class="social-row identity-links">
+          ${links.join("")}
+        </div>
+      </div>`;
+}
+
 export async function renderAccount(
   ctx: ShellContext,
   initialTab?: AccountTab,
@@ -336,16 +365,7 @@ export async function renderAccount(
         <p class="form-msg" id="account-msg" hidden></p>
       </form>
 
-      ${
-        user.github
-          ? `<div class="identity-panel">
-        <p class="hint identity-panel-label">Signed in with</p>
-        <div class="social-row identity-links">
-          ${socialAccountLink("github", `https://github.com/${user.github}`, user.github)}
-        </div>
-      </div>`
-          : ""
-      }
+      ${identityPanelHtml(user)}
 
       <div class="account-danger">
         <button type="button" class="btn-text-danger" id="delete-account-btn">Delete account</button>
