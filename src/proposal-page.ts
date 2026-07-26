@@ -3,6 +3,7 @@ import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import { authFetch, profilePath, type AuthUser } from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import { listListedProposals, proposalFromMarkdown } from "./github";
+import { btnWithIcon } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
@@ -278,6 +279,11 @@ export async function renderProposalPage(
     });
 
     const byline = proposerBylineHtml(match.proposer, profilePath);
+    const listingReportHtml = listingReportControlHtml(
+      String(match.status),
+      match.path,
+      match.id,
+    );
 
     const wantsDonate =
       /(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
@@ -349,11 +355,6 @@ export async function renderProposalPage(
             ${byline}
             ${metaChipsHtml(match)}
             ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" aria-live="polite">Views: -</span>` : ""}
-            ${
-              canEdit
-                ? `<a class="proposal-edit-link" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">Edit</a>`
-                : ""
-            }
           </div>
         </header>
 
@@ -394,7 +395,18 @@ export async function renderProposalPage(
             ${status === "rejected" && match.id ? rebuttalPanelHtml() : ""}
             ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
             ${status === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
-            ${listingReportControlHtml(status, match.path, match.id)}
+            ${
+              canEdit || listingReportHtml
+                ? `<div class="proposal-sidebar-actions">
+                    ${
+                      canEdit
+                        ? `<a class="btn ghost proposal-sidebar-btn" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">${btnWithIcon("pen-to-square", "Edit project")}</a>`
+                        : ""
+                    }
+                    ${listingReportHtml}
+                  </div>`
+                : ""
+            }
             ${onChainPanelHtml(match)}
           </aside>
         </div>
