@@ -22,6 +22,9 @@ describe("skills tags vocabulary", () => {
   it("covers core Bitcoin skill areas", () => {
     for (const tag of [
       "bitcoin-core",
+      "knots",
+      "libbitcoin",
+      "consensus",
       "lightning",
       "rust",
       "ldk",
@@ -30,6 +33,12 @@ describe("skills tags vocabulary", () => {
       "cryptography",
       "miniscript",
       "taproot",
+      "libsecp256k1",
+      "mempool-policy",
+      "stratum-v2",
+      "fedimint",
+      "payjoin",
+      "silent-payments",
     ]) {
       expect(SUGGESTED_SKILLS_TAGS).toContain(tag);
     }
