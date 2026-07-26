@@ -27,8 +27,9 @@ describe("builderPanelHtml proposal types", () => {
       200_000,
       false,
     );
-    expect(html).toContain("Direct funding");
     expect(html).toContain("direct-deliverable-slot");
+    expect(html).not.toContain("builder-title");
+    expect(html).not.toContain("Direct funding");
     expect(html).not.toContain("builder-claim-modal");
     expect(html).not.toContain("Claim this project");
     expect(html).not.toContain("builder-evaluating");
@@ -38,6 +39,8 @@ describe("builderPanelHtml proposal types", () => {
     const html = builderPanelHtml(proposal({ proposal_type: "bounty" }), 200_000, false);
     expect(html).toContain("builder-claim-modal");
     expect(html).toContain("Claim this project");
+    expect(html).not.toContain("builder-title");
+    expect(html).not.toContain(">Build<");
     expect(html).not.toContain("direct-deliverable-slot");
     expect(html).not.toContain("builder-evaluating");
   });

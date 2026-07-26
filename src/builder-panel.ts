@@ -59,9 +59,6 @@ export function builderPanelHtml(
 
   if (isDirect) {
     return `<div class="builder-panel" id="builder">
-    <div class="builder-panel-head">
-      <h2 class="builder-title">Direct funding</h2>
-    </div>
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
@@ -79,9 +76,6 @@ export function builderPanelHtml(
   }
 
   return `<div class="builder-panel" id="builder">
-    <div class="builder-panel-head">
-      <h2 class="builder-title">Build</h2>
-    </div>
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
