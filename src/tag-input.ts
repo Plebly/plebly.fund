@@ -20,12 +20,19 @@ export function tagInputHtml(opts: {
   max?: number;
   placeholder?: string;
   vocabulary?: readonly string[];
+  /** Quick-pick chips; defaults to vocabulary. Pass [] to hide. */
+  presets?: readonly string[];
+  hint?: string;
 }): string {
   const id = opts.id;
   const max = opts.max ?? MAX_PROPOSAL_TAGS;
-  const tags = parseTagList(opts.tags || []);
+  const tags = parseTagList(opts.tags || [], max);
   const placeholder = opts.placeholder || "Type a tag, then Enter";
   const vocab = opts.vocabulary || SUGGESTED_PROPOSAL_TAGS;
+  const presetSource = opts.presets ?? vocab;
+  const hint =
+    opts.hint ||
+    `Pick suggested tags or type your own. Up to ${max}. Enter or comma to add.`;
   const chips = tags
     .map(
       (tag) =>
@@ -35,7 +42,7 @@ export function tagInputHtml(opts: {
         </li>`,
     )
     .join("");
-  const presets = vocab
+  const presets = presetSource
     .map(
       (tag) =>
         `<button type="button" class="tag-preset" data-add-tag="${escapeHtml(tag)}" ${tags.includes(tag) ? "hidden" : ""}>${escapeHtml(tag)}</button>`,
@@ -60,10 +67,10 @@ export function tagInputHtml(opts: {
       <ul class="tag-input-suggest" id="${escapeHtml(id)}-suggest" role="listbox" hidden></ul>
     </div>
     <input type="hidden" name="${escapeHtml(opts.name)}" id="${escapeHtml(id)}-value" value="${escapeHtml(tags.join(", "))}" />
-    <div class="tag-input-presets" id="${escapeHtml(id)}-presets" aria-label="Suggested tags">
+    <div class="tag-input-presets" id="${escapeHtml(id)}-presets" aria-label="Suggested tags" ${presetSource.length ? "" : "hidden"}>
       ${presets}
     </div>
-    <p class="field-hint tag-input-hint">Pick suggested tags or type your own. Up to ${max}. Enter or comma to add.</p>
+    <p class="field-hint tag-input-hint">${escapeHtml(hint)}</p>
   </div>`;
 }
 
@@ -84,7 +91,7 @@ export function bindTagInput(
 
   const max = Number(wrap.dataset.max || MAX_PROPOSAL_TAGS) || MAX_PROPOSAL_TAGS;
   const vocabulary = opts?.vocabulary || SUGGESTED_PROPOSAL_TAGS;
-  let tags = parseTagList(hidden.value);
+  let tags = parseTagList(hidden.value, max);
   let activeIndex = -1;
 
   const syncHidden = () => {
@@ -144,15 +151,15 @@ export function bindTagInput(
     const query = field.value.trim();
     const typed = normalizeTag(query);
     if (!query) {
-      paintSuggest(filterSuggestedTags("", tags, vocabulary).slice(0, 8), null);
+      paintSuggest(filterSuggestedTags("", tags, vocabulary).slice(0, 12), null);
       return;
     }
-    const matches = filterSuggestedTags(query, tags, vocabulary).slice(0, 8);
+    const matches = filterSuggestedTags(query, tags, vocabulary).slice(0, 12);
     const items = [...matches];
     if (typed && !tags.includes(typed) && !items.includes(typed)) {
       items.unshift(typed);
     }
-    paintSuggest(items.slice(0, 8), typed);
+    paintSuggest(items.slice(0, 12), typed);
   };
 
   const addTag = (raw: string): boolean => {
@@ -270,7 +277,7 @@ export function bindTagInput(
   return {
     getTags: () => [...tags],
     setTags: (next) => {
-      tags = parseTagList(next);
+      tags = parseTagList(next, max);
       field.value = "";
       renderChips();
       hideSuggest();

@@ -34,7 +34,13 @@ import {
   proposalsForProfile,
 } from "./github";
 import { addressBalanceSats } from "./mempool";
+import {
+  MAX_SKILLS_TAGS,
+  SKILLS_PRESET_TAGS,
+  SUGGESTED_SKILLS_TAGS,
+} from "./skills-tags";
 import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
+import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
 import {
   applySeo,
@@ -289,8 +295,16 @@ export async function renderAccount(
 
         <fieldset class="form-block">
           <legend>Skills &amp; interests</legend>
-          <input id="skills-tags-input" type="text" value="${escapeHtml((user.skills_tags || []).join(", "))}" placeholder="bitcoin core, rust, docs" maxlength="500" />
-          <p class="hint">Optional comma-separated tags. Matching listed projects may notify you.</p>
+          ${tagInputHtml({
+            id: "skills-tags",
+            name: "skills_tags",
+            tags: user.skills_tags || [],
+            max: MAX_SKILLS_TAGS,
+            vocabulary: SUGGESTED_SKILLS_TAGS,
+            presets: SKILLS_PRESET_TAGS,
+            placeholder: "Type a skill, then Enter",
+            hint: "Add skills and interests. Matching listed projects may notify you. Up to 20; freeform tags are fine.",
+          })}
         </fieldset>
 
         <fieldset class="form-block">
@@ -440,6 +454,9 @@ export async function renderAccount(
 
   bindCreditPreferenceGates(app, "account-credit");
   applyCreditPreferencesToFields(app, creditPrefs, "account-credit");
+  const skillsTags = bindTagInput(app, "skills-tags", {
+    vocabulary: SUGGESTED_SKILLS_TAGS,
+  });
 
   linksList?.addEventListener("click", (e) => {
     const t = e.target as HTMLElement | null;
@@ -512,9 +529,7 @@ export async function renderAccount(
       const payout_address = (
         document.getElementById("payout-input") as HTMLInputElement
       ).value.trim();
-      const skills_tags = (
-        document.getElementById("skills-tags-input") as HTMLInputElement
-      ).value.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+      const skills_tags = skillsTags?.getTags() || [];
       const credit = readCreditPreferences(app, "account-credit");
       const funder_credit = {
         public_credit: credit.public_credit,

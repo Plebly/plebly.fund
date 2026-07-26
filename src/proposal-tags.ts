@@ -29,7 +29,10 @@ export function normalizeTag(raw: string): string | null {
   return tag;
 }
 
-export function parseTagList(raw: string | string[] | null | undefined): string[] {
+export function parseTagList(
+  raw: string | string[] | null | undefined,
+  max = MAX_PROPOSAL_TAGS,
+): string[] {
   const parts = Array.isArray(raw)
     ? raw
     : String(raw || "").split(/[,]+/);
@@ -38,7 +41,7 @@ export function parseTagList(raw: string | string[] | null | undefined): string[
     const tag = normalizeTag(part);
     if (!tag || out.includes(tag)) continue;
     out.push(tag);
-    if (out.length >= MAX_PROPOSAL_TAGS) break;
+    if (out.length >= max) break;
   }
   return out;
 }
