@@ -207,8 +207,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           <fieldset class="field propose-type">
             <span>Proposal type</span>
-            <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /> <strong>Bounty</strong>: open to claim by a builder</label>
-            <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /> <strong>Direct</strong>: you are the recipient (no claim step)</label>
+            <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open to claim by a builder</span></label>
+            <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Direct</strong>: you are the recipient (no claim step)</span></label>
           </fieldset>
           <label class="field">
             <span>Tags <em class="optional">(optional)</em></span>

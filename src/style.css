@@ -4152,7 +4152,7 @@ a.project-card-by:hover {
   font-weight: 500;
 }
 
-.field input,
+.field input:not([type="radio"]):not([type="checkbox"]),
 .field textarea,
 .field select,
 .form-block textarea,
@@ -4171,11 +4171,14 @@ a.project-card-by:hover {
   padding: 0.625rem 0.75rem;
   transition: border-color 0.15s ease;
 }
-.field input:focus,
+.field input:not([type="radio"]):not([type="checkbox"]):focus,
 .field textarea:focus,
 .field select:focus,
 .form-block textarea:focus,
-.form-block input:focus,
+.form-block input[type="text"]:focus,
+.form-block input[type="url"]:focus,
+.form-block input[type="number"]:focus,
+.form-block input[type="date"]:focus,
 .form-block select:focus {
   outline: none;
   border-color: var(--accent);
@@ -4910,36 +4913,57 @@ a.project-card-by:hover {
   border: 0;
   margin: 0;
   padding: 0;
+  min-inline-size: 0;
+  width: 100%;
 }
 
 .propose-type > span {
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--ink-secondary);
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .propose-type .radio-row {
-  display: flex;
-  gap: 0.65rem;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.65rem;
+  align-items: start;
   padding: 0.75rem 0.875rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   background: var(--bg);
   cursor: pointer;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
 }
 
 .propose-type .radio-row:has(input:checked) {
   border-color: var(--accent-border);
   background: var(--accent-soft);
+  color: var(--ink);
 }
 
 .propose-type .radio-row input {
-  margin-top: 0.2rem;
+  width: auto;
+  min-width: 1rem;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.propose-type .radio-row input:focus {
+  outline: none;
+  box-shadow: none;
 }
 
 .propose-type .radio-row strong {
-  display: inline;
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .notify-list {
