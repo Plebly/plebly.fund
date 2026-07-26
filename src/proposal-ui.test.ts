@@ -154,6 +154,8 @@ describe("proposal UI critical render helpers", () => {
     expect(signedOut).toContain("Sign in");
     expect(signedOut).not.toContain("Funder credit");
     expect(signedOut).not.toContain("Step 1 of 2");
+    expect(signedOut).not.toContain("Step 2 of 2");
+    expect(signedOut).not.toContain("Change credit preferences");
     expect(signedOut).not.toContain("donate-credit-public");
 
     const signedIn = donatePanelHtml(
@@ -162,6 +164,7 @@ describe("proposal UI critical render helpers", () => {
     );
     expect(signedIn).toContain("Funder credit");
     expect(signedIn).toContain("Step 1 of 2");
+    expect(signedIn).toContain("Step 2 of 2");
     expect(signedIn).toContain("donate-credit-public");
     expect(signedIn).toContain("donate-credit-amount");
     expect(signedIn).toContain("Continue to payment");

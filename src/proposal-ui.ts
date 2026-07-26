@@ -102,13 +102,18 @@ function donatePayStepHtml(
   networkNote: string,
   onchainPresets: string,
   lnPresets: string,
+  signedIn: boolean,
 ): string {
   return `<section class="donate-step" data-donate-step="pay" id="donate-step-pay" hidden>
     <div class="donate-panel-head">
-      <p class="donate-step-kicker">Step 2 of 2</p>
+      ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
       <h2 class="donate-title" id="donate-pay-title">Donate</h2>
-      <p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
-      <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>
+      ${
+        signedIn
+          ? `<p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
+             <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>`
+          : ""
+      }
     </div>
     ${networkNote}
     <div class="donate-rails" role="tablist" aria-label="How to donate">
@@ -479,7 +484,7 @@ export function donatePanelHtml(
 
   return `<div class="donate-panel" id="donate" data-donate-step="credit">
     ${donateCreditStepHtml(signedIn)}
-    ${donatePayStepHtml(addr, networkNote, onchainPresets, lnPresets)}
+    ${donatePayStepHtml(addr, networkNote, onchainPresets, lnPresets, signedIn)}
   </div>`;
 }
 
@@ -784,8 +789,10 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
 
   const goPay = (prefs: CreditPreferences) => {
     saveStoredCreditPreferences(prefs);
-    applyCreditPreferencesToFields(panel, prefs, "donate-credit");
-    syncCreditSummary(panel, prefs);
+    if (opts.signedIn) {
+      applyCreditPreferencesToFields(panel, prefs, "donate-credit");
+      syncCreditSummary(panel, prefs);
+    }
     setDonateStep(panel, "pay");
     startWatching();
   };
