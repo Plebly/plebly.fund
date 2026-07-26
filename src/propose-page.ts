@@ -180,7 +180,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       ${
         isEdit
           ? `<div class="edit-banner" role="status">
-              <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span> · no second fee</p>
+              <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span></p>
               <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
               <p class="edit-banner-actions">
                 <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
@@ -288,7 +288,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           ${
             isEdit
-              ? `<p class="field-hint">Submission fee already paid. Amend opens a PR without a new fee.</p>`
+              ? ""
               : `<div class="field">
             <span>Submission fee</span>
             ${feePayHtml({
