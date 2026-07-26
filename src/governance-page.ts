@@ -11,6 +11,7 @@ import {
   opsRoleLabel,
   voteOpsRoleBallot,
   type OpsRoleBallotView,
+  type OpsRolesApiPayload,
   type OpsRolesGate,
   type OpsRolesPayload,
 } from "./ops-roles";
@@ -118,15 +119,16 @@ const DEFAULT_OPS_GATE: OpsRolesGate = {
 
 /** Normalize partial `/ops/roles` payloads from older API deploys. */
 export function normalizeOpsRolesPayload(
-  payload: Partial<OpsRolesPayload> | null | undefined,
+  payload: OpsRolesApiPayload | OpsRolesPayload | null | undefined,
 ): OpsRolesPayload | null {
   if (!payload || typeof payload !== "object") return null;
   const roles = Array.isArray(payload.roles) ? payload.roles : [];
-  const kinds = Array.isArray(payload.kinds) && payload.kinds.length
-    ? payload.kinds
-    : [...DEFAULT_OPS_KINDS];
+  const kinds =
+    Array.isArray(payload.kinds) && payload.kinds.length
+      ? payload.kinds
+      : [...DEFAULT_OPS_KINDS];
   const ballots = Array.isArray(payload.ballots) ? payload.ballots : [];
-  const gate =
+  const gate: OpsRolesGate =
     payload.gate && typeof payload.gate === "object"
       ? {
           open: Boolean(payload.gate.open),
@@ -147,7 +149,7 @@ export function normalizeOpsRolesPayload(
 }
 
 export function opsRolesSectionHtml(
-  payload: OpsRolesPayload | null,
+  payload: OpsRolesApiPayload | OpsRolesPayload | null,
   isReviewer: boolean,
 ): string {
   const normalized = normalizeOpsRolesPayload(payload);

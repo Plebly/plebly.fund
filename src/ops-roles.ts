@@ -50,22 +50,30 @@ export type OpsRolesGate = {
   reason: string;
 };
 
+/** Full shape after SPA normalization (always safe to render). */
 export type OpsRolesPayload = {
   roles: OpsRoleView[];
   count: number;
-  /** Present on current workers; older deploys may omit. */
+  kinds: string[];
+  gate: OpsRolesGate;
+  ballots: OpsRoleBallotView[];
+};
+
+/** Wire shape — older workers only returned { roles, count }. */
+export type OpsRolesApiPayload = {
+  roles?: OpsRoleView[];
+  count?: number;
   kinds?: string[];
   gate?: OpsRolesGate;
   ballots?: OpsRoleBallotView[];
 };
 
-export async function fetchOpsRoles(): Promise<OpsRolesPayload | null> {
+export async function fetchOpsRoles(): Promise<OpsRolesApiPayload | null> {
   if (!WORKERS_API) return null;
   const res = await fetch(`${API()}/ops/roles`);
   if (!res.ok) return null;
-  const data = (await res.json()) as Partial<OpsRolesPayload>;
+  const data = (await res.json()) as OpsRolesApiPayload;
   if (!data || typeof data !== "object") return null;
-  // Older deploys only returned { roles, count }.
   return {
     roles: Array.isArray(data.roles) ? data.roles : [],
     count: typeof data.count === "number" ? data.count : 0,

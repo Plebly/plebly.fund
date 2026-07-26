@@ -29,10 +29,7 @@ describe("governance UI helpers", () => {
   });
 
   it("tolerates older /ops/roles payloads without kinds, gate, or ballots", () => {
-    const html = opsRolesSectionHtml(
-      { roles: [], count: 0 } as Parameters<typeof opsRolesSectionHtml>[0],
-      false,
-    );
+    const html = opsRolesSectionHtml({ roles: [], count: 0 }, false);
     expect(html).toContain("Volume-gated");
     expect(html).toContain("Vacant");
     expect(html).toContain("No open role ballots");
