@@ -5,6 +5,7 @@ import {
   loginChoicesHtml,
   type AuthUser,
 } from "./auth";
+import { confirmAction } from "./confirm-modal";
 import { WORKERS_API } from "./config";
 import { fileModerationReport } from "./reports";
 import { profileHref } from "./router";
@@ -354,7 +355,13 @@ export async function bindProposalEngagement(
     }
 
     if (deleteId) {
-      if (!window.confirm("Delete this comment?")) return;
+      const ok = await confirmAction({
+        title: "Delete comment",
+        body: "Remove this comment from the discussion? This cannot be undone.",
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!ok) return;
       try {
         const res = await authFetch(
           `${api()}/comments/${encodeURIComponent(proposalId)}/${encodeURIComponent(deleteId)}`,
@@ -371,7 +378,13 @@ export async function bindProposalEngagement(
     }
 
     if (hideId) {
-      if (!window.confirm("Hide this comment for everyone?")) return;
+      const ok = await confirmAction({
+        title: "Hide comment",
+        body: "Hide this comment for everyone? Reviewers use this for clear abuse.",
+        confirmLabel: "Hide",
+        danger: true,
+      });
+      if (!ok) return;
       try {
         const res = await authFetch(
           `${api()}/comments/${encodeURIComponent(proposalId)}/${encodeURIComponent(hideId)}/hide`,

@@ -5807,10 +5807,31 @@ a.proposal-comment-author:hover {
   font-size: 0.8125rem;
 }
 
+.confirm-modal-card,
 .listing-report-card {
   width: min(28rem, 100%);
   max-width: 28rem;
   padding: 1.5rem 1.5rem 1.25rem;
+}
+
+.confirm-modal-card h2 {
+  margin: 0 0 0.45rem;
+  padding-right: 2.25rem;
+  font-size: 1.25rem;
+}
+
+.confirm-modal-body {
+  margin: 0 0 1.15rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin: 0;
 }
 
 .listing-report-card h2 {
