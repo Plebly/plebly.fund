@@ -38,7 +38,10 @@ import {
   validateMilestoneDrafts,
   type MilestoneDraft,
 } from "./propose-milestones";
+import { parseTagList } from "./proposal-tags";
+import { PROPOSAL_TEMPLATES } from "./proposal-templates";
 import { href, proposalHref } from "./router";
+import { bindTagInput, tagInputHtml } from "./tag-input";
 import type {
   DependsOnEntry,
   ProposalMilestone,
@@ -46,7 +49,6 @@ import type {
 } from "./types";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { escapeHtml, formatSats } from "./util";
-import { PROPOSAL_TEMPLATES } from "./proposal-templates";
 
 const PROPOSE_PATH = "/propose";
 
@@ -210,11 +212,15 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open to claim by a builder</span></label>
             <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Direct</strong>: you are the recipient (no claim step)</span></label>
           </fieldset>
-          <label class="field">
+          <div class="field">
             <span>Tags <em class="optional">(optional)</em></span>
-            <input name="tags" maxlength="200" placeholder="e.g. knots, policy, docs" value="${escapeHtml((prefill?.tags || []).join(", "))}" />
-            <span class="field-hint">Suggested: see TAGS.md (comma-separated).</span>
-          </label>
+            ${tagInputHtml({
+              id: "propose-tags",
+              name: "tags",
+              tags: prefill?.tags || [],
+              placeholder: "Type a tag, then Enter",
+            })}
+          </div>
           <label class="field">
             <span>Commons / parent initiative <em class="optional">(optional)</em></span>
             <input name="parent_initiative" maxlength="200" placeholder="e.g. Bitcoin Core Commons" value="${escapeHtml(prefill?.parent_initiative || "")}" />
@@ -325,6 +331,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const relatedEmpty = document.getElementById("related-work-empty");
   const aiResult = document.getElementById("ai-assist-result")!;
 
+  const tagsInput = bindTagInput(document, "propose-tags");
+
   const aiInput = () => {
     const field = (name: string) =>
       (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement)
@@ -334,11 +342,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       problem: field("problem"),
       deliverable: field("deliverable"),
       verification: field("verification"),
-      tags: field("tags")
-        .split(",")
-        .map((tag) => tag.trim().toLowerCase())
-        .filter(Boolean)
-        .slice(0, 12),
+      tags: tagsInput?.getTags() || parseTagList(field("tags")),
     };
   };
 
@@ -369,11 +373,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       "deliverable",
       "verification",
       "out_of_scope",
-      "tags",
     ].some((name) => {
       const input = form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
       return Boolean(input?.value.trim());
-    });
+    }) || Boolean(tagsInput?.getTags().length);
     if (overwrite && !window.confirm("Use this template to replace the draft fields?")) {
       templateSelect.value = "";
       return;
@@ -383,7 +386,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     (form.elements.namedItem("deliverable") as HTMLTextAreaElement).value = template.deliverable;
     (form.elements.namedItem("verification") as HTMLTextAreaElement).value = template.verification;
     (form.elements.namedItem("out_of_scope") as HTMLTextAreaElement).value = template.out_of_scope;
-    (form.elements.namedItem("tags") as HTMLInputElement).value = template.tags.join(", ");
+    tagsInput?.setTags(template.tags);
     aiResult.hidden = true;
   });
 
@@ -814,12 +817,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       return;
     }
 
-    const tagsRaw = String(fd.get("tags") || "");
-    const tags = tagsRaw
-      .split(/[,]+/)
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 12);
+    const tags = tagsInput?.getTags() || parseTagList(String(fd.get("tags") || ""));
     const author = {
       title: String(fd.get("title") || ""),
       proposal_type:
