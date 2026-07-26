@@ -4,6 +4,8 @@ import {
   openDecisionsHtml,
   openRemovalFormHtml,
   openRemovalsHtml,
+  opsRoleBallotCardHtml,
+  opsRolesSectionHtml,
   removalCardHtml,
   reviewerRowHtml,
   rosterSectionHtml,
@@ -22,6 +24,109 @@ describe("governance UI helpers", () => {
   it("labels decision kinds", () => {
     expect(decisionKindLabel("deliverable_confirm")).toBe("Deliverable confirm");
     expect(decisionKindLabel("second_review")).toBe("Second review");
+    expect(decisionKindLabel("claim_extension")).toBe("Claim extension");
+    expect(decisionKindLabel("listing_challenge")).toBe("Listing challenge");
+  });
+
+  it("renders ops role section with gate and nominate form for reviewers", () => {
+    const gated = opsRolesSectionHtml(
+      {
+        roles: [],
+        count: 0,
+        kinds: ["comms"],
+        gate: {
+          open: false,
+          completions: 2,
+          min_completions: 10,
+          reviewers: 5,
+          min_reviewers: 5,
+          reason: "need 10 platform completions (have 2)",
+        },
+        ballots: [],
+      },
+      true,
+    );
+    expect(gated).toContain("Volume-gated");
+    expect(gated).toContain("gov-gate");
+    expect(gated).toContain("Vacant");
+    expect(gated).not.toContain("ops-nominate-form");
+
+    const open = opsRolesSectionHtml(
+      {
+        roles: [
+          {
+            user_id: "github:9",
+            role: "comms",
+            kind: "comms",
+            label: "Comms",
+            source: "elected",
+            term_ends_at: "2026-12-01T00:00:00.000Z",
+          },
+        ],
+        count: 1,
+        kinds: ["triage_steward", "incident_scribe", "comms"],
+        gate: {
+          open: true,
+          completions: 12,
+          min_completions: 10,
+          reviewers: 6,
+          min_reviewers: 5,
+          reason: "open",
+        },
+        ballots: [
+          {
+            id: "ballot-1",
+            kind: "triage_steward",
+            action: "grant",
+            nominee_user_id: "github:n",
+            initiator_user_id: "github:1",
+            rationale: "Good triage hygiene across recent decisions.",
+            created_at: "2026-01-01T00:00:00.000Z",
+            closes_at: "2026-01-15T00:00:00.000Z",
+            status: "open",
+            vote_count: 1,
+            counts: { yes: 1, no: 0 },
+          },
+        ],
+      },
+      true,
+    );
+    expect(open).toContain("Votes open");
+    expect(open).toContain("ops-nominate-form");
+    expect(open).toContain("data-ops-vote");
+    expect(open).toContain(">Grant<");
+    expect(opsRoleBallotCardHtml(
+      {
+        id: "b2",
+        kind: "comms",
+        action: "remove",
+        nominee_user_id: "github:9",
+        initiator_user_id: "github:1",
+        rationale: "Enough rationale text for the card.",
+        created_at: "2026-01-01T00:00:00.000Z",
+        closes_at: "2026-01-15T00:00:00.000Z",
+        status: "open",
+        vote_count: 0,
+        counts: { yes: 0, no: 0 },
+      },
+      false,
+    )).toContain("Active reviewers vote");
+    expect(opsRoleBallotCardHtml(
+      {
+        id: "b3",
+        kind: "comms",
+        action: "remove",
+        nominee_user_id: "github:9",
+        initiator_user_id: "github:1",
+        rationale: "Enough rationale text for the card.",
+        created_at: "2026-01-01T00:00:00.000Z",
+        closes_at: "2026-01-15T00:00:00.000Z",
+        status: "open",
+        vote_count: 0,
+        counts: { yes: 0, no: 0 },
+      },
+      true,
+    )).toContain(">Remove<");
   });
 
   it("renders roster rows and select for earned seats", () => {

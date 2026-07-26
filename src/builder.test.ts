@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  claimWindowDaysLeft,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
@@ -68,6 +69,14 @@ describe("claim floor helpers", () => {
     expect(
       isNearFloor(proposal({ status: "listed", balance_sats: 100_000 }), floor),
     ).toBe(false);
+  });
+
+  it("claimWindowDaysLeft prefers claim_window_ends_at (extensions)", () => {
+    const claimed = "2026-01-01T00:00:00.000Z";
+    const ends = new Date(Date.now() + 10 * 86400_000).toISOString();
+    const days = claimWindowDaysLeft(claimed, ends);
+    expect(days).toBeGreaterThanOrEqual(9);
+    expect(days).toBeLessThanOrEqual(11);
   });
 
   it("direct proposals are never open-to-claim or near-floor claim filters", () => {

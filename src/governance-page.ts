@@ -5,6 +5,15 @@ import {
 } from "./auth";
 import { btnWithIcon } from "./icons";
 import {
+  fetchOpsRoles,
+  nominateOpsRole,
+  opsActionLabel,
+  opsRoleLabel,
+  voteOpsRoleBallot,
+  type OpsRoleBallotView,
+  type OpsRolesPayload,
+} from "./ops-roles";
+import {
   decisionKindLabel,
   fetchOpenRemovalBallots,
   fetchOpenReviewDecisions,
@@ -20,32 +29,188 @@ import {
   type ReviewerPublic,
   type ReviewerRoster,
 } from "./reviewers";
-import { WORKERS_API } from "./config";
 import { href, proposalHref } from "./router";
 import { escapeHtml, formatSats } from "./util";
 
 export type GovernanceShell = (inner: string) => string;
 
-type OpsRole = { role?: string; name?: string; user_id?: string; holder?: string };
-
-async function fetchOpsRoles(): Promise<OpsRole[]> {
-  if (!WORKERS_API) return [];
-  const res = await fetch(`${WORKERS_API.replace(/\/$/, "")}/ops/roles`);
-  if (!res.ok) return [];
-  const data = (await res.json()) as { roles?: OpsRole[] } | OpsRole[];
-  return Array.isArray(data) ? data : data.roles || [];
+function opsVoteLabels(action: string): { yes: string; no: string } {
+  if (action === "remove") return { yes: "Remove", no: "Keep" };
+  if (action === "retain") return { yes: "Retain", no: "Replace later" };
+  return { yes: "Grant", no: "Reject" };
 }
 
-function opsRolesHtml(roles: OpsRole[]): string {
-  if (!roles.length) {
+export function opsRoleBallotCardHtml(
+  b: OpsRoleBallotView,
+  isReviewer: boolean,
+): string {
+  const labels = opsVoteLabels(b.action);
+  const voteRow = isReviewer
+    ? `<div class="gov-card-actions">
+        <button type="button" class="btn" data-ops-vote="yes" data-ops-ballot-id="${escapeHtml(b.id)}">${escapeHtml(labels.yes)}</button>
+        <button type="button" class="btn ghost" data-ops-vote="no" data-ops-ballot-id="${escapeHtml(b.id)}">${escapeHtml(labels.no)}</button>
+      </div>`
+    : `<p class="muted gov-hint">Active reviewers vote on operational role ballots.</p>`;
+  return `<li class="gov-card gov-ops-ballot" data-ops-ballot-id="${escapeHtml(b.id)}">
+    <div class="gov-card-head">
+      <span class="gov-card-title">${escapeHtml(opsRoleLabel(b.kind))}</span>
+      <span class="pill">${escapeHtml(opsActionLabel(b.action))}</span>
+    </div>
+    <p class="mono muted gov-nominee">Nominee ${escapeHtml(shortUserId(b.nominee_user_id))}</p>
+    <p class="gov-evidence">${escapeHtml(b.rationale)}</p>
+    <div class="gov-counts">
+      <span class="review-count yes">${escapeHtml(labels.yes)} ${b.counts.yes}</span>
+      <span class="review-count no">${escapeHtml(labels.no)} ${b.counts.no}</span>
+      <span class="muted">${b.vote_count} cast</span>
+    </div>
+    <p class="muted gov-closes">Closes ${escapeHtml(closesLabel(b.closes_at))}</p>
+    ${voteRow}
+    <p class="builder-msg gov-msg" hidden></p>
+  </li>`;
+}
+
+function opsGateProgressHtml(gate: OpsRolesPayload["gate"]): string {
+  if (gate.open) return "";
+  const cPct = Math.min(
+    100,
+    Math.round((gate.completions / Math.max(1, gate.min_completions)) * 100),
+  );
+  const rPct = Math.min(
+    100,
+    Math.round((gate.reviewers / Math.max(1, gate.min_reviewers)) * 100),
+  );
+  return `<div class="gov-gate" role="status">
+    <p class="gov-gate-title">Role votes unlock after volume gates</p>
+    <div class="gov-gate-meters">
+      <div class="gov-gate-meter">
+        <div class="gov-gate-meter-head">
+          <span>Completions</span>
+          <span class="mono">${gate.completions}/${gate.min_completions}</span>
+        </div>
+        <div class="gov-gate-bar" aria-hidden="true"><span style="width:${cPct}%"></span></div>
+      </div>
+      <div class="gov-gate-meter">
+        <div class="gov-gate-meter-head">
+          <span>Active reviewers</span>
+          <span class="mono">${gate.reviewers}/${gate.min_reviewers}</span>
+        </div>
+        <div class="gov-gate-bar" aria-hidden="true"><span style="width:${rPct}%"></span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+export function opsRolesSectionHtml(
+  payload: OpsRolesPayload | null,
+  isReviewer: boolean,
+): string {
+  if (!payload) {
     return `<div class="empty-state gov-empty"><div class="empty-state-inner">
-      <p class="empty-state-title">Not active yet</p>
-      <p class="empty-state-body">Operational roles are volume-gated until the reviewer pool has meaningful activity. No role vote is live.</p>
+      <p class="empty-state-title">Roles unavailable</p>
+      <p class="empty-state-body">Could not load operational roles from the API.</p>
     </div></div>`;
   }
-  return `<ul class="gov-roster">${roles
-    .map((role) => `<li class="gov-roster-row"><span>${escapeHtml(role.role || role.name || "Operational role")}</span><span class="mono muted">${escapeHtml(role.user_id || role.holder || "Assigned")}</span></li>`)
+  const gate = payload.gate;
+  const gatePill = gate.open
+    ? `<span class="pill status-good">Votes open</span>`
+    : `<span class="pill">Volume-gated</span>`;
+
+  const kinds = payload.kinds.length
+    ? payload.kinds
+    : ["triage_steward", "incident_scribe", "comms"];
+  const byKind = new Map(
+    payload.roles.map((r) => [r.kind || r.role, r] as const),
+  );
+  const seats = `<ul class="gov-roster gov-ops-seats">${kinds
+    .map((kind) => {
+      const role = byKind.get(kind);
+      if (!role) {
+        return `<li class="gov-roster-row gov-seat-vacant">
+          <div class="gov-roster-main">
+            <span class="gov-user">${escapeHtml(opsRoleLabel(kind))}</span>
+            <span class="pill">Vacant</span>
+          </div>
+          <span class="muted">No holder</span>
+        </li>`;
+      }
+      const holder = role.user_id || role.holder || "—";
+      const term = role.term_ends_at
+        ? `<span class="muted">Term ends ${escapeHtml(closesLabel(role.term_ends_at))}</span>`
+        : "";
+      return `<li class="gov-roster-row">
+        <div class="gov-roster-main">
+          <span class="gov-user">${escapeHtml(role.label || opsRoleLabel(kind))}</span>
+          <span class="pill">${escapeHtml(role.source)}</span>
+        </div>
+        <div class="gov-seat-holder">
+          <span class="mono">${escapeHtml(shortUserId(holder))}</span>
+          ${term}
+        </div>
+      </li>`;
+    })
     .join("")}</ul>`;
+
+  const ballots = payload.ballots.length
+    ? `<ul class="gov-list" id="gov-ops-ballots">${payload.ballots
+        .map((b) => opsRoleBallotCardHtml(b, isReviewer))
+        .join("")}</ul>`
+    : `<div class="empty-state gov-empty gov-empty-compact"><div class="empty-state-inner">
+        <p class="empty-state-title">No open role ballots</p>
+        <p class="empty-state-body">Grant, remove, or retain ballots appear here while voting is open.</p>
+      </div></div>`;
+
+  let nominateBlock: string;
+  if (!gate.open) {
+    nominateBlock = opsGateProgressHtml(gate);
+  } else if (!isReviewer) {
+    nominateBlock = `<div class="gov-form-panel">
+      <p class="lede">Sign in as an active reviewer to open a role ballot.</p>
+    </div>`;
+  } else {
+    nominateBlock = `<form id="ops-nominate-form" class="gov-form-panel gov-form">
+      <p class="lede">One seat per role. Remove or retain must name the current holder.</p>
+      <div class="gov-form-grid">
+        <label class="field"><span>Role</span>
+          <select id="ops-kind" required>
+            ${kinds
+              .map(
+                (k) =>
+                  `<option value="${escapeHtml(k)}">${escapeHtml(opsRoleLabel(k))}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
+        <label class="field"><span>Action</span>
+          <select id="ops-action" required>
+            <option value="grant">Grant seat</option>
+            <option value="remove">Remove holder</option>
+            <option value="retain">Retain for new term</option>
+          </select>
+        </label>
+      </div>
+      <label class="field"><span>Nominee</span>
+        <input id="ops-nominee" class="mono" type="text" required maxlength="120" placeholder="github:…" autocomplete="off" />
+      </label>
+      <label class="field"><span>Rationale</span>
+        <textarea id="ops-rationale" rows="3" required minlength="20" maxlength="4000" placeholder="Why this grant, removal, or retain…"></textarea>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn">Open role ballot</button>
+      </div>
+      <p class="builder-msg" id="ops-nominate-msg" hidden></p>
+    </form>`;
+  }
+
+  return `<div class="gov-meta">${gatePill}
+      <span class="pill">${payload.count} filled · ${kinds.length} seats</span>
+    </div>
+    <p class="muted gov-block-lede">Coordination labels only — never escrow signing, fund movement, or parameter changes. Reviewers vote; ⅔ of cast with quorum.</p>
+    <h3 class="gov-subhead">Seats</h3>
+    ${seats}
+    <h3 class="gov-subhead">Open ballots</h3>
+    ${ballots}
+    <h3 class="gov-subhead">${gate.open ? "Open a role ballot" : "Activation"}</h3>
+    ${nominateBlock}`;
 }
 
 function decisionPath(d: ReviewDecisionView): string {
@@ -186,6 +351,15 @@ export function removalCardHtml(
       <span class="pill">Removal</span>
     </div>
     <p class="gov-evidence">${escapeHtml(b.evidence)}</p>
+    ${
+      b.evidence_pr_url
+        ? `<p class="muted gov-closes"><a href="${escapeHtml(b.evidence_pr_url)}" target="_blank" rel="noreferrer">Evidence PR</a>${
+            b.result_pr_url
+              ? ` · <a href="${escapeHtml(b.result_pr_url)}" target="_blank" rel="noreferrer">Result PR</a>`
+              : ""
+          }</p>`
+        : ""
+    }
     <div class="gov-counts">
       <span class="review-count yes">Remove ${b.counts.yes}</span>
       <span class="review-count no">Keep ${b.counts.no}</span>
@@ -261,24 +435,34 @@ export async function renderGovernance(
     fetchOpenReviewDecisions().catch(() => [] as ReviewDecisionView[]),
     fetchOpenRemovalBallots().catch(() => [] as RemovalBallotView[]),
     user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
-    fetchOpsRoles().catch(() => [] as OpsRole[]),
+    fetchOpsRoles().catch(() => null),
   ]);
 
   const isReviewer = Boolean(me?.active);
   const funderEligible = Boolean(me?.funder_eligible);
+
+  const decisionCount = decisions.length;
+  const removalCount = removals.length;
+  const opsBallotCount = opsRoles?.ballots.length ?? 0;
 
   app.innerHTML = shell(`
     <section class="wrap detail gov-page">
       <header class="gov-hero">
         <p class="about-eyebrow">Governance</p>
         <h1>Reviewers</h1>
-        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers for a documented pattern of bad faith. Bootstrap seats stay permanent.</p>
+        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers. After volume gates, reviewers elect coordination roles — never custody.</p>
         ${statusStripHtml(me, user)}
+        <nav class="gov-jump" aria-label="Governance sections">
+          <a href="#roster">Roster${roster ? ` (${roster.count})` : ""}</a>
+          <a href="#decisions">Decisions${decisionCount ? ` (${decisionCount})` : ""}</a>
+          <a href="#removals">Removals${removalCount ? ` (${removalCount})` : ""}</a>
+          <a href="#ops-roles">Roles${opsBallotCount ? ` (${opsBallotCount})` : ""}</a>
+        </nav>
       </header>
 
       <section class="gov-block" id="roster">
         <h2 class="gov-block-title">Active roster</h2>
-        <p class="muted gov-block-lede">⌈⅔⌉ yes of the active roster, with at least five non-abstaining votes, passes a decision.</p>
+        <p class="muted gov-block-lede">⌈⅔⌉ yes of the active roster, with at least five non-abstaining votes, passes a decision.${funderEligible ? " Select an earned seat to prefill a removal." : ""}</p>
         ${rosterSectionHtml(roster, { selectable: funderEligible })}
       </section>
 
@@ -290,18 +474,17 @@ export async function renderGovernance(
 
       <section class="gov-block" id="removals">
         <h2 class="gov-block-title">Removal ballots</h2>
-        <p class="muted gov-block-lede">One funder identity = one vote. Passes at ⅔ of votes cast after the window closes (ops tally).</p>
+        <p class="muted gov-block-lede">One funder identity = one vote. Passes at ⅔ of votes cast after the window closes.</p>
         ${openRemovalsHtml(removals, funderEligible)}
-      </section>
-
-      <section class="gov-block" id="open-removal">
-        <h2 class="gov-block-title">Open a removal</h2>
-        ${openRemovalFormHtml(me, Boolean(user))}
+        <div class="gov-inline-panel" id="open-removal">
+          <h3 class="gov-subhead">Open a removal</h3>
+          ${openRemovalFormHtml(me, Boolean(user))}
+        </div>
       </section>
 
       <section class="gov-block" id="ops-roles">
         <h2 class="gov-block-title">Operational roles</h2>
-        ${opsRolesHtml(opsRoles)}
+        ${opsRolesSectionHtml(opsRoles, isReviewer)}
       </section>
 
       <p class="gov-foot muted">
@@ -378,6 +561,28 @@ function bindGovernanceHandlers(
       return;
     }
 
+    const opsBtn = t?.closest?.<HTMLButtonElement>("[data-ops-vote]");
+    if (opsBtn && page.contains(opsBtn)) {
+      const id = opsBtn.dataset.opsBallotId;
+      const vote = opsBtn.dataset.opsVote as "yes" | "no" | undefined;
+      if (!id || !vote) return;
+      const card = opsBtn.closest(".gov-card");
+      setCardMsg(card, "Submitting…");
+      try {
+        const b = await voteOpsRoleBallot(id, vote);
+        const li = page.querySelector(`[data-ops-ballot-id="${CSS.escape(id)}"]`);
+        if (li) li.outerHTML = opsRoleBallotCardHtml(b, ctx.isReviewer);
+      } catch (e) {
+        const msg = (e as Error).message;
+        setCardMsg(
+          card,
+          msg === "login_required" ? "Sign in to vote." : msg,
+          "error",
+        );
+      }
+      return;
+    }
+
     const selectBtn = t?.closest?.<HTMLButtonElement>(".gov-select-target");
     if (selectBtn && page.contains(selectBtn)) {
       const target = selectBtn.dataset.target;
@@ -392,6 +597,57 @@ function bindGovernanceHandlers(
       }
     }
   });
+
+  page
+    .querySelector<HTMLFormElement>("#ops-nominate-form")
+    ?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = page.querySelector<HTMLElement>("#ops-nominate-msg");
+      const kind = page.querySelector<HTMLSelectElement>("#ops-kind");
+      const action = page.querySelector<HTMLSelectElement>("#ops-action");
+      const nominee = page.querySelector<HTMLInputElement>("#ops-nominee");
+      const rationale = page.querySelector<HTMLTextAreaElement>("#ops-rationale");
+      if (!msg || !kind || !action || !nominee || !rationale) return;
+      msg.hidden = false;
+      msg.className = "builder-msg";
+      msg.textContent = "Opening role ballot…";
+      try {
+        const ballot = await nominateOpsRole({
+          kind: kind.value,
+          action: action.value as "grant" | "remove" | "retain",
+          nominee_user_id: nominee.value.trim(),
+          rationale: rationale.value.trim(),
+        });
+        msg.textContent = "Role ballot opened.";
+        msg.className = "builder-msg success";
+        const list = page.querySelector("#gov-ops-ballots");
+        const html = opsRoleBallotCardHtml(ballot, ctx.isReviewer);
+        if (list) {
+          list.insertAdjacentHTML("afterbegin", html);
+        } else {
+          const block = page.querySelector("#ops-roles");
+          const placeholder = block?.querySelector("p.muted");
+          // Replace the "No open role ballots" line when present
+          const emptyLine = [...(block?.querySelectorAll("p.muted") || [])].find(
+            (el) => el.textContent?.includes("No open role ballots"),
+          );
+          if (emptyLine) {
+            emptyLine.outerHTML = `<ul class="gov-list" id="gov-ops-ballots">${html}</ul>`;
+          } else {
+            placeholder?.insertAdjacentHTML(
+              "afterend",
+              `<ul class="gov-list" id="gov-ops-ballots">${html}</ul>`,
+            );
+          }
+        }
+        rationale.value = "";
+      } catch (err) {
+        const text = (err as Error).message;
+        msg.textContent =
+          text === "login_required" ? "Sign in to open a ballot." : text;
+        msg.className = "builder-msg error";
+      }
+    });
 
   page
     .querySelector<HTMLFormElement>("#removal-open-form")

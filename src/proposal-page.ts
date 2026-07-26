@@ -30,6 +30,10 @@ import {
   userMatchesProposer,
 } from "./proposal-ui";
 import {
+  bindListingChallengePanel,
+  listingChallengePanelHtml,
+} from "./listing-challenge-panel";
+import {
   bindRebuttalPanel,
   bindReviewPanel,
   rebuttalPanelHtml,
@@ -388,6 +392,7 @@ export async function renderProposalPage(
             ${status === "rejected" && match.id ? rebuttalPanelHtml() : ""}
             ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
             ${status === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
+            ${listingChallengePanelHtml(status, match.path)}
             ${onChainPanelHtml(match)}
           </aside>
         </div>
@@ -403,6 +408,12 @@ export async function renderProposalPage(
       user,
       watching,
       evaluating,
+    });
+    await bindListingChallengePanel(app, {
+      proposalId: match.id,
+      proposalPath: match.path,
+      status,
+      user,
     });
     let reloadEngagement: (() => Promise<void>) | null = null;
     if (match.escrow_address) {

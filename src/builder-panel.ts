@@ -7,6 +7,7 @@ import {
   isOpenToClaim,
   removeWatch,
   removeEvaluating,
+  requestClaimExtension,
   submitAbandonedChallenge,
   submitCheckpoint,
   submitClaim,
@@ -182,7 +183,10 @@ function renderStatusBody(
   user: AuthUser | null,
   proposalPath: string,
 ): void {
-  const days = claimWindowDaysLeft(status.claimed_at);
+  const days = claimWindowDaysLeft(
+    status.claimed_at,
+    status.claim_window_ends_at,
+  );
   const isYou =
     user &&
     status.claimer &&
@@ -190,6 +194,16 @@ function renderStatusBody(
       status.claimer === user.github ||
       status.claimer === user.id);
   const meta = metaBits(status);
+  const windowLabel =
+    days != null
+      ? ` · ${days} day${days === 1 ? "" : "s"} left`
+      : "";
+  const extensionTools = isYou
+    ? `<div class="builder-extension">
+        <button type="button" class="btn ghost" id="builder-request-extension">Request 30-day extension</button>
+        <p class="hint">Opens a reviewer ballot. Window updates after approve + tally.</p>
+      </div>`
+    : "";
 
   switch (status.state) {
     case "open":
@@ -212,13 +226,12 @@ function renderStatusBody(
       break;
     case "claimed":
       if (isYou) {
-        body.innerHTML = `${meta}<p class="builder-status">You claimed this project${
-          days != null ? ` · ${days} day${days === 1 ? "" : "s"} left` : ""
-        }.</p>
+        body.innerHTML = `${meta}<p class="builder-status">You claimed this project${windowLabel}.</p>
         <div class="builder-claim-tools">
           <button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>
           <button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
         </div>
+        ${extensionTools}
         <div id="checkpoint-form" class="deliverable-form" hidden>
           <label class="donate-amount-label" for="checkpoint-url">Progress URL</label>
           <input id="checkpoint-url" class="donate-amount" type="url" placeholder="https://…" />
@@ -231,16 +244,15 @@ function renderStatusBody(
       } else {
         body.innerHTML = `${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
           status.claimer || "another builder",
-        )}</strong>${
-          days != null ? ` · ${days} day${days === 1 ? "" : "s"} left` : ""
-        }.</p>
+        )}</strong>${windowLabel}.</p>
         <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
       }
       break;
     case "in_review":
       body.innerHTML = `${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${escapeHtml(status.claimer)}` : ""
-      }. AI triage finished. Reviewers confirm in the panel below.</p>`;
+      }${windowLabel}. AI triage finished. Reviewers confirm in the panel below.</p>
+      ${isYou ? extensionTools : ""}`;
       break;
     case "completed":
       body.innerHTML = `${meta}<p class="builder-status">Completed${
@@ -464,6 +476,7 @@ export async function bindBuilderPanel(
       bindDeliverable(refreshStatus);
       bindCheckpoint();
       bindChallenge();
+      bindExtension();
     }
   };
 
@@ -610,6 +623,37 @@ export async function bindBuilderPanel(
         else setMsg(msg, (e as Error).message, "error");
       }
     });
+  };
+
+  const bindExtension = () => {
+    panel
+      .querySelector("#builder-request-extension")
+      ?.addEventListener("click", async () => {
+        if (!opts.user) {
+          requireLogin("Sign in to request an extension.");
+          return;
+        }
+        const btn = panel.querySelector<HTMLButtonElement>(
+          "#builder-request-extension",
+        );
+        if (btn) btn.disabled = true;
+        setMsg(msg, "Opening claim-extension ballot…");
+        try {
+          const result = await requestClaimExtension({
+            proposal_path: opts.proposal.path,
+          });
+          setMsg(
+            msg,
+            `Extension ballot opened (${result.decision_id}). Reviewers vote on /reviewers and this project.`,
+            "success",
+          );
+        } catch (e) {
+          if (btn) btn.disabled = false;
+          if ((e as Error).message === "login_required") {
+            requireLogin("Sign in to request an extension.");
+          } else setMsg(msg, (e as Error).message, "error");
+        }
+      });
   };
 
   try {

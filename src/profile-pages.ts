@@ -184,8 +184,8 @@ function linkRowHtml(links: ProfileLink[]): string {
     .map(
       (l, i) => `
     <div class="link-row" data-index="${i}">
-      <input type="text" class="link-label" placeholder="Custom label (optional)" value="${escapeHtml(l.label)}" maxlength="40" />
-      <input type="text" class="link-url" inputmode="url" placeholder="https://…" value="${escapeHtml(l.url)}" maxlength="300" />
+      <input type="text" class="link-label" placeholder="Label" value="${escapeHtml(l.label)}" maxlength="40" aria-label="Link label" />
+      <input type="text" class="link-url mono" inputmode="url" placeholder="https://…" value="${escapeHtml(l.url)}" maxlength="300" aria-label="Link URL" />
       <button type="button" class="editor-remove remove-link">Remove</button>
     </div>`,
     )
@@ -248,7 +248,7 @@ export async function renderAccount(
     };
 
   app.innerHTML = ctx.shell(`
-    <section class="wrap detail account-page">
+    <section class="wrap-wide detail account-page">
       <div class="account-head">
         <div>
           <h1>${escapeHtml(accountNavLabel(user))}</h1>
@@ -277,8 +277,8 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
-      <form id="account-form" class="form-panel">
-        <fieldset class="form-block">
+      <form id="account-form" class="form-panel form-panel-wide account-form">
+        <fieldset class="form-block account-block-narrow">
           <legend>Username</legend>
           <div class="field-row">
             <span class="field-prefix">plebly.fund/u/</span>
@@ -288,12 +288,12 @@ export async function renderAccount(
           <p class="hint" id="username-hint">3-32 characters · lowercase letters, numbers, hyphens</p>
         </fieldset>
 
-        <fieldset class="form-block">
+        <fieldset class="form-block account-block-bio">
           <legend>Bio</legend>
           <textarea id="bio-input" rows="4" maxlength="500" placeholder="What you work on, Bitcoin interests…">${escapeHtml(user.bio || "")}</textarea>
         </fieldset>
 
-        <fieldset class="form-block">
+        <fieldset class="form-block account-block-skills">
           <legend>Skills &amp; interests</legend>
           ${tagInputHtml({
             id: "skills-tags",
@@ -307,19 +307,24 @@ export async function renderAccount(
           })}
         </fieldset>
 
-        <fieldset class="form-block">
+        <fieldset class="form-block account-block-payout">
           <legend>Payout address</legend>
           <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… or tb1…" maxlength="120" />
           <p class="hint">Default for claims; overrideable per claim.</p>
         </fieldset>
 
-        <fieldset class="form-block">
+        <fieldset class="form-block account-block-links">
           <legend>Links</legend>
-          <div id="links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
-          <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
+          <p class="hint">Optional profile links. Label is required for non-social URLs.</p>
+          <div class="account-links">
+            <div id="links-list" class="account-links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
+            <div class="account-links-foot">
+              <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
+            </div>
+          </div>
         </fieldset>
 
-        <fieldset class="form-block account-funder-credit">
+        <fieldset class="form-block account-funder-credit account-block-narrow">
           <legend>Funder appearance</legend>
           <p class="hint">How you show up on project funder lists after a donation is linked to your account. Amounts stay private unless you opt in.</p>
           ${creditPreferenceFieldsHtml({ idPrefix: "account-credit" })}
@@ -480,8 +485,8 @@ export async function renderAccount(
     linksList.insertAdjacentHTML(
       "beforeend",
       `<div class="link-row" data-index="${rows.length}">
-        <input type="text" class="link-label" placeholder="Custom label (optional)" maxlength="40" />
-        <input type="text" class="link-url" inputmode="url" placeholder="https://…" maxlength="300" />
+        <input type="text" class="link-label" placeholder="Label" maxlength="40" aria-label="Link label" />
+        <input type="text" class="link-url mono" inputmode="url" placeholder="https://…" maxlength="300" aria-label="Link URL" />
         <button type="button" class="editor-remove remove-link">Remove</button>
       </div>`,
     );

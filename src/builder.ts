@@ -385,12 +385,41 @@ export async function submitDeliverable(input: {
   };
 }
 
+/** Prefer claim_window_ends_at (includes granted extensions). */
 export function claimWindowDaysLeft(
-  claimedAt: string | null | undefined,
+  claimedAtOrEnd: string | null | undefined,
+  endsAt?: string | null,
 ): number | null {
-  if (!claimedAt) return null;
-  const start = new Date(claimedAt).getTime();
-  if (Number.isNaN(start)) return null;
-  const end = start + 90 * 24 * 60 * 60 * 1000;
+  const endIso = endsAt || claimedAtOrEnd;
+  if (!endIso) return null;
+  const end = new Date(endIso).getTime();
+  if (Number.isNaN(end)) return null;
+  // Legacy: if only claimed_at was passed (no endsAt), keep 90-day window from start
+  if (!endsAt && claimedAtOrEnd) {
+    const start = new Date(claimedAtOrEnd).getTime();
+    if (Number.isNaN(start)) return null;
+    const legacyEnd = start + 90 * 24 * 60 * 60 * 1000;
+    return Math.ceil((legacyEnd - Date.now()) / (24 * 60 * 60 * 1000));
+  }
   return Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
+export async function requestClaimExtension(input: {
+  proposal_path: string;
+}): Promise<{ decision_id: string }> {
+  const res = await fetch(`${API()}/reviewers/decisions/request-extension`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as {
+    decision?: { id: string };
+    error?: string;
+  };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok || !data.decision?.id) {
+    throw new Error(data.error || `Extension request failed (${res.status})`);
+  }
+  return { decision_id: data.decision.id };
 }

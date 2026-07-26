@@ -66,6 +66,8 @@ export type RemovalBallotView = {
   eligible_count?: number;
   vote_count: number;
   counts: { yes: number; no: number };
+  evidence_pr_url?: string;
+  result_pr_url?: string;
 };
 
 export type ReviewerRoster = {
@@ -187,6 +189,27 @@ export async function fetchReviewerMe(): Promise<ReviewerMe | null> {
   if (res.status === 401) return null;
   if (!res.ok) return null;
   return (await res.json()) as ReviewerMe;
+}
+
+export async function openListingChallenge(input: {
+  proposal_path: string;
+  rationale: string;
+}): Promise<ReviewDecisionView> {
+  const res = await fetch(`${API()}/reviewers/decisions/challenge-listing`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as {
+    decision?: ReviewDecisionView;
+    error?: string;
+  };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok || !data.decision) {
+    throw new Error(data.error || `Listing challenge failed (${res.status})`);
+  }
+  return data.decision;
 }
 
 export async function openRemovalBallot(input: {
