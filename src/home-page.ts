@@ -347,17 +347,21 @@ function railHtml(
   floor: number,
   lightningEnabled: boolean,
   watchPaths: Set<string>,
+  opts: { hideWhenEmpty?: boolean } = {},
 ): string {
   if (!proposals.length) {
-    const emptyLine =
+    if (opts.hideWhenEmpty) return "";
+    const emptyBody =
       id === "completed-projects"
-        ? "No completed projects yet."
+        ? "Nothing here yet. Projects move here after public review and release."
         : `No ${title.toLowerCase()} yet.`;
     return `<section class="wrap-wide project-rail project-rail-empty" aria-labelledby="${id}">
       <div class="rail-head">
         <div><h2 id="${id}">${escapeHtml(title)}</h2><p>${escapeHtml(description)}</p></div>
       </div>
-      <p class="rail-empty-line">${emptyLine}</p>
+      <div class="rail-empty">
+        <p class="rail-empty-line">${escapeHtml(emptyBody)}</p>
+      </div>
     </section>`;
   }
   return `<section class="wrap-wide project-rail" aria-labelledby="${id}">
@@ -369,6 +373,18 @@ function railHtml(
       .map((p) => proposalCardHtml(p, floor, lightningEnabled, watchPaths.has(p.path) || Boolean(p.id && watchPaths.has(p.id))))
       .join("")}</div>
   </section>`;
+}
+
+function completedRailEmptyHtml(): string {
+  return railHtml(
+    "completed-projects",
+    "Recently completed",
+    "Work delivered through public review.",
+    [],
+    CLAIM_FLOOR_SATS,
+    false,
+    new Set(),
+  );
 }
 
 function bottomCtaHtml(): string {
@@ -607,7 +623,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <section id="activity-strip" class="wrap-wide activity-strip" hidden aria-label="Recent activity"></section>
     ${audiencePathsHtml()}
     <div id="featured-rail"></div>
-    <div id="completed-rail"></div>
+    <div id="completed-rail">${completedRailEmptyHtml()}</div>
     <section class="wrap-wide landing-discover">
       ${discoverToolbarHtml(0)}
       <div id="list" class="loading">Loading open projects…</div>
@@ -677,6 +693,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     void bindActivityStrip(app);
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
+      // Hide featured when empty so the always-visible completed rail stays clear.
       featuredRail.innerHTML = railHtml(
         "featured-projects",
         "Featured work",
@@ -685,10 +702,12 @@ export async function renderHome(shell: HomeShell): Promise<void> {
         CLAIM_FLOOR_SATS,
         lightningEnabled,
         watchPaths,
+        { hideWhenEmpty: true },
       );
     }
     const completedRail = app.querySelector("#completed-rail");
     if (completedRail) {
+      // Always show Recently completed, including an empty state when none exist yet.
       completedRail.innerHTML = railHtml(
         "completed-projects",
         "Recently completed",

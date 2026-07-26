@@ -451,12 +451,22 @@ a:hover {
   font-weight: 600;
 }
 
+.rail-empty {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
 .rail-empty-line {
   margin: 0;
-  padding: 0.65rem 0;
-  border-top: 1px solid var(--line-soft);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
   color: var(--muted);
+}
+
+.project-rail-empty .rail-head {
+  margin-bottom: 0.75rem;
 }
 
 .project-rail-list {
