@@ -80,7 +80,8 @@ describe("proposal UI critical render helpers", () => {
         deadline: "2026-09-15",
       },
     ];
-    const html = milestonesHtml(milestones);
+    const now = Date.parse("2026-07-26T17:00:00.000Z");
+    const html = milestonesHtml(milestones, now);
     expect(html).toContain("proposal-milestones");
     expect(html).toContain("milestone-rail");
     expect(html).toContain("Out of scope");
@@ -91,6 +92,9 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain('href="https://example.com/check"');
     expect(html).toContain('href="https://example.com/verify"');
     expect(html).toMatch(/100[,.]?000|100k/i);
+    expect(html).toContain("Due");
+    expect(html).toContain("milestone-rail-due-rel");
+    expect(html).toMatch(/in \d+ (week|month)s?/);
   });
 
   it("milestonesHtml empty when no milestones", () => {
@@ -247,15 +251,21 @@ describe("proposal UI critical render helpers", () => {
     expect(html).not.toContain("proposal-stats");
   });
 
-  it("shareSlotHtml offers copy, X, and Nostr", () => {
+  it("shareSlotHtml offers copy plus icon-only X, Reddit, HN, and Nostr", () => {
     const path = "proposals/listed/knots-spam-heuristics.md";
     const html = shareSlotHtml("Knots spam heuristics", path, "PLEBLY-42");
     expect(proposalShareUrl(path, "PLEBLY-42")).toContain("/p/PLEBLY-42");
     expect(html).toContain("proposal-share-slot");
     expect(html).toContain('data-share="copy"');
     expect(html).toContain("intent/post");
+    expect(html).toContain("reddit.com/submit");
+    expect(html).toContain("news.ycombinator.com/submitlink");
     expect(html).toContain('data-share="nostr"');
     expect(html).toContain("icon-nostr");
     expect(html).toContain("fa-x-twitter");
+    expect(html).toContain("fa-reddit");
+    expect(html).toContain("fa-hacker-news");
+    expect(html).toContain('aria-label="Share on X"');
+    expect(html).not.toContain(">X</span>");
   });
 });

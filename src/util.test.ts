@@ -3,6 +3,7 @@ import {
   bitcoinUri,
   escapeHtml,
   formatTimeAgo,
+  formatTimeAhead,
   linkifyText,
   proposalRepoPath,
   proposalSlug,
@@ -89,5 +90,27 @@ describe("formatTimeAgo", () => {
     expect(html).toContain('datetime="2026-07-26T16:40:00.000Z"');
     expect(html).toContain("title=");
     expect(html).toContain("20m ago");
+  });
+});
+
+describe("formatTimeAhead", () => {
+  const now = Date.parse("2026-07-26T17:00:00.000Z");
+
+  it("labels future horizons in days, weeks, and months", () => {
+    expect(formatTimeAhead("2026-07-29T17:00:00.000Z", now)?.text).toBe(
+      "in 3 days",
+    );
+    expect(formatTimeAhead("2026-08-09T17:00:00.000Z", now)?.text).toBe(
+      "in 2 weeks",
+    );
+    expect(formatTimeAhead("2027-01-26T17:00:00.000Z", now)?.text).toBe(
+      "in 6 months",
+    );
+  });
+
+  it("labels past deadlines as overdue", () => {
+    expect(formatTimeAhead("2026-06-26T17:00:00.000Z", now)?.text).toBe(
+      "1 month overdue",
+    );
   });
 });

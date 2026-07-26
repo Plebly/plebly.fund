@@ -90,6 +90,60 @@ export function timeAgoHtml(iso: string | null | undefined, nowMs = Date.now()):
   return `<time class="timeago" datetime="${escapeHtml(iso)}" title="${escapeHtml(ago.title)}">${escapeHtml(ago.text)}</time>`;
 }
 
+function pluralUnit(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+/**
+ * Relative horizon for due dates: "in 6 months", "3 days overdue".
+ * Prefer calendar-ish units for longer spans (milestones).
+ */
+export function formatTimeAhead(
+  iso: string,
+  nowMs = Date.now(),
+): { text: string; title: string } | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const title = formatAbsoluteDateTime(iso);
+  const deltaMs = d.getTime() - nowMs;
+  const absSec = Math.abs(Math.round(deltaMs / 1000));
+  if (absSec < 12 * 3600) {
+    return { text: "due today", title };
+  }
+
+  let span: string;
+  if (absSec < 14 * 86400) {
+    span = pluralUnit(
+      Math.max(1, Math.round(absSec / 86400)),
+      "day",
+      "days",
+    );
+  } else if (absSec < 28 * 86400) {
+    span = pluralUnit(
+      Math.max(1, Math.round(absSec / (7 * 86400))),
+      "week",
+      "weeks",
+    );
+  } else if (absSec < 540 * 86400) {
+    span = pluralUnit(
+      Math.max(1, Math.round(absSec / (30 * 86400))),
+      "month",
+      "months",
+    );
+  } else {
+    span = pluralUnit(
+      Math.max(1, Math.round(absSec / (365 * 86400))),
+      "year",
+      "years",
+    );
+  }
+
+  return {
+    text: deltaMs >= 0 ? `in ${span}` : `${span} overdue`,
+    title,
+  };
+}
+
 /** BIP21 URI; optional amount in sats → BTC. */
 export function bitcoinUri(address: string, amountSats?: number | null): string {
   if (amountSats != null && amountSats > 0) {

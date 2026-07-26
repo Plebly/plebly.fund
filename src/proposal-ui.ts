@@ -20,9 +20,9 @@ import {
   type CreditPreferences,
 } from "./funder-credit";
 import {
-  btnWithBrandIcon,
+  btnBrandIconOnly,
+  btnNostrIconOnly,
   btnWithIcon,
-  btnWithNostrIcon,
   solidIcon,
 } from "./icons";
 import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
@@ -43,6 +43,7 @@ import {
   bitcoinUri,
   escapeHtml,
   formatSats,
+  formatTimeAhead,
   linkifyText,
   themeQrColors,
   timeAgoHtml,
@@ -403,7 +404,7 @@ export function proposalShareUrl(repoPath: string, id?: string | null): string {
   return new URL(proposalHref(repoPath, id), SITE_ORIGIN).toString();
 }
 
-/** Share controls under the primary actions (copy / X / Nostr). */
+/** Share controls under the primary actions (copy + social). */
 export function shareSlotHtml(
   title: string,
   repoPath: string,
@@ -412,14 +413,18 @@ export function shareSlotHtml(
   const url = proposalShareUrl(repoPath, id);
   const text = `${title}: fund open Bitcoin work on Plebly`;
   const xHref = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+  const redditHref = `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`;
+  const hnHref = `https://news.ycombinator.com/submitlink?u=${encodeURIComponent(url)}&t=${encodeURIComponent(text)}`;
   const nostrNote = `${text}\n\n${url}`;
   return `<div class="proposal-share-slot">
     <p class="proposal-share-label">Share</p>
     <div class="proposal-share-actions">
       <button type="button" class="btn ghost proposal-share-btn" data-share="copy" data-share-url="${escapeHtml(url)}">${btnWithIcon("link", "Copy link")}</button>
       <div class="proposal-share-social">
-        <a class="btn ghost proposal-share-btn" href="${escapeHtml(xHref)}" target="_blank" rel="noreferrer noopener">${btnWithBrandIcon("x-twitter", "X")}</a>
-        <button type="button" class="btn ghost proposal-share-btn" data-share="nostr" data-share-note="${escapeHtml(nostrNote)}">${btnWithNostrIcon("Nostr")}</button>
+        <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(xHref)}" target="_blank" rel="noreferrer noopener" aria-label="Share on X" title="Share on X">${btnBrandIconOnly("x-twitter")}</a>
+        <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(redditHref)}" target="_blank" rel="noreferrer noopener" aria-label="Share on Reddit" title="Share on Reddit">${btnBrandIconOnly("reddit")}</a>
+        <a class="btn ghost proposal-share-btn proposal-share-icon" href="${escapeHtml(hnHref)}" target="_blank" rel="noreferrer noopener" aria-label="Share on Hacker News" title="Share on Hacker News">${btnBrandIconOnly("hacker-news")}</a>
+        <button type="button" class="btn ghost proposal-share-btn proposal-share-icon" data-share="nostr" data-share-note="${escapeHtml(nostrNote)}" aria-label="Copy Nostr note" title="Copy Nostr note">${btnNostrIconOnly()}</button>
       </div>
     </div>
   </div>`;
@@ -455,13 +460,22 @@ export function bindShareButtons(root: ParentNode): void {
         if (!note) return;
         try {
           await navigator.clipboard.writeText(note);
-          const label = el.querySelector("[data-login-label]");
-          const target = label ?? el;
-          const prev = target.textContent;
-          target.textContent = "Copied note";
-          setTimeout(() => {
-            if (prev) target.textContent = prev;
-          }, 1400);
+          const label = el.querySelector("[data-login-label]:not(.btn-icon-only)");
+          if (label) {
+            const prev = label.textContent;
+            label.textContent = "Copied note";
+            setTimeout(() => {
+              if (prev) label.textContent = prev;
+            }, 1400);
+          } else {
+            const prevTitle = el.getAttribute("title") || "Copy Nostr note";
+            el.setAttribute("title", "Copied note");
+            el.setAttribute("aria-label", "Copied note");
+            setTimeout(() => {
+              el.setAttribute("title", prevTitle);
+              el.setAttribute("aria-label", prevTitle);
+            }, 1400);
+          }
         } catch {
           window.alert("Could not copy Nostr note. Paste the project URL into your client.");
         }
@@ -1291,6 +1305,16 @@ function formatMilestoneDeadline(iso: string): string {
   });
 }
 
+function milestoneDueHtml(iso: string, nowMs = Date.now()): string {
+  const due = formatMilestoneDeadline(iso);
+  const ahead = formatTimeAhead(iso, nowMs);
+  const rel = ahead
+    ? ` <span class="milestone-rail-due-rel">· ${escapeHtml(ahead.text)}</span>`
+    : "";
+  const title = ahead?.title || due;
+  return `<time class="milestone-rail-due" datetime="${escapeHtml(iso)}" title="${escapeHtml(title)}">Due ${escapeHtml(due)}${rel}</time>`;
+}
+
 /** Created-by byline with profile link when a site username is present. */
 export function proposerBylineHtml(
   proposer: Proposal["proposer"] | null | undefined,
@@ -1315,7 +1339,10 @@ export function proposerBylineHtml(
   return "";
 }
 
-export function milestonesHtml(milestones: ProposalMilestone[]): string {
+export function milestonesHtml(
+  milestones: ProposalMilestone[],
+  nowMs = Date.now(),
+): string {
   if (!milestones.length) return "";
   const total = milestones.reduce(
     (s, m) => s + (Number(m.allocation_sats) || 0),
@@ -1329,7 +1356,9 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
     <ol class="milestone-rail">
       ${milestones
         .map((m, i) => {
-          const due = m.deadline ? formatMilestoneDeadline(String(m.deadline)) : "";
+          const due = m.deadline
+            ? milestoneDueHtml(String(m.deadline), nowMs)
+            : "";
           const moreBits: string[] = [];
           if (m.verification) {
             moreBits.push(
@@ -1351,7 +1380,7 @@ export function milestonesHtml(milestones: ProposalMilestone[]): string {
           <div class="milestone-rail-body">
             <div class="milestone-rail-meta">
               <span class="milestone-rail-sats sats">${escapeHtml(formatSats(m.allocation_sats))}</span>
-              ${due ? `<time class="milestone-rail-due" datetime="${escapeHtml(String(m.deadline))}">Due ${escapeHtml(due)}</time>` : ""}
+              ${due}
             </div>
             <p class="milestone-rail-deliverable">${linkifyText(m.deliverable)}</p>
             ${

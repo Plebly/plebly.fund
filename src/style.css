@@ -3437,12 +3437,23 @@ a.project-card-by:hover .project-card-by-text {
 
 .proposal-share-social {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
 }
 
 .proposal-share-social .proposal-share-btn {
   white-space: nowrap;
+}
+
+.proposal-share-icon {
+  justify-content: center;
+  min-height: 2.35rem;
+  padding-inline: 0.5rem;
+}
+
+.proposal-share-icon .btn-icon-only {
+  gap: 0;
+  font-size: 1.05rem;
 }
 
 .proposal-onchain {
@@ -3770,6 +3781,11 @@ a.project-card-by:hover .project-card-by-text {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--ink);
+}
+
+.milestone-rail-due-rel {
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .milestone-rail-due {
@@ -5224,8 +5240,27 @@ a.proposal-comment-author:hover {
   line-height: 1.5;
 }
 
-.proposal-comment-deleted {
+.proposal-comment.is-deleted {
+  display: block;
+  padding: 0.35rem 0;
+}
+
+.proposal-comment-removed {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--muted);
   font-style: italic;
+}
+
+.proposal-comment-removed .proposal-comment-author {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.proposal-comment-removed-mark,
+.proposal-comment-removed .proposal-comment-when .timeago {
+  color: var(--muted);
 }
 
 .proposal-comment-actions {

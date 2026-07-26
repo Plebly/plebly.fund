@@ -113,6 +113,24 @@ describe("commentsListHtml", () => {
     expect(html).toContain("data-comment-delete");
     expect(html).not.toContain("data-comment-report");
   });
+
+  it("renders removed comments as a single muted line", () => {
+    const html = commentsListHtml([
+      {
+        id: "c3",
+        author: "alice",
+        username: "alice",
+        body: "",
+        created_at: "2026-07-26T16:40:00.000Z",
+        deleted: true,
+      },
+    ]);
+    expect(html).toContain("is-deleted");
+    expect(html).toContain("proposal-comment-removed");
+    expect(html).toContain("removed");
+    expect(html).not.toContain("Comment removed.");
+    expect(html).not.toContain("proposal-comment-avatar");
+  });
 });
 
 describe("fundersListHtml", () => {

@@ -3,7 +3,7 @@ import { escapeHtml } from "./util";
 export const PLEBLY_GITHUB_URL = "https://github.com/Plebly";
 export const PLEBLY_X_URL = "https://x.com/joinplebly";
 
-type BrandIcon = "github" | "x-twitter";
+type BrandIcon = "github" | "x-twitter" | "reddit" | "hacker-news";
 type SolidIcon =
   | "eye"
   | "eye-slash"
@@ -33,8 +33,18 @@ export function btnWithBrandIcon(icon: BrandIcon, label: string): string {
   return `<span class="btn-icon">${brandIcon(icon)}<span>${escapeHtml(label)}</span></span>`;
 }
 
+/** Brand mark only — use with aria-label / title on the control. */
+export function btnBrandIconOnly(icon: BrandIcon): string {
+  return `<span class="btn-icon btn-icon-only">${brandIcon(icon)}</span>`;
+}
+
 export function btnWithNostrIcon(label: string): string {
   return `<span class="btn-icon">${nostrIcon()}<span data-login-label>${escapeHtml(label)}</span></span>`;
+}
+
+/** Nostr mark only — use with aria-label / title on the control. */
+export function btnNostrIconOnly(): string {
+  return `<span class="btn-icon btn-icon-only" data-login-label>${nostrIcon()}</span>`;
 }
 
 export function iconLink(

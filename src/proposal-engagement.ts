@@ -173,17 +173,23 @@ export function commentsListHtml(
           `<button type="button" class="btn ghost comment-action" data-comment-hide="${escapeHtml(comment.id)}">Hide</button>`,
         );
       }
-      const body = comment.deleted
-        ? `<p class="muted proposal-comment-deleted">Comment removed.</p>`
-        : `<p>${linkifyText(comment.body)}</p>`;
-      return `<article class="proposal-comment${comment.deleted ? " is-deleted" : ""}" data-comment-id="${escapeHtml(comment.id)}">
+      if (comment.deleted) {
+        return `<article class="proposal-comment is-deleted" data-comment-id="${escapeHtml(comment.id)}">
+          <p class="proposal-comment-removed">
+            ${commentNameHtml(comment)}
+            <span class="proposal-comment-removed-mark"> · removed</span>
+            ${when ? `<span class="proposal-comment-when"> · ${when}</span>` : ""}
+          </p>
+        </article>`;
+      }
+      return `<article class="proposal-comment" data-comment-id="${escapeHtml(comment.id)}">
         ${commentAvatarHtml(comment)}
         <div class="proposal-comment-body">
           <header>
             ${commentNameHtml(comment)}
             ${when ? `<span class="proposal-comment-when"> · ${when}</span>` : ""}
           </header>
-          ${body}
+          <p>${linkifyText(comment.body)}</p>
           ${
             actions.length
               ? `<div class="proposal-comment-actions">${actions.join("")}</div>`
