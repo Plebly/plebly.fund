@@ -6,6 +6,7 @@ import {
   type AuthUser,
 } from "./auth";
 import { WORKERS_API } from "./config";
+import { fileModerationReport } from "./reports";
 import { profileHref } from "./router";
 import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
 
@@ -197,13 +198,20 @@ export async function bindProposalEngagement(
   root: ParentNode,
   signedIn = false,
   onAuthed: () => void = () => undefined,
-  opts: { user?: AuthUser | null; canModerate?: boolean } = {},
+  opts: {
+    user?: AuthUser | null;
+    canModerate?: boolean;
+    proposalId?: string | null;
+  } = {},
 ): Promise<() => Promise<void>> {
   const noop = async () => undefined;
   if (!WORKERS_API) return noop;
   const funder = root.querySelector<HTMLElement>("#funder-credit");
   const comments = root.querySelector<HTMLElement>("#proposal-comments");
-  const proposalId = funder?.dataset.proposalId || comments?.dataset.proposalId;
+  const proposalId =
+    opts.proposalId ||
+    funder?.dataset.proposalId ||
+    comments?.dataset.proposalId;
   if (!proposalId) return noop;
 
   bindLoginHandlers(onAuthed);
@@ -319,23 +327,16 @@ export async function bindProposalEngagement(
       );
       if (!reason || reason.trim().length < 8) return;
       try {
-        const res = await authFetch(
-          `${api()}/comments/${encodeURIComponent(proposalId)}/${encodeURIComponent(reportId)}/report`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: reason.trim() }),
-          },
-        );
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          hidden?: boolean;
-        };
-        if (!res.ok) throw new Error(data.error || "Could not report comment.");
+        const result = await fileModerationReport({
+          target_type: "comment",
+          proposal_id: proposalId,
+          comment_id: reportId,
+          reason: reason.trim(),
+        });
         setMsg(
-          data.hidden
+          result.comment_hidden
             ? "Report received — comment was auto-hidden."
-            : "Report received. Thanks.",
+            : "Report filed for reviewers. Thanks.",
         );
         await loadComments();
       } catch (error) {

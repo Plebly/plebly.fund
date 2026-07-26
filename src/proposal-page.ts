@@ -30,9 +30,9 @@ import {
   userMatchesProposer,
 } from "./proposal-ui";
 import {
-  bindListingChallengePanel,
-  listingChallengePanelHtml,
-} from "./listing-challenge-panel";
+  bindListingReportControl,
+  listingReportControlHtml,
+} from "./report-panel";
 import {
   bindRebuttalPanel,
   bindReviewPanel,
@@ -394,7 +394,7 @@ export async function renderProposalPage(
             ${status === "rejected" && match.id ? rebuttalPanelHtml() : ""}
             ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
             ${status === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
-            ${listingChallengePanelHtml(status, match.path)}
+            ${listingReportControlHtml(status, match.path, match.id)}
             ${onChainPanelHtml(match)}
           </aside>
         </div>
@@ -410,12 +410,6 @@ export async function renderProposalPage(
       user,
       watching,
       evaluating,
-    });
-    await bindListingChallengePanel(app, {
-      proposalId: match.id,
-      proposalPath: match.path,
-      status,
-      user,
     });
     let reloadEngagement: (() => Promise<void>) | null = null;
     if (match.escrow_address) {
@@ -445,6 +439,14 @@ export async function renderProposalPage(
     const reviewerMe = user
       ? await fetchReviewerMe().catch(() => null)
       : null;
+    await bindListingReportControl(app, {
+      proposalId: match.id,
+      proposalPath: match.path,
+      status,
+      user,
+      reviewerMe,
+      onAuthed,
+    });
     reloadEngagement = await bindProposalEngagement(
       app,
       Boolean(user),
@@ -452,6 +454,7 @@ export async function renderProposalPage(
       {
         user,
         canModerate: Boolean(reviewerMe?.active),
+        proposalId: match.id,
       },
     );
     void hydrateAvatarSlots(app);

@@ -7,6 +7,7 @@ import {
   opsRoleBallotCardHtml,
   opsRolesSectionHtml,
   removalCardHtml,
+  reportsInboxHtml,
   reviewerRowHtml,
   rosterSectionHtml,
 } from "./governance-page";
@@ -248,5 +249,28 @@ describe("governance UI helpers", () => {
     );
     expect(blocked).toContain("confirmed contribution");
     expect(blocked).not.toContain("removal-open-form");
+  });
+
+  it("renders reports inbox for reviewers and gates guests", () => {
+    expect(reportsInboxHtml([], false)).toContain("Reviewers only");
+    expect(reportsInboxHtml([], true)).toContain("No open reports");
+    const html = reportsInboxHtml(
+      [
+        {
+          id: "r1",
+          target_type: "listing",
+          proposal_id: "PLEBLY-1",
+          proposal_path: "proposals/listed/demo.md",
+          reason: "Looks spammy",
+          escalate_requested: false,
+          status: "open",
+          created_at: "2026-07-26T16:00:00.000Z",
+        },
+      ],
+      true,
+    );
+    expect(html).toContain("data-report-resolve");
+    expect(html).toContain("Open challenge ballot");
+    expect(html).toContain("Looks spammy");
   });
 });

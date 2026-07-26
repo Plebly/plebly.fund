@@ -5764,25 +5764,56 @@ a.proposal-comment-author:hover {
   letter-spacing: -0.015em;
 }
 
-.gov-jump {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.85rem;
-  margin-top: 1.1rem;
+.gov-tabs {
+  margin-top: 1.15rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--line-soft);
+}
+
+.listing-report {
+  margin-top: 0.85rem;
+}
+
+.listing-report-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.listing-report-status {
+  margin: 0.55rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.listing-report-card {
+  max-width: 28rem;
+}
+
+.listing-report-card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.25rem;
+}
+
+.listing-report-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.8125rem;
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.85rem 0 1rem;
   font-size: 0.875rem;
+  color: var(--ink-secondary);
+  line-height: 1.4;
 }
 
-.gov-jump a {
-  color: var(--muted);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.gov-jump a:hover,
-.gov-jump a:focus-visible {
-  color: var(--accent-text);
+.check-row input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
 }
 
 .gov-form {

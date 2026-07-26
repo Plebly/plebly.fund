@@ -16,6 +16,11 @@ import {
   type OpsRolesPayload,
 } from "./ops-roles";
 import {
+  fetchOpenReports,
+  resolveModerationReport,
+  type ModerationReportView,
+} from "./reports";
+import {
   decisionKindLabel,
   fetchOpenRemovalBallots,
   fetchOpenReviewDecisions,
@@ -32,9 +37,79 @@ import {
   type ReviewerRoster,
 } from "./reviewers";
 import { href, proposalHref } from "./router";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
 export type GovernanceShell = (inner: string) => string;
+
+type GovTab =
+  | "roster"
+  | "decisions"
+  | "removals"
+  | "roles"
+  | "reports";
+
+const GOV_TABS: GovTab[] = [
+  "roster",
+  "decisions",
+  "removals",
+  "roles",
+  "reports",
+];
+
+function initialGovTab(): GovTab {
+  const params = new URLSearchParams(location.search);
+  const q = params.get("tab") as GovTab | null;
+  if (q && GOV_TABS.includes(q)) return q;
+  const hash = location.hash.replace(/^#/, "");
+  if (hash === "ops-roles") return "roles";
+  if (hash === "roster" || hash === "decisions" || hash === "removals" || hash === "reports") {
+    return hash;
+  }
+  return "decisions";
+}
+
+export function reportsInboxHtml(
+  reports: ModerationReportView[],
+  isReviewer: boolean,
+): string {
+  if (!isReviewer) {
+    return `<div class="empty-state gov-empty"><div class="empty-state-inner">
+      <p class="empty-state-title">Reviewers only</p>
+      <p class="empty-state-body">Open moderation reports for listings and comments appear here for the active roster.</p>
+    </div></div>`;
+  }
+  if (!reports.length) {
+    return `<div class="empty-state gov-empty"><div class="empty-state-inner">
+      <p class="empty-state-title">No open reports</p>
+      <p class="empty-state-body">Listing and comment reports from the community show up here.</p>
+    </div></div>`;
+  }
+  return `<ul class="gov-list" id="gov-reports">${reports
+    .map((r) => {
+      const when = timeAgoHtml(r.created_at);
+      const target =
+        r.target_type === "comment"
+          ? `Comment on <a href="${proposalHref(r.proposal_path || "", r.proposal_id)}">${escapeHtml(r.proposal_id)}</a>`
+          : `Listing <a href="${proposalHref(r.proposal_path || "", r.proposal_id)}">${escapeHtml(r.proposal_id)}</a>`;
+      const actions =
+        r.target_type === "comment"
+          ? `<button type="button" class="btn" data-report-resolve="hide_comment" data-report-id="${escapeHtml(r.id)}">Hide comment</button>
+             <button type="button" class="btn ghost" data-report-resolve="dismiss" data-report-id="${escapeHtml(r.id)}">Dismiss</button>`
+          : `<button type="button" class="btn" data-report-resolve="escalate_listing" data-report-id="${escapeHtml(r.id)}">Open challenge ballot</button>
+             <button type="button" class="btn ghost" data-report-resolve="dismiss" data-report-id="${escapeHtml(r.id)}">Dismiss</button>`;
+      return `<li class="gov-card" data-report-id="${escapeHtml(r.id)}">
+        <div class="gov-card-head">
+          <span class="gov-card-title">${r.target_type === "comment" ? "Comment" : "Listing"}</span>
+          <span class="pill">${escapeHtml(r.status)}</span>
+        </div>
+        <p class="muted">${target}${when ? ` · ${when}` : ""}</p>
+        <p class="gov-evidence">${escapeHtml(r.reason)}</p>
+        <div class="gov-card-actions">${actions}</div>
+        <p class="builder-msg gov-msg" hidden></p>
+      </li>`;
+    })
+    .join("")}</ul>`;
+}
 
 function opsVoteLabels(action: string): { yes: string; no: string } {
   if (action === "remove") return { yes: "Remove", no: "Keep" };
@@ -478,12 +553,13 @@ export async function renderGovernance(
     </section>
   `);
 
-  const [roster, decisions, removals, me, opsRoles] = await Promise.all([
+  const [roster, decisions, removals, me, opsRoles, reports] = await Promise.all([
     fetchReviewerRoster().catch(() => null),
     fetchOpenReviewDecisions().catch(() => [] as ReviewDecisionView[]),
     fetchOpenRemovalBallots().catch(() => [] as RemovalBallotView[]),
     user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
     fetchOpsRoles().catch(() => null),
+    user ? fetchOpenReports().catch(() => [] as ModerationReportView[]) : Promise.resolve([]),
   ]);
 
   const isReviewer = Boolean(me?.active);
@@ -491,8 +567,10 @@ export async function renderGovernance(
 
   const decisionCount = decisions.length;
   const removalCount = removals.length;
+  const reportCount = reports.length;
   const opsNormalized = normalizeOpsRolesPayload(opsRoles);
   const opsBallotCount = opsNormalized?.ballots.length ?? 0;
+  const tab = initialGovTab();
 
   app.innerHTML = shell(`
     <section class="wrap detail gov-page">
@@ -501,27 +579,28 @@ export async function renderGovernance(
         <h1>Reviewers</h1>
         <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers. After volume gates, reviewers elect coordination roles — never custody.</p>
         ${statusStripHtml(me, user)}
-        <nav class="gov-jump" aria-label="Governance sections">
-          <a href="#roster">Roster${roster ? ` (${roster.count})` : ""}</a>
-          <a href="#decisions">Decisions${decisionCount ? ` (${decisionCount})` : ""}</a>
-          <a href="#removals">Removals${removalCount ? ` (${removalCount})` : ""}</a>
-          <a href="#ops-roles">Roles${opsBallotCount ? ` (${opsBallotCount})` : ""}</a>
-        </nav>
+        <div class="account-tabs gov-tabs" role="tablist" aria-label="Governance sections">
+          <button type="button" class="account-tab ${tab === "roster" ? "active" : ""}" data-gov-tab="roster" role="tab" aria-selected="${tab === "roster"}">Roster${roster ? ` (${roster.count})` : ""}</button>
+          <button type="button" class="account-tab ${tab === "decisions" ? "active" : ""}" data-gov-tab="decisions" role="tab" aria-selected="${tab === "decisions"}">Decisions${decisionCount ? ` (${decisionCount})` : ""}</button>
+          <button type="button" class="account-tab ${tab === "removals" ? "active" : ""}" data-gov-tab="removals" role="tab" aria-selected="${tab === "removals"}">Removals${removalCount ? ` (${removalCount})` : ""}</button>
+          <button type="button" class="account-tab ${tab === "roles" ? "active" : ""}" data-gov-tab="roles" role="tab" aria-selected="${tab === "roles"}">Roles${opsBallotCount ? ` (${opsBallotCount})` : ""}</button>
+          <button type="button" class="account-tab ${tab === "reports" ? "active" : ""}" data-gov-tab="reports" role="tab" aria-selected="${tab === "reports"}">Reports${reportCount ? ` (${reportCount})` : ""}</button>
+        </div>
       </header>
 
-      <section class="gov-block" id="roster">
+      <section class="gov-block account-pane" data-gov-pane="roster" id="roster" ${tab === "roster" ? "" : "hidden"}>
         <h2 class="gov-block-title">Active roster</h2>
         <p class="muted gov-block-lede">⌈⅔⌉ yes of the active roster, with at least five non-abstaining votes, passes a decision.${funderEligible ? " Select an earned seat to prefill a removal." : ""}</p>
         ${rosterSectionHtml(roster, { selectable: funderEligible })}
       </section>
 
-      <section class="gov-block" id="decisions">
+      <section class="gov-block account-pane" data-gov-pane="decisions" id="decisions" ${tab === "decisions" ? "" : "hidden"}>
         <h2 class="gov-block-title">Open decisions</h2>
         <p class="muted gov-block-lede">Reviewers approve or reject. Dissent publishes permanently via PR on the project page.</p>
         ${openDecisionsHtml(decisions, isReviewer)}
       </section>
 
-      <section class="gov-block" id="removals">
+      <section class="gov-block account-pane" data-gov-pane="removals" id="removals" ${tab === "removals" ? "" : "hidden"}>
         <h2 class="gov-block-title">Removal ballots</h2>
         <p class="muted gov-block-lede">One funder identity = one vote. Passes at ⅔ of votes cast after the window closes.</p>
         ${openRemovalsHtml(removals, funderEligible)}
@@ -531,9 +610,15 @@ export async function renderGovernance(
         </div>
       </section>
 
-      <section class="gov-block" id="ops-roles">
+      <section class="gov-block account-pane" data-gov-pane="roles" id="ops-roles" ${tab === "roles" ? "" : "hidden"}>
         <h2 class="gov-block-title">Operational roles</h2>
         ${opsRolesSectionHtml(opsNormalized, isReviewer)}
+      </section>
+
+      <section class="gov-block account-pane" data-gov-pane="reports" id="reports" ${tab === "reports" ? "" : "hidden"}>
+        <h2 class="gov-block-title">Reports inbox</h2>
+        <p class="muted gov-block-lede">Community reports on listings and comments. Dismiss, hide a comment, or escalate a listing into a formal challenge ballot.</p>
+        ${reportsInboxHtml(reports, isReviewer)}
       </section>
 
       <p class="gov-foot muted">
@@ -546,6 +631,37 @@ export async function renderGovernance(
   `);
 
   bindGovernanceHandlers(app, { isReviewer, funderEligible });
+  bindGovTabs(app);
+}
+
+function bindGovTabs(root: ParentNode): void {
+  const page = root.querySelector(".gov-page");
+  if (!page || page.getAttribute("data-gov-tabs") === "1") return;
+  page.setAttribute("data-gov-tabs", "1");
+
+  const activate = (tab: GovTab) => {
+    page.querySelectorAll<HTMLButtonElement>("[data-gov-tab]").forEach((btn) => {
+      const on = btn.dataset.govTab === tab;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    page.querySelectorAll<HTMLElement>("[data-gov-pane]").forEach((pane) => {
+      pane.hidden = pane.dataset.govPane !== tab;
+    });
+    const url = new URL(location.href);
+    url.searchParams.set("tab", tab);
+    history.replaceState(null, "", `${url.pathname}${url.search}`);
+  };
+
+  page.addEventListener("click", (ev) => {
+    const btn = (ev.target as Element | null)?.closest<HTMLButtonElement>(
+      "[data-gov-tab]",
+    );
+    if (!btn?.dataset.govTab) return;
+    const tab = btn.dataset.govTab as GovTab;
+    if (!GOV_TABS.includes(tab)) return;
+    activate(tab);
+  });
 }
 
 function setCardMsg(card: Element | null, text: string, cls = ""): void {
@@ -632,6 +748,36 @@ function bindGovernanceHandlers(
       return;
     }
 
+    const reportBtn = t?.closest?.<HTMLButtonElement>("[data-report-resolve]");
+    if (reportBtn && page.contains(reportBtn)) {
+      const id = reportBtn.dataset.reportId;
+      const action = reportBtn.dataset.reportResolve as
+        | "dismiss"
+        | "escalate_listing"
+        | "hide_comment"
+        | undefined;
+      if (!id || !action) return;
+      const card = reportBtn.closest(".gov-card");
+      setCardMsg(card, "Working…");
+      try {
+        await resolveModerationReport(id, action);
+        const li = page.querySelector(`[data-report-id="${CSS.escape(id)}"]`);
+        li?.remove();
+        const list = page.querySelector("#gov-reports");
+        if (list && !list.children.length) {
+          list.outerHTML = reportsInboxHtml([], true);
+        }
+      } catch (e) {
+        const msg = (e as Error).message;
+        setCardMsg(
+          card,
+          msg === "login_required" ? "Sign in as a reviewer." : msg,
+          "error",
+        );
+      }
+      return;
+    }
+
     const selectBtn = t?.closest?.<HTMLButtonElement>(".gov-select-target");
     if (selectBtn && page.contains(selectBtn)) {
       const target = selectBtn.dataset.target;
@@ -639,6 +785,10 @@ function bindGovernanceHandlers(
       if (target && input) {
         input.value = target;
         input.focus();
+        const removalsTab = page.querySelector<HTMLButtonElement>(
+          '[data-gov-tab="removals"]',
+        );
+        removalsTab?.click();
         page.querySelector("#open-removal")?.scrollIntoView({
           behavior: "smooth",
           block: "start",

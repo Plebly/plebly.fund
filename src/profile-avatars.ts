@@ -32,13 +32,13 @@ export async function fetchAvatars(
         const data = (await res.json()) as { avatars?: Record<string, string> };
         const map = data.avatars || {};
         for (const name of needed) {
+          // Cache hits and confirmed misses; retry later if API errors.
           cache.set(name, map[name] || null);
         }
-      } else {
-        for (const name of needed) cache.set(name, null);
       }
+      // On non-OK (e.g. undeployed route), leave uncached so a refresh retries.
     } catch {
-      for (const name of needed) cache.set(name, null);
+      /* transient — do not poison cache */
     }
   }
   const out: Record<string, string> = {};
