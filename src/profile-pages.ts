@@ -263,7 +263,7 @@ export async function renderAccount(
             <input id="username-input" type="text" value="${escapeHtml(user.username || "")}" placeholder="yourname" pattern="[a-z0-9-]+" minlength="3" maxlength="32" ${user.username ? "readonly" : ""} />
             ${user.username ? "" : `<button type="button" class="btn" id="claim-username-btn">Claim</button>`}
           </div>
-          <p class="hint" id="username-hint">3–32 characters · lowercase letters, numbers, hyphens</p>
+          <p class="hint" id="username-hint">3-32 characters · lowercase letters, numbers, hyphens</p>
         </fieldset>
 
         <fieldset class="form-block">

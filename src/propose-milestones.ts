@@ -19,9 +19,9 @@ export function milestoneEditorSectionHtml(): string {
     <legend>Milestones <em class="optional">(optional unless target ≥ ${escapeHtml(formatSats(MILESTONE_THRESHOLD_SATS))})</em></legend>
     <p class="field-hint">
       Stage the work with sats and due dates. Leave empty for small bounties.
-      Use <strong>Remove</strong> on any stage you do not want — including ones you just added.
+      Use <strong>Remove</strong> on any stage you do not want, including ones you just added.
     </p>
-    <div id="milestones-empty" class="editor-empty">No milestones yet — add stages if you want phased delivery.</div>
+    <div id="milestones-empty" class="editor-empty">No milestones yet. Add stages if you want phased delivery.</div>
     <div id="milestones-list" class="milestone-editor-list"></div>
     <div class="milestone-editor-foot">
       <button type="button" class="btn ghost" id="add-milestone-btn">Add milestone</button>
@@ -36,7 +36,7 @@ export function priorDepsHtml(
   selected: string[] | undefined,
 ): string {
   if (index === 0) {
-    return `<div class="ms-dep-slot" data-ms-dep-slot><p class="field-hint">First stage — nothing to depend on yet.</p></div>`;
+    return `<div class="ms-dep-slot" data-ms-dep-slot><p class="field-hint">First stage. Nothing to depend on yet.</p></div>`;
   }
   const boxes = Array.from({ length: index }, (_, i) => {
     const id = `m${i + 1}`;
@@ -56,12 +56,12 @@ export function milestonesFundingHint(
   stageCount: number,
 ): string {
   if (targetSats != null && targetSats >= MILESTONE_THRESHOLD_SATS && stageCount === 0) {
-    return `Target is ≥ ${formatSats(MILESTONE_THRESHOLD_SATS)} — add at least one milestone before submitting.`;
+    return `Target is ≥ ${formatSats(MILESTONE_THRESHOLD_SATS)}. Add at least one milestone before submitting.`;
   }
   if (targetSats != null && targetSats > 0 && allocated > 0 && allocated !== targetSats) {
     const delta = allocated - targetSats;
     const dir = delta > 0 ? "over" : "under";
-    return `Allocated ${formatSats(allocated)} vs target ${formatSats(targetSats)} (${dir} by ${formatSats(Math.abs(delta))}). Display-only — not blocked.`;
+    return `Allocated ${formatSats(allocated)} vs target ${formatSats(targetSats)} (${dir} by ${formatSats(Math.abs(delta))}). Display-only, not blocked.`;
   }
   return "";
 }

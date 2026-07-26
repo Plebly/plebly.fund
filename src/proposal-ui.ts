@@ -94,7 +94,7 @@ export function proposalLifecycleBannersHtml(
         );
       } else if (days < 0 && ["listed", "funding", "declined_fundable"].includes(String(p.status))) {
         parts.push(
-          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended — underfunded / refund path may open</p></div>`,
+          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended; underfunded / refund path may open</p></div>`,
         );
       }
     }
@@ -115,7 +115,7 @@ export function proposalLifecycleBannersHtml(
         ["listed", "funding", "claimable"].includes(String(p.status))
       ) {
         parts.push(
-          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Delivery window</span><p>Window ended — refund path may open</p></div>`,
+          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Delivery window</span><p>Window ended; refund path may open</p></div>`,
         );
       }
     }
@@ -127,7 +127,7 @@ export function proposalLifecycleBannersHtml(
       parts.push(
         `<div class="lifecycle-banner ${overdue ? "lifecycle-warn" : ""}" role="status"><span class="lifecycle-k">Milestones</span><p>${
           overdue
-            ? "Grace ended — claims and outcomes blocked until milestones are published (Q12)"
+            ? "Grace ended; claims and outcomes blocked until milestones are published (Q12)"
             : `Milestones due by ${due.toLocaleDateString()} (escrow crossed 1M sats)`
         }</p></div>`,
       );
@@ -138,7 +138,7 @@ export function proposalLifecycleBannersHtml(
     balance >= 1_000_000
   ) {
     parts.push(
-      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Milestones</span><p>Escrow ≥ 1M sats — milestones required (Q12)</p></div>`,
+      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Milestones</span><p>Escrow ≥ 1M sats; milestones required (Q12)</p></div>`,
     );
   }
   if (String(p.status) === "abandoned_vote") {
@@ -148,12 +148,12 @@ export function proposalLifecycleBannersHtml(
   }
   if (String(p.status) === "in_review") {
     parts.push(
-      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>AI first-pass is complete. Active reviewers vote to approve or reject — ⌈⅔⌉ yes with at least five non-abstaining votes.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>AI first-pass is complete. Active reviewers vote to approve or reject: ⌈⅔⌉ yes with at least five non-abstaining votes.</p></div>`,
     );
   }
   if (String(p.status) === "rejected") {
     parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Rejected</span><p>The fulfiller may file one formal rebuttal within 14 days. One second review follows — no third appeal.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Rejected</span><p>The fulfiller may file one formal rebuttal within 14 days. One second review follows. No third appeal.</p></div>`,
     );
   }
   if (String(p.status) === "refunding") {
@@ -225,7 +225,7 @@ export function fundingProgressHtml(
     </div>`;
 }
 
-/** Slim funding strip under the hero — progress only, no duplicate stat cards. */
+/** Slim funding strip under the hero: progress only, no duplicate stat cards. */
 export function proposalFundingBarHtml(
   balance: number | undefined,
   floor: number,
@@ -244,7 +244,7 @@ function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
 }
 
-/** Compact control — opens donate modal (lives in the actions group). */
+/** Compact control that opens the donate modal (lives in the actions group). */
 export function donateTriggerHtml(): string {
   return `<button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>`;
 }
@@ -261,7 +261,7 @@ export function shareSlotHtml(
   id?: string | null,
 ): string {
   const url = proposalShareUrl(repoPath, id);
-  const text = `${title} — fund open Bitcoin work on Plebly`;
+  const text = `${title}: fund open Bitcoin work on Plebly`;
   const xHref = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
   const nostrNote = `${text}\n\n${url}`;
   return `<div class="proposal-share-slot">
@@ -314,7 +314,7 @@ export function bindShareButtons(root: ParentNode): void {
             if (prev) target.textContent = prev;
           }, 1400);
         } catch {
-          window.alert("Could not copy Nostr note — paste the project URL into your client.");
+          window.alert("Could not copy Nostr note. Paste the project URL into your client.");
         }
       }
     });
@@ -333,13 +333,13 @@ export function donateModalHtml(p: Proposal): string {
   </div>`;
 }
 
-/** Prominent funder panel — Bitcoin on-chain and Lightning as equal rails. */
+/** Prominent funder panel: Bitcoin on-chain and Lightning as equal rails. */
 export function donatePanelHtml(p: Proposal): string {
   if (!p.escrow_address) return "";
   const addr = p.escrow_address;
   const networkNote =
     BITCOIN_NETWORK === "signet"
-      ? `<p class="donate-network-note">This project is on <strong>signet</strong> — use a signet wallet for on-chain donations.</p>`
+      ? `<p class="donate-network-note">This project is on <strong>signet</strong>. Use a signet wallet for on-chain donations.</p>`
       : "";
   const onchainPresets = DONATE_PRESETS_SATS.map(
     (sats) =>
@@ -385,7 +385,7 @@ export function donatePanelHtml(p: Proposal): string {
 
     <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
       <div id="donate-ln-ready" hidden>
-        <p class="donate-pane-intro">Reverse swap to escrow — fees apply.</p>
+        <p class="donate-pane-intro">Reverse swap to escrow. Fees apply.</p>
         <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
         <div class="donate-amount-row">
           <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
@@ -646,7 +646,7 @@ function bindLightningDonate(
     if (statusEl) {
       const map: Record<string, string> = {
         pending: "Waiting for Lightning payment…",
-        invoice_paid: "Invoice paid — claiming to escrow…",
+        invoice_paid: "Invoice paid. Claiming to escrow…",
         claiming: "Broadcasting claim to escrow…",
         settled: swap.claim_txid
           ? `Settled on-chain. Claim tx: ${swap.claim_txid.slice(0, 12)}…`
@@ -655,7 +655,7 @@ function bindLightningDonate(
           swap.error ||
           "Swap failed. On mainnet the claimer waits for lockup confirmation; try again or use on-chain.",
         expired:
-          "Invoice or swap expired. Create a new Lightning invoice — lockup timeout is set by Boltz.",
+          "Invoice or swap expired. Create a new Lightning invoice. Lockup timeout is set by Boltz.",
       };
       statusEl.textContent = map[swap.status] || swap.status;
       const live = ["pending", "invoice_paid", "claiming"].includes(swap.status);
@@ -738,7 +738,7 @@ function bindLightningDonate(
     setError(null);
     try {
       await weblnPay(bolt11);
-      if (statusEl) statusEl.textContent = "Payment sent — waiting for settle…";
+      if (statusEl) statusEl.textContent = "Payment sent. Waiting for settle…";
     } catch (e) {
       setError((e as Error).message || "WebLN payment failed");
     }
@@ -1092,7 +1092,7 @@ export function relatedWorkHtml(
   </section>`;
 }
 
-/** Combined context band — blocking deps + related work, one section. */
+/** Combined context band: blocking deps + related work, one section. */
 export function proposalContextHtml(
   dependsOn: { kind: string; label: string; ref?: string; note?: string }[],
   relatedWork: { label: string; url: string; note?: string }[],

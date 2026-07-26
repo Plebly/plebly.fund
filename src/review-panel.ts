@@ -36,7 +36,7 @@ export function aiReviewCardHtml(ai: AiReviewView, opts?: { compact?: boolean })
     ai.outcome === "fail"
       ? `<p class="ai-next">No reviewer ballot opened. Revise and resubmit before the claim window ends.</p>`
       : ai.outcome === "pass"
-        ? `<p class="ai-next">Reviewers still confirm — AI never releases funds.</p>`
+        ? `<p class="ai-next">Reviewers still confirm. AI never releases funds.</p>`
         : `<p class="ai-next">Escalated to a full reviewer vote.</p>`;
   return `<div class="ai-review-card ${aiOutcomeClass(ai.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
     <div class="ai-review-head">
@@ -252,7 +252,7 @@ export async function bindRebuttalPanel(
       });
       setMsg(
         msg,
-        `Rebuttal opened — second review ${result.decision_id}. ${result.pr_url}`,
+        `Rebuttal opened. Second review ${result.decision_id}. ${result.pr_url}`,
         "success",
       );
     } catch (e) {

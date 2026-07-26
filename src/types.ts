@@ -92,7 +92,7 @@ export type Proposal = {
   id: string | null;
   title: string;
   status: ProposalStatus | string;
-  /** bounty (default) | direct — proposer is recipient */
+  /** bounty (default) | direct: proposer is recipient */
   proposal_type?: ProposalType | string | null;
   tags?: string[];
   parent_initiative?: string | null;

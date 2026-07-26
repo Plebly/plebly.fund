@@ -207,13 +207,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           <fieldset class="field propose-type">
             <span>Proposal type</span>
-            <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /> <strong>Bounty</strong> — open to claim by a builder</label>
-            <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /> <strong>Direct</strong> — you are the recipient (no claim step)</label>
+            <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /> <strong>Bounty</strong>: open to claim by a builder</label>
+            <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /> <strong>Direct</strong>: you are the recipient (no claim step)</label>
           </fieldset>
           <label class="field">
             <span>Tags <em class="optional">(optional)</em></span>
             <input name="tags" maxlength="200" placeholder="e.g. knots, policy, docs" value="${escapeHtml((prefill?.tags || []).join(", "))}" />
-            <span class="field-hint">Suggested: see TAGS.md — comma-separated.</span>
+            <span class="field-hint">Suggested: see TAGS.md (comma-separated).</span>
           </label>
           <label class="field">
             <span>Commons / parent initiative <em class="optional">(optional)</em></span>
@@ -251,7 +251,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           <label class="field">
             <span>Verification</span>
-            <textarea name="verification" required minlength="40" rows="4" placeholder="Steps a reviewer can follow to confirm completion — commands, URLs, acceptance criteria.">${escapeHtml(prefill?.verification || "")}</textarea>
+            <textarea name="verification" required minlength="40" rows="4" placeholder="Steps a reviewer can follow to confirm completion: commands, URLs, acceptance criteria.">${escapeHtml(prefill?.verification || "")}</textarea>
             <span class="field-hint">Two independent reviewers should reach the same yes/no conclusion. Numbered steps (1. 2.) render as a checklist on the project page.</span>
           </label>
           <label class="field">
@@ -282,7 +282,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           </label>
           ${
             isEdit
-              ? `<p class="field-hint">Submission fee already paid — amend opens a PR without a new fee.</p>`
+              ? `<p class="field-hint">Submission fee already paid. Amend opens a PR without a new fee.</p>`
               : `<div class="field">
             <span>Submission fee</span>
             ${feePayHtml({
@@ -764,7 +764,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       coverUploading = false;
       clearCover();
       if (e.code === "MEDIA_DISABLED") {
-        setHint("Cover uploads are not enabled yet — continue without an image.");
+        setHint("Cover uploads are not enabled yet. Continue without an image.");
         return;
       }
       setHint(e.message, "error");

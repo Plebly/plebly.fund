@@ -55,7 +55,7 @@ export async function renderStats(shell: StatsShell): Promise<void> {
         ${statHtml("Currently escrowed", formatSats(escrowed), escrowed ? "Live balances across listed projects" : "No public escrow balance is tracked yet")}
         ${statHtml("Completed projects", String(completed.length), completed.length ? "Publicly marked completed" : "Completed work will appear here after public review")}
         ${statHtml("Completed targets", formatSats(paidEstimate), completed.length ? "Target amounts for completed projects; actual payouts remain on-chain verifiable" : "No completed project target is recorded yet")}
-        ${statHtml("Claim completion rate", claimed.length ? `${Math.round((completed.length / claimed.length) * 100)}%` : "—", claimed.length ? "Completed among claimed and reviewed projects" : "Shown once a project enters the claim lifecycle")}
+        ${statHtml("Claim completion rate", claimed.length ? `${Math.round((completed.length / claimed.length) * 100)}%` : "-", claimed.length ? "Completed among claimed and reviewed projects" : "Shown once a project enters the claim lifecycle")}
       </dl>
       <section class="gap-ticker stats-gap">
         <div>

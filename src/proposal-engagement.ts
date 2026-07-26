@@ -35,7 +35,7 @@ export function funderCreditHtml(
   if (!proposalId) return "";
   return `<section class="proposal-engagement" id="funder-credit" data-proposal-id="${escapeHtml(proposalId)}">
     <h2 class="proposal-block-title">Funders</h2>
-    <p class="proposal-block-lede">Public credit is optional — donors choose what appears here.</p>
+    <p class="proposal-block-lede">Public credit is optional. Donors choose what appears here.</p>
     <div id="funder-credit-list" class="funder-credit-list" aria-live="polite">
       <p class="muted">Loading funder credit…</p>
     </div>
@@ -98,10 +98,10 @@ export function commentsHtml(proposalId: string | null, signedIn: boolean): stri
   </section>`;
 }
 
-/** Pure HTML for the public funder list — exported for tests. */
+/** Pure HTML for the public funder list (exported for tests). */
 export function fundersListHtml(contributions: PublicContribution[]): string {
   if (!contributions.length) {
-    return `<p class="muted">No public funder credit yet — donors can opt in below after linking a contribution.</p>`;
+    return `<p class="muted">No public funder credit yet. Donors can opt in below after linking a contribution.</p>`;
   }
   return `<ul class="proposal-engagement-list">${contributions
     .map((contribution) => {
@@ -138,7 +138,7 @@ function renderComments(el: HTMLElement, comments: ProposalComment[]): void {
     .join("");
 }
 
-/** Pure HTML for the signed-in donor's linked rows — exported for tests. */
+/** Pure HTML for the signed-in donor's linked rows (exported for tests). */
 export function mineContributionsHtml(mine: MineContribution[]): string {
   if (!mine.length) {
     return `<p class="muted">No linked donations yet. Enter the on-chain outpoint below after your payment confirms and is indexed.</p>`;

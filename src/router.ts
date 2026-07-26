@@ -323,7 +323,7 @@ export function seoForRoute(
   switch (route.name) {
     case "home":
       return {
-        title: "Plebly — Fund open Bitcoin work",
+        title: "Plebly: Fund open Bitcoin work",
         description: DEFAULT_DESCRIPTION,
         path: "/",
         jsonLd: {

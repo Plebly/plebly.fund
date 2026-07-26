@@ -50,7 +50,8 @@ function networkNoteHtml(): string {
   if (ABOUT_BITCOIN_NETWORK !== "signet") return "";
   return `<p class="about-network-note">
     Running on <strong>signet</strong> for testing.
-    Launch is <strong>mainnet</strong> with 3-of-5 multisig —
+    Launch is <strong>mainnet</strong> with 3-of-5 multisig.
+    See
     <a href="https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md" target="_blank" rel="noreferrer">keyholders</a>.
   </p>`;
 }
@@ -73,7 +74,7 @@ export function renderAbout(shell: AboutShell): void {
     `<div class="about-detail">
       <h3>Reviewers</h3>
       <p>After AI triage, active reviewers confirm deliverables.
-        Eligible funders may open removal ballots for documented bad faith; bootstrap seats stay permanent.
+        Eligible funders may open removal ballots for documented bad faith. Bootstrap seats stay permanent.
         <a href="${href("/reviewers")}">Reviewer governance</a>
         ·
         <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>
@@ -113,7 +114,10 @@ export function renderAbout(shell: AboutShell): void {
         <h2>How it works</h2>
         ${flowHtml()}
         <p class="about-section-foot">
-          <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Full rules in the proposals repo →</a>
+          <a href="${href("/")}">Browse open projects</a>,
+          <a href="${href("/propose")}">start a project</a>,
+          or read the full rules in the
+          <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">proposals repo</a>.
         </p>
       </section>
 

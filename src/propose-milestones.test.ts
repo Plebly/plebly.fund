@@ -30,7 +30,7 @@ describe("propose milestone editor", () => {
     expect(html).toContain("Milestone 1");
     expect(html).toContain("remove-milestone");
     expect(html).toContain('type="button"');
-    // JS validates length — no HTML minlength trap on optional rows
+    // JS validates length; no HTML minlength trap on optional rows
     expect(html).not.toContain("minlength");
   });
 

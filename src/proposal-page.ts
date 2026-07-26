@@ -341,7 +341,7 @@ export async function renderProposalPage(
           <div class="proposal-hero-meta">
             ${byline}
             ${metaChipsHtml(match)}
-            ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" aria-live="polite">Views: —</span>` : ""}
+            ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" aria-live="polite">Views: -</span>` : ""}
             ${
               canEdit
                 ? `<a class="proposal-edit-link" href="${href("/propose", `?edit=${encodeURIComponent(match.path)}`)}">Edit</a>`

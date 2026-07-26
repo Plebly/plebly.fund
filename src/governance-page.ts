@@ -229,7 +229,7 @@ export function openRemovalFormHtml(
 
 function statusStripHtml(me: ReviewerMe | null, user: AuthUser | null): string {
   if (!user) {
-    return `<p class="gov-status muted">Browsing as guest — sign in to vote if you are a reviewer or eligible funder.</p>`;
+    return `<p class="gov-status muted">Browsing as guest. Sign in to vote if you are a reviewer or eligible funder.</p>`;
   }
   const bits: string[] = [];
   if (me?.active) {
@@ -272,7 +272,7 @@ export async function renderGovernance(
       <header class="gov-hero">
         <p class="about-eyebrow">Governance</p>
         <h1>Reviewers</h1>
-        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers for a documented pattern of bad faith — bootstrap seats stay permanent.</p>
+        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers for a documented pattern of bad faith. Bootstrap seats stay permanent.</p>
         ${statusStripHtml(me, user)}
       </header>
 
@@ -307,8 +307,8 @@ export async function renderGovernance(
       <p class="gov-foot muted">
         Rules live in
         <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>.
-        Project-level review UI stays on each project page —
-        <a href="${href("/")}">browse projects</a>.
+        Project-level review UI stays on each project page.
+        <a href="${href("/")}">Browse projects</a>.
       </p>
     </section>
   `);

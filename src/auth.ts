@@ -194,7 +194,7 @@ export function loginChoicesHtml(prompt?: string, returnPath?: string): string {
   </div>`;
 }
 
-/** Nav login control — summary opens provider list. */
+/** Nav login control: summary opens provider list. */
 export function loginMenuHtml(returnPath?: string): string {
   return `<details class="login-menu">
     <summary>Log in</summary>

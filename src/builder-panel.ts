@@ -72,11 +72,11 @@ export function builderPanelHtml(
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
     <div id="builder-body" class="builder-body">
-      <p class="builder-status">This is a <strong>direct</strong> proposal — the proposer is the recipient. No claim bond. The proposer submits the deliverable when ready.</p>
+      <p class="builder-status">This is a <strong>direct</strong> proposal: the proposer is the recipient. No claim bond. The proposer submits the deliverable when ready.</p>
       ${
         need > 0
           ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the floor.</p>`
-          : `<p class="builder-status">Floor met — proposer may submit a deliverable.</p>`
+          : `<p class="builder-status">Floor met. Proposer may submit a deliverable.</p>`
       }
       <div id="direct-deliverable-slot"></div>
     </div>
@@ -206,7 +206,7 @@ function renderStatusBody(
     case "claim_pending":
       body.innerHTML = `${meta}<p class="builder-status">Claim pending${
         status.pending?.pr_url
-          ? ` — <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
+          ? ` · <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
           : ""
       }. Exclusive after merge.</p>`;
       break;
@@ -240,7 +240,7 @@ function renderStatusBody(
     case "in_review":
       body.innerHTML = `${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${escapeHtml(status.claimer)}` : ""
-      }. AI triage finished — reviewers confirm in the panel below.</p>`;
+      }. AI triage finished. Reviewers confirm in the panel below.</p>`;
       break;
     case "completed":
       body.innerHTML = `${meta}<p class="builder-status">Completed${
@@ -370,7 +370,7 @@ export async function bindBuilderPanel(
         }
         const next =
           result.ai_review?.outcome === "fail"
-            ? "Clear fail — revise and resubmit."
+            ? "Clear fail. Revise and resubmit."
             : result.decision_id
               ? "Reviewer ballot opened."
               : "Submitted.";

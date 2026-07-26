@@ -130,7 +130,7 @@ async function metaForId(id) {
               .trim()
               .slice(0, 180) || "";
           return {
-            title: `${title} — Plebly`,
+            title: `${title} · Plebly`,
             description:
               problem ||
               "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
@@ -142,7 +142,7 @@ async function metaForId(id) {
     /* fall through */
   }
   return {
-    title: `${id} — Plebly`,
+    title: `${id} · Plebly`,
     description:
       "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
   };
@@ -176,7 +176,7 @@ async function main() {
     if (!id) continue;
     const meta = entry.title
       ? {
-          title: `${entry.title} — Plebly`,
+          title: `${entry.title} · Plebly`,
           description:
             "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
         }

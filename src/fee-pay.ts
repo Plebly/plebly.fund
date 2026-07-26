@@ -57,7 +57,7 @@ export function feePayHtml(opts: FeePayOpts): string {
       </div>`
     : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong> to the published fee address.</p>
       ${opts.note ? `<p class="fee-pay-note">${opts.note}</p>` : ""}
-      <p class="field-hint">Fee address is not available from the API yet — pay using the published address, then continue.</p>
+      <p class="field-hint">Fee address is not available from the API yet. Pay using the published address, then continue.</p>
       <div class="fee-pay-nav">
         <button type="button" class="btn" id="${escapeHtml(opts.id)}-next">I've sent it</button>
       </div>`;

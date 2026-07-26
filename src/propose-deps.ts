@@ -7,7 +7,7 @@ export const MAX_RELATED_WORK = 20;
 export function dependsOnSectionHtml(): string {
   return `<fieldset class="form-block" id="depends-on-block">
     <legend>Depends on <em class="optional">(optional)</em></legend>
-    <p class="field-hint">Blocking work this project cannot finish without — another Plebly proposal or an external initiative. Remove any row you do not want.</p>
+    <p class="field-hint">Blocking work this project cannot finish without: another Plebly proposal or an external initiative. Remove any row you do not want.</p>
     <div id="depends-on-empty" class="editor-empty">No blocking dependencies.</div>
     <div id="depends-on-list" class="dep-editor-list"></div>
     <button type="button" class="btn ghost" id="add-depends-on-btn">Add dependency</button>
