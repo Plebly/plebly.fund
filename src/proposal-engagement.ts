@@ -173,13 +173,7 @@ export function commentsListHtml(
         );
       }
       if (comment.deleted) {
-        return `<article class="proposal-comment is-deleted" data-comment-id="${escapeHtml(comment.id)}">
-          <p class="proposal-comment-removed">
-            ${commentNameHtml(comment)}
-            <span class="proposal-comment-removed-mark"> · removed</span>
-            ${when ? `<span class="proposal-comment-when"> · ${when}</span>` : ""}
-          </p>
-        </article>`;
+        return `<article class="proposal-comment is-deleted" data-comment-id="${escapeHtml(comment.id)}"><p class="proposal-comment-removed">${commentNameHtml(comment)}<span class="proposal-comment-removed-mark"> · removed</span>${when ? `<span class="proposal-comment-when"> · ${when}</span>` : ""}</p></article>`;
       }
       return `<article class="proposal-comment" data-comment-id="${escapeHtml(comment.id)}">
         ${commentAvatarHtml(comment)}

@@ -5269,11 +5269,14 @@ a.proposal-comment-author:hover {
 }
 
 .proposal-comment-removed {
-  margin: 0;
+  margin: 0 !important;
   font-size: 0.8125rem;
   line-height: 1.35;
   color: var(--muted);
   font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .proposal-comment-removed .proposal-comment-author {
