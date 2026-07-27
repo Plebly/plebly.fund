@@ -2,7 +2,7 @@ import { fetchWatches } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import { authFetch, profilePath, type AuthUser } from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
-import { listListedProposals, proposalFromMarkdown } from "./github";
+import { proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
@@ -215,6 +215,7 @@ export async function renderProposalPage(
   shell: ProposalShell,
   user: AuthUser | null = null,
   onAuthed: () => void = () => undefined,
+  preloaded: Proposal | null = null,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(
@@ -222,14 +223,16 @@ export async function renderProposalPage(
   );
 
   try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/Plebly/proposals/main/${path}`,
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw = await res.text();
-    const proposals = await listListedProposals();
-    const listed = proposals.find((p) => p.path === path);
-    const match: Proposal = listed || proposalFromMarkdown(raw, path);
+    let match: Proposal;
+    if (preloaded && preloaded.path === path) {
+      match = preloaded;
+    } else {
+      const res = await fetch(
+        `https://raw.githubusercontent.com/Plebly/proposals/main/${path}`,
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      match = proposalFromMarkdown(await res.text(), path);
+    }
     const coverUrl = safeHttpsImageUrl(match.cover_image);
     if (match.id) {
       const canonical = new URL(proposalHref(match.path, match.id), location.origin);

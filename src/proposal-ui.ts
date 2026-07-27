@@ -918,10 +918,10 @@ function bindLightningDonate(
     });
   });
 
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
   const stopPoll = () => {
     if (pollTimer) {
-      clearInterval(pollTimer);
+      clearTimeout(pollTimer);
       pollTimer = null;
     }
   };
@@ -991,25 +991,28 @@ function bindLightningDonate(
   const startPoll = (swapId: string) => {
     stopPoll();
     settledLinked = false;
-    pollTimer = setInterval(() => {
-      void (async () => {
-        try {
-          const swap = await fetchLightningSwap(swapId);
-          await renderSwap(swap);
-          if (swap.status === "settled" && !settledLinked) {
-            settledLinked = true;
-            stopPoll();
-            void linkLightningCredit(panel, opts, swapId);
-            return;
-          }
-          if (["failed", "expired"].includes(swap.status)) {
-            stopPoll();
-          }
-        } catch {
-          /* keep polling */
+    let delayMs = 4000;
+    const tick = async () => {
+      try {
+        const swap = await fetchLightningSwap(swapId);
+        await renderSwap(swap);
+        if (swap.status === "settled" && !settledLinked) {
+          settledLinked = true;
+          stopPoll();
+          void linkLightningCredit(panel, opts, swapId);
+          return;
         }
-      })();
-    }, 4000);
+        if (["failed", "expired"].includes(swap.status)) {
+          stopPoll();
+          return;
+        }
+        delayMs = Math.min(delayMs + 2000, 15_000);
+      } catch {
+        /* keep polling */
+      }
+      pollTimer = setTimeout(() => void tick(), delayMs);
+    };
+    pollTimer = setTimeout(() => void tick(), delayMs);
   };
 
   createBtn?.addEventListener("click", async () => {

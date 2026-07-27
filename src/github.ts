@@ -118,16 +118,31 @@ export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {
     if (res.status === 404) continue;
     if (!res.ok) throw new Error(`GitHub API ${res.status}`);
     const items = (await res.json()) as GhContent[];
-    for (const item of items) {
-      const p = await loadProposalFile(item, dir);
+    const loaded = await Promise.all(
+      items.map((item) => loadProposalFile(item, dir)),
+    );
+    for (const p of loaded) {
       if (p) out.push(p);
     }
   }
   return out;
 }
 
+const LISTED_TTL_MS = 60_000;
+let listedCache: { at: number; data: Proposal[] } | null = null;
+
+/** Listed/claimed/completed catalog with a short in-memory TTL across SPA navigations. */
 export async function listListedProposals(): Promise<Proposal[]> {
-  return listProposalsInDirs(["listed", "claimed", "completed"]);
+  if (listedCache && Date.now() - listedCache.at < LISTED_TTL_MS) {
+    return listedCache.data;
+  }
+  const data = await listProposalsInDirs(["listed", "claimed", "completed"]);
+  listedCache = { at: Date.now(), data };
+  return data;
+}
+
+export function clearListedProposalsCache(): void {
+  listedCache = null;
 }
 
 async function loadProposalByPath(path: string): Promise<Proposal | null> {

@@ -202,10 +202,24 @@ async function render() {
     return;
   }
   if (r.name === "proposal") {
+    // Stable /p/{id}: resolve via Worker idmap (O(1)). Legacy /proposal/... uses path directly.
     const proposal = r.stable ? await findListedProposalById(r.id) : null;
-    await renderProposalPage(proposal?.path || r.id, shell, currentUser, () => {
-      void render();
-    });
+    const path = proposal?.path || (!r.stable ? r.id : "");
+    if (!path) {
+      applySeo(seoForRoute({ name: "home" }));
+      await renderHome(shell);
+      bindAuthHandlers();
+      return;
+    }
+    await renderProposalPage(
+      path,
+      shell,
+      currentUser,
+      () => {
+        void render();
+      },
+      proposal,
+    );
     bindAuthHandlers();
     scrollToHashTarget();
     return;
