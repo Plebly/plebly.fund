@@ -5250,6 +5250,70 @@ a.project-card-by:hover .project-card-by-text {
   background: var(--bg);
 }
 
+.funder-badge {
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  background: var(--accent-soft);
+  color: var(--ink-secondary);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.funder-badge-patron {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  color: var(--ink);
+}
+
+.declined-page {
+  padding: 2rem 0 4rem;
+}
+
+.declined-head {
+  margin-bottom: 1.5rem;
+}
+
+.declined-head .eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+.declined-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.declined-row {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.declined-title {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.declined-title:hover {
+  color: var(--accent);
+}
+
+.declined-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
 @media (max-width: 560px) {
   .funder-credit-outpoint {
     grid-template-columns: 1fr;

@@ -64,6 +64,7 @@ export function parseLocation(
   if (!path || path === "home") return { name: "home" };
   if (path === "about") return { name: "about" };
   if (path === "stats") return { name: "stats" };
+  if (path === "declined") return { name: "declined" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
@@ -367,6 +368,13 @@ export function seoForRoute(
         description:
           "Public, best-effort funding and completion totals for Plebly Bitcoin work.",
         path: "/stats",
+      };
+    case "declined":
+      return {
+        title: "Declined proposals",
+        description:
+          "Archive of declined or closed Plebly listings kept for public record.",
+        path: "/declined",
       };
     case "propose":
       return {

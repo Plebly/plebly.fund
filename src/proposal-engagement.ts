@@ -5,6 +5,7 @@ import {
   loginChoicesHtml,
   type AuthUser,
 } from "./auth";
+import { contributorBadge, contributorBadgeLabel } from "./badges";
 import { confirmAction } from "./confirm-modal";
 import { WORKERS_API } from "./config";
 import { fileModerationReport } from "./reports";
@@ -87,6 +88,15 @@ function funderTooltip(contribution: PublicContribution): string {
   return bits.join(" · ");
 }
 
+function badgeHtml(contribution: PublicContribution): string {
+  const badge = contributorBadge(contribution.amount_sats);
+  if (!badge) return "";
+  const label = contributorBadgeLabel(badge);
+  return `<span class="funder-badge funder-badge-${badge}" title="${escapeHtml(
+    `${label} Contributor`,
+  )}">${escapeHtml(label)}</span>`;
+}
+
 /** Pure HTML for the public funder chips (exported for tests). */
 export function fundersListHtml(contributions: PublicContribution[]): string {
   if (!contributions.length) return "";
@@ -95,11 +105,12 @@ export function fundersListHtml(contributions: PublicContribution[]): string {
       const name = contribution.identity || "Anonymous";
       const tip = escapeHtml(funderTooltip(contribution));
       const label = escapeHtml(name);
+      const badge = badgeHtml(contribution);
       const href = profileUrlForIdentity(contribution.identity);
       if (href) {
-        return `<a class="funder-chip" href="${escapeHtml(href)}" title="${tip}">${label}</a>`;
+        return `<a class="funder-chip" href="${escapeHtml(href)}" title="${tip}">${label}${badge}</a>`;
       }
-      return `<span class="funder-chip funder-chip-static" title="${tip}">${label}</span>`;
+      return `<span class="funder-chip funder-chip-static" title="${tip}">${label}${badge}</span>`;
     })
     .join("")}</div>`;
 }

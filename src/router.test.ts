@@ -34,7 +34,7 @@ describe("router governance paths", () => {
     );
   });
 
-  it("keeps legacy folder URLs and adds /stats", () => {
+  it("keeps legacy folder URLs and adds /stats + /declined", () => {
     expect(parseLocation("/proposal/listed/example", "")).toEqual({
       name: "proposal",
       id: "proposals/listed/example.md",
@@ -43,6 +43,8 @@ describe("router governance paths", () => {
       "/proposal/listed/example",
     );
     expect(parseLocation("/stats", "")).toEqual({ name: "stats" });
+    expect(parseLocation("/declined", "")).toEqual({ name: "declined" });
+    expect(seoForRoute({ name: "declined" }).path).toBe("/declined");
   });
 
   it("builds FundingCampaign JSON-LD for stable proposal URLs", () => {

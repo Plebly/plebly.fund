@@ -3,6 +3,7 @@ import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
 import "@fortawesome/fontawesome-free/css/brands.min.css";
 import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
+import { renderDeclined } from "./declined-page";
 import { WORKERS_API } from "./config";
 import { renderGovernance } from "./governance-page";
 import { renderHome } from "./home-page";
@@ -69,6 +70,7 @@ function siteFooterHtml(routeName: string): string {
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/about")}"${fa("about")}>About</a>
           <a href="${href("/stats")}"${fa("stats")}>Stats</a>
+          <a href="${href("/declined")}"${fa("declined")}>Declined</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
         </div>
         <div class="footer-col">
@@ -186,6 +188,13 @@ async function render() {
   if (r.name === "stats") {
     applySeo(seoForRoute(r));
     await renderStats(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "declined") {
+    applySeo(seoForRoute(r));
+    await renderDeclined(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

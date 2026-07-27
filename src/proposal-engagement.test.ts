@@ -149,6 +149,8 @@ describe("fundersListHtml", () => {
     expect(html).toContain('href="/u/alice"');
     expect(html).toContain("Anonymous");
     expect(html).toContain("funder-chip-static");
+    expect(html).toContain("funder-badge-notable");
+    expect(html).toContain("Notable");
   });
 
   it("escapes identity HTML", () => {

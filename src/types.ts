@@ -145,6 +145,7 @@ export type Route =
   | { name: "home" }
   | { name: "about" }
   | { name: "stats" }
+  | { name: "declined" }
   | { name: "params" }
   | { name: "account" }
   | { name: "work" }
