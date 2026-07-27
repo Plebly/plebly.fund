@@ -553,13 +553,19 @@ export async function renderGovernance(
     </section>
   `);
 
+  const tab = initialGovTab();
   const [roster, decisions, removals, me, opsRoles, reports] = await Promise.all([
     fetchReviewerRoster().catch(() => null),
     fetchOpenReviewDecisions().catch(() => [] as ReviewDecisionView[]),
     fetchOpenRemovalBallots().catch(() => [] as RemovalBallotView[]),
     user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
-    fetchOpsRoles().catch(() => null),
-    user ? fetchOpenReports().catch(() => [] as ModerationReportView[]) : Promise.resolve([]),
+    tab === "roles"
+      ? fetchOpsRoles().catch(() => null)
+      : Promise.resolve(null),
+    // Reports are signed-in-only and often unused — load when that tab is active.
+    user && tab === "reports"
+      ? fetchOpenReports().catch(() => [] as ModerationReportView[])
+      : Promise.resolve([] as ModerationReportView[]),
   ]);
 
   const isReviewer = Boolean(me?.active);
@@ -570,7 +576,6 @@ export async function renderGovernance(
   const reportCount = reports.length;
   const opsNormalized = normalizeOpsRolesPayload(opsRoles);
   const opsBallotCount = opsNormalized?.ballots.length ?? 0;
-  const tab = initialGovTab();
 
   app.innerHTML = shell(`
     <section class="wrap detail gov-page">
@@ -631,15 +636,33 @@ export async function renderGovernance(
   `);
 
   bindGovernanceHandlers(app, { isReviewer, funderEligible });
-  bindGovTabs(app);
+  bindGovTabs(app, {
+    onLazyTab: (next) => {
+      if (
+        (next === "reports" && user && reports.length === 0) ||
+        (next === "roles" && !opsRoles)
+      ) {
+        const url = new URL(location.href);
+        url.searchParams.set("tab", next);
+        history.replaceState(null, "", `${url.pathname}${url.search}`);
+        void renderGovernance(shell, user);
+        return true;
+      }
+      return false;
+    },
+  });
 }
 
-function bindGovTabs(root: ParentNode): void {
+function bindGovTabs(
+  root: ParentNode,
+  opts?: { onLazyTab?: (tab: GovTab) => boolean },
+): void {
   const page = root.querySelector(".gov-page");
   if (!page || page.getAttribute("data-gov-tabs") === "1") return;
   page.setAttribute("data-gov-tabs", "1");
 
   const activate = (tab: GovTab) => {
+    if (opts?.onLazyTab?.(tab)) return;
     page.querySelectorAll<HTMLButtonElement>("[data-gov-tab]").forEach((btn) => {
       const on = btn.dataset.govTab === tab;
       btn.classList.toggle("active", on);

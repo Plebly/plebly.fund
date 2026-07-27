@@ -22,6 +22,7 @@ async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (proposal) => {
       if (!proposal.escrow_address) return proposal;
+      if (typeof proposal.balance_sats === "number") return proposal;
       try {
         return {
           ...proposal,

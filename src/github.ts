@@ -129,15 +129,87 @@ export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {
 }
 
 const LISTED_TTL_MS = 60_000;
-let listedCache: { at: number; data: Proposal[] } | null = null;
+let listedCache: { at: number; data: Proposal[]; scope: "listed" | "all" } | null =
+  null;
 
-/** Listed/claimed/completed catalog with a short in-memory TTL across SPA navigations. */
+type CatalogProposal = {
+  id: string | null;
+  path: string;
+  title: string;
+  status: string;
+  proposal_type?: string;
+  tags?: string[];
+  cover_image?: string | null;
+  excerpt?: string;
+  created_at?: string | null;
+  target_sats?: number | null;
+  escrow_address?: string | null;
+  balance_sats?: number | null;
+  funding_window_ends_at?: string | null;
+  delivery_window_ends_at?: string | null;
+  claimer?: string | null;
+  proposer?: ProposalProposer | null;
+};
+
+function proposalFromCatalog(entry: CatalogProposal): Proposal {
+  return {
+    id: entry.id,
+    path: entry.path,
+    title: entry.title,
+    status: entry.status,
+    proposal_type:
+      String(entry.proposal_type || "bounty").toLowerCase() === "direct"
+        ? "direct"
+        : "bounty",
+    tags: entry.tags || [],
+    cover_image: entry.cover_image ?? null,
+    created_at: entry.created_at ?? null,
+    target_sats: entry.target_sats ?? null,
+    escrow_address: entry.escrow_address ?? null,
+    balance_sats:
+      typeof entry.balance_sats === "number" ? entry.balance_sats : undefined,
+    funding_window_ends_at: entry.funding_window_ends_at ?? null,
+    delivery_window_ends_at: entry.delivery_window_ends_at ?? null,
+    claimer: entry.claimer ?? null,
+    proposer: entry.proposer ?? null,
+    submission_fee_txid: null,
+    escrow_index: null,
+    milestones: [],
+    body: entry.excerpt || "",
+  };
+}
+
+async function fetchWorkerCatalog(
+  scope: "listed" | "all",
+): Promise<Proposal[] | null> {
+  if (!WORKERS_API) return null;
+  try {
+    const res = await fetch(
+      `${WORKERS_API.replace(/\/$/, "")}/proposals/catalog?scope=${scope}`,
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { proposals?: CatalogProposal[] };
+    if (!Array.isArray(data.proposals)) return null;
+    return data.proposals.map(proposalFromCatalog);
+  } catch {
+    return null;
+  }
+}
+
+/** Listed/claimed/completed catalog — Worker blob first, GitHub walk as fallback. */
 export async function listListedProposals(): Promise<Proposal[]> {
-  if (listedCache && Date.now() - listedCache.at < LISTED_TTL_MS) {
+  if (
+    listedCache &&
+    listedCache.scope === "listed" &&
+    Date.now() - listedCache.at < LISTED_TTL_MS
+  ) {
     return listedCache.data;
   }
-  const data = await listProposalsInDirs(["listed", "claimed", "completed"]);
-  listedCache = { at: Date.now(), data };
+  const fromWorker = await fetchWorkerCatalog("listed");
+  const data =
+    fromWorker ||
+    (await listProposalsInDirs(["listed", "claimed", "completed"]));
+  listedCache = { at: Date.now(), data, scope: "listed" };
   return data;
 }
 
@@ -196,13 +268,25 @@ export async function findListedProposalById(
 }
 
 export async function listAllPublicProposals(): Promise<Proposal[]> {
-  return listProposalsInDirs([
-    "listed",
-    "claimed",
-    "completed",
-    "unindexed",
-    "declined",
-  ]);
+  if (
+    listedCache &&
+    listedCache.scope === "all" &&
+    Date.now() - listedCache.at < LISTED_TTL_MS
+  ) {
+    return listedCache.data;
+  }
+  const fromWorker = await fetchWorkerCatalog("all");
+  const data =
+    fromWorker ||
+    (await listProposalsInDirs([
+      "listed",
+      "claimed",
+      "completed",
+      "unindexed",
+      "declined",
+    ]));
+  listedCache = { at: Date.now(), data, scope: "all" };
+  return data;
 }
 
 export function proposalsForProfile(

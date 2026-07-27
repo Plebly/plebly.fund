@@ -240,10 +240,13 @@ export async function renderAccount(
 
   const user = ctx.user;
   const tab: AccountTab = initialTab || "profile";
+  const needsCatalog = tab === "watching" || tab === "proposals";
   const [watches, myClaims, allProps, reviewerMe, notifications] = await Promise.all([
     fetchWatches().catch(() => []),
     fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
-    listListedProposals().catch(() => [] as Proposal[]),
+    needsCatalog
+      ? listListedProposals().catch(() => [] as Proposal[])
+      : Promise.resolve([] as Proposal[]),
     fetchReviewerMe().catch(() => null),
     fetchNotifications().catch(() => []),
   ]);
@@ -459,6 +462,15 @@ export async function renderAccount(
   app.querySelectorAll<HTMLButtonElement>(".account-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
       const name = (btn.dataset.tab || "profile") as AccountTab;
+      // Watching/proposals need the catalog — reload once if we skipped it.
+      if (
+        (name === "watching" || name === "proposals") &&
+        !needsCatalog &&
+        allProps.length === 0
+      ) {
+        void renderAccount(ctx, name);
+        return;
+      }
       app.querySelectorAll(".account-tab").forEach((t) => {
         t.classList.toggle("active", t === btn);
       });
