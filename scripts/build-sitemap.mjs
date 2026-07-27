@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Build public/sitemap.xml for GitHub Pages.
- * Prefers the Worker dynamic sitemap; falls back to GitHub tree + static routes.
+ * Prefers the Worker dynamic sitemap; merges static discovery URLs;
+ * falls back to GitHub tree + static routes.
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -15,7 +16,16 @@ const WORKERS =
   "https://plebly-api.securesovereigns.workers.dev";
 const REPO = "Plebly/proposals";
 
-const STATIC = ["/", "/about", "/propose", "/stats", "/reviewers", "/llms.txt"];
+const STATIC = [
+  "/",
+  "/about",
+  "/propose",
+  "/stats",
+  "/reviewers",
+  "/llms.txt",
+  "/llms-full.txt",
+  "/humans.txt",
+];
 
 function escapeXml(value) {
   return value.replace(/[<>&'"]/g, (char) =>
@@ -30,16 +40,30 @@ function escapeXml(value) {
 }
 
 function xmlFor(urls) {
+  const unique = [...new Set(urls)];
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ...urls.map(
+    ...unique.map(
       (path) =>
         `  <url><loc>${escapeXml(`${SITE}${path.startsWith("/") ? path : `/${path}`}`)}</loc></url>`,
     ),
     "</urlset>",
     "",
   ].join("\n");
+}
+
+function pathsFromXml(text) {
+  const paths = [];
+  for (const match of text.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    try {
+      const url = new URL(match[1]);
+      paths.push(url.pathname === "" ? "/" : url.pathname);
+    } catch {
+      /* skip */
+    }
+  }
+  return paths;
 }
 
 async function fromWorker() {
@@ -49,7 +73,7 @@ async function fromWorker() {
   if (!res.ok) throw new Error(`worker sitemap ${res.status}`);
   const text = await res.text();
   if (!text.includes("<urlset")) throw new Error("invalid worker sitemap");
-  return text.endsWith("\n") ? text : `${text}\n`;
+  return xmlFor([...STATIC, ...pathsFromXml(text)]);
 }
 
 async function fromGitHub() {
@@ -77,23 +101,22 @@ async function fromGitHub() {
       if (!raw.ok) continue;
       const text = await raw.text();
       const m = text.match(/^id:\s*["']?([A-Za-z0-9][A-Za-z0-9._-]{0,119})/m);
-      if (m) ids.push(m[1]);
+      if (m) ids.push(m[1].trim().toLowerCase());
     } catch {
       /* skip */
     }
   }
-  const urls = [
+  return xmlFor([
     ...STATIC,
     ...[...new Set(ids)].map((id) => `/p/${encodeURIComponent(id)}`),
-  ];
-  return xmlFor(urls);
+  ]);
 }
 
 async function main() {
   try {
     const body = await fromWorker();
     writeFileSync(out, body);
-    console.log("Wrote sitemap.xml from Worker");
+    console.log("Wrote sitemap.xml from Worker (+ static discovery URLs)");
     return;
   } catch (e) {
     console.warn("Worker sitemap unavailable:", (e && e.message) || e);

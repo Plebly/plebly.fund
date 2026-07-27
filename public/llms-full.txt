@@ -8,6 +8,7 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 - Connects donors and builders without a custodian that can freeze or redirect escrow.
 - Canonical proposals and funding history live in git: https://github.com/Plebly/proposals
 - The website may decline to list a proposal, but cannot erase the repo record or on-chain history.
+- Curated agent index: https://plebly.fund/llms.txt (https://llmstxt.org/)
 
 ## Core beliefs
 
@@ -39,11 +40,16 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. Revers
 - Site home: https://plebly.fund/
 - About: https://plebly.fund/about
 - Propose: https://plebly.fund/propose
+- Stats: https://plebly.fund/stats
+- Reviewers: https://plebly.fund/reviewers
+- Project pages: https://plebly.fund/p/{id} (stable lowercase id)
+- llms.txt: https://plebly.fund/llms.txt
+- Sitemap: https://plebly.fund/sitemap.xml
 - Proposals repo: https://github.com/Plebly/proposals
 - PARAMETERS.md: https://github.com/Plebly/proposals/blob/main/PARAMETERS.md
 - KEYHOLDERS.md: https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md
-- Workers API (runtime): see site config / VITE_WORKERS_API
+- Workers API (runtime): https://plebly-api.securesovereigns.workers.dev
 
 ## Trust notes
 
-Escrow is 3-of-5 multisig at launch. Plebly does not hold spending keys. There is no on-chain timelock in v1. Keyholder stall process is documented in the proposals repo.
+Escrow is 3-of-5 multisig at launch. Plebly does not hold spending keys. There is no on-chain timelock in v1. Keyholder stall process is documented in the proposals repo. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.

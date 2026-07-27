@@ -11,7 +11,14 @@ Canonical proposal record: https://github.com/Plebly/proposals
 - [Home / open projects](https://plebly.fund/): Browse listed projects and escrow funding progress
 - [About](https://plebly.fund/about): Beliefs, how it works, fees, and network status
 - [Start a project](https://plebly.fund/propose): Submit a proposal (GitHub login; on-chain submission fee required)
+- [Funding stats](https://plebly.fund/stats): Public funding and completion totals
+- [Reviewers](https://plebly.fund/reviewers): Reviewer roster and open decisions
 - [Full context for LLMs](https://plebly.fund/llms-full.txt): Longer plain-text overview of product rules and flows
+
+## Projects
+
+- [Signet smoke test bounty](https://plebly.fund/p/plebly-signet-demo): listed — Need a live signet proposal to exercise listing, balance display, and the claim floor path without mainnet risk
+- [Knots PR: reject high size-to-value relay spam](https://plebly.fund/p/plebly-knots-size-value-spam): listed — Bitcoin Knots already has strong relay knobs for datacarrier weight, tokens (-rejecttokens), parasites (-reject
 
 ## Protocol (source of truth)
 
@@ -25,5 +32,6 @@ Canonical proposal record: https://github.com/Plebly/proposals
 
 - [Sitemap](https://plebly.fund/sitemap.xml): Machine-readable page index
 - [robots.txt](https://plebly.fund/robots.txt): Crawler policy
+- [humans.txt](https://plebly.fund/humans.txt): Site maintainers
 - [Plebly on X](https://x.com/joinplebly): Product updates
 - [Plebly on GitHub](https://github.com/Plebly): Organization and open source

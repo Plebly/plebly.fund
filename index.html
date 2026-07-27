@@ -13,6 +13,7 @@
     <link rel="canonical" href="https://plebly.fund/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Plebly" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="Plebly: Fund open Bitcoin work" />
     <meta
       property="og:description"
@@ -20,7 +21,9 @@
     />
     <meta property="og:url" content="https://plebly.fund/" />
     <meta property="og:image" content="https://plebly.fund/logo.jpeg" />
+    <meta property="og:image:alt" content="Plebly" />
     <meta name="twitter:card" content="summary" />
+    <meta name="twitter:site" content="@joinplebly" />
     <meta name="twitter:title" content="Plebly: Fund open Bitcoin work" />
     <meta
       name="twitter:description"
@@ -34,9 +37,50 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://plebly.fund/#organization",
+            "name": "Plebly",
+            "url": "https://plebly.fund/",
+            "logo": "https://plebly.fund/logo.jpeg",
+            "sameAs": [
+              "https://x.com/joinplebly",
+              "https://github.com/Plebly"
+            ],
+            "description": "Public funding platform for Bitcoin development and research with verifiable on-chain escrow."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://plebly.fund/#website",
+            "name": "Plebly",
+            "url": "https://plebly.fund/",
+            "description": "Fund open Bitcoin work with publicly verifiable on-chain escrow. No custodian in the middle.",
+            "publisher": { "@id": "https://plebly.fund/#organization" },
+            "inLanguage": "en"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <main>
+        <h1>Plebly</h1>
+        <p>
+          Fund open Bitcoin work with publicly verifiable on-chain escrow. No
+          custodian in the middle.
+        </p>
+        <p>
+          <a href="/about">About</a> ·
+          <a href="/propose">Start a project</a> ·
+          <a href="/llms.txt">llms.txt</a>
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

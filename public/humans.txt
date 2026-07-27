@@ -1,0 +1,11 @@
+/* TEAM */
+Organization: Plebly
+Site: https://plebly.fund/
+Contact: https://x.com/joinplebly
+GitHub: https://github.com/Plebly
+
+/* SITE */
+Standards: HTML5, CSS, TypeScript
+Components: Cloudflare Workers API, GitHub Pages, Bitcoin on-chain escrow
+Canonical proposals: https://github.com/Plebly/proposals
+LLM index: https://plebly.fund/llms.txt

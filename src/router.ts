@@ -257,13 +257,16 @@ export function applySeo(input: SeoInput): void {
 
   ensureMeta("property", "og:type").content = "website";
   ensureMeta("property", "og:site_name").content = "Plebly";
+  ensureMeta("property", "og:locale").content = "en_US";
   ensureMeta("property", "og:title").content = document.title;
   ensureMeta("property", "og:description").content = description;
   ensureMeta("property", "og:url").content = canonical;
   ensureMeta("property", "og:image").content = image;
+  ensureMeta("property", "og:image:alt").content = "Plebly";
 
   ensureMeta("name", "twitter:card").content =
     image !== `${SITE_ORIGIN}/logo.jpeg` ? "summary_large_image" : "summary";
+  ensureMeta("name", "twitter:site").content = "@joinplebly";
   ensureMeta("name", "twitter:title").content = document.title;
   ensureMeta("name", "twitter:description").content = description;
   ensureMeta("name", "twitter:image").content = image;
@@ -328,10 +331,27 @@ export function seoForRoute(
         path: "/",
         jsonLd: {
           "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: "Plebly",
-          url: SITE_ORIGIN,
-          description: DEFAULT_DESCRIPTION,
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": `${SITE_ORIGIN}/#organization`,
+              name: "Plebly",
+              url: `${SITE_ORIGIN}/`,
+              logo: `${SITE_ORIGIN}/logo.jpeg`,
+              sameAs: [
+                "https://x.com/joinplebly",
+                "https://github.com/Plebly",
+              ],
+            },
+            {
+              "@type": "WebSite",
+              "@id": `${SITE_ORIGIN}/#website`,
+              name: "Plebly",
+              url: `${SITE_ORIGIN}/`,
+              description: DEFAULT_DESCRIPTION,
+              publisher: { "@id": `${SITE_ORIGIN}/#organization` },
+            },
+          ],
         },
       };
     case "about":

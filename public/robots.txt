@@ -1,7 +1,33 @@
+# Plebly — https://plebly.fund
 User-agent: *
 Allow: /
 
-# Curated context for LLM / agent crawlers (https://llmstxt.org/)
+# AI / answer-engine crawlers (explicit allow; policy is open)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Curated context for LLM / coding agents (https://llmstxt.org/)
 # https://plebly.fund/llms.txt
 # https://plebly.fund/llms-full.txt
 
