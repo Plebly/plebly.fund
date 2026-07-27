@@ -24,7 +24,7 @@ import type { Proposal } from "./types";
 import { href, profileHref, proposalHref } from "./router";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import { escapeHtml, formatSats } from "./util";
-import { fetchProposalViews } from "./views";
+import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
 
 export type HomeShell = (inner: string) => string;
@@ -659,17 +659,15 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       fetchWatches().catch(() => []),
     ]);
     proposals = withBalances;
-    const proposalsWithViews = await Promise.all(
-      proposals.map(async (proposal) => {
-        const view_count = proposal.id
-          ? await fetchProposalViews(proposal.id).catch(() => null)
-          : null;
-        return typeof view_count === "number"
-          ? { ...proposal, view_count }
-          : proposal;
-      }),
-    );
-    proposals = proposalsWithViews;
+    const viewCounts = await fetchProposalViewsBatch(
+      proposals.map((proposal) => proposal.id || "").filter(Boolean),
+    ).catch(() => new Map<string, number>());
+    proposals = proposals.map((proposal) => {
+      const view_count = proposal.id ? viewCounts.get(proposal.id) : undefined;
+      return typeof view_count === "number"
+        ? { ...proposal, view_count }
+        : proposal;
+    });
     const lightningEnabled = Boolean(lnStatus.enabled);
     const watchPaths = new Set(
       watches.flatMap((w) => [w.proposal_path, w.proposal_id]),
