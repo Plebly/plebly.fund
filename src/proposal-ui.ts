@@ -400,7 +400,14 @@ function explorerLink(href: string, label: string): string {
 
 /** Compact control that opens the donate modal (lives in the actions group). */
 export function donateTriggerHtml(): string {
-  return `<button type="button" class="btn donate-open-btn" id="donate-open">${btnWithIcon("bitcoin-sign", "Donate")}</button>`;
+  return `<button type="button" class="btn donate-open-btn" id="donate-open" data-open-donate>${btnWithIcon("bitcoin-sign", "Donate")}</button>`;
+}
+
+/** Sticky mobile CTA — same open handler as #donate-open via data-open-donate. */
+export function donateMobileCtaHtml(): string {
+  return `<div class="proposal-mobile-cta">
+    <button type="button" class="btn donate-open-btn" data-open-donate>${btnWithIcon("bitcoin-sign", "Donate")}</button>
+  </div>`;
 }
 
 /** Absolute canonical URL for sharing a project page. */
@@ -1126,13 +1133,21 @@ export function bindDonateModal(
   opts?: { open?: boolean; rail?: "onchain" | "lightning" },
 ): void {
   const modal = root.querySelector<HTMLElement>("#donate-modal");
-  const openBtn = root.querySelector<HTMLButtonElement>("#donate-open");
+  const openBtns = [
+    ...root.querySelectorAll<HTMLButtonElement>(
+      "[data-open-donate], #donate-open",
+    ),
+  ];
   const closeBtn = root.querySelector<HTMLButtonElement>("#donate-close");
   const backdrop = root.querySelector<HTMLElement>("[data-close-donate]");
   const panel = root.querySelector("#donate");
+  let lastOpener: HTMLButtonElement | null = openBtns[0] || null;
 
-  const open = () => {
+  const open = (ev?: Event) => {
     if (!modal) return;
+    if (ev?.currentTarget instanceof HTMLButtonElement) {
+      lastOpener = ev.currentTarget;
+    }
     modal.hidden = false;
     document.body.classList.add("modal-open");
     if (opts?.rail === "lightning" && panel) {
@@ -1147,14 +1162,14 @@ export function bindDonateModal(
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     window.removeEventListener("keydown", onEscape);
-    openBtn?.focus();
+    lastOpener?.focus();
   };
 
   const onEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && modal && !modal.hidden) close();
   };
 
-  openBtn?.addEventListener("click", open);
+  for (const btn of openBtns) btn.addEventListener("click", open);
   closeBtn?.addEventListener("click", close);
   backdrop?.addEventListener("click", close);
 

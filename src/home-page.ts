@@ -221,23 +221,23 @@ function discoverToolbarHtml(count: number): string {
               <option value="ended">Window ended</option>
             </select>
           </label>
+          <div class="builder-filters" aria-label="Claim and type filters">
+            <div class="builder-filter-group" role="group" aria-label="Claim state">
+              <span class="builder-filter-label">Claim</span>
+              <button type="button" class="builder-filter active" data-claim="all">Any</button>
+              <button type="button" class="builder-filter" data-claim="open">Open</button>
+              <button type="button" class="builder-filter" data-claim="near">Near</button>
+              <button type="button" class="builder-filter" data-claim="taken">Taken</button>
+            </div>
+            <div class="builder-filter-group" role="group" aria-label="Proposal type">
+              <span class="builder-filter-label">Type</span>
+              <button type="button" class="builder-filter active" data-type="all">Any</button>
+              <button type="button" class="builder-filter" data-type="bounty">Bounty</button>
+              <button type="button" class="builder-filter" data-type="direct">Direct</button>
+            </div>
+          </div>
         </div>
       </details>
-    </div>
-  </div>
-  <div class="builder-filters" aria-label="Project filters">
-    <div class="builder-filter-group" role="group" aria-label="Claim state">
-      <span class="builder-filter-label">Claim</span>
-      <button type="button" class="builder-filter active" data-claim="all">Any</button>
-      <button type="button" class="builder-filter" data-claim="open">Open</button>
-      <button type="button" class="builder-filter" data-claim="near">Near</button>
-      <button type="button" class="builder-filter" data-claim="taken">Taken</button>
-    </div>
-    <div class="builder-filter-group" role="group" aria-label="Proposal type">
-      <span class="builder-filter-label">Type</span>
-      <button type="button" class="builder-filter active" data-type="all">Any</button>
-      <button type="button" class="builder-filter" data-type="bounty">Bounty</button>
-      <button type="button" class="builder-filter" data-type="direct">Direct</button>
     </div>
   </div>`;
 }
@@ -643,7 +643,12 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <div id="completed-rail"></div>
     <section class="wrap-wide landing-discover">
       ${discoverToolbarHtml(0)}
-      <div id="list" class="loading">Loading open projects…</div>
+      <div id="list" class="project-grid project-grid-skeleton" aria-busy="true" aria-label="Loading open projects">
+        <div class="project-card skeleton-card"></div>
+        <div class="project-card skeleton-card"></div>
+        <div class="project-card skeleton-card"></div>
+        <div class="project-card skeleton-card"></div>
+      </div>
     </section>
     ${howItWorksHtml()}
     ${trustStripHtml()}

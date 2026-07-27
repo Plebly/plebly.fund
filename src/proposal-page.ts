@@ -12,6 +12,7 @@ import {
   bindProposalCopyButtons,
   bindShareButtons,
   donateModalHtml,
+  donateMobileCtaHtml,
   donateTriggerHtml,
   shareSlotHtml,
   ballotPanelHtml,
@@ -402,6 +403,7 @@ export async function renderProposalPage(
             ${onChainPanelHtml(match)}
           </aside>
         </div>
+        ${match.escrow_address ? donateMobileCtaHtml() : ""}
         ${match.escrow_address ? donateModalHtml(match, { signedIn: Boolean(user) }) : ""}
       </section>
     `);
