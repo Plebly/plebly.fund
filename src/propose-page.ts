@@ -1,10 +1,16 @@
 import {
+  authFetch,
   loginChoicesHtml,
   submitProposal,
   updateProposal,
 } from "./auth";
 import { fetchClaimParams } from "./builder";
-import { BITCOIN_NETWORK, PROPOSALS_RAW, SUBMISSION_FEE_SATS } from "./config";
+import {
+  BITCOIN_NETWORK,
+  PROPOSALS_RAW,
+  SUBMISSION_FEE_SATS,
+  WORKERS_API,
+} from "./config";
 import { bindFeePay, feePayHtml } from "./fee-pay";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
 import {
@@ -122,12 +128,44 @@ async function loadPrefill(editPath: string): Promise<Prefill | null> {
   };
 }
 
+type BridgeSource = {
+  owner: string;
+  repo: string;
+  number: number;
+  html_url: string;
+  author_login?: string | null;
+};
+
+async function loadBridgeSource(sourceUrl: string): Promise<{
+  source_issue: BridgeSource;
+  title: string;
+  problem: string;
+  draft: { pr_url: string } | null;
+} | null> {
+  const api = WORKERS_API.replace(/\/$/, "");
+  const res = await authFetch(
+    `${api}/bridge/source?url=${encodeURIComponent(sourceUrl)}`,
+  );
+  if (!res.ok) return null;
+  return (await res.json()) as {
+    source_issue: BridgeSource;
+    title: string;
+    problem: string;
+    draft: { pr_url: string } | null;
+  };
+}
+
 export async function renderPropose(ctx: ShellContext): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
-  const editParam = new URLSearchParams(location.search).get("edit");
+  const params = new URLSearchParams(location.search);
+  const editParam = params.get("edit");
+  const sourceParam = params.get("source");
+  const bridgeParam = params.get("bridge");
   const returnPath = editParam
     ? `${PROPOSE_PATH}?edit=${encodeURIComponent(editParam)}`
-    : PROPOSE_PATH;
+    : sourceParam
+      ? `${PROPOSE_PATH}?bridge=1&source=${encodeURIComponent(sourceParam)}`
+      : PROPOSE_PATH;
 
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
@@ -142,6 +180,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   }
 
   let prefill: Prefill | null = null;
+  let bridgeSource: BridgeSource | null = null;
+  let bridgeDraftPr: string | null = null;
   if (editParam) {
     app.innerHTML = ctx.shell(
       `<section class="wrap detail propose-page"><p class="loading">Loading proposal…</p></section>`,
@@ -157,9 +197,51 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       `);
       return;
     }
+  } else if (sourceParam && (bridgeParam === "1" || sourceParam.includes("github.com"))) {
+    app.innerHTML = ctx.shell(
+      `<section class="wrap detail propose-page"><p class="loading">Loading GitHub issue…</p></section>`,
+    );
+    const bridge = await loadBridgeSource(sourceParam);
+    if (!bridge) {
+      app.innerHTML = ctx.shell(`
+        <section class="wrap detail propose-page">
+          <h1>Cannot load issue</h1>
+          <p class="lede">Install the Plebly GitHub App on that repository (required for private issues), or check the URL.</p>
+          <p><a class="btn" href="${href("/propose")}">Start without bridge</a></p>
+        </section>
+      `);
+      return;
+    }
+    bridgeSource = bridge.source_issue;
+    bridgeDraftPr = bridge.draft?.pr_url || null;
+    prefill = {
+      path: "",
+      id: null,
+      title: bridge.title,
+      proposal_type: "bounty",
+      tags: [],
+      parent_initiative: null,
+      problem: bridge.problem,
+      deliverable: "",
+      verification: "",
+      out_of_scope: "",
+      notes: `Bridged from ${bridge.source_issue.html_url}`,
+      target_sats: null,
+      cover_image: null,
+      milestones: [],
+      depends_on: [],
+      related_work: [
+        {
+          label: `GitHub #${bridge.source_issue.number}`,
+          url: bridge.source_issue.html_url,
+        },
+      ],
+      status: "pr_open",
+    };
   }
 
-  const isEdit = Boolean(prefill);
+  const isEdit = Boolean(editParam && prefill);
+  const isBridge = Boolean(bridgeSource && !isEdit);
   const feeLabel = formatSats(SUBMISSION_FEE_SATS);
   const networkLabel = BITCOIN_NETWORK === "signet" ? "signet" : "mainnet";
   let feeAddress: string | null = null;
@@ -174,9 +256,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail propose-page">
-      <h1>${isEdit ? "Edit proposal" : "Start a project"}</h1>
+      <h1>${isEdit ? "Edit proposal" : isBridge ? "Complete bridged proposal" : "Start a project"}</h1>
       ${
-        isEdit
+        isBridge && bridgeSource
+          ? `<div class="edit-banner" role="status">
+            <p>Bridged from <a href="${escapeHtml(bridgeSource.html_url)}" target="_blank" rel="noreferrer">${escapeHtml(bridgeSource.owner)}/${escapeHtml(bridgeSource.repo)}#${bridgeSource.number}</a>${
+              bridgeDraftPr
+                ? ` · <a href="${escapeHtml(bridgeDraftPr)}" target="_blank" rel="noreferrer">draft PR</a>`
+                : ""
+            }</p>
+            <p class="hint">Pay the submission fee and finish Deliverable / Verification / Out of scope. The draft PR is updated in place.</p>
+          </div>`
+          : isEdit
           ? `<div class="edit-banner" role="status">
               <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span></p>
               <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
@@ -296,7 +387,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         ${relatedWorkSectionHtml()}
 
         <div class="form-actions">
-          <button type="submit" class="btn">${isEdit ? "Open amend PR" : "Open proposal PR"}</button>
+          <button type="submit" class="btn">${isEdit ? "Open amend PR" : isBridge ? "Pay fee & update draft PR" : "Open proposal PR"}</button>
           ${isEdit ? `<a class="btn ghost" href="${proposalHref(prefill!.path, prefill!.id)}">Cancel</a>` : ""}
         </div>
         <p class="form-msg" id="propose-msg" hidden></p>
@@ -757,10 +848,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         const result = await submitProposal({
           ...author,
           submission_fee_txid: feeTxid,
+          source_issue: bridgeSource,
         });
         showProposeSuccess({
-          title: "Proposal submitted",
-          body: "Your submission pull request is open. It becomes editable in-app after merge to main.",
+          title: isBridge ? "Bridge proposal funded" : "Proposal submitted",
+          body: isBridge
+            ? "Your draft PR was updated with the fee and full fields. It becomes listed after merge + escrow allocate; the source issue then gets the funding comment."
+            : "Your submission pull request is open. It becomes editable in-app after merge to main.",
           prUrl: result.pr_url,
           backHref: href("/"),
           backLabel: "Browse projects",

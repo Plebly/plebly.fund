@@ -506,6 +506,13 @@ export type ProposalAuthorInput = {
 
 export type SubmitProposalInput = ProposalAuthorInput & {
   submission_fee_txid: string;
+  source_issue?: {
+    owner: string;
+    repo: string;
+    number: number;
+    html_url: string;
+    author_login?: string | null;
+  } | null;
 };
 
 export type UpdateProposalInput = ProposalAuthorInput & {
