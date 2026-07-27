@@ -331,7 +331,11 @@ describe("donate credit UX (signed out)", () => {
     await vi.waitFor(() => {
       expect(document.querySelector("#donate-step-credit")?.hidden).toBe(false);
     });
-    expect(document.body.textContent).toContain("Sign in to claim public credit");
+    expect(document.querySelector("#donate-modal-title")?.textContent).toContain(
+      "Sign in",
+    );
+    expect(document.body.textContent).toContain("GitHub");
+    expect(document.body.textContent).toContain("Nostr");
     expect(document.querySelector("#donate-credit-public")).toBeNull();
     expect(document.querySelector("#donate-credit-continue")?.textContent).toContain(
       "Continue anonymously",
