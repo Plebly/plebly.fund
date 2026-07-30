@@ -35,6 +35,7 @@ import {
   collectMilestoneDrafts,
   MAX_MILESTONES,
   milestoneEditorSectionHtml,
+  milestoneFieldSelector,
   milestoneRowHtml,
   milestonesAllocatedTotal,
   milestonesFundingHint,
@@ -45,13 +46,16 @@ import {
 import { parseTagList } from "./proposal-tags";
 import { PROPOSAL_TEMPLATES } from "./proposal-templates";
 import {
-  focusFormField,
+  applyNamedFieldErrors,
+  clearControlFieldError,
+  clearProposeFieldErrors,
   proposeReviewSummaryHtml,
   proposeWizardNavHtml,
   proposeWizardProgressHtml,
   PROPOSE_WIZARD_STEPS,
   proposeWizardStepIndex,
   readNamedValue,
+  setControlFieldError,
   validateBasicsDraft,
   validateScopeDraft,
   type ProposeWizardStepId,
@@ -477,6 +481,88 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     msg.className = kind === "error" ? "form-msg error" : "form-msg";
   };
 
+  const focusControl = (control: HTMLElement | null | undefined) => {
+    if (!control) return;
+    control.focus?.();
+    control.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  };
+
+  const showNamedFieldErrors = (
+    errors: { field: string; message: string }[],
+  ): boolean => {
+    showWizardMsg("");
+    const first = applyNamedFieldErrors(form, errors);
+    focusControl(first);
+    return false;
+  };
+
+  const showMilestoneValidation = (
+    checked: ReturnType<typeof validateMilestoneDrafts>,
+  ): boolean => {
+    if (checked.ok) return true;
+    showWizardMsg("");
+    const focus = checked.focus;
+    if (focus?.type === "row") {
+      const row = milestonesList.querySelectorAll<HTMLElement>(
+        ".milestone-editor-row",
+      )[focus.index];
+      const control = row?.querySelector(milestoneFieldSelector(focus.field));
+      focusControl(setControlFieldError(control, focus.message));
+      return false;
+    }
+    if (focus?.type === "block") {
+      const host =
+        document.getElementById("milestones-block") ||
+        document.getElementById("propose-target-sats")?.closest(".field");
+      if (host) {
+        host.classList.add("is-invalid");
+        let err = host.querySelector<HTMLElement>(":scope > .field-error");
+        if (!err) {
+          err = document.createElement("p");
+          err.className = "field-error";
+          err.setAttribute("role", "alert");
+          const foot = host.querySelector(".milestone-editor-foot");
+          if (foot) foot.insertAdjacentElement("beforebegin", err);
+          else host.appendChild(err);
+        }
+        err.textContent = focus.message;
+        focusControl(
+          (document.getElementById("add-milestone-btn") as HTMLElement | null) ||
+            (document.getElementById("propose-target-sats") as HTMLElement | null),
+        );
+      }
+      return false;
+    }
+    showWizardMsg(checked.error, "error");
+    return false;
+  };
+
+  const showDepValidation = (
+    list: HTMLElement,
+    checked:
+      | { ok: true }
+      | {
+          ok: false;
+          focus: { index: number; field: string; message: string };
+        },
+    fieldClass: { label: string; ref?: string; url?: string },
+  ): boolean => {
+    if (checked.ok) return true;
+    showWizardMsg("");
+    const row = list.querySelectorAll<HTMLElement>(".dep-editor-row")[
+      checked.focus.index
+    ];
+    const sel =
+      checked.focus.field === "label"
+        ? fieldClass.label
+        : checked.focus.field === "url"
+          ? fieldClass.url || ".dep-ref"
+          : fieldClass.ref || ".dep-ref";
+    const control = row?.querySelector(sel);
+    focusControl(setControlFieldError(control, checked.focus.message));
+    return false;
+  };
+
   const refreshReviewSummary = () => {
     const fd = new FormData(form);
     const targetRaw = fd.get("target_sats");
@@ -508,6 +594,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   };
 
   const validateCurrentStep = (): boolean => {
+    clearProposeFieldErrors(form);
     if (currentStep === "basics") {
       const checked = validateBasicsDraft({
         title: readNamedValue(form, "title"),
@@ -516,16 +603,26 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             ? "direct"
             : "bounty",
       });
-      if (!checked.ok) {
-        showWizardMsg(checked.error, "error");
-        if (checked.focus) focusFormField(form, checked.focus);
-        return false;
-      }
+      if (!checked.ok) return showNamedFieldErrors(checked.errors);
       if (coverUploading) {
-        showWizardMsg(
-          "Wait for the cover upload to finish, or remove it.",
-          "error",
-        );
+        const coverField = document
+          .querySelector(".cover-field")
+          ?.closest(".field") as HTMLElement | null;
+        const pick = document.getElementById("propose-cover-pick");
+        if (coverField || pick) {
+          showWizardMsg("");
+          focusControl(
+            setControlFieldError(
+              pick || coverField,
+              "Wait for the cover upload to finish, or remove it.",
+            ),
+          );
+        } else {
+          showWizardMsg(
+            "Wait for the cover upload to finish, or remove it.",
+            "error",
+          );
+        }
         return false;
       }
       return true;
@@ -537,46 +634,50 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         verification: readNamedValue(form, "verification"),
         out_of_scope: readNamedValue(form, "out_of_scope"),
       });
-      if (!checked.ok) {
-        showWizardMsg(checked.error, "error");
-        if (checked.focus) focusFormField(form, checked.focus);
-        return false;
-      }
+      if (!checked.ok) return showNamedFieldErrors(checked.errors);
       return true;
     }
     if (currentStep === "funding") {
       const targetRaw = readNamedValue(form, "target_sats");
       const target_sats = targetRaw.length ? Number(targetRaw) : null;
       const drafts = collectMilestoneDrafts(milestonesList);
-      const checked = validateMilestoneDrafts(
-        drafts,
-        Number.isFinite(target_sats as number) ? target_sats : null,
+      return showMilestoneValidation(
+        validateMilestoneDrafts(
+          drafts,
+          Number.isFinite(target_sats as number) ? target_sats : null,
+        ),
       );
-      if (!checked.ok) {
-        showWizardMsg(checked.error, "error");
-        document.getElementById("milestones-block")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-        return false;
-      }
-      return true;
     }
     if (currentStep === "context") {
       const depOk = validateDependsOnDrafts(collectDependsOn(dependsList));
-      if (!depOk.ok) {
-        showWizardMsg(depOk.error, "error");
+      if (
+        !showDepValidation(dependsList, depOk, {
+          label: ".dep-label",
+          ref: ".dep-ref",
+        })
+      ) {
         return false;
       }
       const relOk = validateRelatedWorkDrafts(collectRelatedWork(relatedList));
-      if (!relOk.ok) {
-        showWizardMsg(relOk.error, "error");
-        return false;
-      }
-      return true;
+      return showDepValidation(relatedList, relOk, {
+        label: ".rel-label",
+        url: ".rel-url",
+      });
     }
     return true;
   };
+
+  // Clear a field's inline error as soon as the user edits it.
+  form.addEventListener("input", (e) => {
+    const t = e.target as Element | null;
+    if (!t) return;
+    clearControlFieldError(t);
+  });
+  form.addEventListener("change", (e) => {
+    const t = e.target as Element | null;
+    if (!t) return;
+    clearControlFieldError(t);
+  });
 
   const setWizardStep = (next: ProposeWizardStepId) => {
     currentStep = next;
@@ -618,6 +719,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       });
 
     if (next === "review") refreshReviewSummary();
+    clearProposeFieldErrors(form);
     showWizardMsg("");
     document
       .querySelector(".propose-wizard-step-meta")
@@ -1032,8 +1134,14 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       return;
     }
     if (coverUploading) {
-      showWizardMsg("Wait for the cover upload to finish, or remove it.", "error");
       setWizardStep("basics");
+      const pick = document.getElementById("propose-cover-pick");
+      focusControl(
+        setControlFieldError(
+          pick,
+          "Wait for the cover upload to finish, or remove it.",
+        ),
+      );
       return;
     }
 
@@ -1043,9 +1151,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         readNamedValue(form, "proposal_type") === "direct" ? "direct" : "bounty",
     });
     if (!basics.ok) {
-      showWizardMsg(basics.error, "error");
       setWizardStep("basics");
-      if (basics.focus) focusFormField(form, basics.focus);
+      showNamedFieldErrors(basics.errors);
       return;
     }
     const scope = validateScopeDraft({
@@ -1055,9 +1162,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       out_of_scope: readNamedValue(form, "out_of_scope"),
     });
     if (!scope.ok) {
-      showWizardMsg(scope.error, "error");
       setWizardStep("scope");
-      if (scope.focus) focusFormField(form, scope.focus);
+      showNamedFieldErrors(scope.errors);
       return;
     }
 
@@ -1068,27 +1174,29 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const drafts = collectMilestoneDrafts(milestonesList);
     const checked = validateMilestoneDrafts(drafts, target_sats);
     if (!checked.ok) {
-      showWizardMsg(checked.error, "error");
       setWizardStep("funding");
-      document.getElementById("milestones-block")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      showMilestoneValidation(checked);
       return;
     }
 
     const depDrafts = collectDependsOn(dependsList);
     const depOk = validateDependsOnDrafts(depDrafts);
     if (!depOk.ok) {
-      showWizardMsg(depOk.error, "error");
       setWizardStep("context");
+      showDepValidation(dependsList, depOk, {
+        label: ".dep-label",
+        ref: ".dep-ref",
+      });
       return;
     }
     const relDrafts = collectRelatedWork(relatedList);
     const relOk = validateRelatedWorkDrafts(relDrafts);
     if (!relOk.ok) {
-      showWizardMsg(relOk.error, "error");
       setWizardStep("context");
+      showDepValidation(relatedList, relOk, {
+        label: ".rel-label",
+        url: ".rel-url",
+      });
       return;
     }
 
@@ -1117,10 +1225,22 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       const feeTxid = feePay?.getTxid() || "";
       if (!/^[0-9a-fA-F]{64}$/.test(feeTxid)) {
         feePay?.setStep("txid");
-        showWizardMsg(
-          "Paste the 64-character submission fee txid after you've sent the payment.",
-          "error",
+        const txidInput = document.getElementById(
+          "propose-fee-txid",
+        ) as HTMLInputElement | null;
+        showWizardMsg("");
+        focusControl(
+          setControlFieldError(
+            txidInput,
+            "Paste the 64-character submission fee txid after you've sent the payment.",
+          ) || txidInput,
         );
+        if (!txidInput) {
+          showWizardMsg(
+            "Paste the 64-character submission fee txid after you've sent the payment.",
+            "error",
+          );
+        }
         return;
       }
       showWizardMsg("Opening pull request…");

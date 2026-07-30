@@ -75,7 +75,7 @@ ${projectLines.join("\n")}
 
 - [Proposals repository](https://github.com/Plebly/proposals): Canonical uncensorable proposal and funding record
 - [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md): Fixed launch parameters (fees, claim floor, windows, claim-abuse knobs)
-- [KEYHOLDERS.md](https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md): Multisig keyholder and network notes
+- [Keyholders](${SITE}/about#keyholders): Multisig roster and rules (generated from KEYHOLDERS.md at build)
 - [Proposal template](https://github.com/Plebly/proposals/blob/main/template/proposal.md): Required fields for a new proposal
 - [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
 

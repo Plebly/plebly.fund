@@ -27,12 +27,11 @@ Watch a project to follow funding progress. Watching does **not** reserve the wo
 
 ## Lightning donations
 
-Lightning is a **funding rail into on-chain escrow**, not a separate balance. A reverse submarine swap (via Boltz) pays a hold invoice; after the lockup confirms, Plebly's claimer broadcasts a claim transaction **to the project's escrow address**. Only then do the mempool balance and the claim floor move.
+Lightning is a way to fund the same on-chain escrow address. After payment settles, the project's balance and claim floor update as usual.
 
-- Unpaid or in-flight invoices do **not** count toward the claim floor.
-- Escrow credit is the invoice amount minus Boltz service and claim fees; the donate UI shows the expected on-chain credit.
-- Minimum amounts follow the Boltz BTC/BTC reverse pair (often above the smallest on-chain presets).
-- Lightning is enabled on **mainnet** production. Signet stays on-chain only (Boltz has no signet pair). Use `BITCOIN_NETWORK=testnet` for Lightning staging.
+- Unpaid invoices do **not** count toward funding.
+- Network and routing fees may reduce the amount that lands in escrow.
+- Lightning is available on **mainnet**. Signet stays on-chain only.
 
 ## Key parameters
 
@@ -47,15 +46,15 @@ Milestone splits apply above **{{milestone_threshold}}**. Badge tiers, funding w
 
 ## Trust model
 
-Escrow is **3-of-5 multisig**. Plebly never holds a spending key. Launch uses human keyholders; there is **no on-chain timelock** in v1.
+Escrow is **3-of-5 multisig**. Plebly never holds a spending key. Launch uses human keyholders.
 
-If keyholders stall after a reviewer-approved release, the public process in the [KEYHOLDERS stall runbook](https://github.com/Plebly/proposals/blob/main/docs/keyholder-stall-runbook.md) applies: a 7-day log followed by a 14-day incident process.
+If keyholders stall after a reviewer-approved release, the public process applies: a 7-day log followed by a 14-day incident process.
 
-Parameters and the keyholder roster live in git. See [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md) and [KEYHOLDERS.md](https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md).
+See [Keyholders](#keyholders) for the live roster and [Key parameters](#parameters) for fees and floors.
 
 ## Testing vs launch
 
-The site is currently on **{{bitcoin_network}}** for end-to-end testing. Launch will use **mainnet only** with 3-of-5 multisig escrow. See [KEYHOLDERS.md](https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md).
+The site is currently on **{{bitcoin_network}}** for end-to-end testing. Launch will use **mainnet only** with 3-of-5 multisig escrow. See [Keyholders](#keyholders).
 
 ## Get involved
 

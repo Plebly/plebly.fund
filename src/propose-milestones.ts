@@ -213,16 +213,47 @@ export function collectMilestoneDrafts(root: ParentNode): MilestoneDraft[] {
   return out;
 }
 
+export type MilestoneFieldKey =
+  | "deliverable"
+  | "verification"
+  | "out_of_scope"
+  | "allocation_sats"
+  | "deadline";
+
+export type MilestoneValidationFail = {
+  ok: false;
+  error: string;
+  focus?:
+    | { type: "block"; message: string }
+    | { type: "row"; index: number; field: MilestoneFieldKey; message: string };
+};
+
+const MS_FIELD_SELECTOR: Record<MilestoneFieldKey, string> = {
+  deliverable: ".ms-deliverable",
+  verification: ".ms-verification",
+  out_of_scope: ".ms-oos",
+  allocation_sats: ".ms-sats",
+  deadline: ".ms-deadline",
+};
+
+export function milestoneFieldSelector(field: MilestoneFieldKey): string {
+  return MS_FIELD_SELECTOR[field];
+}
+
 export function validateMilestoneDrafts(
   drafts: MilestoneDraft[],
   targetSats: number | null,
-): { ok: true; milestones: ProposalMilestone[] } | { ok: false; error: string } {
+):
+  | { ok: true; milestones: ProposalMilestone[] }
+  | MilestoneValidationFail {
   const need =
     targetSats != null && targetSats >= MILESTONE_THRESHOLD_SATS;
   if (need && drafts.length === 0) {
+    const message = `Add at least one milestone when target funding is ≥ ${formatSats(MILESTONE_THRESHOLD_SATS)}.`;
     return {
       ok: false,
-      error: `Add at least one milestone when target funding is ≥ ${formatSats(MILESTONE_THRESHOLD_SATS)}.`,
+      error: message,
+      focus: { type: "block", message },
     };
   }
   if (drafts.length === 0) {
@@ -234,33 +265,43 @@ export function validateMilestoneDrafts(
     const d = drafts[i];
     const n = i + 1;
     if (d.deliverable.length < 10) {
+      const message = "Deliverable needs at least 10 characters.";
       return {
         ok: false,
         error: `Milestone ${n}: deliverable needs at least 10 characters.`,
+        focus: { type: "row", index: i, field: "deliverable", message },
       };
     }
     if (d.verification.length < 10) {
+      const message = "Verification needs at least 10 characters.";
       return {
         ok: false,
         error: `Milestone ${n}: verification needs at least 10 characters.`,
+        focus: { type: "row", index: i, field: "verification", message },
       };
     }
     if (!d.out_of_scope) {
+      const message = "Out of scope is required.";
       return {
         ok: false,
         error: `Milestone ${n}: out of scope is required.`,
+        focus: { type: "row", index: i, field: "out_of_scope", message },
       };
     }
     if (!Number.isFinite(d.allocation_sats) || d.allocation_sats < 1) {
+      const message = "Allocation must be at least 1 sat.";
       return {
         ok: false,
         error: `Milestone ${n}: allocation must be at least 1 sat.`,
+        focus: { type: "row", index: i, field: "allocation_sats", message },
       };
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.deadline)) {
+      const message = "Pick a deadline date.";
       return {
         ok: false,
         error: `Milestone ${n}: pick a deadline date.`,
+        focus: { type: "row", index: i, field: "deadline", message },
       };
     }
     const id = `m${n}`;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyNamedFieldErrors,
+  clearProposeFieldErrors,
   proposeReviewSummaryHtml,
   proposeWizardNavHtml,
   proposeWizardProgressHtml,
@@ -61,27 +63,48 @@ describe("propose wizard steps", () => {
 
 describe("propose wizard validation", () => {
   it("requires a real title and type on basics", () => {
-    expect(validateBasicsDraft({ title: "ab", proposal_type: "bounty" })).toEqual(
-      {
-        ok: false,
-        error: "Title needs at least 3 characters.",
-        focus: "title",
-      },
-    );
+    const bad = validateBasicsDraft({ title: "ab", proposal_type: "bounty" });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.focus).toBe("title");
+      expect(bad.error).toBe("Title needs at least 3 characters.");
+      expect(bad.errors).toEqual([
+        { field: "title", message: "Title needs at least 3 characters." },
+      ]);
+    }
     expect(
       validateBasicsDraft({ title: "Ship docs", proposal_type: "direct" }),
     ).toEqual({ ok: true });
   });
 
-  it("enforces scope minimum lengths", () => {
+  it("enforces scope minimum lengths and collects every failing field", () => {
     const short = validateScopeDraft({
       problem: "too short",
       deliverable: "x".repeat(40),
       verification: "x".repeat(40),
-      out_of_scope: "not this",
+      out_of_scope: "long enough",
     });
     expect(short.ok).toBe(false);
-    if (!short.ok) expect(short.focus).toBe("problem");
+    if (!short.ok) {
+      expect(short.focus).toBe("problem");
+      expect(short.errors.map((e) => e.field)).toEqual(["problem"]);
+    }
+
+    const many = validateScopeDraft({
+      problem: "short",
+      deliverable: "short",
+      verification: "short",
+      out_of_scope: "x",
+    });
+    expect(many.ok).toBe(false);
+    if (!many.ok) {
+      expect(many.errors.map((e) => e.field)).toEqual([
+        "problem",
+        "deliverable",
+        "verification",
+        "out_of_scope",
+      ]);
+    }
 
     expect(
       validateScopeDraft({
@@ -91,6 +114,32 @@ describe("propose wizard validation", () => {
         out_of_scope: "not included",
       }),
     ).toEqual({ ok: true });
+  });
+});
+
+describe("propose field errors", () => {
+  it("attaches an alert next to the failing control", () => {
+    document.body.innerHTML = `
+      <form id="f">
+        <label class="field">
+          <span>Title</span>
+          <input name="title" />
+        </label>
+      </form>
+    `;
+    const form = document.getElementById("f") as HTMLFormElement;
+    applyNamedFieldErrors(form, [
+      { field: "title", message: "Title needs at least 3 characters." },
+    ]);
+    const input = form.elements.namedItem("title") as HTMLInputElement;
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.closest(".field")?.classList.contains("is-invalid")).toBe(true);
+    expect(form.querySelector(".field-error")?.textContent).toBe(
+      "Title needs at least 3 characters.",
+    );
+    clearProposeFieldErrors(form);
+    expect(form.querySelector(".field-error")).toBeNull();
+    expect(input.getAttribute("aria-invalid")).toBeNull();
   });
 });
 

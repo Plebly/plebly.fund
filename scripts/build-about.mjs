@@ -45,21 +45,181 @@ function parsePercent(value) {
   return m ? Number(m[1]) : null;
 }
 
-async function loadParametersMarkdown() {
-  const localPath = join(root, "../proposals/PARAMETERS.md");
-  if (process.env.PARAMETERS_PATH && existsSync(process.env.PARAMETERS_PATH)) {
-    return readFileSync(process.env.PARAMETERS_PATH, "utf8");
+async function loadRepoMarkdown(filename, envPathKey) {
+  const localPath = join(root, `../proposals/${filename}`);
+  if (process.env[envPathKey] && existsSync(process.env[envPathKey])) {
+    return readFileSync(process.env[envPathKey], "utf8");
   }
   if (existsSync(localPath)) {
     return readFileSync(localPath, "utf8");
   }
-  const res = await fetch(`${proposalsRaw}/PARAMETERS.md`);
+  const res = await fetch(`${proposalsRaw}/${filename}`);
   if (!res.ok) {
     throw new Error(
-      `Could not fetch PARAMETERS.md (${res.status}). Set PARAMETERS_PATH for offline builds.`,
+      `Could not fetch ${filename} (${res.status}). Set ${envPathKey} for offline builds.`,
     );
   }
   return res.text();
+}
+
+async function loadParametersMarkdown() {
+  return loadRepoMarkdown("PARAMETERS.md", "PARAMETERS_PATH");
+}
+
+async function loadKeyholdersMarkdown() {
+  return loadRepoMarkdown("KEYHOLDERS.md", "KEYHOLDERS_PATH");
+}
+
+/** Strip markdown links / emphasis for plain status lines. */
+function plainText(md) {
+  return String(md || "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Public about copy: drop Worker/API internals from KEYHOLDERS lead text. */
+function publicLeadText(md) {
+  const text = plainText(md);
+  if (!text) return "";
+  return text
+    .split(/(?<=\.)\s+/)
+    .filter((sentence) => {
+      const s = sentence.toLowerCase();
+      return !(
+        s.includes("workers") ||
+        s.includes("pending_keyholders") ||
+        s.includes("/escrow") ||
+        s.includes("501")
+      );
+    })
+    .join(" ")
+    .trim();
+}
+
+function extractH1Blocks(md) {
+  const blocks = [];
+  const parts = md.split(/^#\s+/m).filter((c) => c.trim());
+  for (const chunk of parts) {
+    const nl = chunk.indexOf("\n");
+    const title = (nl === -1 ? chunk : chunk.slice(0, nl)).trim();
+    const body = (nl === -1 ? "" : chunk.slice(nl + 1)).trim();
+    blocks.push({ title, body });
+  }
+  return blocks;
+}
+
+function extractH2Section(body, titleMatch) {
+  const sections = body.split(/^##\s+/m).filter((c) => c.trim());
+  for (const chunk of sections) {
+    const nl = chunk.indexOf("\n");
+    const title = (nl === -1 ? chunk : chunk.slice(0, nl)).trim();
+    if (!titleMatch.test(title)) continue;
+    return {
+      title,
+      body: (nl === -1 ? "" : chunk.slice(nl + 1)).trim(),
+    };
+  }
+  return null;
+}
+
+function parseBulletList(body) {
+  const items = [];
+  for (const line of body.split("\n")) {
+    const m = line.trim().match(/^[-*]\s+(.+)$/);
+    if (m) items.push(plainText(m[1]));
+  }
+  return items;
+}
+
+function parseKeyholderRoster(body) {
+  const roster = [];
+  for (const line of body.split("\n")) {
+    const m = line.match(
+      /^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|/,
+    );
+    if (!m) continue;
+    const seat = m[1].trim();
+    const name = m[2].trim();
+    const role = m[3].trim();
+    const xpub = m[4].trim();
+    if (
+      seat.startsWith("-") ||
+      seat === "#" ||
+      /^:?-+:?$/.test(seat) ||
+      name.toLowerCase() === "name"
+    ) {
+      continue;
+    }
+    roster.push({ seat, name, role, xpub });
+  }
+  return roster;
+}
+
+function parseKeyholdersMarkdown(md) {
+  const blocks = extractH1Blocks(md);
+  const signet =
+    blocks.find((b) => /signet/i.test(b.title)) || null;
+  const production =
+    blocks.find((b) => /production|keyholder/i.test(b.title)) ||
+    blocks.find((b) => !/signet/i.test(b.title)) ||
+    null;
+
+  const signetNot =
+    signet && extractH2Section(signet.body, /what this is not/i);
+  const rulesSec =
+    production && extractH2Section(production.body, /^rules$/i);
+  const rosterSec =
+    production && extractH2Section(production.body, /^roster/i);
+
+  let status = "";
+  let productionLead = "";
+  if (production) {
+    const beforeRules = production.body.split(/^##\s+/m)[0] || "";
+    const statusMatch = beforeRules.match(/\*\*Status:\*\*\s*(.+)/i);
+    if (statusMatch) {
+      status = plainText(statusMatch[1]);
+      // Keep the human status; drop ops/runbook pointers from the public page.
+      const cut = status.search(
+        /\.\s*(Ops sequence|After publishing|Stall runbook)/i,
+      );
+      if (cut !== -1) status = status.slice(0, cut + 1).trim();
+    }
+    productionLead = publicLeadText(
+      beforeRules
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("**Status:**") && l !== "---")
+        .join(" "),
+    );
+  }
+
+  const thresholdMatch =
+    (production?.body || md).match(/(\d\s*-\s*of\s*-\s*\d)/i) ||
+    (production?.body || md).match(/(\d)\s*of\s*(\d)/i);
+  const threshold = thresholdMatch
+    ? thresholdMatch[0].replace(/\s+/g, "")
+    : "3-of-5";
+
+  return {
+    threshold,
+    status,
+    productionLead,
+    rules: rulesSec ? parseBulletList(rulesSec.body) : [],
+    roster: rosterSec ? parseKeyholderRoster(rosterSec.body) : [],
+    signetCaveats: signetNot ? parseBulletList(signetNot.body) : [],
+    signetLead: signet
+      ? plainText(
+          (signet.body.split(/^##\s+/m)[0] || "")
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .join(" "),
+        )
+      : "",
+  };
 }
 
 function substitute(template, params, extras) {
@@ -114,7 +274,9 @@ function parseSteps(body) {
 
 async function main() {
   const parametersMd = await loadParametersMarkdown();
+  const keyholdersMd = await loadKeyholdersMarkdown();
   const params = parseParametersMarkdown(parametersMd);
+  const keyholders = parseKeyholdersMarkdown(keyholdersMd);
   const template = readFileSync(join(root, "content/about.md"), "utf8");
 
   const network = (process.env.VITE_BITCOIN_NETWORK || "signet").toLowerCase();
@@ -198,6 +360,29 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
       2,
     )};
 
+export type AboutKeyholderSeat = {
+  seat: string;
+  name: string;
+  role: string;
+  xpub: string;
+};
+
+export type AboutKeyholders = {
+  threshold: string;
+  status: string;
+  productionLead: string;
+  rules: string[];
+  roster: AboutKeyholderSeat[];
+  signetCaveats: string[];
+  signetLead: string;
+};
+
+export const ABOUT_KEYHOLDERS: AboutKeyholders = ${JSON.stringify(
+      keyholders,
+      null,
+      2,
+    )};
+
 export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
   );
 
@@ -253,7 +438,9 @@ export const MAX_SITE_CLAIM_PRS_PER_DAY = ${maxSiteClaimPrsPerDay};
 export const IDENTITY_RELINK_COOLDOWN_DAYS = ${identityRelinkCooldownDays};`,
   );
 
-  console.log("Generated about page and parameters from PARAMETERS.md");
+  console.log(
+    `Generated about page from PARAMETERS.md + KEYHOLDERS.md (${keyholders.roster.length} seats)`,
+  );
 }
 
 main().catch((err) => {

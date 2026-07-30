@@ -125,66 +125,172 @@ export type ScopeDraft = {
   out_of_scope: string;
 };
 
+/** Named form control error (matches `name=` on the propose form). */
+export type NamedFieldError = {
+  field: string;
+  message: string;
+};
+
+export type DraftValidationFail = {
+  ok: false;
+  errors: NamedFieldError[];
+  /** First error message (compat / screen-reader summary). */
+  error: string;
+  /** First failing field name. */
+  focus: string;
+};
+
+function failNamed(errors: NamedFieldError[]): DraftValidationFail {
+  return {
+    ok: false,
+    errors,
+    error: errors[0]?.message || "Fix the highlighted fields.",
+    focus: errors[0]?.field || "",
+  };
+}
+
 export function validateBasicsDraft(
   draft: BasicsDraft,
-): { ok: true } | { ok: false; error: string; focus?: string } {
+): { ok: true } | DraftValidationFail {
+  const errors: NamedFieldError[] = [];
   const title = draft.title.trim();
   if (title.length < 3) {
-    return {
-      ok: false,
-      error: "Title needs at least 3 characters.",
-      focus: "title",
-    };
-  }
-  if (title.length > 200) {
-    return {
-      ok: false,
-      error: "Title must be 200 characters or fewer.",
-      focus: "title",
-    };
+    errors.push({
+      field: "title",
+      message: "Title needs at least 3 characters.",
+    });
+  } else if (title.length > 200) {
+    errors.push({
+      field: "title",
+      message: "Title must be 200 characters or fewer.",
+    });
   }
   if (draft.proposal_type !== "bounty" && draft.proposal_type !== "direct") {
-    return {
-      ok: false,
-      error: "Choose bounty or direct.",
-      focus: "proposal_type",
-    };
+    errors.push({
+      field: "proposal_type",
+      message: "Choose bounty or direct.",
+    });
   }
-  return { ok: true };
+  return errors.length ? failNamed(errors) : { ok: true };
 }
 
 export function validateScopeDraft(
   draft: ScopeDraft,
-): { ok: true } | { ok: false; error: string; focus?: string } {
+): { ok: true } | DraftValidationFail {
+  const errors: NamedFieldError[] = [];
   if (draft.problem.trim().length < 40) {
-    return {
-      ok: false,
-      error: "Problem & audience needs at least 40 characters.",
-      focus: "problem",
-    };
+    errors.push({
+      field: "problem",
+      message: "Needs at least 40 characters.",
+    });
   }
   if (draft.deliverable.trim().length < 40) {
-    return {
-      ok: false,
-      error: "Plan & deliverables needs at least 40 characters.",
-      focus: "deliverable",
-    };
+    errors.push({
+      field: "deliverable",
+      message: "Needs at least 40 characters.",
+    });
   }
   if (draft.verification.trim().length < 40) {
-    return {
-      ok: false,
-      error: "Verification needs at least 40 characters.",
-      focus: "verification",
-    };
+    errors.push({
+      field: "verification",
+      message: "Needs at least 40 characters.",
+    });
   }
   if (draft.out_of_scope.trim().length < 10) {
-    return {
-      ok: false,
-      error: "Out of scope needs at least 10 characters.",
-      focus: "out_of_scope",
-    };
+    errors.push({
+      field: "out_of_scope",
+      message: "Needs at least 10 characters.",
+    });
   }
-  return { ok: true };
+  return errors.length ? failNamed(errors) : { ok: true };
+}
+
+export function clearProposeFieldErrors(root: ParentNode): void {
+  root.querySelectorAll(".field-error").forEach((el) => el.remove());
+  root.querySelectorAll(".is-invalid").forEach((el) => {
+    el.classList.remove("is-invalid");
+  });
+  root.querySelectorAll("[aria-invalid='true']").forEach((el) => {
+    el.removeAttribute("aria-invalid");
+  });
+}
+
+function fieldHostForControl(control: Element): HTMLElement | null {
+  return (
+    (control.closest(".field") as HTMLElement | null) ||
+    (control.closest(".propose-type") as HTMLElement | null) ||
+    (control.parentElement as HTMLElement | null)
+  );
+}
+
+/** Attach / replace an inline error on the field wrapping `control`. */
+export function setControlFieldError(
+  control: Element | null | undefined,
+  message: string,
+): HTMLElement | null {
+  if (!control) return null;
+  const host = fieldHostForControl(control);
+  if (!host) return null;
+  host.classList.add("is-invalid");
+  if (
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement
+  ) {
+    control.setAttribute("aria-invalid", "true");
+  }
+  let err = host.querySelector<HTMLElement>(":scope > .field-error");
+  if (!err) {
+    err = document.createElement("p");
+    err.className = "field-error";
+    err.setAttribute("role", "alert");
+    host.appendChild(err);
+  }
+  err.textContent = message;
+  return control instanceof HTMLElement ? control : null;
+}
+
+export function setNamedFieldError(
+  form: HTMLFormElement,
+  name: string,
+  message: string,
+): HTMLElement | null {
+  const el = form.elements.namedItem(name);
+  if (!el) return null;
+  const control =
+    el instanceof RadioNodeList
+      ? (el[0] as Element | undefined)
+      : (el as Element);
+  return setControlFieldError(control, message);
+}
+
+/** Apply named-field errors; returns the first control for focus/scroll. */
+export function applyNamedFieldErrors(
+  form: HTMLFormElement,
+  errors: NamedFieldError[],
+): HTMLElement | null {
+  let first: HTMLElement | null = null;
+  for (const err of errors) {
+    const control = setNamedFieldError(form, err.field, err.message);
+    if (!first && control) first = control;
+  }
+  return first;
+}
+
+/** Clear only the inline error on the field containing `control`. */
+export function clearControlFieldError(control: Element | null): void {
+  if (!control) return;
+  const host = fieldHostForControl(control);
+  if (!host) return;
+  host.classList.remove("is-invalid");
+  if (
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement
+  ) {
+    control.removeAttribute("aria-invalid");
+  }
+  host.querySelectorAll(":scope > .field-error").forEach((el) => el.remove());
 }
 
 export type ReviewSummaryInput = {

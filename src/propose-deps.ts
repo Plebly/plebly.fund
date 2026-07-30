@@ -156,17 +156,38 @@ export function collectRelatedWork(root: ParentNode): RelatedWorkEntry[] {
   return out;
 }
 
+export type DepRowField = "label" | "ref" | "url";
+
+export type DepValidationFail = {
+  ok: false;
+  error: string;
+  focus: { index: number; field: DepRowField; message: string };
+};
+
 export function validateDependsOnDrafts(
   drafts: DependsOnEntry[],
-): { ok: true; value: DependsOnEntry[] } | { ok: false; error: string } {
+):
+  | { ok: true; value: DependsOnEntry[] }
+  | DepValidationFail {
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
     const n = i + 1;
-    if (!d.label) return { ok: false, error: `Dependency ${n}: label required` };
+    if (!d.label) {
+      return {
+        ok: false,
+        error: `Dependency ${n}: label required`,
+        focus: { index: i, field: "label", message: "Label required." },
+      };
+    }
     if (d.kind === "external" && d.ref && !d.ref.startsWith("https://")) {
       return {
         ok: false,
         error: `Dependency ${n}: external ref must be https://`,
+        focus: {
+          index: i,
+          field: "ref",
+          message: "External ref must start with https://.",
+        },
       };
     }
   }
@@ -175,15 +196,28 @@ export function validateDependsOnDrafts(
 
 export function validateRelatedWorkDrafts(
   drafts: RelatedWorkEntry[],
-): { ok: true; value: RelatedWorkEntry[] } | { ok: false; error: string } {
+):
+  | { ok: true; value: RelatedWorkEntry[] }
+  | DepValidationFail {
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
     const n = i + 1;
-    if (!d.label) return { ok: false, error: `Related work ${n}: label required` };
+    if (!d.label) {
+      return {
+        ok: false,
+        error: `Related work ${n}: label required`,
+        focus: { index: i, field: "label", message: "Label required." },
+      };
+    }
     if (!d.url.startsWith("https://")) {
       return {
         ok: false,
         error: `Related work ${n}: URL must start with https://`,
+        focus: {
+          index: i,
+          field: "url",
+          message: "URL must start with https://.",
+        },
       };
     }
   }
