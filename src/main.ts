@@ -10,11 +10,14 @@ import { renderHome } from "./home-page";
 import {
   consumeSessionFromHash,
   fetchCurrentUser,
+  fetchUnreadNotificationCount,
   bindLoginHandlers,
   loginMenuHtml,
   logout,
   accountNavLabel,
   currentReturnPath,
+  notificationNavBadgeHtml,
+  setUnreadNotificationCount,
   type AuthUser,
 } from "./auth";
 import { renderProposalPage } from "./proposal-page";
@@ -39,6 +42,7 @@ import { escapeHtml } from "./util";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 let currentUser: AuthUser | null = null;
+let unreadNotifications = 0;
 
 function route(): Route {
   return parseLocation();
@@ -47,8 +51,13 @@ function route(): Route {
 function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
+    const label = accountNavLabel(currentUser);
+    const badge = notificationNavBadgeHtml(unreadNotifications);
     return `<span class="nav-divider" aria-hidden="true"></span>
-      <a href="${href("/account")}" class="${route().name === "account" ? "active" : ""}">${escapeHtml(accountNavLabel(currentUser))}</a>
+      <span class="nav-account-wrap" data-nav-account-wrap>
+        <a href="${href("/account")}" data-nav-account class="nav-account ${route().name === "account" ? "active" : ""}">${escapeHtml(label)}</a>
+        ${badge}
+      </span>
       <button type="button" class="link-btn" id="logout-btn">Log out</button>`;
   }
   return `<span class="nav-divider" aria-hidden="true"></span>
@@ -136,12 +145,18 @@ async function render() {
   if (currentUser?.funder_credit) {
     syncStoredCreditPreferencesFromProfile(currentUser.funder_credit);
   }
+  unreadNotifications = currentUser
+    ? await fetchUnreadNotificationCount().catch(() => 0)
+    : 0;
   const r = route();
   const ctx = {
     user: currentUser,
     routeName: r.name,
     shell,
     rerender: () => void render(),
+    setUnreadNotifications: (count: number) => {
+      unreadNotifications = setUnreadNotificationCount(count);
+    },
   };
 
   if (r.name === "work") {
@@ -155,10 +170,17 @@ async function render() {
       tabParam === "watching" ||
       tabParam === "claims" ||
       tabParam === "proposals" ||
+      tabParam === "notifications" ||
       tabParam === "profile"
         ? tabParam
         : undefined
-    ) as "profile" | "watching" | "claims" | "proposals" | undefined;
+    ) as
+      | "profile"
+      | "watching"
+      | "claims"
+      | "proposals"
+      | "notifications"
+      | undefined;
     await renderAccount(ctx, initialTab);
     bindAuthHandlers();
     scrollToHashTarget();

@@ -5,11 +5,14 @@ import {
   fetchNotifications,
   loginChoicesHtml,
   markNotificationsRead,
+  peekUnreadNotificationCount,
   profilePath,
+  updateNavUnreadBadge,
   updateProfile,
   accountNavLabel,
   shortNostrPubkey,
   type AuthUser,
+  type ProposalNotification,
 } from "./auth";
 import { CLAIM_FLOOR_SATS } from "./config";
 import {
@@ -57,6 +60,8 @@ export type ShellContext = {
   routeName: string;
   shell: (inner: string) => string;
   rerender: () => void;
+  /** Keep the top-nav unread badge in sync after mark-read actions. */
+  setUnreadNotifications?: (count: number) => void;
 };
 
 type AccountTab = "profile" | "watching" | "claims" | "proposals" | "notifications";
@@ -241,6 +246,8 @@ export async function renderAccount(
   const user = ctx.user;
   const tab: AccountTab = initialTab || "profile";
   const needsCatalog = tab === "watching" || tab === "proposals";
+  // Only pull the full notification list when that tab is open — badge uses cache.
+  const needsNotifications = tab === "notifications";
   const [watches, myClaims, allProps, reviewerMe, notifications] = await Promise.all([
     fetchWatches().catch(() => []),
     fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
@@ -248,8 +255,11 @@ export async function renderAccount(
       ? listListedProposals().catch(() => [] as Proposal[])
       : Promise.resolve([] as Proposal[]),
     fetchReviewerMe().catch(() => null),
-    fetchNotifications().catch(() => []),
+    needsNotifications
+      ? fetchNotifications().catch(() => [] as ProposalNotification[])
+      : Promise.resolve([] as ProposalNotification[]),
   ]);
+  const cachedUnread = peekUnreadNotificationCount() ?? 0;
   const pendingClaims = myClaims.pending;
   const ledger = myClaims.ledger;
   const byPath = new Map(allProps.map((p) => [p.path, p]));
@@ -305,7 +315,17 @@ export async function renderAccount(
         <button type="button" class="account-tab ${tab === "watching" ? "active" : ""}" data-tab="watching">Watching</button>
         <button type="button" class="account-tab ${tab === "claims" ? "active" : ""}" data-tab="claims">Claims</button>
         <button type="button" class="account-tab ${tab === "proposals" ? "active" : ""}" data-tab="proposals">Proposals</button>
-        <button type="button" class="account-tab ${tab === "notifications" ? "active" : ""}" data-tab="notifications">Notifications${notifications.some((n) => !n.read_at) ? ` <span class="pill">${notifications.filter((n) => !n.read_at).length}</span>` : ""}</button>
+        <button type="button" class="account-tab ${tab === "notifications" ? "active" : ""}" data-tab="notifications">Notifications${
+          (needsNotifications
+            ? notifications.filter((n) => !n.read_at).length
+            : cachedUnread) > 0
+            ? ` <span class="account-tab-count">${
+                needsNotifications
+                  ? notifications.filter((n) => !n.read_at).length
+                  : cachedUnread
+              }</span>`
+            : ""
+        }</button>
       </div>
 
       <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
@@ -427,29 +447,28 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="notifications" ${tab === "notifications" ? "" : "hidden"}>
-        <div class="form-actions">
+        <div class="notify-toolbar">
+          <p class="notify-toolbar-lede">Lifecycle updates for projects you watch.</p>
           <button type="button" class="btn ghost" id="notifications-read-btn" ${notifications.some((n) => !n.read_at) ? "" : "disabled"}>Mark all read</button>
         </div>
         ${
           notifications.length === 0
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No notifications</p>
-                <p class="empty-state-body">Watch projects to receive lifecycle updates here.</p>
+                <p class="empty-state-body">Watch a project to get funding and claim updates here.</p>
               </div></div>`
             : `<ul class="work-list notify-list">${notifications
                 .map((notification) => {
                   const label = notificationLabel(notification.type);
-                  const when = new Date(
-                    notification.created_at,
-                  ).toLocaleDateString();
+                  const when = formatNotifyWhen(notification.created_at);
                   return `<li class="notify-row ${notification.read_at ? "is-read" : "is-new"}">
                     <a class="notify-main" href="${proposalHref(notification.proposal_path, notification.proposal_id)}">
                       <span class="notify-title">${escapeHtml(label)}</span>
                       <span class="notify-id mono">${escapeHtml(notification.proposal_id)}</span>
                     </a>
                     <span class="notify-meta">
-                      ${notification.read_at ? "" : `<span class="pill status-good">New</span>`}
-                      <span class="muted">${escapeHtml(when)}</span>
+                      ${notification.read_at ? "" : `<span class="notify-new">New</span>`}
+                      <time class="muted" datetime="${escapeHtml(notification.created_at)}">${escapeHtml(when)}</time>
                     </span>
                   </li>`;
                 })
@@ -468,6 +487,11 @@ export async function renderAccount(
         !needsCatalog &&
         allProps.length === 0
       ) {
+        void renderAccount(ctx, name);
+        return;
+      }
+      // Notifications list is fetched only for that tab.
+      if (name === "notifications" && !needsNotifications) {
         void renderAccount(ctx, name);
         return;
       }
@@ -614,13 +638,32 @@ export async function renderAccount(
   });
 
   document.getElementById("notifications-read-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById(
+      "notifications-read-btn",
+    ) as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
     try {
-      await markNotificationsRead();
+      const remaining = await markNotificationsRead();
+      ctx.setUnreadNotifications?.(remaining);
+      updateNavUnreadBadge(remaining);
       ctx.rerender();
     } catch (err) {
+      if (btn) btn.disabled = false;
       window.alert((err as Error).message);
     }
   });
+}
+
+function formatNotifyWhen(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const delta = Date.now() - t;
+  const mins = Math.floor(delta / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return new Date(t).toLocaleDateString();
 }
 
 export async function renderPublicProfile(

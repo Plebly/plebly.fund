@@ -154,6 +154,69 @@ a:hover {
   background: var(--bg-hover);
 }
 
+.nav-account-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.nav-account {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-notify-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+  animation: nav-notify-in 0.28s ease;
+}
+
+.nav-notify-badge:hover {
+  background: var(--accent-hover);
+  color: var(--accent-on);
+  transform: translateY(-1px);
+}
+
+.nav a.nav-notify-badge:hover,
+.nav a.nav-notify-badge.active {
+  background: var(--accent-hover);
+  color: var(--accent-on);
+}
+
+@keyframes nav-notify-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-notify-badge {
+    animation: none;
+  }
+}
+
 .nav-divider {
   width: 1px;
   height: 1rem;
@@ -879,6 +942,24 @@ body.modal-open {
   color: var(--accent-text);
   background: var(--bg-elevated);
   box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.account-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  margin-left: 0.3rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 0.05em;
 }
 
 .account-pane[hidden] {
@@ -6357,6 +6438,23 @@ a.proposal-comment-author:hover {
   margin: 0;
 }
 
+.notify-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.notify-toolbar-lede {
+  margin: 0;
+  flex: 1 1 12rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
 .notify-list {
   display: grid;
   gap: 0.5rem;
@@ -6400,6 +6498,26 @@ a.proposal-comment-author:hover {
   align-items: center;
   gap: 0.5rem;
   flex: 0 0 auto;
+}
+
+.notify-new {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.notify-row:hover {
+  border-color: var(--line);
+}
+
+.notify-main:hover .notify-title {
+  color: var(--accent-text);
 }
 
 .claim-modal-actions {

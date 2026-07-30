@@ -1,6 +1,12 @@
 import { fetchWatches } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
-import { authFetch, profilePath, type AuthUser } from "./auth";
+import {
+  authFetch,
+  markNotificationsForProposalRead,
+  profilePath,
+  updateNavUnreadBadge,
+  type AuthUser,
+} from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import { proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
@@ -463,6 +469,16 @@ export async function renderProposalPage(
       },
     );
     void hydrateAvatarSlots(app);
+    if (user && (match.id || match.path)) {
+      void markNotificationsForProposalRead({
+        proposalId: match.id,
+        proposalPath: match.path,
+      })
+        .then((remaining) => updateNavUnreadBadge(remaining))
+        .catch(() => {
+          /* non-blocking */
+        });
+    }
     if (match.id) {
       void recordProposalView(match.id).then((count) => {
         const el = app.querySelector("#proposal-view-count");

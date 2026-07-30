@@ -28,6 +28,7 @@ function setStoredSession(token: string): void {
 
 function clearStoredSession(): void {
   sessionStorage.removeItem(SESSION_KEY);
+  clearUnreadNotificationCache();
 }
 
 /**
@@ -40,6 +41,7 @@ export function consumeSessionFromHash(): boolean {
   if (!match) return false;
 
   setStoredSession(decodeURIComponent(match[1]));
+  clearUnreadNotificationCache();
   const cleaned = hash
     .replace(/^[?#]/, "")
     .replace(/[?&]?plebly_auth=[^&]*/g, "")
@@ -354,22 +356,181 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
+const UNREAD_CACHE_KEY = "plebly_unread_notify";
+/** Avoid hitting Workers on every SPA navigation. */
+const UNREAD_TTL_MS = 5 * 60 * 1000;
+
+type UnreadCache = { count: number; at: number };
+
+let memoryUnread: UnreadCache | null = null;
+
+function clampUnread(count: number): number {
+  return Math.max(0, Math.floor(count));
+}
+
+function readUnreadCache(): number | null {
+  if (memoryUnread && Date.now() - memoryUnread.at < UNREAD_TTL_MS) {
+    return memoryUnread.count;
+  }
+  try {
+    const raw = sessionStorage.getItem(UNREAD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as UnreadCache;
+    if (
+      typeof parsed?.count !== "number" ||
+      typeof parsed?.at !== "number" ||
+      Date.now() - parsed.at >= UNREAD_TTL_MS
+    ) {
+      return null;
+    }
+    memoryUnread = { count: clampUnread(parsed.count), at: parsed.at };
+    return memoryUnread.count;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist unread locally so mark-read / nav can skip remote polls. */
+export function setUnreadNotificationCount(count: number): number {
+  const next = clampUnread(count);
+  memoryUnread = { count: next, at: Date.now() };
+  try {
+    sessionStorage.setItem(
+      UNREAD_CACHE_KEY,
+      JSON.stringify(memoryUnread),
+    );
+  } catch {
+    /* private mode */
+  }
+  return next;
+}
+
+export function clearUnreadNotificationCache(): void {
+  memoryUnread = null;
+  try {
+    sessionStorage.removeItem(UNREAD_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function peekUnreadNotificationCount(): number | null {
+  return readUnreadCache();
+}
+
+export function unreadNotificationCount(
+  items: ProposalNotification[],
+): number {
+  return items.reduce((n, item) => n + (item.read_at ? 0 : 1), 0);
+}
+
 export async function fetchNotifications(): Promise<ProposalNotification[]> {
   if (!WORKERS_API) return [];
   const res = await authFetch(`${API()}/notifications`);
   if (!res.ok) return [];
-  const data = (await res.json()) as { notifications?: ProposalNotification[] };
+  const data = (await res.json()) as {
+    notifications?: ProposalNotification[];
+    unread?: number;
+  };
+  if (typeof data.unread === "number" && Number.isFinite(data.unread)) {
+    setUnreadNotificationCount(data.unread);
+  } else if (data.notifications) {
+    setUnreadNotificationCount(unreadNotificationCount(data.notifications));
+  }
   return data.notifications || [];
 }
 
-export async function markNotificationsRead(ids?: string[]): Promise<void> {
-  if (!WORKERS_API) return;
+/**
+ * Unread badge count. Uses a short session cache to avoid Workers calls on
+ * every route change. Pass `{ force: true }` after login or rare refreshes.
+ */
+export async function fetchUnreadNotificationCount(
+  opts: { force?: boolean } = {},
+): Promise<number> {
+  if (!WORKERS_API) return 0;
+  if (!opts.force) {
+    const cached = readUnreadCache();
+    if (cached != null) return cached;
+  }
+  const res = await authFetch(`${API()}/notifications?count=1`);
+  if (!res.ok) return readUnreadCache() ?? 0;
+  const data = (await res.json()) as { unread?: number };
+  const unread =
+    typeof data.unread === "number" && Number.isFinite(data.unread)
+      ? clampUnread(data.unread)
+      : 0;
+  return setUnreadNotificationCount(unread);
+}
+
+export async function markNotificationsRead(
+  ids?: string[],
+): Promise<number> {
+  if (!WORKERS_API) return 0;
   const res = await authFetch(`${API()}/notifications/read`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(ids?.length ? { ids } : {}),
   });
   if (!res.ok) throw new Error("Could not mark notifications read");
+  const data = (await res.json()) as { unread?: number };
+  const unread =
+    typeof data.unread === "number" ? clampUnread(data.unread) : 0;
+  return setUnreadNotificationCount(unread);
+}
+
+/**
+ * Mark unread notifications for a proposal as read when the user opens it.
+ * One POST (no prior list fetch). Skips the network if local unread is 0.
+ */
+export async function markNotificationsForProposalRead(opts: {
+  proposalId?: string | null;
+  proposalPath?: string | null;
+}): Promise<number> {
+  if (!WORKERS_API) return 0;
+  const id = opts.proposalId?.trim() || "";
+  const path = opts.proposalPath?.trim() || "";
+  if (!id && !path) return fetchUnreadNotificationCount();
+
+  const cached = readUnreadCache();
+  if (cached === 0) return 0;
+
+  const res = await authFetch(`${API()}/notifications/read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(id ? { proposal_id: id } : {}),
+      ...(path ? { proposal_path: path } : {}),
+    }),
+  });
+  if (!res.ok) return cached ?? 0;
+  const data = (await res.json()) as { unread?: number };
+  const unread =
+    typeof data.unread === "number" ? clampUnread(data.unread) : 0;
+  return setUnreadNotificationCount(unread);
+}
+
+/** Compact unread count control next to the account nav link. */
+export function notificationNavBadgeHtml(count: number): string {
+  const n = clampUnread(count);
+  if (n <= 0) return "";
+  const label = n > 99 ? "99+" : String(n);
+  const aria = n === 1 ? "1 unread notification" : `${label} unread notifications`;
+  return `<a href="${href("/account", "?tab=notifications")}" class="nav-notify-badge" data-nav-notify-badge title="${escapeHtml(aria)}" aria-label="${escapeHtml(aria)}">${escapeHtml(label)}</a>`;
+}
+
+/** Patch the nav badge in place after mark-read without a full re-render. */
+export function updateNavUnreadBadge(count: number): void {
+  const next = setUnreadNotificationCount(count);
+  const host = document.querySelector<HTMLElement>("[data-nav-account-wrap]");
+  if (!host) return;
+  const existing = host.querySelector("[data-nav-notify-badge]");
+  const html = notificationNavBadgeHtml(next);
+  if (!html) {
+    existing?.remove();
+    return;
+  }
+  if (existing) existing.outerHTML = html;
+  else host.insertAdjacentHTML("beforeend", html);
 }
 
 export async function fetchPublicProfile(
