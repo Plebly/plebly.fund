@@ -15,6 +15,10 @@ npm install
 npm run dev
 ```
 
+Open `http://localhost:5173/`. The SPA talks to the deployed Workers API by default.
+
+**Local login:** GitHub OAuth `return_to` must be an allowed frontend origin on the Workers API (`localhost` / `127.0.0.1` any port). If login bounces you to `https://plebly.fund`, deploy the workers change that allows local origins, then try again from localhost.
+
 ## Deploy
 
 Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages.yml`).

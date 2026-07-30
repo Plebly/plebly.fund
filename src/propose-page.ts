@@ -44,6 +44,18 @@ import {
 } from "./propose-milestones";
 import { parseTagList } from "./proposal-tags";
 import { PROPOSAL_TEMPLATES } from "./proposal-templates";
+import {
+  focusFormField,
+  proposeReviewSummaryHtml,
+  proposeWizardNavHtml,
+  proposeWizardProgressHtml,
+  PROPOSE_WIZARD_STEPS,
+  proposeWizardStepIndex,
+  readNamedValue,
+  validateBasicsDraft,
+  validateScopeDraft,
+  type ProposeWizardStepId,
+} from "./propose-wizard";
 import { href, proposalHref } from "./router";
 import { bindTagInput, tagInputHtml } from "./tag-input";
 import type {
@@ -254,123 +266,156 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     }
   }
 
+  const reviewLede = isEdit
+    ? "Confirm the amend, then open the pull request. Lifecycle fields stay intact until merge."
+    : `Confirm the draft, then pay the ${feeLabel} submission fee on ${networkLabel}.`;
+
   app.innerHTML = ctx.shell(`
-    <section class="wrap detail propose-page">
-      <h1>${isEdit ? "Edit proposal" : isBridge ? "Complete bridged proposal" : "Start a project"}</h1>
-      ${
-        isBridge && bridgeSource
-          ? `<div class="edit-banner" role="status">
-            <p>Bridged from <a href="${escapeHtml(bridgeSource.html_url)}" target="_blank" rel="noreferrer">${escapeHtml(bridgeSource.owner)}/${escapeHtml(bridgeSource.repo)}#${bridgeSource.number}</a>${
-              bridgeDraftPr
-                ? ` · <a href="${escapeHtml(bridgeDraftPr)}" target="_blank" rel="noreferrer">draft PR</a>`
-                : ""
-            }</p>
-            <p class="hint">Pay the submission fee and finish Deliverable / Verification / Out of scope. The draft PR is updated in place.</p>
-          </div>`
-          : isEdit
-          ? `<div class="edit-banner" role="status">
-              <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span></p>
-              <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
-              <p class="edit-banner-actions">
-                <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
-              </p>
+    <section class="wrap detail propose-page propose-wizard">
+      <header class="propose-wizard-header">
+        <h1>${isEdit ? "Edit proposal" : isBridge ? "Complete bridged proposal" : "Start a project"}</h1>
+        ${
+          isBridge && bridgeSource
+            ? `<div class="edit-banner" role="status">
+              <p>Bridged from <a href="${escapeHtml(bridgeSource.html_url)}" target="_blank" rel="noreferrer">${escapeHtml(bridgeSource.owner)}/${escapeHtml(bridgeSource.repo)}#${bridgeSource.number}</a>${
+                bridgeDraftPr
+                  ? ` · <a href="${escapeHtml(bridgeDraftPr)}" target="_blank" rel="noreferrer">draft PR</a>`
+                  : ""
+              }</p>
+              <p class="hint">Finish Deliverable / Verification / Out of scope, then pay the fee. The draft PR is updated in place.</p>
             </div>`
-          : `<p class="lede">Describe the work and pay the ${escapeHtml(feeLabel)} submission fee on ${escapeHtml(networkLabel)}.</p>`
-      }
+            : isEdit
+            ? `<div class="edit-banner" role="status">
+                <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span></p>
+                <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
+                <p class="edit-banner-actions">
+                  <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
+                </p>
+              </div>`
+            : `<p class="lede">A short guided path to open a proposal PR. Submission fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.</p>`
+        }
+      </header>
 
-      <form id="propose-form" class="form-panel form-panel-wide">
-        <fieldset class="form-block">
-          <legend>Proposal</legend>
-          ${
-            isEdit
-              ? ""
-              : `<label class="field">
-              <span>Start from template <em class="optional">(optional)</em></span>
-              <select id="proposal-template">
-                <option value="">Choose a starter template (fills the draft)…</option>
-                ${PROPOSAL_TEMPLATES.map((template) => `<option value="${template.id}">${template.label}</option>`).join("")}
-              </select>
-            </label>`
-          }
-          <label class="field">
-            <span>Title</span>
-            <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" value="${escapeHtml(prefill?.title || "")}" />
-          </label>
-          <fieldset class="field propose-type">
-            <span>Proposal type</span>
-            <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open to claim by a builder</span></label>
-            <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Direct</strong>: you are the recipient (no claim step)</span></label>
+      <div id="propose-wizard-progress-host">
+        ${proposeWizardProgressHtml("basics")}
+      </div>
+
+      <form id="propose-form" class="form-panel form-panel-wide propose-wizard-form" novalidate>
+        <div class="propose-wizard-step-meta" id="propose-wizard-step-meta">
+          <p class="propose-wizard-kicker"><span id="propose-wizard-step-count">Step 1 of ${PROPOSE_WIZARD_STEPS.length}</span></p>
+          <h2 id="propose-wizard-step-title" tabindex="-1">${escapeHtml(PROPOSE_WIZARD_STEPS[0].title)}</h2>
+          <p class="lede propose-wizard-step-lede" id="propose-wizard-step-lede">${escapeHtml(PROPOSE_WIZARD_STEPS[0].lede)}</p>
+        </div>
+
+        <section class="propose-wizard-panel" data-wizard-step="basics" aria-labelledby="propose-wizard-step-title">
+          <fieldset class="form-block">
+            ${
+              isEdit
+                ? ""
+                : `<label class="field">
+                <span>Start from template <em class="optional">(optional)</em></span>
+                <select id="proposal-template">
+                  <option value="">Choose a starter template (fills the draft)…</option>
+                  ${PROPOSAL_TEMPLATES.map((template) => `<option value="${template.id}">${template.label}</option>`).join("")}
+                </select>
+              </label>`
+            }
+            <label class="field">
+              <span>Title</span>
+              <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" value="${escapeHtml(prefill?.title || "")}" />
+            </label>
+            <fieldset class="field propose-type">
+              <span>Proposal type</span>
+              <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open to claim by a builder</span></label>
+              <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Direct</strong>: you are the recipient (no claim step)</span></label>
+            </fieldset>
+            <div class="field">
+              <span>Tags <em class="optional">(optional)</em></span>
+              ${tagInputHtml({
+                id: "propose-tags",
+                name: "tags",
+                tags: prefill?.tags || [],
+                placeholder: "Type a tag, then Enter",
+              })}
+            </div>
+            <label class="field">
+              <span>Commons / parent initiative <em class="optional">(optional)</em></span>
+              <input name="parent_initiative" maxlength="200" placeholder="e.g. Bitcoin Core Commons" value="${escapeHtml(prefill?.parent_initiative || "")}" />
+              <span class="field-hint">Use a shared initiative name to group related proposals. This does not create governance authority.</span>
+            </label>
+            <div class="field cover-field">
+              <span>Cover image <em class="optional">(optional)</em></span>
+              <input type="file" id="propose-cover-input" class="cover-file-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden />
+              <div class="cover-picker" id="propose-cover-picker">
+                <button type="button" class="cover-pick-btn" id="propose-cover-pick">
+                  <span class="cover-pick-label">Choose cover</span>
+                  <span class="cover-pick-meta">JPEG, PNG, or WebP · max 2 MiB · 16:9 works best</span>
+                </button>
+              </div>
+              <div class="cover-preview" id="propose-cover-preview" hidden>
+                <div class="cover-preview-frame">
+                  <img id="propose-cover-img" alt="" />
+                  <div class="cover-preview-status" id="propose-cover-status" hidden></div>
+                </div>
+                <div class="cover-preview-actions">
+                  <button type="button" class="btn ghost" id="propose-cover-replace">Replace</button>
+                  <button type="button" class="btn ghost" id="propose-cover-clear">Remove</button>
+                </div>
+              </div>
+              <span class="field-hint" id="propose-cover-hint" hidden></span>
+            </div>
           </fieldset>
-          <div class="field">
-            <span>Tags <em class="optional">(optional)</em></span>
-            ${tagInputHtml({
-              id: "propose-tags",
-              name: "tags",
-              tags: prefill?.tags || [],
-              placeholder: "Type a tag, then Enter",
-            })}
-          </div>
-          <label class="field">
-            <span>Commons / parent initiative <em class="optional">(optional)</em></span>
-            <input name="parent_initiative" maxlength="200" placeholder="e.g. Bitcoin Core Commons" value="${escapeHtml(prefill?.parent_initiative || "")}" />
-            <span class="field-hint">Use a shared initiative name to group related proposals. This does not create governance authority.</span>
-          </label>
-          <div class="field cover-field">
-            <span>Cover image <em class="optional">(optional)</em></span>
-            <input type="file" id="propose-cover-input" class="cover-file-input" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden />
-            <div class="cover-picker" id="propose-cover-picker">
-              <button type="button" class="cover-pick-btn" id="propose-cover-pick">
-                <span class="cover-pick-label">Choose cover</span>
-                <span class="cover-pick-meta">JPEG, PNG, or WebP · max 2 MiB · 16:9 works best</span>
-              </button>
-            </div>
-            <div class="cover-preview" id="propose-cover-preview" hidden>
-              <div class="cover-preview-frame">
-                <img id="propose-cover-img" alt="" />
-                <div class="cover-preview-status" id="propose-cover-status" hidden></div>
-              </div>
-              <div class="cover-preview-actions">
-                <button type="button" class="btn ghost" id="propose-cover-replace">Replace</button>
-                <button type="button" class="btn ghost" id="propose-cover-clear">Remove</button>
-              </div>
-            </div>
-            <span class="field-hint" id="propose-cover-hint" hidden></span>
-          </div>
-          <label class="field">
-            <span>Problem &amp; audience</span>
-            <textarea name="problem" required minlength="40" rows="4" placeholder="What problem are you solving? Who benefits? Why is this good for Bitcoin?">${escapeHtml(prefill?.problem || "")}</textarea>
-          </label>
-          <label class="field">
-            <span>Plan &amp; deliverables</span>
-            <textarea name="deliverable" required minlength="40" rows="5" placeholder="Concrete artifacts you will produce: code, docs, research, designs. Include license intent (FOSS).">${escapeHtml(prefill?.deliverable || "")}</textarea>
-          </label>
-          <label class="field">
-            <span>Verification</span>
-            <textarea name="verification" required minlength="40" rows="4" placeholder="Steps a reviewer can follow to confirm completion: commands, URLs, acceptance criteria.">${escapeHtml(prefill?.verification || "")}</textarea>
-            <span class="field-hint">Two independent reviewers should reach the same yes/no conclusion. Numbered steps (1. 2.) render as a checklist on the project page.</span>
-          </label>
-          <label class="field">
-            <span>Out of scope</span>
-            <textarea name="out_of_scope" required minlength="10" rows="3" placeholder="What this project explicitly does not include.">${escapeHtml(prefill?.out_of_scope || "")}</textarea>
-          </label>
-          <label class="field">
-            <span>Notes <em class="optional">(optional)</em></span>
-            <textarea name="notes" maxlength="4000" rows="3" placeholder="Freeform context. Prefer Related work below for structured https links.">${escapeHtml(prefill?.notes || "")}</textarea>
-          </label>
-        </fieldset>
+        </section>
 
-        <fieldset class="form-block">
-          <legend>Funding</legend>
-          <label class="field">
-            <span>Target funding <em class="optional">(optional)</em></span>
-            <input name="target_sats" id="propose-target-sats" type="number" min="0" step="1" placeholder="e.g. 5000000" value="${prefill?.target_sats != null ? escapeHtml(String(prefill.target_sats)) : ""}" />
-            <span class="field-hint">Targets ≥ 1,000,000 sats require at least one milestone.</span>
-          </label>
+        <section class="propose-wizard-panel" data-wizard-step="scope" hidden aria-labelledby="propose-wizard-step-title">
+          <fieldset class="form-block">
+            <label class="field">
+              <span>Problem &amp; audience</span>
+              <textarea name="problem" required minlength="40" rows="5" placeholder="What problem are you solving? Who benefits? Why is this good for Bitcoin?">${escapeHtml(prefill?.problem || "")}</textarea>
+            </label>
+            <label class="field">
+              <span>Plan &amp; deliverables</span>
+              <textarea name="deliverable" required minlength="40" rows="6" placeholder="Concrete artifacts you will produce: code, docs, research, designs. Include license intent (FOSS).">${escapeHtml(prefill?.deliverable || "")}</textarea>
+            </label>
+            <label class="field">
+              <span>Verification</span>
+              <textarea name="verification" required minlength="40" rows="5" placeholder="Steps a reviewer can follow to confirm completion: commands, URLs, acceptance criteria.">${escapeHtml(prefill?.verification || "")}</textarea>
+              <span class="field-hint">Two independent reviewers should reach the same yes/no conclusion. Numbered steps (1. 2.) render as a checklist on the project page.</span>
+            </label>
+            <label class="field">
+              <span>Out of scope</span>
+              <textarea name="out_of_scope" required minlength="10" rows="3" placeholder="What this project explicitly does not include.">${escapeHtml(prefill?.out_of_scope || "")}</textarea>
+            </label>
+            <label class="field">
+              <span>Notes <em class="optional">(optional)</em></span>
+              <textarea name="notes" maxlength="4000" rows="3" placeholder="Freeform context. Prefer Related work for structured https links.">${escapeHtml(prefill?.notes || "")}</textarea>
+            </label>
+          </fieldset>
+        </section>
+
+        <section class="propose-wizard-panel" data-wizard-step="funding" hidden aria-labelledby="propose-wizard-step-title">
+          <fieldset class="form-block">
+            <label class="field">
+              <span>Target funding <em class="optional">(optional)</em></span>
+              <input name="target_sats" id="propose-target-sats" type="number" min="0" step="1" placeholder="e.g. 5000000" value="${prefill?.target_sats != null ? escapeHtml(String(prefill.target_sats)) : ""}" />
+              <span class="field-hint">Targets ≥ 1,000,000 sats require at least one milestone.</span>
+            </label>
+          </fieldset>
+          ${milestoneEditorSectionHtml()}
+        </section>
+
+        <section class="propose-wizard-panel" data-wizard-step="context" hidden aria-labelledby="propose-wizard-step-title">
+          ${dependsOnSectionHtml()}
+          ${relatedWorkSectionHtml()}
+        </section>
+
+        <section class="propose-wizard-panel" data-wizard-step="review" hidden aria-labelledby="propose-wizard-step-title">
+          <div id="propose-review-host"></div>
           ${
             isEdit
               ? ""
-              : `<div class="field">
-            <span>Submission fee</span>
+              : `<fieldset class="form-block propose-fee-block">
+            <legend>Submission fee</legend>
             ${feePayHtml({
               id: "propose-fee",
               amountSats: SUBMISSION_FEE_SATS,
@@ -378,19 +423,17 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               txidName: "submission_fee_txid",
               note: "Required to open a proposal PR. Exact amount on-chain.",
             })}
-          </div>`
+          </fieldset>`
           }
-        </fieldset>
+        </section>
 
-        ${milestoneEditorSectionHtml()}
-        ${dependsOnSectionHtml()}
-        ${relatedWorkSectionHtml()}
-
-        <div class="form-actions">
-          <button type="submit" class="btn">${isEdit ? "Open amend PR" : isBridge ? "Pay fee & update draft PR" : "Open proposal PR"}</button>
-          ${isEdit ? `<a class="btn ghost" href="${proposalHref(prefill!.path, prefill!.id)}">Cancel</a>` : ""}
-        </div>
         <p class="form-msg" id="propose-msg" hidden></p>
+        ${proposeWizardNavHtml({ current: "basics", isEdit, isBridge })}
+        ${
+          isEdit
+            ? `<p class="propose-wizard-cancel"><a class="btn ghost" href="${proposalHref(prefill!.path, prefill!.id)}">Cancel</a></p>`
+            : ""
+        }
       </form>
     </section>
   `);
@@ -409,8 +452,225 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const dependsEmpty = document.getElementById("depends-on-empty");
   const relatedList = document.getElementById("related-work-list")!;
   const relatedEmpty = document.getElementById("related-work-empty");
+  const progressHost = document.getElementById("propose-wizard-progress-host")!;
+  const reviewHost = document.getElementById("propose-review-host")!;
+  const stepTitleEl = document.getElementById("propose-wizard-step-title")!;
+  const stepLedeEl = document.getElementById("propose-wizard-step-lede")!;
+  const stepCountEl = document.getElementById("propose-wizard-step-count")!;
 
   const tagsInput = bindTagInput(document, "propose-tags");
+  let coverUrl: string | null = prefill?.cover_image || null;
+  let coverUploading = false;
+
+  let currentStep: ProposeWizardStepId = "basics";
+  let maxReachedIdx = 0;
+
+  const showWizardMsg = (text: string, kind: "" | "error" = "") => {
+    if (!text) {
+      msg.hidden = true;
+      msg.textContent = "";
+      msg.className = "form-msg";
+      return;
+    }
+    msg.hidden = false;
+    msg.textContent = text;
+    msg.className = kind === "error" ? "form-msg error" : "form-msg";
+  };
+
+  const refreshReviewSummary = () => {
+    const fd = new FormData(form);
+    const targetRaw = fd.get("target_sats");
+    const target_sats =
+      targetRaw && String(targetRaw).length ? Number(targetRaw) : null;
+    const drafts = collectMilestoneDrafts(milestonesList);
+    reviewHost.innerHTML = proposeReviewSummaryHtml({
+      title: String(fd.get("title") || ""),
+      proposal_type:
+        String(fd.get("proposal_type") || "bounty") === "direct"
+          ? "direct"
+          : "bounty",
+      tags: tagsInput?.getTags() || parseTagList(String(fd.get("tags") || "")),
+      parent_initiative:
+        String(fd.get("parent_initiative") || "").trim() || null,
+      cover_image: coverUrl,
+      problem: String(fd.get("problem") || ""),
+      deliverable: String(fd.get("deliverable") || ""),
+      verification: String(fd.get("verification") || ""),
+      out_of_scope: String(fd.get("out_of_scope") || ""),
+      notes: String(fd.get("notes") || "").trim() || null,
+      target_sats: Number.isFinite(target_sats as number) ? target_sats : null,
+      milestones: drafts,
+      depends_on: collectDependsOn(dependsList),
+      related_work: collectRelatedWork(relatedList),
+      isEdit,
+      feeLabel,
+    });
+  };
+
+  const validateCurrentStep = (): boolean => {
+    if (currentStep === "basics") {
+      const checked = validateBasicsDraft({
+        title: readNamedValue(form, "title"),
+        proposal_type:
+          readNamedValue(form, "proposal_type") === "direct"
+            ? "direct"
+            : "bounty",
+      });
+      if (!checked.ok) {
+        showWizardMsg(checked.error, "error");
+        if (checked.focus) focusFormField(form, checked.focus);
+        return false;
+      }
+      if (coverUploading) {
+        showWizardMsg(
+          "Wait for the cover upload to finish, or remove it.",
+          "error",
+        );
+        return false;
+      }
+      return true;
+    }
+    if (currentStep === "scope") {
+      const checked = validateScopeDraft({
+        problem: readNamedValue(form, "problem"),
+        deliverable: readNamedValue(form, "deliverable"),
+        verification: readNamedValue(form, "verification"),
+        out_of_scope: readNamedValue(form, "out_of_scope"),
+      });
+      if (!checked.ok) {
+        showWizardMsg(checked.error, "error");
+        if (checked.focus) focusFormField(form, checked.focus);
+        return false;
+      }
+      return true;
+    }
+    if (currentStep === "funding") {
+      const targetRaw = readNamedValue(form, "target_sats");
+      const target_sats = targetRaw.length ? Number(targetRaw) : null;
+      const drafts = collectMilestoneDrafts(milestonesList);
+      const checked = validateMilestoneDrafts(
+        drafts,
+        Number.isFinite(target_sats as number) ? target_sats : null,
+      );
+      if (!checked.ok) {
+        showWizardMsg(checked.error, "error");
+        document.getElementById("milestones-block")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        return false;
+      }
+      return true;
+    }
+    if (currentStep === "context") {
+      const depOk = validateDependsOnDrafts(collectDependsOn(dependsList));
+      if (!depOk.ok) {
+        showWizardMsg(depOk.error, "error");
+        return false;
+      }
+      const relOk = validateRelatedWorkDrafts(collectRelatedWork(relatedList));
+      if (!relOk.ok) {
+        showWizardMsg(relOk.error, "error");
+        return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const setWizardStep = (next: ProposeWizardStepId) => {
+    currentStep = next;
+    const idx = proposeWizardStepIndex(next);
+    maxReachedIdx = Math.max(maxReachedIdx, idx);
+    const meta = PROPOSE_WIZARD_STEPS[idx];
+    stepCountEl.textContent = `Step ${idx + 1} of ${PROPOSE_WIZARD_STEPS.length}`;
+    stepTitleEl.textContent = meta.title;
+    stepLedeEl.textContent =
+      next === "review" ? reviewLede : meta.lede;
+
+    form.querySelectorAll<HTMLElement>("[data-wizard-step]").forEach((panel) => {
+      panel.hidden = panel.dataset.wizardStep !== next;
+    });
+
+    progressHost.innerHTML = proposeWizardProgressHtml(next);
+    const nav = document.getElementById("propose-wizard-nav");
+    if (nav) {
+      nav.outerHTML = proposeWizardNavHtml({ current: next, isEdit, isBridge });
+    }
+    bindWizardNav();
+
+    // Allow jumping back to any reached step via the progress rail.
+    progressHost
+      .querySelectorAll<HTMLButtonElement>("[data-goto-step]")
+      .forEach((btn) => {
+        const id = btn.dataset.gotoStep as ProposeWizardStepId | undefined;
+        if (!id) return;
+        const targetIdx = proposeWizardStepIndex(id);
+        btn.disabled = targetIdx > maxReachedIdx;
+        btn.addEventListener("click", () => {
+          if (targetIdx > maxReachedIdx) return;
+          if (targetIdx > proposeWizardStepIndex(currentStep) && !validateCurrentStep()) {
+            return;
+          }
+          showWizardMsg("");
+          setWizardStep(id);
+        });
+      });
+
+    if (next === "review") refreshReviewSummary();
+    showWizardMsg("");
+    document
+      .querySelector(".propose-wizard-step-meta")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    stepTitleEl.focus({ preventScroll: true });
+  };
+
+  const goNext = () => {
+    if (!validateCurrentStep()) return;
+    const idx = proposeWizardStepIndex(currentStep);
+    const next = PROPOSE_WIZARD_STEPS[idx + 1];
+    if (!next) return;
+    setWizardStep(next.id);
+  };
+
+  const goBack = () => {
+    const idx = proposeWizardStepIndex(currentStep);
+    const prev = PROPOSE_WIZARD_STEPS[idx - 1];
+    if (!prev) return;
+    showWizardMsg("");
+    setWizardStep(prev.id);
+  };
+
+  function bindWizardNav(): void {
+    document
+      .getElementById("propose-wizard-next")
+      ?.addEventListener("click", goNext);
+    document
+      .getElementById("propose-wizard-back")
+      ?.addEventListener("click", goBack);
+    document
+      .getElementById("propose-wizard-skip")
+      ?.addEventListener("click", () => {
+        // Still validate if the user started filling optional rows.
+        if (!validateCurrentStep()) return;
+        showWizardMsg("");
+        setWizardStep("review");
+      });
+  }
+
+  bindWizardNav();
+  progressHost
+    .querySelectorAll<HTMLButtonElement>("[data-goto-step]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.gotoStep as ProposeWizardStepId | undefined;
+        if (!id || id === currentStep) return;
+        const targetIdx = proposeWizardStepIndex(id);
+        if (targetIdx > maxReachedIdx) return;
+        showWizardMsg("");
+        setWizardStep(id);
+      });
+    });
 
   const templateSelect = document.getElementById(
     "proposal-template",
@@ -655,9 +915,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   ) as HTMLImageElement;
   const coverStatus = document.getElementById("propose-cover-status")!;
   const coverHint = document.getElementById("propose-cover-hint")!;
-  let coverUrl: string | null = prefill?.cover_image || null;
   let coverObjectUrl: string | null = null;
-  let coverUploading = false;
 
   const setHint = (text: string, kind: "" | "error" | "ok" = "") => {
     if (!text) {
@@ -769,10 +1027,37 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (currentStep !== "review") {
+      goNext();
+      return;
+    }
     if (coverUploading) {
-      msg.hidden = false;
-      msg.className = "form-msg error";
-      msg.textContent = "Wait for the cover upload to finish, or remove it.";
+      showWizardMsg("Wait for the cover upload to finish, or remove it.", "error");
+      setWizardStep("basics");
+      return;
+    }
+
+    const basics = validateBasicsDraft({
+      title: readNamedValue(form, "title"),
+      proposal_type:
+        readNamedValue(form, "proposal_type") === "direct" ? "direct" : "bounty",
+    });
+    if (!basics.ok) {
+      showWizardMsg(basics.error, "error");
+      setWizardStep("basics");
+      if (basics.focus) focusFormField(form, basics.focus);
+      return;
+    }
+    const scope = validateScopeDraft({
+      problem: readNamedValue(form, "problem"),
+      deliverable: readNamedValue(form, "deliverable"),
+      verification: readNamedValue(form, "verification"),
+      out_of_scope: readNamedValue(form, "out_of_scope"),
+    });
+    if (!scope.ok) {
+      showWizardMsg(scope.error, "error");
+      setWizardStep("scope");
+      if (scope.focus) focusFormField(form, scope.focus);
       return;
     }
 
@@ -783,9 +1068,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const drafts = collectMilestoneDrafts(milestonesList);
     const checked = validateMilestoneDrafts(drafts, target_sats);
     if (!checked.ok) {
-      msg.hidden = false;
-      msg.className = "form-msg error";
-      msg.textContent = checked.error;
+      showWizardMsg(checked.error, "error");
+      setWizardStep("funding");
       document.getElementById("milestones-block")?.scrollIntoView({
         behavior: "smooth",
         block: "start",
@@ -796,17 +1080,15 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const depDrafts = collectDependsOn(dependsList);
     const depOk = validateDependsOnDrafts(depDrafts);
     if (!depOk.ok) {
-      msg.hidden = false;
-      msg.className = "form-msg error";
-      msg.textContent = depOk.error;
+      showWizardMsg(depOk.error, "error");
+      setWizardStep("context");
       return;
     }
     const relDrafts = collectRelatedWork(relatedList);
     const relOk = validateRelatedWorkDrafts(relDrafts);
     if (!relOk.ok) {
-      msg.hidden = false;
-      msg.className = "form-msg error";
-      msg.textContent = relOk.error;
+      showWizardMsg(relOk.error, "error");
+      setWizardStep("context");
       return;
     }
 
@@ -835,15 +1117,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       const feeTxid = feePay?.getTxid() || "";
       if (!/^[0-9a-fA-F]{64}$/.test(feeTxid)) {
         feePay?.setStep("txid");
-        msg.hidden = false;
-        msg.className = "form-msg error";
-        msg.textContent =
-          "Paste the 64-character submission fee txid after you've sent the payment.";
+        showWizardMsg(
+          "Paste the 64-character submission fee txid after you've sent the payment.",
+          "error",
+        );
         return;
       }
-      msg.hidden = false;
-      msg.className = "form-msg";
-      msg.textContent = "Opening pull request…";
+      showWizardMsg("Opening pull request…");
       try {
         const result = await submitProposal({
           ...author,
@@ -860,15 +1140,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           backLabel: "Browse projects",
         });
       } catch (err) {
-        msg.className = "form-msg error";
-        msg.textContent = (err as Error).message;
+        showWizardMsg((err as Error).message, "error");
       }
       return;
     }
 
-    msg.hidden = false;
-    msg.className = "form-msg";
-    msg.textContent = "Opening amend pull request…";
+    showWizardMsg("Opening amend pull request…");
     try {
       const result = await updateProposal({
         ...author,
@@ -882,8 +1159,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         backLabel: "Back to project",
       });
     } catch (err) {
-      msg.className = "form-msg error";
-      msg.textContent = (err as Error).message;
+      showWizardMsg((err as Error).message, "error");
     }
   });
 }
