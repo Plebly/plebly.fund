@@ -16,35 +16,6 @@ function slugify(label) {
     .replace(/^_|_$/g, "");
 }
 
-function parseParametersMarkdown(md) {
-  const params = {};
-  for (const line of md.split("\n")) {
-    const m = line.match(/^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|/);
-    if (!m) continue;
-    const key = m[1].trim();
-    const value = m[2].trim();
-    if (key.startsWith("-") || key === "Parameter" || key === "Role" || key === "Mode") {
-      continue;
-    }
-    const slug = slugify(key);
-    if (slug in params) continue;
-    params[slug] = value;
-  }
-  return params;
-}
-
-function parseSats(value) {
-  if (value == null || value === "") return null;
-  const m = String(value).replace(/,/g, "").match(/(\d+)\s*sats?/i);
-  return m ? Number(m[1]) : null;
-}
-
-function parsePercent(value) {
-  if (value == null || value === "") return null;
-  const m = String(value).match(/([\d.]+)\s*%/);
-  return m ? Number(m[1]) : null;
-}
-
 async function loadRepoMarkdown(filename, envPathKey) {
   const localPath = join(root, `../proposals/${filename}`);
   if (process.env[envPathKey] && existsSync(process.env[envPathKey])) {
@@ -62,12 +33,57 @@ async function loadRepoMarkdown(filename, envPathKey) {
   return res.text();
 }
 
-async function loadParametersMarkdown() {
-  return loadRepoMarkdown("PARAMETERS.md", "PARAMETERS_PATH");
-}
-
 async function loadKeyholdersMarkdown() {
   return loadRepoMarkdown("KEYHOLDERS.md", "KEYHOLDERS_PATH");
+}
+
+function formatSats(n) {
+  return `${Number(n).toLocaleString("en-US")} sats`;
+}
+
+async function loadParametersDoc() {
+  const envPath = process.env.PARAMETERS_JSON_PATH;
+  if (envPath && existsSync(envPath)) {
+    return JSON.parse(readFileSync(envPath, "utf8"));
+  }
+  const localPath = join(root, "../proposals/parameters.json");
+  if (existsSync(localPath)) {
+    return JSON.parse(readFileSync(localPath, "utf8"));
+  }
+  const res = await fetch(`${proposalsRaw}/parameters.json`);
+  if (!res.ok) {
+    throw new Error(
+      `Could not fetch parameters.json (${res.status}). Set PARAMETERS_JSON_PATH for offline builds.`,
+    );
+  }
+  return res.json();
+}
+
+function resolveNetworkParams(doc, bitcoinNetwork) {
+  const network = bitcoinNetwork === "signet" ? "signet" : "mainnet";
+  const overlay = doc.networks?.[network];
+  if (!doc.shared || !overlay || typeof overlay.claim_floor_sats !== "number") {
+    throw new Error(`parameters.json missing shared/networks.${network}`);
+  }
+  return {
+    ...doc.shared,
+    claim_floor_sats: overlay.claim_floor_sats,
+    submission_fee_address: overlay.submission_fee_address ?? null,
+    claim_floor_note: overlay.claim_floor_note,
+    network,
+  };
+}
+
+/** Template placeholders for content/about.md */
+function aboutPlaceholders(p) {
+  return {
+    submission_fee: `${formatSats(p.submission_fee_sats)} (exact, non-refundable)`,
+    platform_fee: `${p.platform_fee_percent}% of escrow to Plebly at successful disbursement`,
+    minimum_funding_claim_floor: formatSats(p.claim_floor_sats),
+    claim_window: `${p.claim_window_days} days`,
+    claim_extension: `One ${p.claim_extension_days}-day extension via reviewer supermajority.`,
+    milestone_threshold: formatSats(p.milestone_threshold_sats),
+  };
 }
 
 /** Strip markdown links / emphasis for plain status lines. */
@@ -273,14 +289,15 @@ function parseSteps(body) {
 }
 
 async function main() {
-  const parametersMd = await loadParametersMarkdown();
   const keyholdersMd = await loadKeyholdersMarkdown();
-  const params = parseParametersMarkdown(parametersMd);
   const keyholders = parseKeyholdersMarkdown(keyholdersMd);
   const template = readFileSync(join(root, "content/about.md"), "utf8");
 
   const network = (process.env.VITE_BITCOIN_NETWORK || "signet").toLowerCase();
   const bitcoinNetwork = network === "signet" ? "signet" : "mainnet";
+  const doc = await loadParametersDoc();
+  const resolved = resolveNetworkParams(doc, bitcoinNetwork);
+  const params = aboutPlaceholders(resolved);
   const aboutMd = substitute(template, params, { bitcoin_network: bitcoinNetwork });
 
   const aboutHtml = marked.parse(aboutMd, { async: false });
@@ -343,7 +360,9 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Claim floor",
           value: params.minimum_funding_claim_floor,
-          hint: "Minimum escrow balance before a builder can claim.",
+          hint:
+            resolved.claim_floor_note ||
+            `Minimum escrow on ${bitcoinNetwork} before a builder can claim.`,
         },
         {
           label: "Claim window",
@@ -386,60 +405,36 @@ export const ABOUT_KEYHOLDERS: AboutKeyholders = ${JSON.stringify(
 export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
   );
 
-  const submissionFeeSats = parseSats(params.submission_fee);
-  const claimFloorSats = parseSats(params.minimum_funding_claim_floor);
-  const milestoneSats = parseSats(params.milestone_threshold);
-  const platformFeePct = parsePercent(params.platform_fee);
-  const firstInt = (raw, fallback) => {
-    const m = String(raw ?? "").match(/(\d+)/);
-    return m ? Number(m[1]) : fallback;
-  };
-  const claimBondSats = parseSats(params.claim_bond) ?? 10_000;
-  const maxActiveClaims = firstInt(params.max_active_claims, 1);
-  const claimPendingTtlHours = firstInt(params.claim_pending_ttl, 72);
-  const reclaimCooldownDays = firstInt(params.reclaim_cooldown, 30);
-  const claimCheckpointDay = firstInt(params.claim_checkpoint_day, 45);
-  const claimCheckpointGraceDays = firstInt(params.claim_checkpoint_grace, 7);
-  const claimAbuseEscalationThreshold = firstInt(
-    params.claim_abuse_escalation_threshold,
-    2,
-  );
-  const coreAnnualGapSats = parseSats(params.core_annual_gap) ?? 0;
-  const maxSiteClaimPrsPerDay = firstInt(params.max_site_claim_prs_per_day, 10);
-  const identityRelinkCooldownDays = firstInt(
-    params.identity_relink_cooldown,
-    7,
-  );
-
-  if (
-    submissionFeeSats == null ||
-    claimFloorSats == null ||
-    milestoneSats == null ||
-    platformFeePct == null
-  ) {
-    throw new Error("Failed to parse numeric values from PARAMETERS.md");
-  }
-
   emitTs(
     join(genDir, "parameters.ts"),
-    `export const SUBMISSION_FEE_SATS = ${submissionFeeSats};
-export const CLAIM_FLOOR_SATS = ${claimFloorSats};
-export const MILESTONE_THRESHOLD_SATS = ${milestoneSats};
-export const PLATFORM_FEE_PERCENT = ${platformFeePct};
-export const CLAIM_BOND_SATS = ${claimBondSats};
-export const MAX_ACTIVE_CLAIMS = ${maxActiveClaims};
-export const CLAIM_PENDING_TTL_HOURS = ${claimPendingTtlHours};
-export const RECLAIM_COOLDOWN_DAYS = ${reclaimCooldownDays};
-export const CLAIM_CHECKPOINT_DAY = ${claimCheckpointDay};
-export const CLAIM_CHECKPOINT_GRACE_DAYS = ${claimCheckpointGraceDays};
-export const CLAIM_ABUSE_ESCALATION_THRESHOLD = ${claimAbuseEscalationThreshold};
-export const CORE_ANNUAL_GAP_SATS = ${coreAnnualGapSats};
-export const MAX_SITE_CLAIM_PRS_PER_DAY = ${maxSiteClaimPrsPerDay};
-export const IDENTITY_RELINK_COOLDOWN_DAYS = ${identityRelinkCooldownDays};`,
+    `export const SUBMISSION_FEE_SATS = ${resolved.submission_fee_sats};
+export const CLAIM_FLOOR_SATS = ${resolved.claim_floor_sats};
+export const MILESTONE_THRESHOLD_SATS = ${resolved.milestone_threshold_sats};
+export const PLATFORM_FEE_PERCENT = ${resolved.platform_fee_percent};
+export const CLAIM_BOND_SATS = ${resolved.claim_bond_sats};
+export const MAX_ACTIVE_CLAIMS = ${resolved.max_active_claims};
+export const CLAIM_PENDING_TTL_HOURS = ${resolved.claim_pending_ttl_hours};
+export const RECLAIM_COOLDOWN_DAYS = ${resolved.reclaim_cooldown_days};
+export const CLAIM_CHECKPOINT_DAY = ${resolved.claim_checkpoint_day};
+export const CLAIM_CHECKPOINT_GRACE_DAYS = ${resolved.claim_checkpoint_grace_days};
+export const CLAIM_ABUSE_ESCALATION_THRESHOLD = ${resolved.claim_abuse_escalation_threshold};
+export const CORE_ANNUAL_GAP_SATS = ${resolved.core_annual_gap_sats};
+export const MAX_SITE_CLAIM_PRS_PER_DAY = ${resolved.max_site_claim_prs_per_day};
+export const IDENTITY_RELINK_COOLDOWN_DAYS = ${resolved.identity_relink_cooldown_days};
+export const CLAIM_WINDOW_DAYS = ${resolved.claim_window_days};
+export const CLAIM_EXTENSION_DAYS = ${resolved.claim_extension_days};
+export const FUNDING_WINDOW_DAYS = ${resolved.funding_window_days};
+export const FUNDING_WINDOW_EXTENSION_DAYS = ${resolved.funding_window_extension_days};
+export const DELIVERY_WINDOW_DAYS = ${resolved.delivery_window_days};
+export const FUNDING_CONFIRMATIONS = ${resolved.funding_confirmations};
+export const BADGE_NOTABLE_SATS = ${resolved.badge_notable_sats};
+export const BADGE_MAJOR_SATS = ${resolved.badge_major_sats};
+export const BADGE_PATRON_SATS = ${resolved.badge_patron_sats};
+export const PLEBLY_PARAMETERS_NETWORK = ${JSON.stringify(resolved.network)} as const;`,
   );
 
   console.log(
-    `Generated about page from PARAMETERS.md + KEYHOLDERS.md (${keyholders.roster.length} seats)`,
+    `Generated about page from parameters.json (${bitcoinNetwork}) + KEYHOLDERS.md (${keyholders.roster.length} seats)`,
   );
 }
 

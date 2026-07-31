@@ -31,7 +31,7 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. Revers
 
 - Submission fee: paid when opening a proposal; exact and non-refundable.
 - Platform fee: a percentage of escrow paid to Plebly only at successful disbursement (not "the project gets 2.5%").
-- Claim floor: minimum confirmed escrow before a builder can claim.
+- Claim floor: network-specific minimum confirmed escrow (see parameters.json; signet is lowered for testing).
 - Claim window: exclusive period after claim acceptance, with a possible reviewer-approved extension.
 - Claim bonds and abuse mitigations (active-claim caps, cooldowns, checkpoints) are documented in PARAMETERS.md and site docs.
 
