@@ -15,6 +15,7 @@ import { renderMarkdown } from "./markdown";
 import {
   bindDonateModal,
   bindDonatePanel,
+  updateProposalFundingBar,
   bindProposalCopyButtons,
   bindShareButtons,
   donateModalHtml,
@@ -62,7 +63,7 @@ import {
   proposalJsonLd,
   seoForRoute,
 } from "./router";
-import { escapeHtml, linkifyText, proposalStablePath } from "./util";
+import { escapeHtml, formatSats, linkifyText, proposalStablePath } from "./util";
 import { recordProposalView } from "./views";
 
 export type ProposalShell = (inner: string) => string;
@@ -429,6 +430,9 @@ export async function renderProposalPage(
         proposalId: match.id,
         proposalPath: match.path,
         signedIn: Boolean(user),
+        initialBalance: balance ?? 0,
+        claimFloorSats: CLAIM_FLOOR_SATS,
+        targetSats: match.target_sats,
         creditPrefs: user?.funder_credit
           ? {
               public_credit: user.funder_credit.public_credit !== false,
@@ -439,6 +443,27 @@ export async function renderProposalPage(
         onAuthed,
         onCreditLinked: () => {
           void reloadEngagement?.();
+        },
+        onBalanceUpdate: (next) => {
+          updateProposalFundingBar(
+            app,
+            next,
+            CLAIM_FLOOR_SATS,
+            match.target_sats,
+          );
+          const needEl = app.querySelector(".builder-status.muted");
+          if (
+            needEl &&
+            /more confirmed sats to reach the claim floor/i.test(
+              needEl.textContent || "",
+            )
+          ) {
+            const need = Math.max(0, CLAIM_FLOOR_SATS - next);
+            needEl.textContent =
+              need > 0
+                ? `Needs ${formatSats(need)} more confirmed sats to reach the claim floor.`
+                : "Claim floor met. Refresh if the claim button does not appear.";
+          }
         },
       });
       bindDonateModal(app, {

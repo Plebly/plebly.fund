@@ -187,9 +187,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     app.innerHTML = ctx.shell(`
       <section class="wrap detail propose-page">
         <h1>${editParam ? "Edit proposal" : "Start a project"}</h1>
-        <p class="lede">Sign in to ${editParam ? "open an amend pull request" : "open a proposal pull request"}.</p>
+        <p class="lede">Sign in to ${editParam ? "open an amend pull request" : "open a proposal"}.</p>
         ${loginChoicesHtml(undefined, returnPath)}
-        <p class="hint form-alt-link"><a href="https://github.com/Plebly/proposals/blob/main/template/proposal.md" target="_blank" rel="noreferrer">Or open a PR manually</a></p>
       </section>
     `);
     return;
@@ -296,7 +295,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                   <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
                 </p>
               </div>`
-            : `<p class="lede">A short guided path to open a proposal PR. Submission fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.</p>`
+            : `<p class="lede">A short guided path to open a proposal. Submission fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.</p>`
         }
       </header>
 
@@ -425,7 +424,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               amountSats: SUBMISSION_FEE_SATS,
               address: feeAddress,
               txidName: "submission_fee_txid",
-              note: "Required to open a proposal PR. Exact amount on-chain.",
+              note: "Required to open a proposal. Exact amount on-chain.",
             })}
           </fieldset>`
           }

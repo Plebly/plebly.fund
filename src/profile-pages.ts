@@ -432,7 +432,7 @@ export async function renderAccount(
           myProposals.length === 0
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No proposals yet</p>
-                <p class="empty-state-body">Describe the work and open a proposal PR.</p>
+                <p class="empty-state-body">Describe the work and open a proposal.</p>
                 <a class="btn" href="${href("/propose")}">Start a project</a>
               </div></div>`
             : `<ul class="work-list">${myProposals

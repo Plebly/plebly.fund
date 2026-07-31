@@ -17,7 +17,7 @@ We built it for people who want hard problems solved in the open.
 1. **Submit**: Open a pull request with your proposal and pay the submission fee on-chain.
 2. **Donate**: Anyone sends Bitcoin to the project's escrow address (on-chain, or Lightning that settles into that same address).
 3. **Claim**: A builder claims the project once funding hits the claim floor.
-4. **Complete**: Reviewers verify the deliverable; keyholders release escrow on success.
+4. **Complete**: Reviewers verify the deliverable; keyholders release escrow manually on success. Plebly never moves funds.
 
 Browse [open projects](/), [start a project](/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
@@ -37,7 +37,7 @@ Lightning is a way to fund the same on-chain escrow address. After payment settl
 
 These numbers are fixed at launch and pulled from [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md) on every deploy:
 
-- **Submission fee:** {{submission_fee}} (paid when you open a proposal PR; exact and non-refundable).
+- **Submission fee:** {{submission_fee}} (paid when you open a proposal; exact and non-refundable).
 - **Platform fee:** {{platform_fee}} (paid to Plebly from escrow only when a project completes successfully).
 - **Claim floor:** {{minimum_funding_claim_floor}} (minimum escrow balance before a builder can claim).
 - **Claim window:** {{claim_window}} after a claim is accepted. {{claim_extension}}.

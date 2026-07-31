@@ -30,6 +30,7 @@ import {
   type LightningStatus,
   type LightningSwapView,
 } from "./lightning";
+import { watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
 import { proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
@@ -63,10 +64,18 @@ export type DonateBindOpts = {
   signedIn?: boolean;
   onAuthed?: () => void;
   onCreditLinked?: () => void;
+  /** Confirmed escrow balance when the page loaded (for live funding updates). */
+  initialBalance?: number | null;
+  claimFloorSats?: number;
+  targetSats?: number | null;
+  /** Called when confirmed escrow balance changes (updates funding bar). */
+  onBalanceUpdate?: (balance: number) => void;
   /** Account default prefs (skip credit step when present). */
   creditPrefs?: CreditPreferences | null;
   /** Override UTXO poll interval (tests use a short value). */
   utxoPollMs?: number;
+  /** Override confirmed-balance poll interval (tests use a short value). */
+  balancePollMs?: number;
 };
 
 function donateCreditStepHtml(signedIn: boolean): string {
@@ -142,6 +151,7 @@ function donatePayStepHtml(
         <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
       </div>
       <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
+      <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
 
     <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
@@ -355,13 +365,13 @@ export function fundingProgressHtml(
   const funded = balance ?? 0;
   const claimable = funded >= floor;
   const over = funded > floor;
-  const toFloorPct = Math.min(100, Math.round((funded / Math.max(1, floor)) * 100));
+  const remaining = Math.max(0, floor - funded);
   const overLabel = overfundRatioLabel(funded, floor);
   const label = over
     ? `Overfunded · ${overLabel}`
     : claimable
       ? "Open to claim"
-      : `${toFloorPct}% to claim floor`;
+      : `${formatSats(remaining)} to claim floor`;
   const labelClass = over
     ? " overfunded"
     : claimable
@@ -388,6 +398,18 @@ export function proposalFundingBarHtml(
   return `<div class="proposal-funding-bar">
     ${fundingProgressHtml(balance, floor, target)}
   </div>`;
+}
+
+/** Replace the live funding bar when confirmed balance changes. */
+export function updateProposalFundingBar(
+  root: ParentNode,
+  balance: number,
+  floor: number,
+  target: number | null,
+): void {
+  const host = root.querySelector(".proposal-funding-bar");
+  if (!host) return;
+  host.innerHTML = fundingProgressHtml(balance, floor, target);
 }
 
 function copyBtn(value: string, label: string): string {
@@ -618,8 +640,11 @@ function setLightningReady(panel: Element): void {
     ?.classList.remove("donate-rail-limited");
 }
 
-function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
-  const el = panel.querySelector<HTMLElement>("#donate-credit-status");
+function setDonateStatusEl(
+  el: HTMLElement | null,
+  message: string | null,
+  kind?: "ok" | "bad" | "live",
+): void {
   if (!el) return;
   if (!message) {
     el.hidden = true;
@@ -632,6 +657,14 @@ function setDonateCreditStatus(panel: Element, message: string | null, kind?: "o
   el.classList.toggle("ok", kind === "ok");
   el.classList.toggle("bad", kind === "bad");
   el.classList.toggle("live", kind === "live");
+}
+
+function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
+  setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
+}
+
+function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
+  setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
 }
 
 function setDonateStep(panel: Element, step: "credit" | "pay"): void {
@@ -709,14 +742,24 @@ async function resolveInitialDonateStep(
   return { step: "credit", prefs: null };
 }
 
-/** Wire credit step + pay step navigation; starts UTXO watch on pay. */
+/** Wire credit step + pay step navigation; polls mempool on pay for confirmations. */
 function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   bindCreditPreferenceGates(panel, "donate-credit");
   if (opts.onAuthed) bindLoginHandlers(opts.onAuthed);
 
   const claimWrap = panel.querySelector<HTMLElement>("#donate-credit-claim");
-  let watcherStop: (() => void) | null = null;
+  let utxoStop: (() => void) | null = null;
+  let balanceStop: (() => void) | null = null;
   let linking = false;
+
+  const stopWatchers = () => {
+    utxoStop?.();
+    balanceStop?.();
+    utxoStop = null;
+    balanceStop = null;
+  };
+  (panel as HTMLElement & { __stopDonateWatchers?: () => void }).__stopDonateWatchers =
+    stopWatchers;
 
   const linkOutpoint = async (utxo: {
     txid: string;
@@ -754,7 +797,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   };
 
   const showClaimable = (utxos: { txid: string; vout: number; value: number }[]) => {
-    if (!claimWrap || !utxos.length) return;
+    if (!claimWrap || !utxos.length || !opts.signedIn || !opts.proposalId) return;
     claimWrap.hidden = false;
     claimWrap.innerHTML = `<p class="donate-credit-seen">New payment detected.</p>
       <ul class="donate-credit-utxos">${utxos
@@ -777,14 +820,60 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     });
   };
 
-  const startWatching = () => {
-    if (watcherStop || !opts.signedIn || !opts.proposalId) return;
-    const watcher = watchNewUtxos(opts.address, showClaimable, {
-      intervalMs: opts.utxoPollMs ?? 8000,
-    });
-    watcherStop = watcher.stop;
+  const startBalanceWatch = () => {
+    if (balanceStop) return;
+    const watcher = watchConfirmedBalance(
+      opts.address,
+      (balance, { previous }) => {
+        const delta = balance - previous;
+        setDonateConfirmStatus(
+          panel,
+          delta > 0
+            ? `Confirmed · ${formatSats(delta)} added. Escrow is now ${formatSats(balance)}.`
+            : `Escrow balance is now ${formatSats(balance)}.`,
+          "ok",
+        );
+        opts.onBalanceUpdate?.(balance);
+      },
+      {
+        baseline:
+          typeof opts.initialBalance === "number" && Number.isFinite(opts.initialBalance)
+            ? opts.initialBalance
+            : undefined,
+        intervalMs: opts.balancePollMs ?? 10_000,
+      },
+    );
+    balanceStop = watcher.stop;
     void watcher.ready.then(() => {
       if (panel.getAttribute("data-donate-step") === "pay") {
+        setDonateConfirmStatus(panel, "Waiting for your payment to confirm…", "live");
+      }
+    });
+  };
+
+  const startUtxoWatch = () => {
+    if (utxoStop) return;
+    const watcher = watchNewUtxos(
+      opts.address,
+      (utxos) => {
+        if (utxos.some((u) => !u.status?.confirmed)) {
+          setDonateConfirmStatus(
+            panel,
+            "Payment seen · waiting for confirmation…",
+            "live",
+          );
+        }
+        showClaimable(utxos);
+      },
+      { intervalMs: opts.utxoPollMs ?? 8000 },
+    );
+    utxoStop = watcher.stop;
+    void watcher.ready.then(() => {
+      if (
+        opts.signedIn &&
+        opts.proposalId &&
+        panel.getAttribute("data-donate-step") === "pay"
+      ) {
         setDonateCreditStatus(
           panel,
           "Watching for a new on-chain payment to this address…",
@@ -801,7 +890,8 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       syncCreditSummary(panel, prefs);
     }
     setDonateStep(panel, "pay");
-    startWatching();
+    startBalanceWatch();
+    startUtxoWatch();
   };
 
   panel.querySelector<HTMLButtonElement>("#donate-credit-continue")?.addEventListener(

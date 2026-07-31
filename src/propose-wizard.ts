@@ -95,7 +95,7 @@ export function proposeWizardNavHtml(opts: {
     ? "Open amend PR"
     : opts.isBridge
       ? "Pay fee & update draft PR"
-      : "Open proposal PR";
+      : "Open proposal";
   return `<div class="propose-wizard-nav" id="propose-wizard-nav">
     <button type="button" class="btn ghost" id="propose-wizard-back" ${isFirst ? "hidden" : ""}>Back</button>
     <div class="propose-wizard-nav-end">

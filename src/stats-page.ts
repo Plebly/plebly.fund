@@ -153,7 +153,7 @@ function statsBodyHtml(stats: PublicStats): string {
         String(stats.completed),
         stats.completed
           ? `Targets sum to ${formatSats(stats.paidEstimate)} · payouts stay on-chain verifiable`
-          : "Completed work appears here after public review",
+          : "Completed work appears here after public review and keyholder release",
       )}
       ${supportMetricHtml("Claim completion", rateValue, rateDetail)}
     </dl>

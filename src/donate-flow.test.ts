@@ -22,6 +22,10 @@ const addressUtxos = vi.fn();
 vi.mock("./mempool", () => ({
   addressBalanceSats: vi.fn(async () => 0),
   addressUtxos: (...args: unknown[]) => addressUtxos(...args),
+  watchConfirmedBalance: () => ({
+    stop: () => {},
+    ready: Promise.resolve(),
+  }),
 }));
 
 const fetchLightningStatus = vi.fn();
@@ -318,7 +322,7 @@ describe("donate modal UX", () => {
 });
 
 describe("donate credit UX (signed out)", () => {
-  it("offers sign-in on credit step and continues anonymously without watching", async () => {
+  it("offers sign-in on credit step and continues anonymously", async () => {
     mountDonate({ signedIn: false, open: true });
     await bindDonatePanel(document, {
       address: proposal.escrow_address!,
@@ -345,7 +349,13 @@ describe("donate credit UX (signed out)", () => {
     expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
       "pay",
     );
-    expect(addressUtxos).not.toHaveBeenCalled();
+    // Anonymous pay still polls for confirmation status (no credit-claim UI).
+    await vi.waitFor(() => {
+      expect(addressUtxos).toHaveBeenCalled();
+    });
+    expect(document.querySelector("#donate-credit-claim")?.hasAttribute("hidden")).toBe(
+      true,
+    );
   });
 });
 

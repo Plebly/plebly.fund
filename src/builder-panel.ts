@@ -98,6 +98,7 @@ export function builderPanelHtml(
 
         <div class="claim-modal-section">
           <label class="donate-amount-label" for="claim-payout">Payout address</label>
+          <p class="builder-claim-hint muted">Where keyholders send escrow when they release it. Plebly never moves funds.</p>
           <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
         </div>
 
@@ -237,7 +238,7 @@ function renderStatusBody(
     case "completed":
       body.innerHTML = `${meta}<p class="builder-status">Completed${
         status.claimer ? ` · ${escapeHtml(status.claimer)}` : ""
-      }. Fulfiller earns a reviewer seat.</p>`;
+      }. Fulfiller earns a reviewer seat. Escrow release is by keyholders — Plebly never moves funds.</p>`;
       break;
     default:
       body.innerHTML = `<p class="builder-status muted">Not available for claim.</p>`;

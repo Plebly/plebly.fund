@@ -255,6 +255,7 @@ describe("proposal UI critical render helpers", () => {
   it("funding bar stays slim without duplicate stats", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
+    expect(html).toContain("50,000 sats to claim floor");
     expect(html).not.toContain("proposal-stats");
   });
 

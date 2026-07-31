@@ -333,7 +333,7 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Submission fee",
           value: params.submission_fee,
-          hint: "Paid when you open a proposal PR.",
+          hint: "Paid when you open a proposal.",
         },
         {
           label: "Platform fee",

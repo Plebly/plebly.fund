@@ -113,7 +113,7 @@ function howItWorksHtml(): string {
     { n: "01", title: "Propose", body: "Describe the problem, deliverable, and how success is verified." },
     { n: "02", title: "Donate", body: "Anyone sends sats to the project’s public escrow address." },
     { n: "03", title: "Claim", body: "A builder claims once funding clears the claim floor." },
-    { n: "04", title: "Complete", body: "Reviewers verify the work; keyholders release escrow on success." },
+    { n: "04", title: "Complete", body: "Reviewers verify the work. Keyholders release escrow in wallet — Plebly never moves funds." },
   ];
   return `<section class="landing-how">
     <div class="wrap-wide">
@@ -244,7 +244,7 @@ function discoverToolbarHtml(count: number): string {
 
 function progressHtml(p: Proposal, floor: number): string {
   const bal = p.balance_sats ?? 0;
-  const pct = Math.min(100, Math.round((bal / Math.max(1, floor)) * 100));
+  const remaining = Math.max(0, floor - bal);
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
   const over = bal > floor;
@@ -255,14 +255,14 @@ function progressHtml(p: Proposal, floor: number): string {
     : isDirect
       ? bal >= floor
         ? "Floor met · direct"
-        : `${pct}% to floor`
+        : `${formatSats(remaining)} to floor`
       : open
         ? "Open to claim"
         : near
           ? "Near floor"
           : isTakenStatus(String(p.status)) || p.claimer
             ? "Taken"
-            : `${pct}% to claim floor`;
+            : `${formatSats(remaining)} to claim floor`;
   const labelClass = over ? "overfunded" : open ? "claimable" : "";
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">

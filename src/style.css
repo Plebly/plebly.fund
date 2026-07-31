@@ -3314,22 +3314,26 @@ a.project-card-by:hover .project-card-by-text {
   border-top: 1px solid var(--line-soft);
 }
 
-.donate-credit-status {
+.donate-credit-status,
+.donate-confirm-status {
   margin: 0.75rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--ink-secondary);
 }
 
-.donate-credit-status.live {
+.donate-credit-status.live,
+.donate-confirm-status.live {
   color: var(--accent-text);
 }
 
-.donate-credit-status.ok {
+.donate-credit-status.ok,
+.donate-confirm-status.ok {
   color: var(--good);
 }
 
-.donate-credit-status.bad {
+.donate-credit-status.bad,
+.donate-confirm-status.bad {
   color: var(--bad);
 }
 
@@ -3650,6 +3654,12 @@ a.project-card-by:hover .project-card-by-text {
 
 .claim-modal-section {
   margin-bottom: 1rem;
+}
+
+.builder-claim-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .claim-modal-section:last-child {
