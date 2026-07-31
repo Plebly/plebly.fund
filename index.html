@@ -8,7 +8,7 @@
       name="description"
       content="Fund open Bitcoin work with publicly verifiable on-chain escrow. No custodian in the middle."
     />
-    <meta name="theme-color" content="#7828b8" />
+    <meta name="theme-color" content="#0c0b10" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://plebly.fund/" />
     <meta property="og:type" content="website" />
@@ -37,6 +37,175 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <!-- Critical boot styles: first paint matches site chrome before JS/CSS land. -->
+    <style>
+      :root {
+        color-scheme: dark;
+        --boot-bg: #0c0b10;
+        --boot-ink: #f2f0f6;
+        --boot-muted: #78728a;
+        --boot-line: #2a2634;
+        --boot-accent: #b57aef;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--boot-bg);
+        color: var(--boot-ink);
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        z-index: 100;
+        padding: 0.5rem 0.75rem;
+        background: var(--boot-ink);
+        color: var(--boot-bg);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .skip-link:focus {
+        left: 0.75rem;
+        top: 0.75rem;
+      }
+      #app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .boot-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem 1rem;
+        width: min(980px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 0.875rem 0;
+      }
+      .boot-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        color: inherit;
+        text-decoration: none;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .boot-brand img {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: block;
+      }
+      .boot-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1rem;
+        color: var(--boot-muted);
+        font-size: 0.9375rem;
+      }
+      .boot-nav a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .boot-nav a:hover,
+      .boot-nav a.active {
+        color: var(--boot-accent);
+      }
+      .boot-main {
+        width: min(720px, calc(100% - 2rem));
+        margin: 2.5rem auto 0;
+        flex: 1;
+      }
+      .boot-main h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.75rem;
+        letter-spacing: -0.03em;
+      }
+      .boot-main h2 {
+        margin: 1.75rem 0 0.5rem;
+        font-size: 1.125rem;
+        letter-spacing: -0.02em;
+      }
+      .boot-main p,
+      .boot-main li {
+        margin: 0 0 0.75rem;
+        color: var(--boot-muted);
+        max-width: 36rem;
+      }
+      .boot-main a,
+      .boot-footer a {
+        color: var(--boot-accent);
+        text-decoration: none;
+      }
+      .boot-main ul {
+        margin: 0 0 1rem;
+        padding-left: 1.2rem;
+      }
+      .boot-crumbs {
+        margin: 0 0 1rem;
+        font-size: 0.875rem;
+        color: var(--boot-muted);
+      }
+      .boot-crumbs ol {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0.5rem;
+      }
+      .boot-crumbs li:not(:last-child)::after {
+        content: "/";
+        margin-left: 0.5rem;
+        color: var(--boot-line);
+      }
+      .boot-footer {
+        width: min(980px, calc(100% - 2rem));
+        margin: 2.5rem auto 0;
+        padding: 1.5rem 0 2rem;
+        border-top: 1px solid var(--boot-line);
+        color: var(--boot-muted);
+        font-size: 0.875rem;
+      }
+      .boot-footer nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        margin-top: 0.75rem;
+      }
+      .boot-pulse {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        margin-right: 0.45rem;
+        border-radius: 50%;
+        background: var(--boot-accent);
+        vertical-align: middle;
+        animation: boot-pulse 1.1s ease-in-out infinite;
+      }
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          opacity: 0.35;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-pulse {
+          animation: none;
+          opacity: 0.7;
+        }
+      }
+    </style>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -46,7 +215,10 @@
             "@id": "https://plebly.fund/#organization",
             "name": "Plebly",
             "url": "https://plebly.fund/",
-            "logo": "https://plebly.fund/logo.jpeg",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://plebly.fund/logo.jpeg"
+            },
             "sameAs": [
               "https://x.com/joinplebly",
               "https://github.com/Plebly"
@@ -67,19 +239,50 @@
     </script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <div id="app">
-      <main>
+      <header class="boot-header">
+        <a class="boot-brand" href="/">
+          <img src="./logo.jpeg" alt="Plebly" width="28" height="28" />
+          <span>Plebly</span>
+        </a>
+        <nav class="boot-nav" aria-label="Primary">
+          <a href="/" aria-current="page">Projects</a>
+          <a href="/propose">Start a project</a>
+          <a href="/about">About</a>
+        </nav>
+      </header>
+      <main id="main-content" class="boot-main">
         <h1>Plebly</h1>
         <p>
           Fund open Bitcoin work with publicly verifiable on-chain escrow. No
           custodian in the middle.
         </p>
+        <h2>How it works</h2>
+        <ul>
+          <li>Propose Bitcoin development or research in the open.</li>
+          <li>Anyone donates to a public on-chain escrow address.</li>
+          <li>Builders claim funded work once the claim floor is met.</li>
+          <li>Reviewers verify deliverables; keyholders release escrow.</li>
+        </ul>
         <p>
-          <a href="/about">About</a> ·
+          <a href="/">Browse open projects</a> ·
           <a href="/propose">Start a project</a> ·
+          <a href="/about">About</a> ·
           <a href="/llms.txt">llms.txt</a>
         </p>
       </main>
+      <footer class="boot-footer">
+        <p>Non-custodial Bitcoin bounties. Protocol over platform.</p>
+        <nav aria-label="Footer">
+          <a href="/">Projects</a>
+          <a href="/propose">Start a project</a>
+          <a href="/about">About</a>
+          <a href="/stats">Stats</a>
+          <a href="/reviewers">Reviewers</a>
+          <a href="https://github.com/Plebly/proposals">Proposals repo</a>
+        </nav>
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

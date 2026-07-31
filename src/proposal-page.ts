@@ -275,6 +275,7 @@ export async function renderProposalPage(
           path: match.id ? proposalStablePath(match.id) : undefined,
         },
       ),
+      ogType: "article",
       ...(coverUrl ? { image: coverUrl } : {}),
       jsonLd: proposalJsonLd({
         id: match.id,
@@ -342,8 +343,13 @@ export async function renderProposalPage(
     const status = String(match.status);
 
     app.innerHTML = shell(`
-      <section class="wrap-wide detail proposal-page">
-        <a class="back-link" href="${href("/")}">← Projects</a>
+      <article class="wrap-wide detail proposal-page">
+        <nav class="proposal-breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="${href("/")}">Projects</a></li>
+            <li aria-current="page">${escapeHtml(match.title)}</li>
+          </ol>
+        </nav>
         ${coverHtml}
 
         <header class="proposal-hero">
@@ -412,7 +418,7 @@ export async function renderProposalPage(
         </div>
         ${match.escrow_address ? donateMobileCtaHtml() : ""}
         ${match.escrow_address ? donateModalHtml(match, { signedIn: Boolean(user) }) : ""}
-      </section>
+      </article>
     `);
 
     bindProposalCopyButtons(app);

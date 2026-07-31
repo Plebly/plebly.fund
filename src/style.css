@@ -2975,6 +2975,49 @@ a.project-card-by:hover .project-card-by-text {
   line-height: 1.2;
 }
 
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 0.75rem;
+  background: var(--ink);
+  color: var(--bg);
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
+.skip-link:focus {
+  left: 0.75rem;
+  top: 0.75rem;
+}
+
+.proposal-breadcrumbs {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+}
+
+.proposal-breadcrumbs ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+}
+
+.proposal-breadcrumbs li:not(:last-child)::after {
+  content: "/";
+  margin-left: 0.5rem;
+  color: var(--line);
+}
+
+.proposal-breadcrumbs a:hover {
+  color: var(--accent-text);
+}
+
 .back-link {
   font-size: 0.8125rem;
   color: var(--muted);

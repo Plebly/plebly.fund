@@ -310,7 +310,7 @@ export function renderAbout(shell: AboutShell): void {
   app.innerHTML = shell(`
     <section class="wrap detail about-page">
       <header class="about-hero">
-        <h1>Plebly</h1>
+        <h1>About Plebly</h1>
         <div class="about-lede prose-rich">${ABOUT_INTRO_HTML}</div>
         <div class="about-cta">
           <a class="btn" href="${href("/")}">Browse projects</a>

@@ -39,6 +39,9 @@ import {
 import type { Route } from "./types";
 import { escapeHtml } from "./util";
 
+/** Styles land with this module — first paint used index.html boot chrome. */
+document.documentElement.classList.add("app-ready");
+
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 let currentUser: AuthUser | null = null;
@@ -100,23 +103,26 @@ function siteFooterHtml(routeName: string): string {
 function shell(inner: string): string {
   const r = route();
   const active = (name: string) => (r.name === name ? "active" : "");
+  const current = (name: string) =>
+    r.name === name ? ' aria-current="page"' : "";
   return `
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="wrap-wide site-header">
       <a class="brand" href="${href("/")}">
-        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="28" height="28" />
+        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="Plebly" width="28" height="28" />
         <span>Plebly</span>
       </a>
       <div class="header-end">
-        <nav class="nav">
-          <a href="${href("/")}" class="${active("home")}">Projects</a>
-          <a href="${href("/propose")}" class="${active("propose")}">Start a project</a>
-          <a href="${href("/about")}" class="${active("about")}">About</a>
+        <nav class="nav" aria-label="Primary">
+          <a href="${href("/")}" class="${active("home")}"${current("home")}>Projects</a>
+          <a href="${href("/propose")}" class="${active("propose")}"${current("propose")}>Start a project</a>
+          <a href="${href("/about")}" class="${active("about")}"${current("about")}>About</a>
           ${authNavHtml()}
         </nav>
         ${pleblySocialLinksHtml()}
       </div>
     </header>
-    <main>${inner}</main>
+    <main id="main-content">${inner}</main>
     ${siteFooterHtml(r.name)}
   `;
 }

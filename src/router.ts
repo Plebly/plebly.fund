@@ -186,6 +186,8 @@ export type SeoInput = {
   path?: string;
   image?: string;
   noindex?: boolean;
+  /** Open Graph type (default website; proposals use article). */
+  ogType?: string;
   /** JSON-LD graph objects (FundingCampaign, WebSite, etc.) */
   jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 };
@@ -256,14 +258,14 @@ export function applySeo(input: SeoInput): void {
 
   ensureLink("canonical").href = canonical;
 
-  ensureMeta("property", "og:type").content = "website";
+  ensureMeta("property", "og:type").content = input.ogType || "website";
   ensureMeta("property", "og:site_name").content = "Plebly";
   ensureMeta("property", "og:locale").content = "en_US";
   ensureMeta("property", "og:title").content = document.title;
   ensureMeta("property", "og:description").content = description;
   ensureMeta("property", "og:url").content = canonical;
   ensureMeta("property", "og:image").content = image;
-  ensureMeta("property", "og:image:alt").content = "Plebly";
+  ensureMeta("property", "og:image:alt").content = document.title;
 
   ensureMeta("name", "twitter:card").content =
     image !== `${SITE_ORIGIN}/logo.jpeg` ? "summary_large_image" : "summary";
@@ -307,16 +309,53 @@ export function proposalJsonLd(input: {
       : undefined;
   return {
     "@context": "https://schema.org",
-    "@type": "FundingCampaign",
-    name: input.title,
-    description: input.description,
-    url,
-    identifier: input.id || undefined,
-    creativeWorkStatus: input.status,
-    ...(input.cover_image ? { image: input.cover_image } : {}),
-    ...(raised ? { amount: raised } : {}),
-    ...(goal ? { fundingGoal: goal } : {}),
-    funder: { "@type": "Organization", name: "Plebly", url: SITE_ORIGIN },
+    "@graph": [
+      {
+        "@type": "FundingCampaign",
+        "@id": `${url}#campaign`,
+        name: input.title,
+        description: input.description,
+        url,
+        identifier: input.id || undefined,
+        creativeWorkStatus: input.status,
+        ...(input.cover_image ? { image: input.cover_image } : {}),
+        ...(raised ? { amount: raised } : {}),
+        ...(goal ? { fundingGoal: goal } : {}),
+        funder: {
+          "@type": "Organization",
+          name: "Plebly",
+          url: SITE_ORIGIN,
+        },
+        mainEntityOfPage: { "@id": `${url}#webpage` },
+      },
+      {
+        "@type": "WebPage",
+        "@id": `${url}#webpage`,
+        name: input.title,
+        description: input.description,
+        url,
+        isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
+        about: { "@id": `${url}#campaign` },
+        inLanguage: "en",
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Projects",
+            item: `${SITE_ORIGIN}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: input.title,
+            item: url,
+          },
+        ],
+      },
+    ],
   };
 }
 

@@ -70,11 +70,12 @@ function setMeta(html, attr, key, value) {
 
 function replaceShell(html, attrs) {
   let out = html;
+  const ogType = attrs.type || "website";
   out = setMeta(out, "name", "description", attrs.description);
   out = setMeta(out, "property", "og:title", attrs.title);
   out = setMeta(out, "property", "og:description", attrs.description);
   out = setMeta(out, "property", "og:url", attrs.url);
-  out = setMeta(out, "property", "og:type", attrs.type || "website");
+  out = setMeta(out, "property", "og:type", ogType);
   out = setMeta(out, "property", "og:image", attrs.image || `${SITE}/logo.jpeg`);
   out = setMeta(out, "property", "og:image:alt", attrs.title);
   out = setMeta(out, "name", "twitter:title", attrs.title);
@@ -107,14 +108,76 @@ function replaceShell(html, attrs) {
     jsonLd || "",
   );
 
-  const body = `<main>
-        <h1>${escapeHtml(attrs.heading || attrs.title)}</h1>
+  const pathname = (() => {
+    try {
+      return new URL(attrs.url).pathname.replace(/\/$/, "") || "/";
+    } catch {
+      return "/";
+    }
+  })();
+  const navClass = (href) => {
+    const on =
+      pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+    return on ? ' class="active" aria-current="page"' : "";
+  };
+  const heading = attrs.heading || attrs.title;
+  const isArticle = (attrs.type || "website") === "article";
+  const crumbs = isArticle
+    ? `<nav class="boot-crumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="/">Projects</a></li>
+            <li aria-current="page">${escapeHtml(heading)}</li>
+          </ol>
+        </nav>`
+    : "";
+  const mainInner = `${crumbs}
+        <h1>${escapeHtml(heading)}</h1>
         <p>${escapeHtml(attrs.description)}</p>
-        <p><a href="${escapeHtml(attrs.url)}">Open on Plebly</a></p>
-      </main>`;
+        ${
+          attrs.extraHtml
+            ? attrs.extraHtml
+            : `<p><a href="${escapeHtml(attrs.url)}">Open on Plebly</a></p>`
+        }`;
+
+  // Semantic boot chrome for crawlers (same landmarks as the live SPA shell).
+  const body = `<a class="skip-link" href="#main-content">Skip to content</a>
+      <header class="boot-header">
+        <a class="boot-brand" href="/">
+          <img src="/logo.jpeg" alt="Plebly" width="28" height="28" />
+          <span>Plebly</span>
+        </a>
+        <nav class="boot-nav" aria-label="Primary">
+          <a href="/"${navClass("/")}>Projects</a>
+          <a href="/propose"${navClass("/propose")}>Start a project</a>
+          <a href="/about"${navClass("/about")}>About</a>
+        </nav>
+      </header>
+      <main id="main-content" class="boot-main">
+        ${
+          isArticle
+            ? `<article>${mainInner}</article>`
+            : mainInner
+        }
+      </main>
+      <footer class="boot-footer">
+        <p>Non-custodial Bitcoin bounties. Protocol over platform.</p>
+        <nav aria-label="Footer">
+          <a href="/">Projects</a>
+          <a href="/propose">Start a project</a>
+          <a href="/about">About</a>
+          <a href="/stats">Stats</a>
+          <a href="/reviewers">Reviewers</a>
+          <a href="https://github.com/Plebly/proposals">Proposals repo</a>
+        </nav>
+      </footer>`;
   out = out.replace(
     /<div id="app">[\s\S]*?<\/div>\s*<script type="module"/i,
     `<div id="app">\n      ${body}\n    </div>\n    <script type="module"`,
+  );
+  // Drop the homepage skip-link duplicate outside #app if present in template.
+  out = out.replace(
+    /<body>\s*<a class="skip-link"[^>]*>Skip to content<\/a>\s*/i,
+    "<body>\n    ",
   );
   return out;
 }
@@ -249,13 +312,38 @@ async function main() {
       description: route.description,
       url,
       type: "website",
+      extraHtml: `<p><a href="${url}">Open on Plebly</a> · <a href="/">Browse projects</a></p>`,
       jsonLd: {
         "@context": "https://schema.org",
-        "@type": "WebPage",
-        name: route.title,
-        description: route.description,
-        url,
-        isPartOf: { "@type": "WebSite", name: "Plebly", url: `${SITE}/` },
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": `${url}#webpage`,
+            name: route.title,
+            description: route.description,
+            url,
+            isPartOf: { "@id": `${SITE}/#website` },
+            about: { "@id": `${SITE}/#organization` },
+            inLanguage: "en",
+          },
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Projects",
+                item: `${SITE}/`,
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: route.title,
+                item: url,
+              },
+            ],
+          },
+        ],
       },
     });
     writeShell(route.path, html);
@@ -302,16 +390,50 @@ async function main() {
       url,
       type: "article",
       image: meta.image,
+      extraHtml: `<p><a href="${url}">Open project on Plebly</a> · <a href="/">All projects</a></p>`,
       jsonLd: {
         "@context": "https://schema.org",
-        "@type": "FundingCampaign",
-        name: meta.heading,
-        description: meta.description,
-        url,
-        identifier: id,
-        creativeWorkStatus: meta.status,
-        ...(meta.image !== `${SITE}/logo.jpeg` ? { image: meta.image } : {}),
-        funder: { "@type": "Organization", name: "Plebly", url: `${SITE}/` },
+        "@graph": [
+          {
+            "@type": "FundingCampaign",
+            "@id": `${url}#campaign`,
+            name: meta.heading,
+            description: meta.description,
+            url,
+            identifier: id,
+            creativeWorkStatus: meta.status,
+            ...(meta.image !== `${SITE}/logo.jpeg` ? { image: meta.image } : {}),
+            funder: { "@id": `${SITE}/#organization` },
+            mainEntityOfPage: { "@id": `${url}#webpage` },
+          },
+          {
+            "@type": "WebPage",
+            "@id": `${url}#webpage`,
+            name: meta.heading,
+            description: meta.description,
+            url,
+            isPartOf: { "@id": `${SITE}/#website` },
+            about: { "@id": `${url}#campaign` },
+            inLanguage: "en",
+          },
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Projects",
+                item: `${SITE}/`,
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: meta.heading,
+                item: url,
+              },
+            ],
+          },
+        ],
       },
     });
     writeShell(`p/${id}`, html);

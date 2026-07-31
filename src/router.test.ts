@@ -57,10 +57,16 @@ describe("router governance paths", () => {
       target_sats: 100_000,
       balance_sats: 25_000,
     });
-    expect(ld["@type"]).toBe("FundingCampaign");
-    expect(ld.url).toBe("https://plebly.fund/p/plebly-42");
-    expect(ld.fundingGoal).toMatchObject({ currency: "XBT" });
-    expect(ld.amount).toMatchObject({ currency: "XBT" });
+    const graph = ld["@graph"] as Array<Record<string, unknown>>;
+    expect(graph.map((n) => n["@type"])).toEqual([
+      "FundingCampaign",
+      "WebPage",
+      "BreadcrumbList",
+    ]);
+    const campaign = graph[0]!;
+    expect(campaign.url).toBe("https://plebly.fund/p/plebly-42");
+    expect(campaign.fundingGoal).toMatchObject({ currency: "XBT" });
+    expect(campaign.amount).toMatchObject({ currency: "XBT" });
   });
 });
 
