@@ -1,4 +1,5 @@
-import { CORE_ANNUAL_GAP_SATS } from "./config";
+import { claimFloorShortfall } from "./builder";
+import { CLAIM_FLOOR_SATS } from "./config";
 import { listListedProposals } from "./github";
 import { addressBalanceSats } from "./mempool";
 import { href } from "./router";
@@ -15,7 +16,9 @@ export type PublicStats = {
   escrowed: number;
   paidEstimate: number;
   completionRate: number | null;
-  gapPercent: number | null;
+  shortfallSats: number;
+  belowFloorCount: number;
+  fundedTowardFloor: number;
 };
 
 async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
@@ -60,10 +63,7 @@ export function computePublicStats(proposals: Proposal[]): PublicStats {
   const completionRate = claimedLifecycle.length
     ? Math.round((completed.length / claimedLifecycle.length) * 100)
     : null;
-  const gapPercent =
-    CORE_ANNUAL_GAP_SATS > 0
-      ? Math.min(100, Math.round((escrowed / CORE_ANNUAL_GAP_SATS) * 100))
-      : null;
+  const shortfall = claimFloorShortfall(proposals, CLAIM_FLOOR_SATS);
 
   return {
     tracked: proposals.length,
@@ -73,7 +73,9 @@ export function computePublicStats(proposals: Proposal[]): PublicStats {
     escrowed,
     paidEstimate,
     completionRate,
-    gapPercent,
+    shortfallSats: shortfall.shortfallSats,
+    belowFloorCount: shortfall.projectCount,
+    fundedTowardFloor: shortfall.fundedTowardFloor,
   };
 }
 
@@ -90,27 +92,49 @@ function supportMetricHtml(
 }
 
 function gapSectionHtml(stats: PublicStats): string {
-  if (!CORE_ANNUAL_GAP_SATS || stats.gapPercent == null) return "";
+  if (stats.belowFloorCount === 0) {
+    return `<section class="stats-gap" aria-labelledby="stats-gap-title">
+      <div class="stats-gap-copy">
+        <p class="stats-gap-eyebrow" id="stats-gap-title">Claim floor</p>
+        <p class="stats-gap-lede">Open projects are at or above the claim floor — builders can claim when rules allow.</p>
+        <p class="stats-gap-figures"><strong>Floor met</strong></p>
+      </div>
+      <div class="stats-gap-visual">
+        <p class="stats-gap-percent mono">100%</p>
+        <div class="stats-gap-meter" role="progressbar" aria-label="Claim floor progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span style="width: 100%"></span></div>
+        <p class="stats-gap-note"><a href="${href("/", "", "#projects")}">Browse projects</a></p>
+      </div>
+    </section>`;
+  }
+  const capacity = stats.fundedTowardFloor + stats.shortfallSats;
+  const percent = Math.min(
+    100,
+    Math.round((stats.fundedTowardFloor / Math.max(1, capacity)) * 100),
+  );
+  const projectLabel =
+    stats.belowFloorCount === 1
+      ? "1 open project"
+      : `${stats.belowFloorCount} open projects`;
   return `<section class="stats-gap" aria-labelledby="stats-gap-title">
     <div class="stats-gap-copy">
-      <p class="stats-gap-eyebrow" id="stats-gap-title">Core annual gap</p>
-      <p class="stats-gap-lede">Escrowed across open projects versus the published Core annual funding gap.</p>
+      <p class="stats-gap-eyebrow" id="stats-gap-title">Claim-floor shortfall</p>
+      <p class="stats-gap-lede">${escapeHtml(projectLabel)} still need confirmed sats to become claimable.</p>
       <p class="stats-gap-figures">
-        <strong>${escapeHtml(formatSats(stats.escrowed))}</strong>
-        <span>of ${escapeHtml(formatSats(CORE_ANNUAL_GAP_SATS))}</span>
+        <strong>${escapeHtml(formatSats(stats.shortfallSats))}</strong>
+        <span>to claim floor</span>
       </p>
     </div>
     <div class="stats-gap-visual">
-      <p class="stats-gap-percent mono">${stats.gapPercent}%</p>
+      <p class="stats-gap-percent mono">${percent}%</p>
       <div
         class="stats-gap-meter"
         role="progressbar"
-        aria-label="Core annual gap represented by escrowed funds"
+        aria-label="Progress toward claim floor across underfunded projects"
         aria-valuemin="0"
-        aria-valuemax="${CORE_ANNUAL_GAP_SATS}"
-        aria-valuenow="${stats.escrowed}"
-      ><span style="width: ${stats.gapPercent}%"></span></div>
-      <p class="stats-gap-note">Best-effort public representation — not custody, not a pledge.</p>
+        aria-valuemax="${capacity}"
+        aria-valuenow="${stats.fundedTowardFloor}"
+      ><span style="width: ${percent}%"></span></div>
+      <p class="stats-gap-note"><a href="${href("/", "?size=below-floor", "#projects")}">Fund below-floor projects</a></p>
     </div>
   </section>`;
 }

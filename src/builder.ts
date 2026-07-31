@@ -114,6 +114,28 @@ export function isNearFloor(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   return bal >= floor * 0.5 && bal < floor;
 }
 
+/** Open (not taken) projects still below the claim floor. */
+export function claimFloorShortfall(
+  proposals: Proposal[],
+  floor = CLAIM_FLOOR_SATS,
+): { shortfallSats: number; projectCount: number; fundedTowardFloor: number } {
+  let shortfallSats = 0;
+  let projectCount = 0;
+  let fundedTowardFloor = 0;
+  for (const p of proposals) {
+    const status = String(p.status);
+    if (status === "completed") continue;
+    if (isTakenStatus(status) || p.claimer) continue;
+    const bal = Math.max(0, p.balance_sats ?? 0);
+    const need = Math.max(0, floor - bal);
+    if (need <= 0) continue;
+    shortfallSats += need;
+    fundedTowardFloor += Math.min(bal, floor);
+    projectCount += 1;
+  }
+  return { shortfallSats, projectCount, fundedTowardFloor };
+}
+
 export async function fetchWatches(): Promise<WatchEntry[]> {
   if (!WORKERS_API) return [];
   const res = await fetch(`${API()}/watch`, {

@@ -1,4 +1,5 @@
 import {
+  claimFloorShortfall,
   fetchWatches,
   isNearFloor,
   isOpenToClaim,
@@ -7,7 +8,6 @@ import {
 import {
   BITCOIN_NETWORK,
   CLAIM_FLOOR_SATS,
-  CORE_ANNUAL_GAP_SATS,
   lightningUiAllowed,
 } from "./config";
 import { listListedProposals } from "./github";
@@ -153,20 +153,39 @@ function trustStripHtml(): string {
   </section>`;
 }
 
-function gapTickerHtml(escrowed: number): string {
-  if (!CORE_ANNUAL_GAP_SATS) return "";
+function gapTickerHtml(
+  proposals: Proposal[],
+  floor = CLAIM_FLOOR_SATS,
+): string {
+  const { shortfallSats, projectCount, fundedTowardFloor } = claimFloorShortfall(
+    proposals,
+    floor,
+  );
+  if (projectCount === 0) {
+    return `<section class="wrap-wide gap-ticker gap-ticker-met">
+      <div>
+        <span class="gap-ticker-label">Claim floor met</span>
+        <span class="gap-ticker-note">Open projects are at or above the claim floor</span>
+        <strong>Ready to claim</strong>
+      </div>
+      <a href="${href("/", "", "#projects")}">Browse projects →</a>
+    </section>`;
+  }
+  const capacity = fundedTowardFloor + shortfallSats;
   const percent = Math.min(
     100,
-    Math.round((escrowed / Math.max(1, CORE_ANNUAL_GAP_SATS)) * 100),
+    Math.round((fundedTowardFloor / Math.max(1, capacity)) * 100),
   );
+  const projectLabel =
+    projectCount === 1 ? "1 project" : `${projectCount} projects`;
   return `<section class="wrap-wide gap-ticker">
     <div>
-      <span class="gap-ticker-label">Fund the core gap</span>
-      <span class="gap-ticker-note">Escrowed across open projects vs published Core annual gap</span>
-      <strong>${formatSats(escrowed)} <span>of ${formatSats(CORE_ANNUAL_GAP_SATS)}</span></strong>
+      <span class="gap-ticker-label">Unlock claimable work</span>
+      <span class="gap-ticker-note">${escapeHtml(projectLabel)} still below the claim floor</span>
+      <strong>${escapeHtml(formatSats(shortfallSats))} <span>to claim floor</span></strong>
     </div>
-    <div class="gap-ticker-meter" role="progressbar" aria-label="Core annual gap funded" aria-valuemin="0" aria-valuemax="${CORE_ANNUAL_GAP_SATS}" aria-valuenow="${escrowed}"><span style="width: ${percent}%"></span></div>
-    <a href="${href("/stats")}">${percent}% tracked →</a>
+    <div class="gap-ticker-meter" role="progressbar" aria-label="Progress toward claim floor across underfunded projects" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
+    <a href="${href("/", "?size=below-floor", "#projects")}">Fund below-floor projects →</a>
   </section>`;
 }
 
@@ -447,6 +466,16 @@ function bindDiscover(
     : "all";
   let typeFilter: TypeFilter = "all";
 
+  const sizeFromUrl = new URLSearchParams(location.search).get("size");
+  if (
+    sizeEl &&
+    (sizeFromUrl === "below-floor" ||
+      sizeFromUrl === "at-floor" ||
+      sizeFromUrl === "overfunded")
+  ) {
+    sizeEl.value = sizeFromUrl;
+  }
+
   const populateSelect = (
     select: HTMLSelectElement | null,
     values: string[],
@@ -679,10 +708,6 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     const watchPaths = new Set(
       watches.flatMap((w) => [w.proposal_path, w.proposal_id]),
     );
-    const escrowed = proposals.reduce(
-      (sum, proposal) => sum + (proposal.balance_sats ?? 0),
-      0,
-    );
     const pinned = new Set<string>(); // Ops may populate this later from public config.
     const excluded = new Set<string>();
     const featured = proposals
@@ -709,7 +734,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
       .slice(0, 4);
     const gapTicker = app.querySelector("#gap-ticker");
-    if (gapTicker) gapTicker.innerHTML = gapTickerHtml(escrowed);
+    if (gapTicker) gapTicker.innerHTML = gapTickerHtml(proposals, CLAIM_FLOOR_SATS);
     void bindActivityStrip(app);
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
