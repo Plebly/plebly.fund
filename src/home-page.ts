@@ -8,6 +8,7 @@ import {
   isOpenToClaim,
   isTakenStatus,
   removeWatch,
+  watchStorageId,
 } from "./builder";
 import { CLAIM_FLOOR_SATS, lightningUiAllowed } from "./config";
 import { listListedProposals } from "./github";
@@ -791,13 +792,22 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     const viewCounts = await fetchProposalViewsBatch(
       proposals.map((proposal) => proposal.id || "").filter(Boolean),
     ).catch(() => new Map<string, number>());
-    const ids = proposals.map((p) => p.id || "").filter(Boolean);
-    const watchMeta = await fetchWatchMetaBatch(ids).catch(
+    const watchKeys = [
+      ...new Set(
+        proposals.flatMap((p) =>
+          [watchStorageId(p.path), p.id || ""].filter(Boolean),
+        ),
+      ),
+    ];
+    const watchMeta = await fetchWatchMetaBatch(watchKeys).catch(
       (): Record<string, { count: number; weighted: number }> => ({}),
     );
     proposals = proposals.map((proposal) => {
       const view_count = proposal.id ? viewCounts.get(proposal.id) : undefined;
-      const meta = proposal.id ? watchMeta[proposal.id] : undefined;
+      const slug = watchStorageId(proposal.path);
+      const meta =
+        (slug && watchMeta[slug]) ||
+        (proposal.id ? watchMeta[proposal.id] : undefined);
       return {
         ...proposal,
         ...(typeof view_count === "number" ? { view_count } : {}),

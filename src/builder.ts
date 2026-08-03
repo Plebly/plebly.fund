@@ -154,11 +154,21 @@ export async function fetchWatches(): Promise<WatchEntry[]> {
   return data.watches || [];
 }
 
+/** Path basename — matches Workers watchmeta / watchers keys. */
+export function watchStorageId(pathOrId: string): string {
+  const raw = pathOrId.trim();
+  if (!raw) return "";
+  return raw.replace(/\.md$/i, "").split("/").filter(Boolean).pop() || raw;
+}
+
 export async function fetchWatchMetaBatch(
   ids: string[],
 ): Promise<Record<string, { count: number; weighted: number }>> {
   if (!WORKERS_API || !ids.length) return {};
-  const q = ids.slice(0, 100).map(encodeURIComponent).join(",");
+  const q = [...new Set(ids.map((id) => id.trim()).filter(Boolean))]
+    .slice(0, 100)
+    .map(encodeURIComponent)
+    .join(",");
   const res = await fetch(`${API()}/watch/meta?ids=${q}`);
   if (!res.ok) return {};
   const data = (await res.json()) as {
