@@ -137,21 +137,25 @@ function donatePayStepHtml(
       </button>
     </div>
 
-    <div class="donate-pane" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
-      <div class="donate-qr-wrap">
-        <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
+    <div class="donate-pane donate-pane-onchain" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
+      <div class="donate-pay-layout">
+        <div class="donate-qr-wrap">
+          <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
+        </div>
+        <div class="donate-pay-fields">
+          <label class="donate-amount-label" for="donate-amount">Amount (optional, sats)</label>
+          <div class="donate-amount-row">
+            <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
+          </div>
+          <div class="donate-presets">${onchainPresets}<button type="button" class="donate-preset donate-preset-any" data-rail="onchain" data-sats="">Any</button></div>
+          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+          <div class="donate-actions">
+            <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
+            <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
+          </div>
+          <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
+        </div>
       </div>
-      <label class="donate-amount-label" for="donate-amount">Amount (optional, sats)</label>
-      <div class="donate-amount-row">
-        <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
-      </div>
-      <div class="donate-presets">${onchainPresets}<button type="button" class="donate-preset donate-preset-any" data-rail="onchain" data-sats="">Any</button></div>
-      <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
-      <div class="donate-actions">
-        <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
-        <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
-      </div>
-      <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
       <p class="donate-watch-hint muted" id="donate-watch-hint">Payment is detected automatically.</p>
       <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
