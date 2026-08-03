@@ -425,6 +425,7 @@ export async function bindBuilderPanel(
 
   const mountClaimFeePay = async () => {
     if (!bondSlot) return;
+    feePay?.stop();
     bondSlot.innerHTML = feePayHtml({
       id: "claim-bond",
       amountSats: params.claim_bond_sats,
@@ -463,6 +464,7 @@ export async function bindBuilderPanel(
     window.removeEventListener("keydown", onClaimEscape);
     setMsg(modalMsg(), null);
     feePay?.setStep("pay");
+    // Keep watching while modal can reopen; remount resets on next open via setStep.
     panel.querySelector<HTMLButtonElement>("#builder-claim")?.focus();
   };
 

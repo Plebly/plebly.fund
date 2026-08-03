@@ -387,18 +387,16 @@ describe("donate credit UX (signed in, on-chain)", () => {
     continueToPay();
 
     await vi.waitFor(() => {
-      expect(
-        document.querySelector("#donate-credit-status")?.textContent,
-      ).toContain("Watching for a new on-chain payment");
+      expect(document.querySelector("#donate-watch-hint")?.textContent).toContain(
+        "detected automatically",
+      );
     });
+    expect(document.querySelector("#donate-confirm-status")?.hidden).toBe(true);
+    expect(
+      document.querySelector("#donate-credit-status")?.textContent || "",
+    ).not.toContain("Watching");
 
     await vi.advanceTimersByTimeAsync(100);
-    await vi.waitFor(() => {
-      expect(document.querySelector("#donate-credit-claim")?.hidden).toBe(false);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-claim-txid]")!.click();
-
     await vi.waitFor(() => {
       expect(recordContribution).toHaveBeenCalled();
       expect(claimContributionWithRetry).toHaveBeenCalledWith({
@@ -410,6 +408,9 @@ describe("donate credit UX (signed in, on-chain)", () => {
         show_amount: true,
       });
       expect(linked).toHaveBeenCalled();
+      expect(document.querySelector("#donate-confirm-status")?.textContent).toContain(
+        "Credit linked",
+      );
     });
   });
 });

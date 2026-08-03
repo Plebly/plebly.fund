@@ -152,6 +152,7 @@ function donatePayStepHtml(
         <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
       </div>
       <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
+      <p class="donate-watch-hint muted" id="donate-watch-hint">Payment is detected automatically.</p>
       <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
 
@@ -883,6 +884,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   (panel as HTMLElement & { __stopDonateWatchers?: () => void }).__stopDonateWatchers =
     stopWatchers;
 
+  const setWatchHintVisible = (visible: boolean) => {
+    const hint = panel.querySelector<HTMLElement>("#donate-watch-hint");
+    if (hint) hint.hidden = !visible;
+  };
+
   const linkOutpoint = async (utxo: {
     txid: string;
     vout: number;
@@ -890,7 +896,9 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   }) => {
     if (!opts.proposalId || !opts.signedIn || linking) return;
     linking = true;
-    setDonateCreditStatus(panel, "Linking funder credit…", "live");
+    setWatchHintVisible(false);
+    setDonateConfirmStatus(panel, "Linking funder credit…", "live");
+    setDonateCreditStatus(panel, null);
     try {
       await recordContribution({
         proposal_id: opts.proposalId,
@@ -904,7 +912,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         vout: utxo.vout,
         ...activeCreditPreferences(panel),
       });
-      setDonateCreditStatus(
+      setDonateConfirmStatus(
         panel,
         `Credit linked for ${formatSats(utxo.value)}.`,
         "ok",
@@ -912,7 +920,8 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       if (claimWrap) claimWrap.hidden = true;
       opts.onCreditLinked?.();
     } catch (e) {
-      setDonateCreditStatus(panel, (e as Error).message, "bad");
+      setDonateConfirmStatus(panel, (e as Error).message, "bad");
+      showClaimable([utxo]);
     } finally {
       linking = false;
     }
@@ -921,13 +930,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   const showClaimable = (utxos: { txid: string; vout: number; value: number }[]) => {
     if (!claimWrap || !utxos.length || !opts.signedIn || !opts.proposalId) return;
     claimWrap.hidden = false;
-    claimWrap.innerHTML = `<p class="donate-credit-seen">New payment detected.</p>
+    claimWrap.innerHTML = `<p class="donate-credit-seen">Couldn’t auto-link — pick your payment:</p>
       <ul class="donate-credit-utxos">${utxos
         .map(
           (u) => `<li>
             <span class="mono">${escapeHtml(u.txid.slice(0, 12))}…:${u.vout}</span>
             <span>${escapeHtml(formatSats(u.value))}</span>
-            <button type="button" class="btn" data-claim-txid="${escapeHtml(u.txid)}" data-claim-vout="${u.vout}" data-claim-value="${u.value}">This was me</button>
+            <button type="button" class="btn" data-claim-txid="${escapeHtml(u.txid)}" data-claim-vout="${u.vout}" data-claim-value="${u.value}">Link this</button>
           </li>`,
         )
         .join("")}</ul>`;
@@ -948,13 +957,19 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       opts.address,
       (balance, { previous }) => {
         const delta = balance - previous;
-        setDonateConfirmStatus(
-          panel,
-          delta > 0
-            ? `Confirmed · ${formatSats(delta)} added. Escrow is now ${formatSats(balance)}.`
-            : `Escrow balance is now ${formatSats(balance)}.`,
-          "ok",
-        );
+        setWatchHintVisible(false);
+        const statusEl = panel.querySelector<HTMLElement>("#donate-confirm-status");
+        const alreadyLinked =
+          statusEl?.textContent?.toLowerCase().includes("credit linked") ?? false;
+        if (!alreadyLinked) {
+          setDonateConfirmStatus(
+            panel,
+            delta > 0
+              ? `Confirmed · ${formatSats(delta)} added · escrow ${formatSats(balance)}`
+              : `Escrow balance is now ${formatSats(balance)}.`,
+            "ok",
+          );
+        }
         opts.onBalanceUpdate?.(balance);
       },
       {
@@ -966,11 +981,6 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       },
     );
     balanceStop = watcher.stop;
-    void watcher.ready.then(() => {
-      if (panel.getAttribute("data-donate-step") === "pay") {
-        setDonateConfirmStatus(panel, "Waiting for your payment to confirm…", "live");
-      }
-    });
   };
 
   const startUtxoWatch = () => {
@@ -978,31 +988,21 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     const watcher = watchNewUtxos(
       opts.address,
       (utxos) => {
+        if (!utxos.length) return;
+        setWatchHintVisible(false);
         if (utxos.some((u) => !u.status?.confirmed)) {
-          setDonateConfirmStatus(
-            panel,
-            "Payment seen · waiting for confirmation…",
-            "live",
-          );
+          setDonateConfirmStatus(panel, "Payment seen · confirming…", "live");
         }
-        showClaimable(utxos);
+        if (opts.signedIn && opts.proposalId) {
+          const pick =
+            utxos.find((u) => u.status?.confirmed) || utxos[0];
+          void linkOutpoint(pick);
+          return;
+        }
       },
       { intervalMs: opts.utxoPollMs ?? 8000 },
     );
     utxoStop = watcher.stop;
-    void watcher.ready.then(() => {
-      if (
-        opts.signedIn &&
-        opts.proposalId &&
-        panel.getAttribute("data-donate-step") === "pay"
-      ) {
-        setDonateCreditStatus(
-          panel,
-          "Watching for a new on-chain payment to this address…",
-          "live",
-        );
-      }
-    });
   };
 
   const goPay = (prefs: CreditPreferences) => {
@@ -1012,6 +1012,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       syncCreditSummary(panel, prefs);
     }
     setDonateStep(panel, "pay");
+    setDonateCreditStatus(panel, null);
+    setDonateConfirmStatus(panel, null);
+    setWatchHintVisible(true);
+    if (claimWrap) {
+      claimWrap.hidden = true;
+      claimWrap.innerHTML = "";
+    }
     startBalanceWatch();
     startUtxoWatch();
   };

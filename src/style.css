@@ -3673,8 +3673,17 @@ a.project-card-by:hover .project-card-by-text {
   border-top: 1px solid var(--line-soft);
 }
 
+.donate-watch-hint,
+.fee-pay-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .donate-credit-status,
-.donate-confirm-status {
+.donate-confirm-status,
+.fee-pay-status {
   margin: 0.75rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
@@ -3682,17 +3691,20 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .donate-credit-status.live,
-.donate-confirm-status.live {
+.donate-confirm-status.live,
+.fee-pay-status.live {
   color: var(--accent-text);
 }
 
 .donate-credit-status.ok,
-.donate-confirm-status.ok {
+.donate-confirm-status.ok,
+.fee-pay-status.ok {
   color: var(--good);
 }
 
 .donate-credit-status.bad,
-.donate-confirm-status.bad {
+.donate-confirm-status.bad,
+.fee-pay-status.bad {
   color: var(--bad);
 }
 

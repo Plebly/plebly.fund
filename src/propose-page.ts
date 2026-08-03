@@ -1234,14 +1234,14 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         ) as HTMLInputElement | null;
         showWizardMsg("");
         focusControl(
-          setControlFieldError(
+            setControlFieldError(
             txidInput,
-            "Paste the 64-character submission fee txid after you've sent the payment.",
+            "Waiting for the fee payment to appear — or paste the txid manually.",
           ) || txidInput,
         );
         if (!txidInput) {
           showWizardMsg(
-            "Paste the 64-character submission fee txid after you've sent the payment.",
+            "Waiting for the fee payment to appear — or paste the txid manually.",
             "error",
           );
         }
