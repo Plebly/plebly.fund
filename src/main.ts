@@ -16,6 +16,7 @@ import {
   logout,
   accountNavLabel,
   currentReturnPath,
+  bindNotificationDropdown,
   notificationNavBadgeHtml,
   setUnreadNotificationCount,
   type AuthUser,
@@ -24,6 +25,7 @@ import { renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
+import { renderWanted } from "./wanted-page";
 import { syncStoredCreditPreferencesFromProfile } from "./funder-credit";
 import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
 import { findListedProposalById } from "./github";
@@ -79,6 +81,7 @@ function siteFooterHtml(routeName: string): string {
         <div class="footer-col">
           <h2 class="footer-col-title">Explore</h2>
           <a href="${href("/")}"${fa("home")}>Projects</a>
+          <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/about")}"${fa("about")}>About</a>
           <a href="${href("/stats")}"${fa("stats")}>Stats</a>
@@ -134,6 +137,7 @@ function bindAuthHandlers() {
     void render();
   });
   bindLoginHandlers(() => void render());
+  bindNotificationDropdown();
 }
 
 function scrollToHashTarget(): void {
@@ -216,6 +220,13 @@ async function render() {
   if (r.name === "stats") {
     applySeo(seoForRoute(r));
     await renderStats(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "wanted") {
+    applySeo(seoForRoute(r));
+    await renderWanted(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

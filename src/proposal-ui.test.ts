@@ -3,6 +3,7 @@ import {
   canEditProposal,
   deliverableChipHtml,
   donatePanelHtml,
+  fundingBarScale,
   metaChipsHtml,
   milestonesHtml,
   proposalContextHtml,
@@ -256,7 +257,64 @@ describe("proposal UI critical render helpers", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
     expect(html).toContain("50,000 sats to claim floor");
+    expect(html).toContain("50,000 sats / 500,000 sats · 10%");
+    expect(html).toContain("funding-marker-floor");
+    expect(html).not.toContain("funding-marker-lock");
     expect(html).not.toContain("proposal-stats");
+  });
+
+  it("funding bar shows lock markers only for funding_threshold_sats", () => {
+    const html = proposalFundingBarHtml(50_000, 10_000, 200_000, [
+      {
+        deliverable: "Ship A",
+        verification: "PR merged with tests",
+        out_of_scope: "Docs",
+        allocation_sats: 100_000,
+        funding_threshold_sats: 100_000,
+        deadline: "2026-12-01",
+        id: "m1",
+      },
+    ]);
+    expect(html).toContain("funding-marker-threshold");
+    expect(html).toContain("funding-marker-lock");
+    expect(html).toContain("is-locked");
+  });
+
+  it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {
+    const empty = fundingBarScale(10_000, null, []);
+    expect(empty.scale).toBe(10_000);
+    expect(empty.markers).toEqual([
+      expect.objectContaining({ kind: "floor", sats: 10_000 }),
+    ]);
+
+    const withTarget = fundingBarScale(10_000, 500_000, [
+      {
+        deliverable: "A",
+        verification: "Bbbbbbbbbb",
+        out_of_scope: "C",
+        allocation_sats: 250_000,
+        deadline: "2026-12-01",
+      },
+    ]);
+    expect(withTarget.scale).toBe(500_000);
+    expect(withTarget.markers.every((m) => m.kind === "floor")).toBe(true);
+
+    const withThreshold = fundingBarScale(10_000, 200_000, [
+      {
+        deliverable: "A",
+        verification: "Bbbbbbbbbb",
+        out_of_scope: "C",
+        allocation_sats: 50_000,
+        funding_threshold_sats: 150_000,
+        deadline: "2026-12-01",
+        id: "m1",
+      },
+    ]);
+    expect(withThreshold.scale).toBe(200_000);
+    expect(withThreshold.markers.map((m) => m.kind)).toEqual([
+      "floor",
+      "threshold",
+    ]);
   });
 
   it("shareSlotHtml offers a single Share control", () => {

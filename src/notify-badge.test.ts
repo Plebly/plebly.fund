@@ -71,6 +71,7 @@ describe("notificationNavBadgeHtml", () => {
     expect(html).toContain(">3<");
     expect(html).toContain("tab=notifications");
     expect(html).toContain('aria-label="3 unread notifications"');
+    expect(html).toContain("data-nav-notify-dropdown");
     expect(notificationNavBadgeHtml(120)).toContain(">99+<");
   });
 });
@@ -92,7 +93,10 @@ describe("updateNavUnreadBadge", () => {
     updateNavUnreadBadge(2);
     const badge = wrap.querySelector("[data-nav-notify-badge]");
     expect(badge?.textContent).toBe("2");
-    expect(badge?.getAttribute("href")).toContain("tab=notifications");
+    expect(wrap.querySelector("[data-nav-notify]")).toBeTruthy();
+    expect(wrap.querySelector(".nav-notify-all")?.getAttribute("href")).toContain(
+      "tab=notifications",
+    );
 
     updateNavUnreadBadge(1);
     expect(wrap.querySelector("[data-nav-notify-badge]")?.textContent).toBe("1");

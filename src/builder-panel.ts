@@ -136,6 +136,22 @@ function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
   btn.innerHTML = watchBtnHtml(watching);
 }
 
+/** Informational claimer track record (exported for unit tests). */
+export function claimerTrackHtml(status: ClaimStatus): string {
+  const s = status.claimer_summary;
+  if (!s) return "";
+  const submitted =
+    s.active + s.completed + s.expired + s.rejected + s.abandoned;
+  const failed = s.expired + s.abandoned + s.rejected;
+  if (submitted === 0) {
+    return `<p class="claimer-track muted">First claim</p>`;
+  }
+  const denom = s.completed + failed;
+  const rate =
+    denom > 0 ? Math.round((s.completed / denom) * 100) : 0;
+  return `<p class="claimer-track mono muted">${submitted} claims · ${s.completed} completed · ${failed} failed · ${rate}%</p>`;
+}
+
 function metaBits(status: ClaimStatus): string {
   const bits: string[] = [];
   if (status.proposer_claimed) {
@@ -176,6 +192,7 @@ function renderStatusBody(
       status.claimer === user.github ||
       status.claimer === user.id);
   const meta = metaBits(status);
+  const track = claimerTrackHtml(status);
   const windowLabel =
     days != null
       ? ` · ${days} day${days === 1 ? "" : "s"} left`
@@ -188,7 +205,7 @@ function renderStatusBody(
 
   switch (status.state) {
     case "open":
-      body.innerHTML = claimBtnHtml();
+      body.innerHTML = `${track}${claimBtnHtml()}`;
       break;
     case "below_floor": {
       const need = Math.max(
@@ -199,7 +216,7 @@ function renderStatusBody(
       break;
     }
     case "claim_pending":
-      body.innerHTML = `${meta}<p class="builder-status">Claim pending${
+      body.innerHTML = `${track}${meta}<p class="builder-status">Claim pending${
         status.pending?.pr_url
           ? ` · <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
           : ""
@@ -207,7 +224,7 @@ function renderStatusBody(
       break;
     case "claimed":
       if (isYou) {
-        body.innerHTML = `${meta}<p class="builder-status">You claimed this project${windowLabel}.</p>
+        body.innerHTML = `${track}${meta}<p class="builder-status">You claimed this project${windowLabel}.</p>
         <div class="builder-claim-tools">
           <button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>
           <button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
@@ -223,20 +240,20 @@ function renderStatusBody(
           'class="deliverable-form" hidden',
         )}`;
       } else {
-        body.innerHTML = `${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
+        body.innerHTML = `${track}${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
           status.claimer || "another builder",
         )}</strong>${windowLabel}.</p>
         <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
       }
       break;
     case "in_review":
-      body.innerHTML = `${meta}<p class="builder-status">In review${
+      body.innerHTML = `${track}${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${escapeHtml(status.claimer)}` : ""
       }${windowLabel}. AI triage finished. Reviewers confirm in the panel below.</p>
       ${isYou ? extensionTools : ""}`;
       break;
     case "completed":
-      body.innerHTML = `${meta}<p class="builder-status">Completed${
+      body.innerHTML = `${track}${meta}<p class="builder-status">Completed${
         status.claimer ? ` · ${escapeHtml(status.claimer)}` : ""
       }. Fulfiller earns a reviewer seat. Escrow release is by keyholders — Plebly never moves funds.</p>`;
       break;

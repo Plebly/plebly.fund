@@ -328,7 +328,7 @@ export function proposalLifecycleBannersHtml(
   return parts.join("");
 }
 
-/** Green to claim floor; glowing orange for overfunding beyond the floor. */
+/** Green to claim floor; glowing orange for overfunding beyond the floor. Card/list meter. */
 export function fundingBarTrackHtml(
   funded: number,
   floor: number,
@@ -343,6 +343,104 @@ export function fundingBarTrackHtml(
   const greenPct = Math.max(0.5, (safeFloor / funded) * 100);
   const orangePct = Math.max(0, 100 - greenPct);
   return `<div class="${variant} is-overfunded" role="progressbar" aria-valuemin="0" aria-valuemax="${Math.round(funded)}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span><span class="progress-over" style="width:${orangePct}%"></span></div>`;
+}
+
+export type FundingBarMarker = {
+  sats: number;
+  kind: "floor" | "threshold";
+  id?: string;
+  label?: string;
+};
+
+/** Scale + markers for detail funding bar (claim floor always; optional thresholds). */
+export function fundingBarScale(
+  floor: number,
+  target: number | null,
+  milestones: ProposalMilestone[] = [],
+): { scale: number; markers: FundingBarMarker[] } {
+  const safeFloor = Math.max(1, floor);
+  const thresholds = milestones
+    .map((m) => ({
+      sats: m.funding_threshold_sats,
+      id: m.id,
+      label: m.id || undefined,
+    }))
+    .filter(
+      (t): t is { sats: number; id?: string; label?: string } =>
+        typeof t.sats === "number" && Number.isFinite(t.sats) && t.sats >= 1,
+    );
+  const highest = thresholds.reduce((m, t) => Math.max(m, t.sats), 0);
+  const targetSats =
+    target != null && Number.isFinite(target) && target > 0
+      ? Math.floor(target)
+      : 0;
+  const scale = Math.max(safeFloor, targetSats || safeFloor, highest);
+  const markers: FundingBarMarker[] = [
+    { sats: safeFloor, kind: "floor", label: "Claim floor" },
+  ];
+  for (const t of thresholds) {
+    markers.push({
+      sats: Math.floor(t.sats),
+      kind: "threshold",
+      id: t.id,
+      label: t.label,
+    });
+  }
+  markers.sort((a, b) => a.sats - b.sats);
+  return { scale, markers };
+}
+
+function fundingDetailTrackHtml(
+  funded: number,
+  floor: number,
+  scale: number,
+  markers: FundingBarMarker[],
+): string {
+  const safeScale = Math.max(1, scale);
+  const fillPct = Math.min(100, (funded / safeScale) * 100);
+  const overTarget = funded > safeScale;
+  const showLocks = markers.some((m) => m.kind === "threshold");
+  const ticks = markers
+    .map((m) => {
+      const left = Math.min(100, Math.max(0, (m.sats / safeScale) * 100));
+      const unlocked = funded >= m.sats;
+      const lock =
+        showLocks && m.kind === "threshold"
+          ? unlocked
+            ? ""
+            : `<span class="funding-marker-lock" aria-hidden="true"></span>`
+          : "";
+      const state = unlocked ? "is-unlocked" : "is-locked";
+      const kind = m.kind === "floor" ? "floor" : "threshold";
+      const label =
+        m.kind === "floor"
+          ? `Claim floor ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "locked"}`
+          : `Milestone ${m.label || m.id || ""} ${m.sats.toLocaleString()} sats, ${unlocked ? "unlocked" : "locked"}`;
+      return `<span class="funding-marker funding-marker-${kind} ${state}" style="left:${left}%" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${lock}<span class="funding-marker-tick"></span></span>`;
+    })
+    .join("");
+  const overClass = overTarget ? " is-overfunded" : "";
+  const floorPct = Math.min(100, (Math.max(1, floor) / safeScale) * 100);
+  let fillHtml: string;
+  if (funded <= Math.max(1, floor) || floor >= safeScale) {
+    fillHtml = `<span class="progress-floor" style="width:${fillPct}%"></span>`;
+  } else if (funded <= safeScale) {
+    const greenPct = Math.min(fillPct, floorPct);
+    const restPct = Math.max(0, fillPct - greenPct);
+    fillHtml = `<span class="progress-floor" style="width:${greenPct}%"></span>${
+      restPct > 0
+        ? `<span class="progress-toward-target" style="width:${restPct}%"></span>`
+        : ""
+    }`;
+  } else {
+    const greenPct = Math.max(0.5, (Math.max(1, floor) / funded) * 100);
+    const orangePct = Math.max(0, 100 - greenPct);
+    fillHtml = `<span class="progress-floor" style="width:${greenPct}%"></span><span class="progress-over" style="width:${orangePct}%"></span>`;
+  }
+  return `<div class="proposal-progress proposal-progress-detail${overClass}" role="progressbar" aria-valuemin="0" aria-valuemax="${safeScale}" aria-valuenow="${Math.round(funded)}">
+      <div class="proposal-progress-fill">${fillHtml}</div>
+      <div class="funding-markers">${ticks}</div>
+    </div>`;
 }
 
 export function overfundRatioLabel(funded: number, floor: number): string {
@@ -361,12 +459,17 @@ export function fundingProgressHtml(
   balance: number | undefined,
   floor: number,
   target: number | null,
+  milestones: ProposalMilestone[] = [],
 ): string {
   const funded = balance ?? 0;
+  const { scale, markers } = fundingBarScale(floor, target, milestones);
   const claimable = funded >= floor;
   const over = funded > floor;
   const remaining = Math.max(0, floor - funded);
   const overLabel = overfundRatioLabel(funded, floor);
+  const denom =
+    target != null && Number.isFinite(target) && target > 0 ? target : floor;
+  const pct = Math.min(999, Math.round((funded / Math.max(1, denom)) * 100));
   const label = over
     ? `Overfunded · ${overLabel}`
     : claimable
@@ -377,15 +480,16 @@ export function fundingProgressHtml(
     : claimable
       ? " claimable"
       : "";
-  const goalLine = target != null && target > floor
-    ? `${formatSats(funded)} / target ${formatSats(target)}`
-    : `${formatSats(funded)} / ${formatSats(floor)} floor`;
-  return `<div class="funding-meter">
+  const goalLine =
+    target != null && target > 0
+      ? `${formatSats(funded)} / ${formatSats(target)} · ${pct}%`
+      : `${formatSats(funded)} / ${formatSats(floor)} floor · ${pct}%`;
+  return `<div class="funding-meter" data-funding-scale="${scale}">
       <div class="funding-meter-top">
         <span class="funding-meter-label${labelClass}">${label}</span>
         <span class="funding-meter-goal sats">${goalLine}</span>
       </div>
-      ${fundingBarTrackHtml(funded, floor, "proposal-progress")}
+      ${fundingDetailTrackHtml(funded, floor, scale, markers)}
     </div>`;
 }
 
@@ -394,9 +498,10 @@ export function proposalFundingBarHtml(
   balance: number | undefined,
   floor: number,
   target: number | null,
+  milestones: ProposalMilestone[] = [],
 ): string {
-  return `<div class="proposal-funding-bar">
-    ${fundingProgressHtml(balance, floor, target)}
+  return `<div class="proposal-funding-bar" data-milestones="${milestones.length}">
+    ${fundingProgressHtml(balance, floor, target, milestones)}
   </div>`;
 }
 
@@ -406,10 +511,22 @@ export function updateProposalFundingBar(
   balance: number,
   floor: number,
   target: number | null,
+  milestones: ProposalMilestone[] = [],
 ): void {
   const host = root.querySelector(".proposal-funding-bar");
   if (!host) return;
-  host.innerHTML = fundingProgressHtml(balance, floor, target);
+  const prevUnlocked = new Set(
+    [...host.querySelectorAll(".funding-marker.is-unlocked")].map(
+      (el) => (el as HTMLElement).style.left,
+    ),
+  );
+  host.innerHTML = fundingProgressHtml(balance, floor, target, milestones);
+  for (const el of host.querySelectorAll(".funding-marker.is-unlocked")) {
+    const left = (el as HTMLElement).style.left;
+    if (!prevUnlocked.has(left) && el.classList.contains("funding-marker-threshold")) {
+      el.classList.add("funding-marker-pulse");
+    }
+  }
 }
 
 function copyBtn(value: string, label: string): string {

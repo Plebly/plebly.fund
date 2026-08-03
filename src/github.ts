@@ -19,10 +19,23 @@ type GhContent = {
 
 function parseMilestones(value: unknown): ProposalMilestone[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(
-    (m): m is ProposalMilestone =>
-      !!m && typeof m === "object" && "deliverable" in m,
-  );
+  const out: ProposalMilestone[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || !("deliverable" in raw)) continue;
+    const m = raw as Record<string, unknown>;
+    const threshold = m.funding_threshold_sats;
+    const funding_threshold_sats =
+      typeof threshold === "number" &&
+      Number.isFinite(threshold) &&
+      threshold >= 1
+        ? Math.floor(threshold)
+        : undefined;
+    out.push({
+      ...(m as unknown as ProposalMilestone),
+      funding_threshold_sats,
+    });
+  }
+  return out;
 }
 
 function parseProposer(data: Record<string, unknown>): ProposalProposer | null {
@@ -149,6 +162,8 @@ type CatalogProposal = {
   delivery_window_ends_at?: string | null;
   claimer?: string | null;
   proposer?: ProposalProposer | null;
+  rescue?: boolean;
+  rescue_gap_sats?: number | null;
 };
 
 function proposalFromCatalog(entry: CatalogProposal): Proposal {
@@ -176,6 +191,9 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     escrow_index: null,
     milestones: [],
     body: entry.excerpt || "",
+    rescue: Boolean(entry.rescue),
+    rescue_gap_sats:
+      typeof entry.rescue_gap_sats === "number" ? entry.rescue_gap_sats : null,
   };
 }
 

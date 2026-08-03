@@ -366,7 +366,12 @@ export async function renderProposalPage(
 
         ${
           match.escrow_address
-            ? proposalFundingBarHtml(balance, CLAIM_FLOOR_SATS, match.target_sats)
+            ? proposalFundingBarHtml(
+                balance,
+                CLAIM_FLOOR_SATS,
+                match.target_sats,
+                match.milestones,
+              )
             : ""
         }
 
@@ -456,6 +461,7 @@ export async function renderProposalPage(
             next,
             CLAIM_FLOOR_SATS,
             match.target_sats,
+            match.milestones,
           );
           const needEl = app.querySelector(".builder-status.muted");
           if (

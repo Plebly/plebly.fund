@@ -72,6 +72,7 @@ function notificationLabel(type: string): string {
     floor_reached: "Claim floor reached",
     target_reached: "Funding target reached",
     claimed: "Project claimed",
+    checkpoint_submitted: "Checkpoint submitted",
     deliverable_submitted: "Deliverable submitted",
     completed: "Project completed",
   };
@@ -730,6 +731,21 @@ export async function renderPublicProfile(
         <span class="pill">Rejected ${s.rejected}</span>
       </div>`
     : "";
+  const fundedCount = profile.funded_completed_count ?? 0;
+  const streak = profile.funder_streak ?? 0;
+  const impactHtml = `<div class="funder-impact">
+      <p class="funder-impact-primary">Funded <span class="mono">${fundedCount}</span> completed ${fundedCount === 1 ? "bounty" : "bounties"}${
+        streak > 0
+          ? ` <span class="funder-streak" title="Completion streak">⚡ ${streak}</span>`
+          : ""
+      }</p>
+      ${
+        typeof profile.funded_sats_total === "number" &&
+        profile.funded_sats_total > 0
+          ? `<p class="funder-impact-sats muted">${escapeHtml(formatSats(profile.funded_sats_total))} credited (when shown)</p>`
+          : ""
+      }
+    </div>`;
   const suspendHtml = profile.claim_suspended
     ? `<p class="error">Claiming suspended${
         profile.claim_suspend_reason
@@ -770,6 +786,7 @@ export async function renderPublicProfile(
       ${muteHtml}
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
       ${linksHtml}
+      ${impactHtml}
       ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}
       <h2 class="section-title">Proposals</h2>
       ${workHtml}

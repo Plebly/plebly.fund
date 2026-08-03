@@ -45,6 +45,10 @@ export type PublicProfile = Pick<
   discussion_mute_reason?: string;
   discussion_muted_until?: string;
   claim_summary?: ClaimSummary;
+  funded_completed_count?: number;
+  funded_sats_total?: number;
+  funder_streak?: number;
+  funder_streak_best?: number;
   reviewer_active?: boolean;
   reviewer_kind?: "bootstrap" | "earned";
 };
@@ -72,6 +76,8 @@ export type ProposalMilestone = {
   verification: string;
   out_of_scope: string;
   allocation_sats: number;
+  /** Optional funding-bar unlock (display only; not payout). */
+  funding_threshold_sats?: number;
   deadline: string;
   dependencies?: string[];
 };
@@ -129,6 +135,10 @@ export type Proposal = {
   milestones_due_at?: string | null;
   release_blocked_reason?: string | null;
   view_count?: number;
+  /** Catalog enrich: rescue stall signal (optional). */
+  rescue?: boolean;
+  rescue_gap_sats?: number | null;
+  watch_count?: number;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */
@@ -151,5 +161,6 @@ export type Route =
   | { name: "work" }
   | { name: "propose" }
   | { name: "reviewers" }
+  | { name: "wanted" }
   | { name: "proposal"; id: string; stable?: boolean }
   | { name: "profile"; username: string };

@@ -1,9 +1,13 @@
 import {
+  addWatch,
   claimFloorShortfall,
+  fetchWanted,
+  fetchWatchMetaBatch,
   fetchWatches,
   isNearFloor,
   isOpenToClaim,
   isTakenStatus,
+  removeWatch,
 } from "./builder";
 import {
   BITCOIN_NETWORK,
@@ -339,8 +343,21 @@ function proposalCardHtml(
     typeof p.view_count === "number" && p.view_count > 0
       ? `<span class="project-card-views" title="Approximate page views">${p.view_count.toLocaleString()} views</span>`
       : "";
+  const rescue = Boolean(p.rescue);
+  const rescueHtml = rescue
+    ? `<div class="project-card-rescue" role="status"><span>Rescue needed</span>${
+        typeof p.rescue_gap_sats === "number"
+          ? `<span class="mono">gap: ${formatSats(p.rescue_gap_sats)}</span>`
+          : ""
+      }</div>`
+    : "";
+  const watchCount =
+    typeof p.watch_count === "number" ? p.watch_count : 0;
+  const watchCtrl = p.id
+    ? `<button type="button" class="project-card-watch-btn" data-card-watch="${escapeHtml(p.id)}" data-path="${escapeHtml(p.path)}" data-watching="${watching ? "1" : "0"}" aria-label="${watching ? "Unwatch" : "Watch"}" title="${watching ? "Unwatch" : "Watch"}"><span class="project-card-watch-icon" aria-hidden="true">${watching ? "★" : "☆"}</span><span class="mono project-card-watch-count">${watchCount}</span></button>`
+    : "";
   return `
-    <article class="project-card">
+    <article class="project-card${rescue ? " is-rescue" : ""}">
       <a class="project-card-main" href="${proposalHref(p.path, p.id)}">
         ${coverHtml}
         <div class="project-card-body">
@@ -349,6 +366,7 @@ function proposalCardHtml(
             ${typeBadge}
             ${secondaryBadge}
           </div>
+          ${rescueHtml}
           <h3>${escapeHtml(p.title)}</h3>
           <p class="project-card-excerpt">${escapeHtml(excerptFromBody(p.body))}</p>
           ${tagsHtml}
@@ -358,6 +376,7 @@ function proposalCardHtml(
       </a>
       <div class="project-card-actions">
         ${proposer}
+        ${watchCtrl}
         <a class="btn project-donate-btn" href="${donateHref}">Donate</a>
       </div>
     </article>`;
@@ -430,17 +449,21 @@ async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
 
 function sortProposals(proposals: Proposal[], key: SortKey, floor: number): Proposal[] {
   const list = [...proposals];
-  if (key === "funded") {
-    list.sort((a, b) => (b.balance_sats ?? 0) - (a.balance_sats ?? 0));
-  } else if (key === "newest") {
-    list.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-  } else {
-    list.sort(
-      (a, b) =>
-        Math.max(0, floor - (a.balance_sats ?? 0)) -
-        Math.max(0, floor - (b.balance_sats ?? 0)),
+  const byKey = (a: Proposal, b: Proposal) => {
+    if (key === "funded") return (b.balance_sats ?? 0) - (a.balance_sats ?? 0);
+    if (key === "newest")
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    return (
+      Math.max(0, floor - (a.balance_sats ?? 0)) -
+      Math.max(0, floor - (b.balance_sats ?? 0))
     );
-  }
+  };
+  list.sort((a, b) => {
+    const ar = a.rescue ? 1 : 0;
+    const br = b.rescue ? 1 : 0;
+    if (ar !== br) return br - ar;
+    return byKey(a, b);
+  });
   return list;
 }
 
@@ -628,6 +651,7 @@ function bindDiscover(
         ),
       )
       .join("");
+    bindCardWatches(listEl, watchPaths);
   };
 
   const scheduleAvatars = () => {
@@ -661,6 +685,69 @@ function bindDiscover(
   scheduleAvatars();
 }
 
+function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void {
+  root.querySelectorAll<HTMLButtonElement>("[data-card-watch]").forEach((btn) => {
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const id = btn.dataset.cardWatch || "";
+      const path = btn.dataset.path || id;
+      const watching = btn.dataset.watching === "1";
+      try {
+        if (watching) {
+          await removeWatch(path);
+          btn.dataset.watching = "0";
+          watchPaths.delete(path);
+          watchPaths.delete(id);
+        } else {
+          await addWatch(path);
+          btn.dataset.watching = "1";
+          watchPaths.add(path);
+          if (id) watchPaths.add(id);
+        }
+        const icon = btn.querySelector(".project-card-watch-icon");
+        if (icon) icon.textContent = btn.dataset.watching === "1" ? "★" : "☆";
+        const countEl = btn.querySelector(".project-card-watch-count");
+        if (countEl) {
+          const n = Number(countEl.textContent || "0") || 0;
+          countEl.textContent = String(
+            Math.max(0, n + (btn.dataset.watching === "1" ? 1 : -1)),
+          );
+        }
+        btn.setAttribute(
+          "aria-label",
+          btn.dataset.watching === "1" ? "Unwatch" : "Watch",
+        );
+      } catch {
+        /* login required or network — leave UI */
+      }
+    });
+  });
+}
+
+function wantedRailHtml(
+  rows: Awaited<ReturnType<typeof fetchWanted>>,
+): string {
+  if (!rows.length) return "";
+  return `<section class="wrap-wide project-rail" aria-labelledby="wanted-projects">
+    <div class="rail-head">
+      <div><h2 id="wanted-projects">Most wanted</h2><p>High watch interest relative to funding progress.</p></div>
+      <a href="${href("/wanted")}">Full list →</a>
+    </div>
+    <div class="wanted-list">${rows
+      .slice(0, 4)
+      .map(
+        (r) => `<a class="wanted-row" href="${proposalHref(r.path, r.id)}">
+        <span class="wanted-title">${escapeHtml(r.title)}</span>
+        <span class="wanted-nums mono">${r.watches} watches · ${r.weighted} weighted · ${
+          r.funded_pct != null ? `${r.funded_pct}%` : "—"
+        }</span>
+      </a>`,
+      )
+      .join("")}</div>
+  </section>`;
+}
+
 export async function renderHome(shell: HomeShell): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(`
@@ -668,6 +755,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <div id="gap-ticker"></div>
     <section id="activity-strip" class="wrap-wide activity-strip" hidden aria-label="Recent activity"></section>
     ${audiencePathsHtml()}
+    <div id="wanted-rail"></div>
     <div id="featured-rail"></div>
     <div id="completed-rail"></div>
     <section class="wrap-wide landing-discover">
@@ -698,16 +786,24 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     const viewCounts = await fetchProposalViewsBatch(
       proposals.map((proposal) => proposal.id || "").filter(Boolean),
     ).catch(() => new Map<string, number>());
+    const ids = proposals.map((p) => p.id || "").filter(Boolean);
+    const watchMeta = await fetchWatchMetaBatch(ids).catch(() => ({}));
     proposals = proposals.map((proposal) => {
       const view_count = proposal.id ? viewCounts.get(proposal.id) : undefined;
-      return typeof view_count === "number"
-        ? { ...proposal, view_count }
-        : proposal;
+      const meta = proposal.id ? watchMeta[proposal.id] : undefined;
+      return {
+        ...proposal,
+        ...(typeof view_count === "number" ? { view_count } : {}),
+        ...(meta ? { watch_count: meta.count } : {}),
+      };
     });
     const lightningEnabled = Boolean(lnStatus.enabled);
     const watchPaths = new Set(
       watches.flatMap((w) => [w.proposal_path, w.proposal_id]),
     );
+    const wanted = await fetchWanted(8).catch(() => []);
+    const wantedRail = app.querySelector("#wanted-rail");
+    if (wantedRail) wantedRail.innerHTML = wantedRailHtml(wanted);
     const pinned = new Set<string>(); // Ops may populate this later from public config.
     const excluded = new Set<string>();
     const featured = proposals
@@ -748,6 +844,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
         watchPaths,
         { hideWhenEmpty: true },
       );
+      bindCardWatches(featuredRail, watchPaths);
     }
     const completedRail = app.querySelector("#completed-rail");
     if (completedRail) {
@@ -761,6 +858,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
         watchPaths,
         { hideWhenEmpty: true },
       );
+      bindCardWatches(completedRail, watchPaths);
     }
     if (proposals.length === 0) {
       listEl.className = "empty-state";

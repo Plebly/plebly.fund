@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { builderPanelHtml } from "./builder-panel";
+import { builderPanelHtml, claimerTrackHtml } from "./builder-panel";
+import type { ClaimStatus } from "./builder";
 import type { Proposal } from "./types";
 
 function proposal(partial: Partial<Proposal> = {}): Proposal {
@@ -49,5 +50,53 @@ describe("builderPanelHtml proposal types", () => {
     const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false);
     expect(html).toContain("Needs");
     expect(html).not.toContain('id="builder-claim" disabled');
+  });
+});
+
+describe("claimerTrackHtml", () => {
+  const base: ClaimStatus = {
+    proposal_id: "p1",
+    proposal_path: "proposals/listed/p1.md",
+    state: "claimed",
+    confirmed_balance_sats: 100_000,
+    claim_floor_sats: 10_000,
+  };
+
+  it("omits block when summary absent", () => {
+    expect(claimerTrackHtml(base)).toBe("");
+    expect(claimerTrackHtml({ ...base, claimer_summary: null })).toBe("");
+  });
+
+  it("shows First claim when all zeros", () => {
+    expect(
+      claimerTrackHtml({
+        ...base,
+        claimer_summary: {
+          active: 0,
+          completed: 0,
+          expired: 0,
+          rejected: 0,
+          abandoned: 0,
+        },
+      }),
+    ).toContain("First claim");
+  });
+
+  it("computes submitted/failed/rate from outcome buckets", () => {
+    const html = claimerTrackHtml({
+      ...base,
+      claimer_summary: {
+        active: 1,
+        completed: 2,
+        expired: 1,
+        rejected: 1,
+        abandoned: 0,
+      },
+    });
+    // submitted = 1+2+1+1+0 = 5; failed = 1+0+1 = 2; rate = 2/(2+2) = 50%
+    expect(html).toContain("5 claims");
+    expect(html).toContain("2 completed");
+    expect(html).toContain("2 failed");
+    expect(html).toContain("50%");
   });
 });

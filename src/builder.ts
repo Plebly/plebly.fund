@@ -45,6 +45,13 @@ export type ClaimStatus = {
   checkpoint_url?: string | null;
   claim_window_ends_at?: string | null;
   proposer_claimed?: boolean;
+  claimer_summary?: {
+    active: number;
+    completed: number;
+    expired: number;
+    rejected: number;
+    abandoned: number;
+  } | null;
 };
 
 export type ClaimLedgerView = {
@@ -145,6 +152,48 @@ export async function fetchWatches(): Promise<WatchEntry[]> {
   if (!res.ok) return [];
   const data = (await res.json()) as { watches?: WatchEntry[] };
   return data.watches || [];
+}
+
+export async function fetchWatchMetaBatch(
+  ids: string[],
+): Promise<Record<string, { count: number; weighted: number }>> {
+  if (!WORKERS_API || !ids.length) return {};
+  const q = ids.slice(0, 100).map(encodeURIComponent).join(",");
+  const res = await fetch(`${API()}/watch/meta?ids=${q}`);
+  if (!res.ok) return {};
+  const data = (await res.json()) as {
+    meta?: Record<string, { count?: number; weighted?: number }>;
+  };
+  const out: Record<string, { count: number; weighted: number }> = {};
+  for (const [id, m] of Object.entries(data.meta || {})) {
+    out[id] = {
+      count: Math.max(0, Number(m.count) || 0),
+      weighted: Math.max(0, Number(m.weighted) || 0),
+    };
+  }
+  return out;
+}
+
+export type WantedRow = {
+  id: string | null;
+  path: string;
+  title: string;
+  status: string;
+  watches: number;
+  weighted: number;
+  funded_pct: number | null;
+  balance_sats: number | null;
+  target_sats: number | null;
+  cover_image: string | null;
+  excerpt: string;
+};
+
+export async function fetchWanted(limit = 12): Promise<WantedRow[]> {
+  if (!WORKERS_API) return [];
+  const res = await fetch(`${API()}/wanted?limit=${limit}`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { proposals?: WantedRow[] };
+  return Array.isArray(data.proposals) ? data.proposals : [];
 }
 
 export async function addWatch(proposalPath: string): Promise<void> {

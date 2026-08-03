@@ -509,13 +509,19 @@ export async function markNotificationsForProposalRead(opts: {
   return setUnreadNotificationCount(unread);
 }
 
-/** Compact unread count control next to the account nav link. */
+/** Compact unread count control next to the account nav link (+ dropdown host). */
 export function notificationNavBadgeHtml(count: number): string {
   const n = clampUnread(count);
   if (n <= 0) return "";
   const label = n > 99 ? "99+" : String(n);
   const aria = n === 1 ? "1 unread notification" : `${label} unread notifications`;
-  return `<a href="${href("/account", "?tab=notifications")}" class="nav-notify-badge" data-nav-notify-badge title="${escapeHtml(aria)}" aria-label="${escapeHtml(aria)}">${escapeHtml(label)}</a>`;
+  return `<span class="nav-notify" data-nav-notify>
+    <button type="button" class="nav-notify-badge" data-nav-notify-badge title="${escapeHtml(aria)}" aria-label="${escapeHtml(aria)}" aria-expanded="false" aria-haspopup="true">${escapeHtml(label)}</button>
+    <div class="nav-notify-dropdown" data-nav-notify-dropdown hidden>
+      <a class="nav-notify-all" href="${href("/account", "?tab=notifications")}">All notifications</a>
+      <div class="nav-notify-list" data-nav-notify-list><p class="muted">Loading…</p></div>
+    </div>
+  </span>`;
 }
 
 /** Patch the nav badge in place after mark-read without a full re-render. */
@@ -523,7 +529,7 @@ export function updateNavUnreadBadge(count: number): void {
   const next = setUnreadNotificationCount(count);
   const host = document.querySelector<HTMLElement>("[data-nav-account-wrap]");
   if (!host) return;
-  const existing = host.querySelector("[data-nav-notify-badge]");
+  const existing = host.querySelector("[data-nav-notify]");
   const html = notificationNavBadgeHtml(next);
   if (!html) {
     existing?.remove();
@@ -531,6 +537,82 @@ export function updateNavUnreadBadge(count: number): void {
   }
   if (existing) existing.outerHTML = html;
   else host.insertAdjacentHTML("beforeend", html);
+}
+
+function notifyTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    listed: "Listed",
+    floor_reached: "Floor reached",
+    target_reached: "Target reached",
+    claimed: "Claimed",
+    checkpoint_submitted: "Checkpoint",
+    deliverable_submitted: "Deliverable",
+    completed: "Completed",
+  };
+  return labels[type] || "Update";
+}
+
+/** Bind badge → compact dropdown (falls back to account tab link inside). */
+export function bindNotificationDropdown(root: ParentNode = document): void {
+  const wrap = root.querySelector<HTMLElement>("[data-nav-notify]");
+  if (!wrap || wrap.dataset.bound === "1") return;
+  wrap.dataset.bound = "1";
+  const btn = wrap.querySelector<HTMLButtonElement>("[data-nav-notify-badge]");
+  const dropdown = wrap.querySelector<HTMLElement>("[data-nav-notify-dropdown]");
+  const list = wrap.querySelector<HTMLElement>("[data-nav-notify-list]");
+  if (!btn || !dropdown || !list) return;
+
+  const close = () => {
+    dropdown.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+  };
+
+  btn.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const open = dropdown.hidden;
+    if (!open) {
+      close();
+      return;
+    }
+    dropdown.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    try {
+      const notes = await fetchNotifications();
+      const recent = notes.slice(0, 8);
+      list.innerHTML = recent.length
+        ? recent
+            .map((n) => {
+              const hrefPath = n.proposal_id
+                ? href(`/p/${encodeURIComponent(n.proposal_id)}`)
+                : n.proposal_path
+                  ? href(
+                      `/proposal/${n.proposal_path
+                        .replace(/^proposals\//, "")
+                        .replace(/\.md$/, "")}`,
+                    )
+                  : href("/account", "?tab=notifications");
+              const when = n.created_at
+                ? new Date(n.created_at).toLocaleDateString()
+                : "";
+              return `<a class="nav-notify-item${n.read_at ? "" : " is-unread"}" href="${hrefPath}">
+                <span class="nav-notify-type">${escapeHtml(notifyTypeLabel(n.type))}</span>
+                <span class="nav-notify-id mono">${escapeHtml(n.proposal_id || "")}</span>
+                <span class="nav-notify-when muted">${escapeHtml(when)}</span>
+              </a>`;
+            })
+            .join("")
+        : `<p class="muted">No notifications yet.</p>`;
+      await markNotificationsRead();
+      updateNavUnreadBadge(0);
+    } catch {
+      list.innerHTML = `<p class="muted"><a href="${href("/account", "?tab=notifications")}">Open notifications</a></p>`;
+    }
+  });
+
+  document.addEventListener("click", (ev) => {
+    if (!wrap.contains(ev.target as Node)) close();
+  });
 }
 
 export async function fetchPublicProfile(
@@ -639,6 +721,7 @@ export type ProposalMilestoneInput = {
   verification: string;
   out_of_scope: string;
   allocation_sats: number;
+  funding_threshold_sats?: number;
   deadline: string;
   dependencies?: string[];
 };

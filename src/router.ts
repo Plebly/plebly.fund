@@ -70,6 +70,7 @@ export function parseLocation(
   if (path === "work") return { name: "work" };
   if (path === "propose" || path === "submit") return { name: "propose" };
   if (path === "reviewers" || path === "governance") return { name: "reviewers" };
+  if (path === "wanted") return { name: "wanted" };
   if (path.startsWith("u/")) {
     return { name: "profile", username: decodeURIComponent(path.slice(2)) };
   }
@@ -407,6 +408,13 @@ export function seoForRoute(
         description:
           "Public, best-effort funding and completion totals for Plebly Bitcoin work.",
         path: "/stats",
+      };
+    case "wanted":
+      return {
+        title: "Most wanted",
+        description:
+          "Projects with high watch interest relative to funding progress.",
+        path: "/wanted",
       };
     case "declined":
       return {
