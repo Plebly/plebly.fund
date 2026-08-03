@@ -330,17 +330,37 @@ export function proposalLifecycleBannersHtml(
   return parts.join("");
 }
 
-/** Green to claim floor; glowing orange for overfunding beyond the floor. Card/list meter. */
+/**
+ * Compact meter for cards/lists.
+ * Scale = max(floor, target) so claim floor is never shown as the funding ceiling
+ * when a soft target exists. Green to floor; tertiary toward target; orange past scale.
+ */
 export function fundingBarTrackHtml(
   funded: number,
   floor: number,
   variant: "progress" | "proposal-progress" = "proposal-progress",
+  target: number | null = null,
 ): string {
   const safeFloor = Math.max(1, floor);
-  const over = funded > safeFloor;
-  if (!over) {
-    const pct = Math.min(100, Math.round((funded / safeFloor) * 100));
-    return `<div class="${variant}" role="progressbar" aria-valuemin="0" aria-valuemax="${safeFloor}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${pct}%"></span></div>`;
+  const targetSats =
+    target != null && Number.isFinite(target) && target > 0
+      ? Math.floor(target)
+      : 0;
+  const scale = Math.max(safeFloor, targetSats || safeFloor);
+  const fillPct = Math.min(100, (Math.max(0, funded) / scale) * 100);
+  const floorPct = Math.min(100, (safeFloor / scale) * 100);
+
+  if (funded <= safeFloor || scale <= safeFloor) {
+    return `<div class="${variant}" role="progressbar" aria-valuemin="0" aria-valuemax="${scale}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${fillPct}%"></span></div>`;
+  }
+  if (funded <= scale) {
+    const greenPct = Math.min(fillPct, floorPct);
+    const restPct = Math.max(0, fillPct - greenPct);
+    return `<div class="${variant}" role="progressbar" aria-valuemin="0" aria-valuemax="${scale}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span>${
+      restPct > 0
+        ? `<span class="progress-toward-target" style="width:${restPct}%"></span>`
+        : ""
+    }</div>`;
   }
   const greenPct = Math.max(0.5, (safeFloor / funded) * 100);
   const orangePct = Math.max(0, 100 - greenPct);

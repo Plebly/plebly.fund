@@ -3218,18 +3218,30 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .proposal-progress-detail {
+  /* Block track: flex on .proposal-progress was collapsing the fill wrapper. */
+  display: block;
   position: relative;
   overflow: visible;
   height: 6px;
   margin-top: 0.35rem;
+  background: transparent;
 }
 
 .proposal-progress-fill {
+  position: absolute;
+  inset: 0;
   display: flex;
+  width: 100%;
   height: 100%;
   border-radius: 2px;
   overflow: hidden;
   background: var(--line);
+}
+
+.proposal-progress-fill .progress-floor,
+.proposal-progress-fill .progress-toward-target,
+.proposal-progress-fill .progress-over {
+  flex: 0 0 auto;
 }
 
 .progress-toward-target {

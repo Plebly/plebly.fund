@@ -4,6 +4,7 @@ import {
   deliverableChipHtml,
   donatePanelHtml,
   fundingBarScale,
+  fundingBarTrackHtml,
   metaChipsHtml,
   milestonesHtml,
   proposalContextHtml,
@@ -288,6 +289,19 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain("funding-marker-threshold");
     expect(html).toContain("funding-marker-lock");
     expect(html).toContain("is-locked");
+  });
+
+  it("card track scales to target and does not treat floor as the ceiling", () => {
+    const html = fundingBarTrackHtml(5_000, 10_000, "progress", 100_000);
+    expect(html).toContain('aria-valuemax="100000"');
+    expect(html).toContain('style="width:5%"');
+    expect(html).toContain("progress-floor");
+    expect(html).not.toContain("progress-toward-target");
+
+    const pastFloor = fundingBarTrackHtml(50_000, 10_000, "progress", 100_000);
+    expect(pastFloor).toContain("progress-toward-target");
+    expect(pastFloor).toContain('style="width:10%"'); // green to floor
+    expect(pastFloor).toContain('style="width:40%"'); // tertiary toward target
   });
 
   it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {

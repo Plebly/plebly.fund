@@ -270,6 +270,10 @@ function progressHtml(p: Proposal, floor: number): string {
   const over = bal > floor;
   const overLabel = overfundRatioLabel(bal, floor);
   const isDirect = String(p.proposal_type || "bounty").toLowerCase() === "direct";
+  const target =
+    p.target_sats != null && Number.isFinite(p.target_sats) && p.target_sats > 0
+      ? p.target_sats
+      : null;
   const label = over
     ? `Overfunded · ${overLabel}`
     : isDirect
@@ -284,12 +288,16 @@ function progressHtml(p: Proposal, floor: number): string {
             ? "Taken"
             : `${formatSats(remaining)} to claim floor`;
   const labelClass = over ? "overfunded" : open ? "claimable" : "";
+  // Match detail page: never present claim floor as the funding ceiling.
+  const satsLine = target
+    ? `${formatSats(bal)} · floor ${formatSats(floor)} · target ${formatSats(target)}`
+    : `${formatSats(bal)} / ${formatSats(floor)} floor`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>
-      <span class="sats">${formatSats(bal)} / ${formatSats(floor)}</span>
+      <span class="sats">${satsLine}</span>
     </div>
-    ${fundingBarTrackHtml(bal, floor, "progress")}
+    ${fundingBarTrackHtml(bal, floor, "progress", target)}
   </div>`;
 }
 
