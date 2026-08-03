@@ -21,6 +21,7 @@ import {
 } from "./funder-credit";
 import { btnWithIcon, solidIcon } from "./icons";
 import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
+import { signetPayNoteHtml } from "./signet";
 import { openShareMenu, prefersNativeShare } from "./share-menu";
 import {
   createLightningInvoice,
@@ -359,16 +360,17 @@ export function fundingBarScale(
   milestones: ProposalMilestone[] = [],
 ): { scale: number; markers: FundingBarMarker[] } {
   const safeFloor = Math.max(1, floor);
-  const thresholds = milestones
-    .map((m) => ({
-      sats: m.funding_threshold_sats,
-      id: m.id,
-      label: m.id || undefined,
-    }))
-    .filter(
-      (t): t is { sats: number; id?: string; label?: string } =>
-        typeof t.sats === "number" && Number.isFinite(t.sats) && t.sats >= 1,
-    );
+  const thresholds: { sats: number; id?: string; label?: string }[] = [];
+  for (const m of milestones) {
+    const sats = m.funding_threshold_sats;
+    if (typeof sats === "number" && Number.isFinite(sats) && sats >= 1) {
+      thresholds.push({
+        sats,
+        id: m.id,
+        label: m.id || undefined,
+      });
+    }
+  }
   const highest = thresholds.reduce((m, t) => Math.max(m, t.sats), 0);
   const targetSats =
     target != null && Number.isFinite(target) && target > 0
@@ -467,9 +469,15 @@ export function fundingProgressHtml(
   const over = funded > floor;
   const remaining = Math.max(0, floor - funded);
   const overLabel = overfundRatioLabel(funded, floor);
-  const denom =
-    target != null && Number.isFinite(target) && target > 0 ? target : floor;
-  const pct = Math.min(999, Math.round((funded / Math.max(1, denom)) * 100));
+  const hasTarget =
+    target != null && Number.isFinite(target) && target > 0;
+  const floorPct = Math.min(
+    999,
+    Math.round((funded / Math.max(1, floor)) * 100),
+  );
+  const targetPct = hasTarget
+    ? Math.min(999, Math.round((funded / Math.max(1, target!)) * 100))
+    : floorPct;
   const label = over
     ? `Overfunded · ${overLabel}`
     : claimable
@@ -480,10 +488,10 @@ export function fundingProgressHtml(
     : claimable
       ? " claimable"
       : "";
-  const goalLine =
-    target != null && target > 0
-      ? `${formatSats(funded)} / ${formatSats(target)} · ${pct}%`
-      : `${formatSats(funded)} / ${formatSats(floor)} floor · ${pct}%`;
+  // Always name the claim floor — never let target_sats look like the floor.
+  const goalLine = hasTarget
+    ? `${formatSats(funded)} / ${formatSats(floor)} floor (${floorPct}%) · target ${formatSats(target!)} (${targetPct}%)`
+    : `${formatSats(funded)} / ${formatSats(floor)} floor · ${floorPct}%`;
   return `<div class="funding-meter" data-funding-scale="${scale}">
       <div class="funding-meter-top">
         <span class="funding-meter-label${labelClass}">${label}</span>
@@ -615,10 +623,7 @@ export function donatePanelHtml(
   if (!p.escrow_address) return "";
   const addr = p.escrow_address;
   const signedIn = Boolean(opts?.signedIn);
-  const networkNote =
-    BITCOIN_NETWORK === "signet"
-      ? `<p class="donate-network-note">This project is on <strong>signet</strong>. Use a signet wallet for on-chain donations.</p>`
-      : "";
+  const networkNote = signetPayNoteHtml("donate");
   const onchainPresets = DONATE_PRESETS_SATS.map(
     (sats) =>
       `<button type="button" class="donate-preset" data-rail="onchain" data-sats="${sats}">${formatSats(sats)}</button>`,

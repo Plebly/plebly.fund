@@ -11,6 +11,7 @@ import {
 } from "./generated/about-data";
 import { pleblySocialAccountsHtml } from "./icons";
 import { href } from "./router";
+import { signetFaucetLinksHtml } from "./signet";
 import { escapeHtml } from "./util";
 
 export type AboutShell = (inner: string) => string;
@@ -68,11 +69,14 @@ function paramsHtml(): string {
 
 function networkNoteHtml(): string {
   if (ABOUT_BITCOIN_NETWORK !== "signet") return "";
-  return `<p class="about-network-badge" role="status">
+  return `<div class="about-network-badge" role="status">
     <span class="about-network-badge-dot" aria-hidden="true"></span>
-    <span><strong>Signet</strong> for testing · Mainnet launch uses ${escapeHtml(ABOUT_KEYHOLDERS.threshold)}
-    · <a href="#keyholders">Keyholders</a></span>
-  </p>`;
+    <span>
+      <strong>Signet</strong> (test coins only) · Mainnet launch uses ${escapeHtml(ABOUT_KEYHOLDERS.threshold)}
+      · <a href="#keyholders">Keyholders</a>
+      · Faucets: ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
+    </span>
+  </div>`;
 }
 
 function keyholdersHtml(): string {

@@ -39,6 +39,7 @@ import {
   seoForRoute,
 } from "./router";
 import type { Route } from "./types";
+import { signetSiteBannerHtml } from "./signet";
 import { escapeHtml } from "./util";
 
 /** Styles land with this module — first paint used index.html boot chrome. */
@@ -110,6 +111,7 @@ function shell(inner: string): string {
     r.name === name ? ' aria-current="page"' : "";
   return `
     <a class="skip-link" href="#main-content">Skip to content</a>
+    ${signetSiteBannerHtml()}
     <header class="wrap-wide site-header">
       <a class="brand" href="${href("/")}">
         <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="Plebly" width="28" height="28" />

@@ -9,11 +9,7 @@ import {
   isTakenStatus,
   removeWatch,
 } from "./builder";
-import {
-  BITCOIN_NETWORK,
-  CLAIM_FLOOR_SATS,
-  lightningUiAllowed,
-} from "./config";
+import { CLAIM_FLOOR_SATS, lightningUiAllowed } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeHttpsImageUrl } from "./media";
@@ -24,6 +20,7 @@ import {
   statusLabel,
   statusPillHtml,
 } from "./proposal-ui";
+import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
 import { href, profileHref, proposalHref } from "./router";
 import { hydrateAvatarSlots } from "./profile-avatars";
@@ -40,8 +37,7 @@ type SizeFilter = "all" | "below-floor" | "at-floor" | "overfunded";
 type WindowFilter = "all" | "soon" | "ended";
 
 function networkBadgeHtml(): string {
-  const isSignet = BITCOIN_NETWORK === "signet";
-  return `<span class="network-badge ${isSignet ? "network-badge-test" : ""}">${isSignet ? "Signet · testing" : "Mainnet"}</span>`;
+  return `<span class="network-badge ${isSignet() ? "network-badge-test" : ""}">${isSignet() ? "Signet · test coins" : "Mainnet"}</span>`;
 }
 
 function excerptFromBody(body: string, max = 140): string {
@@ -63,6 +59,7 @@ function landingHeroHtml(): string {
       <h1 class="landing-brand">Plebly</h1>
       <p class="landing-title">Fund open Bitcoin work.<br />Protocol over platform.</p>
       <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
+      ${signetHeroNoteHtml()}
       <div class="landing-cta-row">
         <a class="btn landing-btn" href="${href("/", "", "#projects")}">Donate to a project</a>
         <a class="btn ghost landing-btn" href="${href("/propose")}">Start a project</a>
@@ -787,7 +784,9 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       proposals.map((proposal) => proposal.id || "").filter(Boolean),
     ).catch(() => new Map<string, number>());
     const ids = proposals.map((p) => p.id || "").filter(Boolean);
-    const watchMeta = await fetchWatchMetaBatch(ids).catch(() => ({}));
+    const watchMeta = await fetchWatchMetaBatch(ids).catch(
+      (): Record<string, { count: number; weighted: number }> => ({}),
+    );
     proposals = proposals.map((proposal) => {
       const view_count = proposal.id ? viewCounts.get(proposal.id) : undefined;
       const meta = proposal.id ? watchMeta[proposal.id] : undefined;

@@ -89,6 +89,68 @@ a:hover {
   margin: 0 auto;
 }
 
+/* —— Signet test-network chrome —— */
+.signet-banner {
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.28);
+  background: var(--accent-soft);
+  color: var(--ink-secondary);
+}
+
+.signet-banner-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1.25rem;
+  padding: 0.55rem 0;
+}
+
+.signet-banner-text,
+.signet-banner-links {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.signet-banner-text strong {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.signet-banner-links,
+.signet-hero-note {
+  color: var(--muted);
+}
+
+.signet-banner a,
+.signet-hero-note a,
+.signet-pay-note a,
+.signet-faucet-links a,
+.about-network-badge .signet-faucet-links a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.signet-banner a:hover,
+.signet-hero-note a:hover,
+.signet-pay-note a:hover,
+.signet-faucet-links a:hover {
+  color: var(--ink);
+}
+
+.signet-hero-note {
+  margin: 0 0 1.25rem;
+  max-width: 36rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.signet-hero-note strong {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
 /* —— Header —— */
 .site-header {
   display: flex;

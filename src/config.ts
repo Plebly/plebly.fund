@@ -1,3 +1,8 @@
+import {
+  CLAIM_FLOOR_SATS as GENERATED_CLAIM_FLOOR_SATS,
+  PLEBLY_PARAMETERS_NETWORK as GENERATED_PARAMETERS_NETWORK,
+} from "./generated/parameters";
+
 export const PROPOSALS_REPO = "Plebly/proposals";
 export const PROPOSALS_RAW = `https://raw.githubusercontent.com/${PROPOSALS_REPO}/main`;
 export const PROPOSALS_API = `https://api.github.com/repos/${PROPOSALS_REPO}/contents/proposals`;
@@ -48,4 +53,14 @@ export {
   PLATFORM_FEE_PERCENT,
   RECLAIM_COOLDOWN_DAYS,
   SUBMISSION_FEE_SATS,
+  PLEBLY_PARAMETERS_NETWORK,
 } from "./generated/parameters";
+
+/** Build-time network for parameters.json must match VITE_BITCOIN_NETWORK. */
+const expectedParamsNetwork =
+  BITCOIN_NETWORK.toLowerCase() === "signet" ? "signet" : "mainnet";
+if (GENERATED_PARAMETERS_NETWORK !== expectedParamsNetwork) {
+  console.error(
+    `[plebly] parameters network mismatch: generated=${GENERATED_PARAMETERS_NETWORK} env=${BITCOIN_NETWORK} (claim floor ${GENERATED_CLAIM_FLOOR_SATS})`,
+  );
+}

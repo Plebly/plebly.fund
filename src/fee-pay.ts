@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import { BITCOIN_NETWORK } from "./config";
+import { signetPayNoteHtml } from "./signet";
 import { bitcoinUri, escapeHtml, formatSats, themeQrColors } from "./util";
 
 const MEMPOOL_WEB =
@@ -45,6 +46,7 @@ export function feePayHtml(opts: FeePayOpts): string {
         <img class="donate-qr" id="${escapeHtml(opts.id)}-qr" alt="QR code for fee payment" width="168" height="168" />
       </div>
       <p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong></p>
+      ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${opts.note}</p>` : ""}
       <code class="donate-address mono" id="${escapeHtml(opts.id)}-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
       <div class="donate-actions">
@@ -56,6 +58,7 @@ export function feePayHtml(opts: FeePayOpts): string {
         <button type="button" class="btn" id="${escapeHtml(opts.id)}-next">I've sent it</button>
       </div>`
     : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong> to the published fee address.</p>
+      ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${opts.note}</p>` : ""}
       <p class="field-hint">Fee address is not available from the API yet. Pay using the published address, then continue.</p>
       <div class="fee-pay-nav">

@@ -13,6 +13,7 @@ import {
 } from "./config";
 import { bindFeePay, feePayHtml } from "./fee-pay";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
+import { isSignet, signetFaucetLinksHtml } from "./signet";
 import {
   clientCoverPrecheck,
   uploadProjectCover,
@@ -295,7 +296,11 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                   <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
                 </p>
               </div>`
-            : `<p class="lede">A short guided path to open a proposal. Submission fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.</p>`
+            : `<p class="lede">A short guided path to open a proposal. Submission fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.${
+                isSignet()
+                  ? ` Soft launch uses <strong>signet</strong> test coins — get sats from ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}.`
+                  : ""
+              }</p>`
         }
       </header>
 

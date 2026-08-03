@@ -257,10 +257,20 @@ describe("proposal UI critical render helpers", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
     expect(html).toContain("50,000 sats to claim floor");
-    expect(html).toContain("50,000 sats / 500,000 sats · 10%");
+    expect(html).toContain(
+      "50,000 sats / 100,000 sats floor (50%) · target 500,000 sats (10%)",
+    );
     expect(html).toContain("funding-marker-floor");
     expect(html).not.toContain("funding-marker-lock");
     expect(html).not.toContain("proposal-stats");
+  });
+
+  it("funding bar always labels claim floor separately from target", () => {
+    const html = proposalFundingBarHtml(5_000, 10_000, 100_000);
+    expect(html).toContain("5,000 sats to claim floor");
+    expect(html).toContain("10,000 sats floor");
+    expect(html).toContain("target 100,000 sats");
+    expect(html).not.toMatch(/\/ 100,000 sats · /);
   });
 
   it("funding bar shows lock markers only for funding_threshold_sats", () => {
