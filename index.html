@@ -11,6 +11,12 @@
     <meta name="theme-color" content="#0c0b10" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://plebly.fund/" />
+    <link
+      rel="alternate"
+      type="text/plain"
+      title="llms.txt"
+      href="https://plebly.fund/llms.txt"
+    />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Plebly" />
     <meta property="og:locale" content="en_US" />
@@ -37,15 +43,19 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <!-- Critical boot styles: first paint matches site chrome before JS/CSS land. -->
+    <!-- Critical boot styles: skeleton chrome matching the live SPA shell. -->
     <style>
       :root {
         color-scheme: dark;
         --boot-bg: #0c0b10;
+        --boot-elevated: #15131c;
+        --boot-hover: #1d1a27;
         --boot-ink: #f2f0f6;
         --boot-muted: #78728a;
         --boot-line: #2a2634;
+        --boot-line-soft: #201d28;
         --boot-accent: #b57aef;
+        --boot-accent-rgb: 142, 63, 212;
       }
       html,
       body {
@@ -78,23 +88,27 @@
         display: flex;
         flex-direction: column;
       }
+      .boot-wrap {
+        width: min(980px, calc(100% - 2rem));
+        margin-left: auto;
+        margin-right: auto;
+      }
       .boot-header {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem 1rem;
-        width: min(980px, calc(100% - 2rem));
-        margin: 0 auto;
         padding: 0.875rem 0;
       }
       .boot-brand {
         display: inline-flex;
         align-items: center;
-        gap: 0.55rem;
+        gap: 0.625rem;
         color: inherit;
         text-decoration: none;
         font-weight: 600;
+        font-size: 0.9375rem;
         letter-spacing: -0.02em;
       }
       .boot-brand img {
@@ -114,95 +128,147 @@
         color: inherit;
         text-decoration: none;
       }
-      .boot-nav a:hover,
-      .boot-nav a.active {
-        color: var(--boot-accent);
+      .boot-nav a[aria-current="page"] {
+        color: var(--boot-ink);
       }
       .boot-main {
-        width: min(720px, calc(100% - 2rem));
-        margin: 2.5rem auto 0;
         flex: 1;
+        width: 100%;
       }
-      .boot-main h1 {
-        margin: 0 0 0.5rem;
-        font-size: 1.75rem;
-        letter-spacing: -0.03em;
+      .boot-hero {
+        position: relative;
+        padding: 2.5rem 0 2rem;
+        margin-bottom: 0.5rem;
+        overflow: hidden;
       }
-      .boot-main h2 {
-        margin: 1.75rem 0 0.5rem;
-        font-size: 1.125rem;
-        letter-spacing: -0.02em;
+      .boot-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(
+            ellipse 80% 60% at 15% 20%,
+            rgba(var(--boot-accent-rgb), 0.18),
+            transparent 55%
+          ),
+          linear-gradient(180deg, #12101a 0%, var(--boot-bg) 100%);
+        pointer-events: none;
       }
-      .boot-main p,
-      .boot-main li {
-        margin: 0 0 0.75rem;
-        color: var(--boot-muted);
-        max-width: 36rem;
+      .boot-hero-inner {
+        position: relative;
+        width: min(980px, calc(100% - 2rem));
+        margin: 0 auto;
       }
-      .boot-main a,
-      .boot-footer a {
-        color: var(--boot-accent);
-        text-decoration: none;
+      .boot-skel {
+        border-radius: 8px;
+        background: linear-gradient(
+          110deg,
+          var(--boot-elevated) 0%,
+          var(--boot-hover) 45%,
+          var(--boot-elevated) 90%
+        );
+        background-size: 200% 100%;
+        animation: boot-shimmer 1.2s ease-in-out infinite;
       }
-      .boot-main ul {
-        margin: 0 0 1rem;
-        padding-left: 1.2rem;
+      .boot-skel-badge {
+        width: 7.5rem;
+        height: 1.35rem;
+        border-radius: 999px;
+        margin-bottom: 1.25rem;
       }
-      .boot-crumbs {
-        margin: 0 0 1rem;
-        font-size: 0.875rem;
-        color: var(--boot-muted);
+      .boot-skel-brand {
+        width: min(10rem, 40%);
+        height: 2.25rem;
+        margin-bottom: 0.75rem;
       }
-      .boot-crumbs ol {
-        list-style: none;
-        margin: 0;
-        padding: 0;
+      .boot-skel-title {
+        width: min(22rem, 85%);
+        height: 1.75rem;
+        margin-bottom: 0.65rem;
+      }
+      .boot-skel-title.short {
+        width: min(16rem, 65%);
+        margin-bottom: 1rem;
+      }
+      .boot-skel-sub {
+        width: min(28rem, 92%);
+        height: 0.95rem;
+        margin-bottom: 1.5rem;
+      }
+      .boot-skel-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.35rem 0.5rem;
+        gap: 0.65rem;
       }
-      .boot-crumbs li:not(:last-child)::after {
-        content: "/";
-        margin-left: 0.5rem;
-        color: var(--boot-line);
+      .boot-skel-btn {
+        width: 9.5rem;
+        height: 2.5rem;
+        border-radius: 8px;
+      }
+      .boot-skel-btn.ghost {
+        opacity: 0.65;
+      }
+      .boot-discover {
+        width: min(980px, calc(100% - 2rem));
+        margin: 1.5rem auto 2rem;
+      }
+      .boot-discover-label {
+        width: 8rem;
+        height: 0.85rem;
+        margin-bottom: 1rem;
+      }
+      .boot-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 1rem;
+      }
+      .boot-skel-card {
+        min-height: 11.5rem;
+        border-radius: 10px;
+        border: 1px solid var(--boot-line-soft);
+        background: linear-gradient(
+          110deg,
+          var(--boot-elevated) 0%,
+          var(--boot-hover) 45%,
+          var(--boot-elevated) 90%
+        );
+        background-size: 200% 100%;
+        animation: boot-shimmer 1.2s ease-in-out infinite;
       }
       .boot-footer {
         width: min(980px, calc(100% - 2rem));
-        margin: 2.5rem auto 0;
+        margin: auto auto 0;
         padding: 1.5rem 0 2rem;
-        border-top: 1px solid var(--boot-line);
+        border-top: 1px solid var(--boot-line-soft);
         color: var(--boot-muted);
         font-size: 0.875rem;
       }
-      .boot-footer nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1.25rem;
-        margin-top: 0.75rem;
+      .boot-footer p {
+        margin: 0;
       }
-      .boot-pulse {
-        display: inline-block;
-        width: 0.5rem;
-        height: 0.5rem;
-        margin-right: 0.45rem;
-        border-radius: 50%;
-        background: var(--boot-accent);
-        vertical-align: middle;
-        animation: boot-pulse 1.1s ease-in-out infinite;
+      .boot-seo {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
-      @keyframes boot-pulse {
-        0%,
-        100% {
-          opacity: 0.35;
+      @keyframes boot-shimmer {
+        0% {
+          background-position: 100% 0;
         }
-        50% {
-          opacity: 1;
+        100% {
+          background-position: -100% 0;
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .boot-pulse {
+        .boot-skel,
+        .boot-skel-card {
           animation: none;
-          opacity: 0.7;
         }
       }
     </style>
@@ -241,7 +307,7 @@
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
     <div id="app">
-      <header class="boot-header">
+      <header class="boot-header boot-wrap">
         <a class="boot-brand" href="/">
           <img src="./logo.jpeg" alt="Plebly" width="28" height="28" />
           <span>Plebly</span>
@@ -253,12 +319,51 @@
         </nav>
       </header>
       <main id="main-content" class="boot-main">
+        <section class="boot-hero" aria-busy="true" aria-label="Loading Plebly">
+          <div class="boot-hero-inner">
+            <div class="boot-skel boot-skel-badge" aria-hidden="true"></div>
+            <div class="boot-skel boot-skel-brand" aria-hidden="true"></div>
+            <div class="boot-skel boot-skel-title" aria-hidden="true"></div>
+            <div class="boot-skel boot-skel-title short" aria-hidden="true"></div>
+            <div class="boot-skel boot-skel-sub" aria-hidden="true"></div>
+            <div class="boot-skel-row" aria-hidden="true">
+              <div class="boot-skel boot-skel-btn"></div>
+              <div class="boot-skel boot-skel-btn ghost"></div>
+            </div>
+          </div>
+        </section>
+        <section class="boot-discover" aria-hidden="true">
+          <div class="boot-skel boot-discover-label"></div>
+          <div class="boot-grid">
+            <div class="boot-skel-card"></div>
+            <div class="boot-skel-card"></div>
+            <div class="boot-skel-card"></div>
+            <div class="boot-skel-card"></div>
+          </div>
+        </section>
+        <div class="boot-seo">
+          <h1>Plebly</h1>
+          <p>
+            Fund open Bitcoin work with publicly verifiable on-chain escrow. No
+            custodian in the middle.
+          </p>
+          <p>
+            Propose Bitcoin development or research, donate to public escrow,
+            claim funded work at the claim floor, and release after review.
+          </p>
+        </div>
+      </main>
+      <footer class="boot-footer">
+        <p>Non-custodial Bitcoin bounties. Protocol over platform.</p>
+      </footer>
+    </div>
+    <noscript>
+      <section style="max-width: 40rem; margin: 2rem auto; padding: 0 1rem">
         <h1>Plebly</h1>
         <p>
           Fund open Bitcoin work with publicly verifiable on-chain escrow. No
           custodian in the middle.
         </p>
-        <h2>How it works</h2>
         <ul>
           <li>Propose Bitcoin development or research in the open.</li>
           <li>Anyone donates to a public on-chain escrow address.</li>
@@ -266,24 +371,12 @@
           <li>Reviewers verify deliverables; keyholders release escrow.</li>
         </ul>
         <p>
-          <a href="/">Browse open projects</a> ·
-          <a href="/propose">Start a project</a> ·
           <a href="/about">About</a> ·
+          <a href="https://github.com/Plebly/proposals">Proposals</a> ·
           <a href="/llms.txt">llms.txt</a>
         </p>
-      </main>
-      <footer class="boot-footer">
-        <p>Non-custodial Bitcoin bounties. Protocol over platform.</p>
-        <nav aria-label="Footer">
-          <a href="/">Projects</a>
-          <a href="/propose">Start a project</a>
-          <a href="/about">About</a>
-          <a href="/stats">Stats</a>
-          <a href="/reviewers">Reviewers</a>
-          <a href="https://github.com/Plebly/proposals">Proposals repo</a>
-        </nav>
-      </footer>
-    </div>
+      </section>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

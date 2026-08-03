@@ -42,7 +42,7 @@ import type { Route } from "./types";
 import { signetSiteBannerHtml } from "./signet";
 import { escapeHtml } from "./util";
 
-/** Styles land with this module — first paint used index.html boot chrome. */
+/** Styles land with this module — first paint used index.html skeleton chrome. */
 document.documentElement.classList.add("app-ready");
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
