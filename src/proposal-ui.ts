@@ -83,8 +83,12 @@ function donateCreditStepHtml(signedIn: boolean): string {
   if (!signedIn) {
     return `<section class="donate-step" data-donate-step="credit" id="donate-step-credit">
       <div class="donate-panel-head">
-        <h2 class="donate-title" id="donate-modal-title">Sign in</h2>
+        <h2 class="donate-title" id="donate-modal-title">Get credit for this donation</h2>
+        <p class="donate-lede">Sign in before you pay so we can link this donation to your profile on the funder list. Amounts stay private unless you opt in later.</p>
       </div>
+      <aside class="donate-credit-advisory" role="note">
+        <p><strong>Suggested:</strong> Log in first if you want public funder credit. Anonymous gifts still fund the project — they just can’t be attributed to you afterward.</p>
+      </aside>
       <div class="donate-credit-login">
         ${loginChoicesHtml(undefined, currentReturnPath())}
         <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
@@ -122,7 +126,9 @@ function donatePayStepHtml(
         signedIn
           ? `<p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
              <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>`
-          : ""
+          : `<aside class="donate-credit-advisory" role="note">
+               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited to your profile.</p>
+             </aside>`
       }
     </div>
     ${networkNote}
@@ -147,7 +153,7 @@ function donatePayStepHtml(
           <div class="donate-amount-row">
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
-          <div class="donate-presets">${onchainPresets}<button type="button" class="donate-preset donate-preset-any" data-rail="onchain" data-sats="">Any</button></div>
+          <div class="donate-presets">${onchainPresets}</div>
           <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
           <div class="donate-actions">
             <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
@@ -689,27 +695,38 @@ async function bindOnchainDonate(
     }
   };
 
+  const onchainPresets = () =>
+    panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="onchain"]');
+
+  /** Highlight a preset only when the input matches it; otherwise none (implicit any). */
+  const syncPresetActive = (sats: number | null) => {
+    onchainPresets().forEach((btn) => {
+      const preset = Number(btn.dataset.sats);
+      btn.classList.toggle(
+        "active",
+        sats != null && Number.isFinite(preset) && preset === sats,
+      );
+    });
+  };
+
   await sync(null);
 
   amountInput?.addEventListener("input", () => {
     const n = Number(amountInput.value);
-    void sync(Number.isFinite(n) && n > 0 ? Math.floor(n) : null);
+    const sats = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+    syncPresetActive(sats);
+    void sync(sats);
   });
 
-  panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="onchain"]').forEach((btn) => {
+  onchainPresets().forEach((btn) => {
     btn.addEventListener("click", () => {
       const raw = btn.dataset.sats ?? "";
-      panel
-        .querySelectorAll('.donate-preset[data-rail="onchain"]')
-        .forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      if (!raw) {
-        if (amountInput) amountInput.value = "";
-        void sync(null);
-        return;
-      }
-      if (amountInput) amountInput.value = raw;
-      void sync(Number(raw));
+      if (!raw) return;
+      const sats = Number(raw);
+      if (!Number.isFinite(sats) || sats <= 0) return;
+      if (amountInput) amountInput.value = String(Math.floor(sats));
+      syncPresetActive(Math.floor(sats));
+      void sync(Math.floor(sats));
     });
   });
 
@@ -1066,6 +1083,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     () => {
       const stored = loadStoredCreditPreferences();
       if (stored) applyCreditPreferencesToFields(panel, stored, "donate-credit");
+      setDonateStep(panel, "credit");
+    },
+  );
+
+  panel.querySelector<HTMLButtonElement>("#donate-credit-signin")?.addEventListener(
+    "click",
+    () => {
       setDonateStep(panel, "credit");
     },
   );

@@ -336,15 +336,25 @@ describe("donate credit UX (signed out)", () => {
       expect(document.querySelector("#donate-step-credit")?.hidden).toBe(false);
     });
     expect(document.querySelector("#donate-modal-title")?.textContent).toContain(
-      "Sign in",
+      "Get credit for this donation",
     );
     expect(document.body.textContent).toContain("GitHub");
     expect(document.body.textContent).toContain("Nostr");
+    expect(document.querySelector(".donate-credit-advisory")).toBeTruthy();
     expect(document.querySelector("#donate-credit-public")).toBeNull();
     expect(document.querySelector("#donate-credit-continue")?.textContent).toContain(
       "Continue anonymously",
     );
 
+    continueToPay();
+    expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
+      "pay",
+    );
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeTruthy();
+    document.querySelector<HTMLButtonElement>("#donate-credit-signin")!.click();
+    expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
+      "credit",
+    );
     continueToPay();
     expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
       "pay",

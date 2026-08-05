@@ -153,8 +153,9 @@ describe("proposal UI critical render helpers", () => {
     expect(signedOut).toContain('id="donate-step-credit"');
     expect(signedOut).toContain('id="donate-step-pay"');
     expect(signedOut).toContain("Continue anonymously");
-    expect(signedOut).toContain("Sign in");
-    expect(signedOut).not.toContain("Funder credit");
+    expect(signedOut).toContain("Get credit for this donation");
+    expect(signedOut).toContain("donate-credit-advisory");
+    expect(signedOut).toContain("sign in first");
     expect(signedOut).not.toContain("Step 1 of 2");
     expect(signedOut).not.toContain("Step 2 of 2");
     expect(signedOut).not.toContain("Change credit preferences");

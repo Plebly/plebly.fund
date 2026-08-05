@@ -3764,6 +3764,48 @@ a.project-card-by:hover .project-card-by-text {
   margin-top: 0.75rem;
 }
 
+/* Soft advisory — not an error/warning; points guests at funder credit. */
+.donate-credit-advisory {
+  margin: 0.75rem 0 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.donate-credit-advisory p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.donate-credit-advisory strong {
+  font-weight: 650;
+  color: var(--accent-text);
+}
+
+.donate-panel-head .donate-credit-advisory {
+  margin-top: 0.65rem;
+}
+
+.donate-credit-signin {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.donate-credit-signin:hover {
+  color: var(--ink);
+}
+
 .donate-step .funder-credit-options {
   margin-top: 0.85rem;
 }
