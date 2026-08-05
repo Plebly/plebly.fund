@@ -1337,9 +1337,10 @@ export async function bindDonatePanel(
       ? { address: opts, proposalId: null, proposalPath: "" }
       : opts;
 
+  // Wire rails + wizard before any network so Donate opens immediately for guests.
   bindDonateRails(panel);
-  await bindOnchainDonate(panel, normalized.address);
   bindDonateWizard(panel, normalized);
+  void bindOnchainDonate(panel, normalized.address);
 
   if (!normalized.proposalPath) {
     setLightningUnavailable(

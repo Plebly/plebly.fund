@@ -145,6 +145,12 @@ export function claimFloorShortfall(
 
 export async function fetchWatches(): Promise<WatchEntry[]> {
   if (!WORKERS_API) return [];
+  // Guests have no session — skip the guaranteed 401 instead of blocking the page.
+  try {
+    if (!sessionStorage.getItem("plebly_session")) return [];
+  } catch {
+    return [];
+  }
   const res = await fetch(`${API()}/watch`, {
     headers: authHeaders(),
     credentials: "include",

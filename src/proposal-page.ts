@@ -428,61 +428,67 @@ export async function renderProposalPage(
 
     bindProposalCopyButtons(app);
     bindShareButtons(app);
-    await bindBuilderPanel(app, {
-      proposal: { ...match, balance_sats: balance },
-      balance,
-      user,
-      watching,
-    });
     let reloadEngagement: (() => Promise<void>) | null = null;
+    // Open Donate before claim/lightning network work so guests are not stuck waiting.
     if (match.escrow_address) {
-      await bindDonatePanel(app, {
-        address: match.escrow_address,
-        proposalId: match.id,
-        proposalPath: match.path,
-        signedIn: Boolean(user),
-        initialBalance: balance ?? 0,
-        claimFloorSats: CLAIM_FLOOR_SATS,
-        targetSats: match.target_sats,
-        creditPrefs: user?.funder_credit
-          ? {
-              public_credit: user.funder_credit.public_credit !== false,
-              anonymous: user.funder_credit.public_credit === false,
-              show_amount: Boolean(user.funder_credit.show_amount),
-            }
-          : null,
-        onAuthed,
-        onCreditLinked: () => {
-          void reloadEngagement?.();
-        },
-        onBalanceUpdate: (next) => {
-          updateProposalFundingBar(
-            app,
-            next,
-            CLAIM_FLOOR_SATS,
-            match.target_sats,
-            match.milestones,
-          );
-          const needEl = app.querySelector(".builder-status.muted");
-          if (
-            needEl &&
-            /more confirmed sats to reach the claim floor/i.test(
-              needEl.textContent || "",
-            )
-          ) {
-            const need = Math.max(0, CLAIM_FLOOR_SATS - next);
-            needEl.textContent =
-              need > 0
-                ? `Needs ${formatSats(need)} more confirmed sats to reach the claim floor.`
-                : "Claim floor met. Refresh if the claim button does not appear.";
-          }
-        },
-      });
       bindDonateModal(app, {
         open: wantsDonate,
         rail: wantsLnRail ? "lightning" : undefined,
       });
     }
+    const donateReady = match.escrow_address
+      ? bindDonatePanel(app, {
+          address: match.escrow_address,
+          proposalId: match.id,
+          proposalPath: match.path,
+          signedIn: Boolean(user),
+          initialBalance: balance ?? 0,
+          claimFloorSats: CLAIM_FLOOR_SATS,
+          targetSats: match.target_sats,
+          creditPrefs: user?.funder_credit
+            ? {
+                public_credit: user.funder_credit.public_credit !== false,
+                anonymous: user.funder_credit.public_credit === false,
+                show_amount: Boolean(user.funder_credit.show_amount),
+              }
+            : null,
+          onAuthed,
+          onCreditLinked: () => {
+            void reloadEngagement?.();
+          },
+          onBalanceUpdate: (next) => {
+            updateProposalFundingBar(
+              app,
+              next,
+              CLAIM_FLOOR_SATS,
+              match.target_sats,
+              match.milestones,
+            );
+            const needEl = app.querySelector(".builder-status.muted");
+            if (
+              needEl &&
+              /more confirmed sats to reach the claim floor/i.test(
+                needEl.textContent || "",
+              )
+            ) {
+              const need = Math.max(0, CLAIM_FLOOR_SATS - next);
+              needEl.textContent =
+                need > 0
+                  ? `Needs ${formatSats(need)} more confirmed sats to reach the claim floor.`
+                  : "Claim floor met. Refresh if the claim button does not appear.";
+            }
+          },
+        })
+      : Promise.resolve();
+    await Promise.all([
+      bindBuilderPanel(app, {
+        proposal: { ...match, balance_sats: balance },
+        balance,
+        user,
+        watching,
+      }),
+      donateReady,
+    ]);
     bindRefundAndBallot(app, match);
     const reviewerMe = user
       ? await fetchReviewerMe().catch(() => null)
