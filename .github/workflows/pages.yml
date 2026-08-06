@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, plebly]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,8 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    # Self-hosted so Pages deploy is not blocked by GitHub-hosted runner outages.
+    runs-on: [self-hosted, Linux, X64, plebly]
     timeout-minutes: 35
     environment:
       name: github-pages
