@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applicationsPanelHtml,
   builderPanelHtml,
+  claimerIdentityHtml,
   claimerTrackHtml,
 } from "./builder-panel";
 import type { ClaimApplicationsResponse, ClaimStatus } from "./builder";
@@ -195,5 +196,30 @@ describe("applicationsPanelHtml", () => {
     expect(html).toContain("data-withdraw-app=\"app-1\"");
     expect(html).toContain("(you)");
     expect(html).not.toContain("data-accept-app");
+  });
+
+  it("links org applicants to /org with avatar slot", () => {
+    const html = applicationsPanelHtml({
+      ...baseApps(),
+      is_proposer: false,
+      applications: [
+        {
+          ...baseApps().applications[0]!,
+          claimer_login: "acme",
+          claimer_type: "org",
+          claim_agent: "alice",
+        },
+      ],
+    });
+    expect(html).toContain("/org/acme");
+    expect(html).toContain('data-avatar-org="acme"');
+    expect(html).toContain("github.com/alice");
+  });
+});
+
+describe("claimerIdentityHtml", () => {
+  it("builds org and user identity markup", () => {
+    expect(claimerIdentityHtml("acme", "org")).toContain("/org/acme");
+    expect(claimerIdentityHtml("bob", "individual")).toContain("/u/bob");
   });
 });

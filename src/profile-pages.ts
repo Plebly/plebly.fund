@@ -48,10 +48,12 @@ import {
 import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
 import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
+import { hydrateAvatarSlots } from "./profile-avatars";
 import {
   applySeo,
   href,
   navigate,
+  orgHref,
   proposalHref,
   seoForRoute,
 } from "./router";
@@ -252,9 +254,16 @@ function linkedOrgsPanelHtml(user: AuthUser): string {
       const when = Number.isFinite(at)
         ? new Date(at).toISOString().slice(0, 10)
         : "?";
+      const avatar = o.avatar_url
+        ? `<img class="avatar account-org-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="28" height="28" />`
+        : `<span class="user-avatar-slot org-avatar-slot" data-avatar-org="${escapeHtml(o.login)}" hidden></span>`;
       return `<li class="account-org-row">
-        <span><strong>@${escapeHtml(o.login)}</strong>
-          <span class="muted mono">${fresh ? `admin · verified ${when}` : "stale — link again"}</span>
+        <span class="account-org-identity">
+          ${avatar}
+          <span>
+            <a href="${orgHref(o.login)}"><strong>@${escapeHtml(o.login)}</strong></a>
+            <span class="muted mono">${fresh ? `admin · verified ${when}` : "stale — resync"}</span>
+          </span>
         </span>
         <button type="button" class="btn ghost" data-unlink-org="${escapeHtml(o.login)}">Unlink</button>
       </li>`;
@@ -262,14 +271,14 @@ function linkedOrgsPanelHtml(user: AuthUser): string {
     .join("");
   return `<div class="identity-panel account-orgs">
       <p class="hint identity-panel-label">GitHub orgs for claims</p>
-      <p class="hint">Link orgs you admin (one-time GitHub <code>read:org</code>). Apply-as-org on bounties only offers linked orgs. Re-link every 90 days.</p>
+      <p class="hint">Resync refreshes admin membership and avatars (<code>read:org</code>). Apply-as-org only offers linked orgs. Re-sync every 90 days.</p>
       ${
         rows
           ? `<ul class="account-org-list">${rows}</ul>`
           : `<p class="hint muted">No orgs linked yet.</p>`
       }
       <p class="form-msg" id="org-link-msg" hidden></p>
-      <button type="button" class="btn" id="link-github-orgs-btn">Link GitHub orgs</button>
+      <button type="button" class="btn" id="link-github-orgs-btn">Resync GitHub orgs</button>
     </div>`;
 }
 
@@ -567,12 +576,13 @@ export async function renderAccount(
     orgMsg.hidden = false;
     if (orgLinkParam === "ok") {
       orgMsg.className = "form-msg success";
-      orgMsg.textContent = "GitHub orgs updated from your admin memberships.";
+      orgMsg.textContent = "GitHub orgs resynced from your admin memberships.";
     } else if (orgLinkParam === "github_required") {
       orgMsg.className = "form-msg error";
       orgMsg.textContent = "Sign in with GitHub before linking orgs.";
     }
   }
+  void hydrateAvatarSlots(app);
 
   document
     .getElementById("link-github-orgs-btn")

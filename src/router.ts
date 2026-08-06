@@ -56,6 +56,11 @@ export function profileHref(username: string): string {
   return href(`/u/${encodeURIComponent(username)}`);
 }
 
+export function orgHref(login: string): string {
+  const handle = login.replace(/^@/, "").trim().toLowerCase();
+  return href(`/org/${encodeURIComponent(handle)}`);
+}
+
 export function parseLocation(
   pathname = appPathname(),
   search = location.search,
@@ -73,6 +78,15 @@ export function parseLocation(
   if (path === "wanted") return { name: "wanted" };
   if (path.startsWith("u/")) {
     return { name: "profile", username: decodeURIComponent(path.slice(2)) };
+  }
+  if (path.startsWith("org/")) {
+    return {
+      name: "org",
+      login: decodeURIComponent(path.slice(4))
+        .replace(/^@/, "")
+        .trim()
+        .toLowerCase(),
+    };
   }
   if (path.startsWith("proposal/")) {
     const slug = path.slice("proposal/".length);
@@ -451,6 +465,14 @@ export function seoForRoute(
           extra?.description ||
           `Public Plebly profile for @${route.username} on Plebly.`,
         path: `/u/${encodeURIComponent(route.username)}`,
+      };
+    case "org":
+      return {
+        title: extra?.title || `@${route.login} (org)`,
+        description:
+          extra?.description ||
+          `GitHub organization @${route.login} on Plebly.`,
+        path: `/org/${encodeURIComponent(route.login)}`,
       };
     case "proposal":
       return {

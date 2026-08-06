@@ -12,6 +12,7 @@ export type GithubOrgAttestation = {
   login: string;
   role: "admin";
   verified_at: string;
+  avatar_url?: string;
 };
 
 export type UserProfile = {
@@ -134,6 +135,8 @@ export type Proposal = {
   balance_sats?: number;
   proposer?: ProposalProposer | null;
   claimer?: string | null;
+  claimer_type?: "individual" | "org" | string | null;
+  claim_agent?: string | null;
   claim_mode?: "first_bonded" | "proposer_select" | string | null;
   claim_window_days?: number | null;
   /** Catalog enrich from claim application pool (optional). */
@@ -179,4 +182,5 @@ export type Route =
   | { name: "reviewers" }
   | { name: "wanted" }
   | { name: "proposal"; id: string; stable?: boolean }
-  | { name: "profile"; username: string };
+  | { name: "profile"; username: string }
+  | { name: "org"; login: string };

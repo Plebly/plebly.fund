@@ -23,6 +23,7 @@ import {
 } from "./auth";
 import { renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
+import { renderPublicOrgProfile } from "./org-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
 import { renderWanted } from "./wanted-page";
@@ -208,6 +209,13 @@ async function render() {
   if (r.name === "profile") {
     applySeo(seoForRoute(r));
     await renderPublicProfile(ctx, r.username);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "org") {
+    applySeo(seoForRoute(r));
+    await renderPublicOrgProfile(shell, r.login, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

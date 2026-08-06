@@ -34,6 +34,8 @@ export type ClaimStatus = {
     created_at: string;
   } | null;
   claimer?: string | null;
+  claimer_type?: "individual" | "org" | string | null;
+  claim_agent?: string | null;
   claimed_at?: string | null;
   payout_address?: string | null;
   status?: string;

@@ -103,6 +103,10 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     related_work: parseRelatedWork(data.related_work),
     proposer: parseProposer(data),
     claimer: (data.claimer as string) || null,
+    claimer_type:
+      typeof data.claimer_type === "string" ? data.claimer_type : null,
+    claim_agent:
+      typeof data.claim_agent === "string" ? data.claim_agent : null,
     claim_mode:
       typeof data.claim_mode === "string" ? data.claim_mode : null,
     claim_window_days:
@@ -165,6 +169,8 @@ type CatalogProposal = {
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
   claimer?: string | null;
+  claimer_type?: string | null;
+  claim_agent?: string | null;
   claim_mode?: string | null;
   claim_window_days?: number | null;
   claim_apps_total?: number | null;
@@ -197,6 +203,8 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     funding_window_ends_at: entry.funding_window_ends_at ?? null,
     delivery_window_ends_at: entry.delivery_window_ends_at ?? null,
     claimer: entry.claimer ?? null,
+    claimer_type: entry.claimer_type ?? null,
+    claim_agent: entry.claim_agent ?? null,
     claim_mode: entry.claim_mode ?? null,
     claim_window_days: entry.claim_window_days ?? null,
     claim_apps_total:
@@ -344,5 +352,21 @@ export function proposalsForProfile(
     if (username && proposer.username?.toLowerCase() === username) return true;
     if (github && proposer.github?.toLowerCase() === github) return true;
     return false;
+  });
+}
+
+/** Projects where this GitHub org is the awarded claimer. */
+export function proposalsForOrgClaimer(
+  proposals: Proposal[],
+  orgLogin: string,
+): Proposal[] {
+  const login = orgLogin.replace(/^@/, "").trim().toLowerCase();
+  if (!login) return [];
+  return proposals.filter((p) => {
+    const claimer = p.claimer?.toLowerCase();
+    if (claimer !== login) return false;
+    if (p.claimer_type === "org") return true;
+    // Legacy / missing type: still match by claimer login alone for org pages.
+    return !p.claimer_type || p.claimer_type === "org";
   });
 }

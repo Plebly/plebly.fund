@@ -34,11 +34,67 @@ import { loginChoicesHtml } from "./auth";
 import type { AuthUser } from "./auth";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
-import { href } from "./router";
+import {
+  avatarSlotHtml,
+  hydrateAvatarSlots,
+  orgAvatarSlotHtml,
+} from "./profile-avatars";
+import { href, orgHref, profileHref } from "./router";
 import { userMatchesProposer } from "./proposal-ui";
 import { aiReviewCardHtml } from "./review-panel";
 import type { GithubOrgAttestation, Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
+
+function githubUserHref(login: string): string {
+  return `https://github.com/${encodeURIComponent(login.replace(/^@/, ""))}`;
+}
+
+/** Linked claimer label (org → /org, individual → /u or GitHub). */
+export function claimerIdentityHtml(
+  login: string,
+  type?: string | null,
+  agent?: string | null,
+): string {
+  const handle = login.replace(/^@/, "").trim();
+  if (!handle) return escapeHtml(login || "another builder");
+  if (type === "org") {
+    const agentBit = agent
+      ? ` <span class="muted">(org · <a href="${escapeHtml(githubUserHref(agent))}" target="_blank" rel="noreferrer">@${escapeHtml(agent)}</a>)</span>`
+      : ` <span class="muted">(org)</span>`;
+    return `${orgAvatarSlotHtml(handle)}<a href="${orgHref(handle)}"><strong>@${escapeHtml(handle)}</strong></a>${agentBit}`;
+  }
+  return `${avatarSlotHtml(handle)}<a href="${profileHref(handle)}"><strong>${escapeHtml(handle)}</strong></a>`;
+}
+
+function sessionIsClaimer(
+  user: AuthUser | null,
+  claimer: string | null | undefined,
+  claimerType?: string | null,
+): boolean {
+  if (!user || !claimer) return false;
+  if (
+    claimer === user.username ||
+    claimer === user.github ||
+    claimer === user.id
+  ) {
+    return true;
+  }
+  if (claimerType === "org") {
+    return Boolean(findFreshOrg(user, claimer));
+  }
+  return false;
+}
+
+function findFreshOrg(
+  user: AuthUser,
+  orgLogin: string,
+): GithubOrgAttestation | null {
+  const want = orgLogin.replace(/^@/, "").trim().toLowerCase();
+  for (const o of freshLinkedOrgs(user)) {
+    if (o.login.toLowerCase() === want) return o;
+  }
+  return null;
+}
 
 const ORG_ATTESTATION_MS = 90 * 86_400_000;
 
@@ -172,11 +228,11 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
                 ? `<span class="claim-app-actions">${proposerActions}${mineWithdraw}</span>`
                 : "";
             return `<li class="claim-app-row">
-              <div><strong>${escapeHtml(a.claimer_login)}</strong>${
-                a.claimer_type === "org"
-                  ? ` <span class="muted">(org${a.claim_agent ? ` · @${escapeHtml(a.claim_agent)}` : ""})</span>`
-                  : ""
-              }${a.is_mine ? ` <span class="muted">(you)</span>` : ""} · ${bond}<br/>${applicantTrackHtml(a.summary)}</div>
+              <div class="claim-app-identity">${claimerIdentityHtml(
+                a.claimer_login,
+                a.claimer_type,
+                a.claim_agent,
+              )}${a.is_mine ? ` <span class="muted">(you)</span>` : ""} · ${bond}<br/>${applicantTrackHtml(a.summary)}</div>
               ${actions}
             </li>`;
           })
@@ -287,11 +343,12 @@ export function builderPanelHtml(
             <label class="radio-row"><input type="radio" name="claimer_type" value="individual" checked /> Me (individual)</label>
             <label class="radio-row"><input type="radio" name="claimer_type" value="org" id="claimer-type-org" /> GitHub org (linked admin)</label>
             <div id="claim-org-slot" hidden>
+              <div id="claim-org-preview" class="claim-org-preview"></div>
               <select id="claim-org-login" class="donate-amount mono" aria-label="Linked GitHub org">
                 <option value="">Select a linked org…</option>
               </select>
               <p class="builder-claim-hint muted" id="claim-org-hint">
-                Link orgs you admin from <a href="/account">Account</a> (GitHub <code>read:org</code>).
+                Resync orgs on <a href="/account">Account</a> (GitHub <code>read:org</code>).
               </p>
             </div>
           </fieldset>
@@ -386,14 +443,16 @@ function renderStatusBody(
     status.claimed_at,
     status.claim_window_ends_at,
   );
-  const isYou =
-    user &&
-    status.claimer &&
-    (status.claimer === user.username ||
-      status.claimer === user.github ||
-      status.claimer === user.id);
+  const isYou = sessionIsClaimer(user, status.claimer, status.claimer_type);
   const meta = metaBits(status);
   const track = claimerTrackHtml(status);
+  const claimerLabel = status.claimer
+    ? claimerIdentityHtml(
+        status.claimer,
+        status.claimer_type,
+        status.claim_agent,
+      )
+    : "another builder";
   const windowLabel =
     days != null
       ? ` · ${days} day${days === 1 ? "" : "s"} left`
@@ -443,9 +502,7 @@ function renderStatusBody(
           'class="deliverable-form" hidden',
         )}`;
       } else {
-        body.innerHTML = `${track}${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
-          status.claimer || "another builder",
-        )}</strong>${windowLabel}.</p>
+        body.innerHTML = `${track}${meta}<p class="builder-status">Claimed by ${claimerLabel}${windowLabel}.</p>
         <p class="builder-status muted" id="claim-award-reason"></p>
         <div id="claim-collab-host"></div>
         <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
@@ -453,13 +510,13 @@ function renderStatusBody(
       break;
     case "in_review":
       body.innerHTML = `${track}${meta}<p class="builder-status">In review${
-        status.claimer ? ` · fulfiller ${escapeHtml(status.claimer)}` : ""
+        status.claimer ? ` · fulfiller ${claimerLabel}` : ""
       }${windowLabel}. AI triage finished. Reviewers confirm in the panel below.</p>
       ${isYou ? extensionTools : ""}`;
       break;
     case "completed":
       body.innerHTML = `${track}${meta}<p class="builder-status">Completed${
-        status.claimer ? ` · ${escapeHtml(status.claimer)}` : ""
+        status.claimer ? ` · ${claimerLabel}` : ""
       }. Fulfiller earns a reviewer seat. Escrow release is by keyholders — Plebly never moves funds.</p>`;
       break;
     default:
@@ -843,12 +900,19 @@ export async function bindBuilderPanel(
     ]);
     syncHeroClaimChip(apps);
     if (status && body) {
+      if (!status.claimer_type && opts.proposal.claimer_type) {
+        status.claimer_type = opts.proposal.claimer_type;
+      }
+      if (!status.claim_agent && opts.proposal.claim_agent) {
+        status.claim_agent = opts.proposal.claim_agent;
+      }
       renderStatusBody(body, status, opts.user, opts.proposal.path);
       const host = body.querySelector("#claim-apps-host");
       if (host && apps && status.state === "open") {
         host.innerHTML = applicationsPanelHtml(apps);
         bindApplicantActions(apps);
       }
+      void hydrateAvatarSlots(body);
       const claimBtn = body.querySelector<HTMLButtonElement>("#builder-claim");
       if (claimBtn && apps?.mine_application_id) {
         claimBtn.hidden = true;
@@ -867,13 +931,12 @@ export async function bindBuilderPanel(
           reasonEl.textContent = label;
         }
       }
-      if (apps && status.state === "claimed") {
-        const isYou =
-          !!opts.user &&
-          !!status.claimer &&
-          (status.claimer === opts.user.username ||
-            status.claimer === opts.user.github ||
-            status.claimer === opts.user.id);
+      if (apps && (status.state === "claimed" || status.state === "in_review")) {
+        const isYou = sessionIsClaimer(
+          opts.user,
+          status.claimer,
+          status.claimer_type,
+        );
         await bindCollaboratorUi(apps, isYou);
       }
       const awareness = panel.querySelector("#claim-modal-awareness");
@@ -1074,6 +1137,22 @@ export async function bindBuilderPanel(
               }>@${escapeHtml(o.login)}</option>`,
           )
           .join("");
+    }
+    const orgPreview = panel.querySelector<HTMLElement>("#claim-org-preview");
+    if (orgPreview) {
+      orgPreview.innerHTML = linked.length
+        ? linked
+            .map(
+              (o) =>
+                `<a class="claim-org-preview-item" href="${orgHref(o.login)}">${
+                  o.avatar_url
+                    ? `<img class="avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="22" height="22" />`
+                    : orgAvatarSlotHtml(o.login)
+                }@${escapeHtml(o.login)}</a>`,
+            )
+            .join("")
+        : "";
+      void hydrateAvatarSlots(orgPreview);
     }
     if (hint) {
       hint.innerHTML = linked.length
