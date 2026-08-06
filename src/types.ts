@@ -77,7 +77,8 @@ export type ProposalStatus =
   | "completed"
   | "abandoned_vote"
   | "refunding"
-  | "redirected";
+  | "redirected"
+  | "redirect_pending";
 
 export type ProposalMilestone = {
   id?: string;

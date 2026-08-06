@@ -148,10 +148,15 @@ export async function renderKeyholders(
     queueEl.innerHTML = `<ul class="declined-list">${data.items
       .map((item) => {
         const sum = item.outputs.reduce((a, o) => a + o.amount_sats, 0);
+        const waiting = item.outputs.length === 0;
         return `<li class="declined-row">
           <button type="button" class="declined-title btn ghost" data-disburse="${escapeHtml(item.id)}">${escapeHtml(item.proposal_id)}</button>
           <span class="declined-meta"><span class="pill">${escapeHtml(item.state)}</span>
-          <span class="muted">${sum ? formatSats(sum) : "—"}</span></span>
+          ${
+            waiting
+              ? `<span class="pill">waiting on address</span>`
+              : `<span class="muted">${formatSats(sum)}</span>`
+          }</span>
         </li>`;
       })
       .join("")}</ul>`;
@@ -175,21 +180,34 @@ export async function renderKeyholders(
       <div class="form-panel form-panel-wide">
         <h2 class="proposal-block-title">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
         <p class="muted">State: ${escapeHtml(item.state)}${item.addresses_frozen ? " · addresses frozen" : ""}</p>
+        ${
+          item.outputs.length === 0
+            ? `<p class="builder-msg bad">Waiting on refund/payout addresses — settle and PSBT upload are blocked until outputs exist.</p>`
+            : ""
+        }
         <table class="kh-outputs">
           <thead><tr><th>Label</th><th>Address</th><th>Amount</th></tr></thead>
           <tbody>
-            ${item.outputs
-              .map(
-                (o) =>
-                  `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
-              )
-              .join("")}
+            ${
+              item.outputs.length
+                ? item.outputs
+                    .map(
+                      (o) =>
+                        `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
+                    )
+                    .join("")
+                : `<tr><td colspan="3" class="muted">No outputs yet</td></tr>`
+            }
           </tbody>
         </table>
         <div class="comment-compose-actions">
           <label class="donate-amount-label" for="kh-psbt">PSBT (base64)</label>
-          <textarea id="kh-psbt" class="comment-input mono" rows="3" placeholder="cHNidP8…"></textarea>
-          <button type="button" class="btn" id="kh-psbt-upload">Upload PSBT</button>
+          <textarea id="kh-psbt" class="comment-input mono" rows="3" placeholder="cHNidP8…" ${
+            item.outputs.length ? "" : "disabled"
+          }></textarea>
+          <button type="button" class="btn" id="kh-psbt-upload" ${
+            item.outputs.length ? "" : "disabled"
+          }>Upload PSBT</button>
           ${
             item.psbts?.[0]
               ? `<a class="btn ghost" id="kh-psbt-dl" href="#">Download latest (${escapeHtml(item.psbts[0].sha256.slice(0, 12))}…)</a>`
@@ -197,7 +215,9 @@ export async function renderKeyholders(
           }
         </div>
         <label class="donate-amount-label" for="kh-txid">Broadcast txid</label>
-        <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" />
+        <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
+          item.outputs.length ? "" : "disabled"
+        } />
         <div id="kh-verify-panel" class="lifecycle-banner" hidden>
           <span class="lifecycle-k">Verify before settle</span>
           <p>Worker will match this txid to the exact outputs above (address + amount). Plebly never broadcasts.</p>
@@ -211,11 +231,15 @@ export async function renderKeyholders(
             .join("")}</ul>
         </div>
         <div class="comment-compose-actions">
-          <button type="button" class="btn" id="kh-propose">Propose settle</button>
+          <button type="button" class="btn" id="kh-propose" ${
+            item.outputs.length ? "" : "disabled"
+          }>Propose settle</button>
           ${
             data.requires_dual_settle
               ? `<button type="button" class="btn ghost" id="kh-confirm"${
-                  item.settle_proposed_by === kh.user_id ? " disabled" : ""
+                  item.settle_proposed_by === kh.user_id || !item.outputs.length
+                    ? " disabled"
+                    : ""
                 }>Confirm settle</button>`
               : ""
           }
@@ -235,6 +259,22 @@ export async function renderKeyholders(
     };
 
     detailEl.querySelector("#kh-psbt-upload")?.addEventListener("click", async () => {
+      if (!item.outputs.length) {
+        setMsg("No outputs yet — waiting on refund/payout addresses.");
+        return;
+      }
+      const outs = item.outputs
+        .map(
+          (o) =>
+            `${o.label || "out"}: ${o.address} · ${formatSats(o.amount_sats)}`,
+        )
+        .join("\n");
+      const ok = await confirmAction({
+        title: "Upload PSBT",
+        body: `Confirm this PSBT pays exactly these outputs (addresses freeze after upload):\n\n${outs}`,
+        confirmLabel: "Upload",
+      });
+      if (!ok) return;
       const b64 = detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt")?.value || "";
       const res = await authFetch(`${api()}/disburse/${id}/psbt`, {
         method: "POST",
@@ -260,6 +300,10 @@ export async function renderKeyholders(
     });
 
     detailEl.querySelector("#kh-propose")?.addEventListener("click", async () => {
+      if (!item.outputs.length) {
+        setMsg("No outputs yet — waiting on refund/payout addresses.");
+        return;
+      }
       const txid = detailEl.querySelector<HTMLInputElement>("#kh-txid")?.value || "";
       const panel = detailEl.querySelector<HTMLElement>("#kh-verify-panel");
       if (panel) panel.hidden = false;

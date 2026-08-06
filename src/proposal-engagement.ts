@@ -49,6 +49,7 @@ export function discussionClosedForStatus(status: string | undefined): boolean {
     "underfunded",
     "refunding",
     "redirected",
+    "redirect_pending",
   ].includes(String(status || ""));
 }
 
@@ -100,7 +101,7 @@ export function commentsHtml(
       <p class="builder-msg" id="proposal-comment-msg" hidden></p>
     </div>
     <div id="proposal-workboard-pane" class="engagement-pane" data-eng-pane="workboard" hidden>
-      <p class="muted engagement-workboard-hint">Only the proposer, claimer, and collaborators can see these posts.</p>
+      <p class="muted engagement-workboard-hint">Only the proposer, claim agent, and invited collaborators can see these posts.</p>
       <div id="proposal-workboard-list"><p class="muted">Loading…</p></div>
       ${workboardCompose}
       <p class="builder-msg" id="proposal-workboard-msg" hidden></p>

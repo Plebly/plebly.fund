@@ -16,14 +16,14 @@ We built it for people who want hard problems solved in the open.
 
 1. **Submit**: Open a pull request with your proposal and pay the submission fee on-chain.
 2. **Donate**: Anyone sends Bitcoin to the project's escrow address (on-chain, or Lightning that settles into that same address).
-3. **Claim**: A builder claims the project once funding hits the claim floor.
+3. **Apply**: Builders apply with a bond once funding hits the claim floor.
 4. **Complete**: Reviewers verify the deliverable; keyholders release escrow manually on success. Plebly never moves funds.
 
 Browse [open projects](/), [start a project](/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
 ## For builders
 
-Watch a project to follow funding progress. Watching does **not** reserve the work. When confirmed escrow meets the claim floor, use **Claim this project** on the project page. That opens a pull request in the proposals repo; the exclusive claim and 90-day window start when the PR merges. Then submit your deliverable the same way for public review.
+Watch a project to follow funding progress. Watching does **not** reserve the work. When confirmed escrow meets the claim floor, use **Apply with bond** on the project page. Your bond is verified at apply; exclusivity is awarded under the proposal’s claim mode (proposer pick or first bonded). The exclusive claim and 90-day window start when the award claim PR merges. Then submit your deliverable for public review.
 
 ## Lightning donations
 

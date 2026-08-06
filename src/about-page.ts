@@ -9,17 +9,23 @@ import {
   ABOUT_STEPS,
   ABOUT_TRUST_HTML,
 } from "./generated/about-data";
-import { pleblySocialAccountsHtml } from "./icons";
-import { href } from "./router";
+import { PLEBLY_GITHUB_URL, pleblySocialAccountsHtml } from "./icons";
+import { fetchPublicOrg, type PublicOrg } from "./org-page";
+import { hydrateAvatarSlots } from "./profile-avatars";
+import { href, orgHref, profileHref } from "./router";
 import { signetFaucetLinksHtml } from "./signet";
 import { escapeHtml } from "./util";
 
 export type AboutShell = (inner: string) => string;
 
+/** Canonical GitHub org login for the platform team roster. */
+export const PLEBLY_ORG_LOGIN = "Plebly";
+
 const ABOUT_NAV = [
   { id: "beliefs", label: "Beliefs" },
   { id: "how-it-works", label: "How it works" },
   { id: "trust", label: "Trust" },
+  { id: "team", label: "Team" },
   { id: "keyholders", label: "Keyholders" },
   { id: "parameters", label: "Parameters" },
   { id: "details", label: "Details" },
@@ -202,6 +208,54 @@ function keyholdersHtml(): string {
   </section>`;
 }
 
+/** Public members of the Plebly GitHub org → Plebly `/u/` profiles. */
+export function aboutTeamMembersHtml(
+  members: { login: string; avatar_url: string }[],
+): string {
+  if (!members.length) {
+    return `<p class="muted">No public members listed yet.</p>`;
+  }
+  return `<ul class="org-member-grid about-team-grid">${members
+    .map((m) => {
+      const login = m.login.replace(/^@/, "").trim();
+      return `<li class="org-member-card">
+        <a href="${profileHref(login)}">
+          ${
+            m.avatar_url
+              ? `<img class="avatar org-member-avatar" src="${escapeHtml(m.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+              : `<span class="org-member-avatar-fallback" aria-hidden="true"></span>`
+          }
+          <span>@${escapeHtml(login)}</span>
+        </a>
+      </li>`;
+    })
+    .join("")}</ul>`;
+}
+
+function teamSectionHtml(org: PublicOrg | null): string {
+  const orgLink = org
+    ? orgHref(org.login)
+    : href(`/org/${encodeURIComponent(PLEBLY_ORG_LOGIN.toLowerCase())}`);
+  const ghLink = org?.html_url || PLEBLY_GITHUB_URL;
+  const members = org?.public_members ?? [];
+  const body = org
+    ? aboutTeamMembersHtml(members)
+    : `<p class="muted">Couldn’t load the <a href="${escapeHtml(ghLink)}" target="_blank" rel="noreferrer">@${escapeHtml(PLEBLY_ORG_LOGIN)}</a> roster right now. Try the <a href="${orgLink}">org page</a>.</p>`;
+
+  return `<section class="about-section" id="team">
+    <h2>Team</h2>
+    <p class="about-section-lede">
+      Public members of the
+      <a href="${escapeHtml(ghLink)}" target="_blank" rel="noreferrer">@${escapeHtml(org?.login || PLEBLY_ORG_LOGIN)}</a>
+      GitHub organization. Profiles on Plebly.
+    </p>
+    ${body}
+    <p class="about-section-foot">
+      <a href="${orgLink}">Org page →</a>
+    </p>
+  </section>`;
+}
+
 /** Scroll-spy TOC + soft section reveal. Safe to call after each about render. */
 export function bindAboutPage(root: ParentNode = document): () => void {
   const page = root.querySelector<HTMLElement>(".about-page");
@@ -286,8 +340,17 @@ export function bindAboutPage(root: ParentNode = document): () => void {
   };
 }
 
-export function renderAbout(shell: AboutShell): void {
+export async function renderAbout(shell: AboutShell): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
+  app.innerHTML = shell(`
+    <section class="wrap detail about-page">
+      <p class="loading">Loading…</p>
+    </section>
+  `);
+
+  const orgResult = await fetchPublicOrg(PLEBLY_ORG_LOGIN).catch(() => null);
+  const org = orgResult?.org ?? null;
+
   const details = [
     ABOUT_BUILDERS_HTML
       ? `<div class="about-detail">
@@ -350,6 +413,8 @@ export function renderAbout(shell: AboutShell): void {
           : ""
       }
 
+      ${teamSectionHtml(org)}
+
       ${keyholdersHtml()}
 
       <section class="about-section" id="parameters">
@@ -376,4 +441,5 @@ export function renderAbout(shell: AboutShell): void {
   `);
 
   bindAboutPage(app);
+  void hydrateAvatarSlots(app);
 }

@@ -5,7 +5,14 @@ import { authFetch, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
 import { listAllPublicProposals, proposalsForOrgClaimer } from "./github";
 import { hydrateAvatarSlots } from "./profile-avatars";
-import { applySeo, href, orgHref, proposalHref, seoForRoute } from "./router";
+import {
+  applySeo,
+  href,
+  orgHref,
+  profileHref,
+  proposalHref,
+  seoForRoute,
+} from "./router";
 import type { ClaimSummary } from "./types";
 import { escapeHtml } from "./util";
 
@@ -80,19 +87,19 @@ function orgPageInnerHtml(
     org.public_members.length === 0
       ? `<p class="muted">No public members listed.</p>`
       : `<ul class="org-member-grid">${org.public_members
-          .map(
-            (m) =>
-              `<li class="org-member-card">
-                <a href="https://github.com/${escapeHtml(m.login)}" target="_blank" rel="noreferrer">
+          .map((m) => {
+            const login = m.login.replace(/^@/, "").trim();
+            return `<li class="org-member-card">
+                <a href="${profileHref(login)}">
                   ${
                     m.avatar_url
                       ? `<img class="avatar org-member-avatar" src="${escapeHtml(m.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
                       : `<span class="org-member-avatar-fallback" aria-hidden="true"></span>`
                   }
-                  <span>@${escapeHtml(m.login)}</span>
+                  <span>@${escapeHtml(login)}</span>
                 </a>
-              </li>`,
-          )
+              </li>`;
+          })
           .join("")}</ul>`;
 
   const synced = relativeSynced(org.synced_at);

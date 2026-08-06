@@ -8,6 +8,7 @@ import {
   type AuthUser,
 } from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import { promptText } from "./confirm-modal";
 import { proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats } from "./mempool";
@@ -99,6 +100,8 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
         contributions: {
           txid: string;
           vout: number;
+          swap_id?: string | null;
+          rail?: string;
           amount_sats: number;
           status: string;
           refund_address?: string | null;
@@ -122,12 +125,19 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
         ? `${parts.join(" · ")}. Addresses frozen for keyholder batch.`
         : `${parts.join(" · ")}.`;
       listEl.innerHTML = data.contributions
-        .map(
-          (r) =>
-            `<li class="mono">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout} · ${escapeHtml(r.status)}${
-              r.refund_address ? ` · ${escapeHtml(r.refund_address.slice(0, 12))}…` : ""
-            }</li>`,
-        )
+        .map((r) => {
+          const identity =
+            r.rail === "lightning" || r.swap_id
+              ? `swap ${escapeHtml((r.swap_id || "").slice(0, 16))}${
+                  r.swap_id && r.swap_id.length > 16 ? "…" : ""
+                }`
+              : `${escapeHtml(r.txid.slice(0, 12))}…:${r.vout}`;
+          return `<li class="mono">${identity} · ${escapeHtml(r.status)}${
+            r.refund_address
+              ? ` · ${escapeHtml(r.refund_address.slice(0, 12))}…`
+              : ""
+          }</li>`;
+        })
         .join("");
       if (formEl) {
         formEl.hidden = Boolean(
@@ -141,37 +151,132 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
   };
   void loadRefundStatus();
 
+  const syncRefundRail = () => {
+    const rail =
+      (
+        root.querySelector(
+          'input[name="refund_rail"]:checked',
+        ) as HTMLInputElement | null
+      )?.value || "onchain";
+    const onchain = root.querySelector<HTMLElement>("#refund-onchain-fields");
+    const ln = root.querySelector<HTMLElement>("#refund-ln-fields");
+    if (onchain) onchain.hidden = rail !== "onchain";
+    if (ln) ln.hidden = rail !== "lightning";
+  };
+  root.querySelectorAll('input[name="refund_rail"]').forEach((el) => {
+    el.addEventListener("change", syncRefundRail);
+  });
+  syncRefundRail();
+
   root.querySelector("#refund-submit")?.addEventListener("click", async () => {
     const msg = root.querySelector<HTMLElement>("#refund-msg");
+    const rail =
+      (
+        root.querySelector(
+          'input[name="refund_rail"]:checked',
+        ) as HTMLInputElement | null
+      )?.value || "onchain";
     const txid = (
       root.querySelector("#refund-txid") as HTMLInputElement | null
     )?.value.trim();
     const vout = Number(
       (root.querySelector("#refund-vout") as HTMLInputElement | null)?.value,
     );
+    const swap_id = (
+      root.querySelector("#refund-swap-id") as HTMLInputElement | null
+    )?.value.trim();
     const refund_address = (
       root.querySelector("#refund-address") as HTMLInputElement | null
     )?.value.trim();
-    if (!match.id || !txid || !refund_address) return;
-    try {
-      const res = await authFetch(`${api}/refunds/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          proposal_id: match.id,
-          txid,
-          vout,
-          refund_address,
-        }),
-      });
-      const body = await res.json();
-      if (msg) {
-        msg.hidden = false;
-        msg.textContent = res.ok
-          ? "Refund address registered — track under Account → Funds."
-          : String(body.error || "failed");
+    const showRefundMsg = (text: string, cls = "") => {
+      if (!msg) return;
+      msg.hidden = false;
+      msg.className = cls ? `muted ${cls}` : "muted";
+      msg.textContent = text;
+    };
+    if (!match.id || !refund_address) {
+      showRefundMsg("Enter a refund address.", "error");
+      return;
+    }
+    if (rail === "onchain") {
+      if (!txid) {
+        showRefundMsg("Enter the funding txid (and vout).", "error");
+        return;
       }
-      if (res.ok) void loadRefundStatus();
+      if (!Number.isInteger(vout) || vout < 0) {
+        showRefundMsg("Enter a valid vout (integer ≥ 0).", "error");
+        return;
+      }
+    }
+    if (rail === "lightning" && !swap_id) {
+      showRefundMsg("Enter the Lightning swap id from your donate receipt.", "error");
+      return;
+    }
+    const registerBody =
+      rail === "lightning"
+        ? { proposal_id: match.id, swap_id, refund_address }
+        : { proposal_id: match.id, txid, vout, refund_address };
+    const claimBody =
+      rail === "lightning"
+        ? { proposal_id: match.id, swap_id }
+        : { proposal_id: match.id, txid, vout };
+    try {
+      const tryRegister = () =>
+        authFetch(`${api}/refunds/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(registerBody),
+        });
+      let res = await tryRegister();
+      let body = (await res.json()) as {
+        error?: string;
+        code?: string;
+        package_error?: boolean;
+        note?: string;
+      };
+      if (
+        res.status === 409 &&
+        (body.code === "link_required" || body.error === "link_required")
+      ) {
+        const claimRes = await authFetch(`${api}/contributions/claim`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(claimBody),
+        });
+        const claimBodyJson = (await claimRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!claimRes.ok) {
+          showRefundMsg(
+            claimBodyJson.error ||
+              "Could not link contribution — sign in and try again.",
+            "error",
+          );
+          return;
+        }
+        res = await tryRegister();
+        body = (await res.json()) as {
+          error?: string;
+          code?: string;
+          package_error?: boolean;
+          note?: string;
+        };
+      }
+      if (res.ok || body.package_error) {
+        showRefundMsg(
+          body.package_error
+            ? body.note ||
+                "Address saved, but the keyholder package failed — try Register again."
+            : "Refund address registered — track under Account → Funds.",
+          body.package_error ? "error" : "",
+        );
+        void loadRefundStatus();
+      } else {
+        showRefundMsg(
+          body.note || String(body.error || "failed"),
+          "error",
+        );
+      }
     } catch (e) {
       if (msg) {
         msg.hidden = false;
@@ -209,7 +314,16 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
               let redirect_target: string | undefined;
               if (option === "redirect") {
                 redirect_target =
-                  window.prompt("Redirect target proposal id") || undefined;
+                  (await promptText({
+                    title: "Redirect target",
+                    body: "Proposal id to redirect escrow toward (ops/keyholders move funds manually).",
+                    placeholder: "proposal-id",
+                    confirmLabel: "Vote redirect",
+                    validate: (v) =>
+                      /^[a-zA-Z0-9._-]{2,80}$/.test(v)
+                        ? null
+                        : "Enter a valid proposal id.",
+                  })) || undefined;
                 if (!redirect_target) return;
               }
               const voteRes = await authFetch(
@@ -479,7 +593,12 @@ export async function renderProposalPage(
             ${status === "in_review" && match.id ? reviewPanelHtml(match.id) : ""}
             ${status === "rejected" && match.id ? rebuttalPanelHtml() : ""}
             ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
-            ${status === "abandoned_vote" ? ballotPanelHtml(match.id) : ""}
+            ${
+              status === "abandoned_vote" ||
+              (status === "underfunded" && (balance ?? 0) > 0)
+                ? ballotPanelHtml(match.id)
+                : ""
+            }
             ${
               canEdit || listingReportHtml
                 ? `<div class="proposal-sidebar-actions">

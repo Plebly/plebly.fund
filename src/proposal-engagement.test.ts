@@ -53,7 +53,9 @@ describe("commentsHtml", () => {
     expect(html).toContain('id="proposal-engagement-tabs"');
     expect(html).toContain("hidden");
     expect(html).toContain("Workboard");
-    expect(html).toContain("Only the proposer, claimer, and collaborators");
+    expect(html).toContain(
+      "Only the proposer, claim agent, and invited collaborators",
+    );
     expect(html).not.toContain("encrypt");
   });
 

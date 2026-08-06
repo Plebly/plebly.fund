@@ -34,7 +34,7 @@ import {
 } from "./lightning";
 import { watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
-import { proposalHref, SITE_ORIGIN } from "./router";
+import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
 import { avatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
@@ -88,7 +88,7 @@ function donateCreditStepHtml(signedIn: boolean): string {
         <p class="donate-lede">Sign in before you pay so we can link this donation to your profile on the funder list. Amounts stay private unless you opt in later.</p>
       </div>
       <aside class="donate-credit-advisory" role="note">
-        <p><strong>Suggested:</strong> Log in first if you want public funder credit. Anonymous gifts still fund the project — they just can’t be attributed to you afterward.</p>
+        <p><strong>Suggested:</strong> Log in first if you want public funder credit. Anonymous gifts still fund the project — they just can’t be attributed to you afterward. If a refund path opens later, you’ll need this receipt (txid:vout or Lightning swap id) plus a signed-in account to register a refund address.</p>
       </aside>
       <div class="donate-credit-login">
         ${loginChoicesHtml(undefined, currentReturnPath())}
@@ -128,7 +128,7 @@ function donatePayStepHtml(
           ? `<p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
              <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>`
           : `<aside class="donate-credit-advisory" role="note">
-               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited to your profile.</p>
+               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited. Save your txid:vout or Lightning swap id; refunds later require sign-in plus that proof.</p>
              </aside>`
       }
     </div>
@@ -189,6 +189,13 @@ function donatePayStepHtml(
             <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
           </div>
           <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
+          <div class="donate-ln-receipt" id="donate-ln-receipt" hidden>
+            <p class="donate-credit-seen">Save swap id for refunds:</p>
+            <code class="donate-address mono" id="donate-ln-swap-id"></code>
+            <div class="donate-actions">
+              <button type="button" class="btn" id="donate-ln-copy-swap">Copy swap id</button>
+            </div>
+          </div>
         </div>
         <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
       </div>
@@ -230,11 +237,15 @@ export function statusLabel(status: string): string {
 
 export function statusClass(status: string): string {
   if (["listed", "claimable", "completed"].includes(status)) return "status-good";
-  if (["claimed", "in_review", "funding", "abandoned_vote"].includes(status)) {
+  if (
+    ["claimed", "in_review", "funding", "abandoned_vote", "underfunded"].includes(
+      status,
+    )
+  ) {
     return "status-active";
   }
   if (
-    ["declined", "rejected", "underfunded", "refunding", "redirected"].includes(
+    ["declined", "rejected", "refunding", "redirected", "redirect_pending"].includes(
       status,
     )
   ) {
@@ -322,6 +333,19 @@ export function proposalLifecycleBannersHtml(
     parts.push(
       `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Ballot open</span><p>Contributor vote: extend, refund, or redirect (1 person = 1 vote)</p></div>`,
     );
+  } else if (String(p.status) === "underfunded") {
+    // Workers open a Q18 ballot only when escrow balance > 0.
+    if (balance != null && balance > 0) {
+      parts.push(
+        `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Ballot open</span><p>Funding window ended underfunded — contributor vote: extend, refund, or redirect (1 person = 1 vote)</p></div>`,
+      );
+    } else {
+      parts.push(
+        `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Underfunded</span><p>Funding window ended below the claim floor${
+          balance === 0 ? " with empty escrow — no contributor ballot." : "."
+        }</p></div>`,
+      );
+    }
   }
   if (String(p.status) === "in_review") {
     parts.push(
@@ -335,7 +359,22 @@ export function proposalLifecycleBannersHtml(
   }
   if (String(p.status) === "refunding") {
     parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Refunding</span><p>Register a refund address for your contribution below. Keyholders batch returns in Sparrow — track status under Account → Funds. No platform fee.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Refunding</span><p>Register a refund address for your contribution below. Keyholders batch returns in Sparrow — track status under <a href="${href("/account", "?tab=funds")}">Account → Funds</a>. No platform fee.</p></div>`,
+    );
+  }
+  if (
+    String(p.status) === "redirect_pending" ||
+    String(p.status) === "redirected"
+  ) {
+    const target = String(
+      (p as Proposal & { redirect_to?: string }).redirect_to || "",
+    ).trim();
+    const label =
+      String(p.status) === "redirected" ? "Redirected" : "Redirect pending";
+    parts.push(
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">${label}</span><p>Contributor ballot chose redirect${
+        target ? ` to <code class="mono">${escapeHtml(target)}</code>` : ""
+      }. Ops/keyholders move escrow manually — Plebly never broadcasts.</p></div>`,
     );
   }
   return parts.join("");
@@ -530,7 +569,7 @@ export function fundingProgressHtml(
   const label = over
     ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
     : claimable
-      ? "Open to claim"
+      ? "Open to apply"
       : `${formatSats(remaining)} to claim floor`;
   const labelClass = over
     ? " overfunded"
@@ -986,8 +1025,64 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     }
   };
 
+  const showAnonymousReceipt = (utxo: {
+    txid: string;
+    vout: number;
+    value: number;
+  }) => {
+    if (!claimWrap) return;
+    const outpoint = `${utxo.txid}:${utxo.vout}`;
+    try {
+      sessionStorage.setItem(
+        `plebly:donate-receipt:${opts.address}`,
+        JSON.stringify({
+          rail: "onchain",
+          txid: utxo.txid,
+          vout: utxo.vout,
+          value: utxo.value,
+          at: Date.now(),
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+    claimWrap.hidden = false;
+    claimWrap.innerHTML = `<p class="donate-credit-seen">Save this receipt for refunds (sign in later to register):</p>
+      <ul class="donate-credit-utxos"><li>
+        <span class="mono" title="${escapeHtml(outpoint)}">${escapeHtml(utxo.txid.slice(0, 12))}…:${utxo.vout}</span>
+        <span>${escapeHtml(formatSats(utxo.value))}</span>
+        <button type="button" class="btn" data-copy-receipt="${escapeHtml(outpoint)}">Copy txid:vout</button>
+      </li></ul>`;
+    claimWrap
+      .querySelector<HTMLButtonElement>("[data-copy-receipt]")
+      ?.addEventListener("click", async (ev) => {
+        const btn = ev.currentTarget as HTMLButtonElement;
+        const value = btn.dataset.copyReceipt || "";
+        if (!value) return;
+        try {
+          await navigator.clipboard.writeText(value);
+          const prev = btn.textContent;
+          btn.textContent = "Copied";
+          setTimeout(() => {
+            btn.textContent = prev;
+          }, 1400);
+        } catch {
+          /* ignore */
+        }
+      });
+    setDonateConfirmStatus(
+      panel,
+      `Payment seen · receipt ${utxo.txid.slice(0, 12)}…:${utxo.vout}`,
+      "ok",
+    );
+  };
+
   const showClaimable = (utxos: { txid: string; vout: number; value: number }[]) => {
-    if (!claimWrap || !utxos.length || !opts.signedIn || !opts.proposalId) return;
+    if (!claimWrap || !utxos.length || !opts.proposalId) return;
+    if (!opts.signedIn) {
+      showAnonymousReceipt(utxos[0]!);
+      return;
+    }
     claimWrap.hidden = false;
     claimWrap.innerHTML = `<p class="donate-credit-seen">Couldn’t auto-link — pick your payment:</p>
       <ul class="donate-credit-utxos">${utxos
@@ -1052,16 +1147,47 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         if (utxos.some((u) => !u.status?.confirmed)) {
           setDonateConfirmStatus(panel, "Payment seen · confirming…", "live");
         }
+        const pick =
+          utxos.find((u) => u.status?.confirmed) || utxos[0];
+        if (!pick) return;
         if (opts.signedIn && opts.proposalId) {
-          const pick =
-            utxos.find((u) => u.status?.confirmed) || utxos[0];
           void linkOutpoint(pick);
           return;
         }
+        showAnonymousReceipt(pick);
       },
       { intervalMs: opts.utxoPollMs ?? 8000 },
     );
     utxoStop = watcher.stop;
+  };
+
+  const restoreStoredReceipt = () => {
+    try {
+      const raw = sessionStorage.getItem(
+        `plebly:donate-receipt:${opts.address}`,
+      );
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        rail?: string;
+        txid?: string;
+        vout?: number;
+        value?: number;
+        swap_id?: string;
+      };
+      if (
+        parsed.rail === "onchain" &&
+        parsed.txid &&
+        typeof parsed.vout === "number"
+      ) {
+        showAnonymousReceipt({
+          txid: parsed.txid,
+          vout: parsed.vout,
+          value: Number(parsed.value) || 0,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
   };
 
   const goPay = (prefs: CreditPreferences) => {
@@ -1078,6 +1204,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       claimWrap.hidden = true;
       claimWrap.innerHTML = "";
     }
+    if (!opts.signedIn) restoreStoredReceipt();
     startBalanceWatch();
     startUtxoWatch();
   };
@@ -1166,7 +1293,35 @@ function bindLightningDonate(
   const weblnBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-webln");
   const statusEl = panel.querySelector<HTMLElement>("#donate-ln-status");
   const errorEl = panel.querySelector<HTMLElement>("#donate-ln-error");
+  const receiptEl = panel.querySelector<HTMLElement>("#donate-ln-receipt");
+  const swapIdEl = panel.querySelector<HTMLElement>("#donate-ln-swap-id");
+  const copySwapBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-copy-swap");
   let settledLinked = false;
+
+  const showSwapReceipt = (swapId: string) => {
+    try {
+      sessionStorage.setItem(
+        `plebly:donate-receipt:${opts.address}`,
+        JSON.stringify({ rail: "lightning", swap_id: swapId, at: Date.now() }),
+      );
+    } catch {
+      /* ignore */
+    }
+    if (swapIdEl) swapIdEl.textContent = swapId;
+    if (receiptEl) receiptEl.hidden = false;
+  };
+
+  try {
+    const raw = sessionStorage.getItem(`plebly:donate-receipt:${opts.address}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { rail?: string; swap_id?: string };
+      if (parsed.rail === "lightning" && parsed.swap_id) {
+        showSwapReceipt(parsed.swap_id);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 
   const min = status.limits?.minimal ?? 25_000;
   if (amountInput) {
@@ -1255,14 +1410,15 @@ function bindLightningDonate(
       feeEl.hidden = false;
       feeEl.textContent = `Invoice ${formatSats(swap.invoice_amount_sats)} → escrow ~${formatSats(swap.expected_onchain_sats)} (fees ~${formatSats(swap.fee_sats)})`;
     }
+    if (swap.swap_id) showSwapReceipt(swap.swap_id);
     if (statusEl) {
       const map: Record<string, string> = {
         pending: "Waiting for Lightning payment…",
         invoice_paid: "Invoice paid. Claiming to escrow…",
         claiming: "Broadcasting claim to escrow…",
         settled: swap.claim_txid
-          ? `Settled on-chain. Claim tx: ${swap.claim_txid.slice(0, 12)}…`
-          : "Settled on-chain.",
+          ? `Settled on-chain · claim tx ${swap.claim_txid.slice(0, 12)}… · copy swap id below for refunds`
+          : "Settled on-chain · copy swap id below for refunds",
         failed:
           swap.error ||
           "Swap failed. On mainnet the claimer waits for lockup confirmation; try again or use on-chain.",
@@ -1348,6 +1504,21 @@ function bindLightningDonate(
       copyBtn.textContent = "Copied";
       setTimeout(() => {
         copyBtn.textContent = prev;
+      }, 1400);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  copySwapBtn?.addEventListener("click", async () => {
+    const text = swapIdEl?.textContent?.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = copySwapBtn.textContent;
+      copySwapBtn.textContent = "Copied";
+      setTimeout(() => {
+        copySwapBtn.textContent = prev;
       }, 1400);
     } catch {
       /* ignore */
@@ -1531,17 +1702,28 @@ export function refundRegisterHtml(proposalId: string | null): string {
   if (!proposalId) return "";
   return `<div class="refund-panel" id="refund-panel">
     <h3 class="milestones-title">Register refund</h3>
-    <p class="muted">Prove your funding outpoint and set a refund address. Keyholders batch returns in Sparrow — no platform fee. Track under Account → Funds.</p>
+    <p class="muted">Link your contribution (Account sign-in), then set a refund address. On-chain uses txid:vout; Lightning uses swap id from your donate receipt. Keyholders batch returns — no platform fee.</p>
     <div id="refund-status" class="lifecycle-banner" hidden>
       <span class="lifecycle-k">Your contributions</span>
       <p id="refund-status-body" class="muted"></p>
       <ul id="refund-status-list" class="kh-verify-outputs"></ul>
     </div>
     <div id="refund-register-form">
-      <label class="donate-amount-label" for="refund-txid">Funding txid</label>
-      <input id="refund-txid" class="donate-amount mono" type="text" maxlength="64" />
-      <label class="donate-amount-label" for="refund-vout">Vout</label>
-      <input id="refund-vout" class="donate-amount mono" type="number" min="0" value="0" />
+      <fieldset class="field">
+        <span>Rail</span>
+        <label class="radio-row"><input type="radio" name="refund_rail" value="onchain" checked /> On-chain</label>
+        <label class="radio-row"><input type="radio" name="refund_rail" value="lightning" /> Lightning</label>
+      </fieldset>
+      <div id="refund-onchain-fields">
+        <label class="donate-amount-label" for="refund-txid">Funding txid</label>
+        <input id="refund-txid" class="donate-amount mono" type="text" maxlength="64" />
+        <label class="donate-amount-label" for="refund-vout">Vout</label>
+        <input id="refund-vout" class="donate-amount mono" type="number" min="0" value="0" />
+      </div>
+      <div id="refund-ln-fields" hidden>
+        <label class="donate-amount-label" for="refund-swap-id">Swap id</label>
+        <input id="refund-swap-id" class="donate-amount mono" type="text" placeholder="From Lightning donate receipt" />
+      </div>
       <label class="donate-amount-label" for="refund-address">Refund address</label>
       <input id="refund-address" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
       <button type="button" class="btn" id="refund-submit">Register</button>
@@ -1560,6 +1742,7 @@ export function ballotPanelHtml(proposalId: string | null): string {
       <button type="button" class="btn ghost" data-ballot-opt="refund">Refund</button>
       <button type="button" class="btn ghost" data-ballot-opt="redirect">Redirect…</button>
     </div>
+    <p class="muted" id="ballot-redirect-note">Redirect is ops-assisted — keyholders move escrow manually; it is not instant.</p>
     <p class="builder-msg" id="ballot-msg" hidden></p>
   </div>`;
 }

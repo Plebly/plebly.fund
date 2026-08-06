@@ -43,11 +43,14 @@ import {
   seoForRoute,
 } from "./router";
 import type { Route } from "./types";
+import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
 import { escapeHtml } from "./util";
 
 /** Styles land with this module — first paint used index.html skeleton chrome. */
 document.documentElement.classList.add("app-ready");
+applyStandaloneClass();
+void registerPwaServiceWorker();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -258,7 +261,7 @@ async function render() {
   }
   if (r.name === "about") {
     applySeo(seoForRoute(r));
-    renderAbout(shell);
+    await renderAbout(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

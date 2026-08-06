@@ -51,6 +51,15 @@ describe("builderPanelHtml proposal types", () => {
     expect(html).not.toContain("builder-evaluating");
   });
 
+  it("applies refund-before-bond wizard markup", () => {
+    const html = builderPanelHtml(proposal({ proposal_type: "bounty" }), 200_000, false);
+    expect(html).toContain("claim-step-refund");
+    expect(html).toContain("claim-payout-ack");
+    expect(html).toContain('id="claim-bond-slot" hidden');
+    expect(html).toContain("Bond refund + claim payout");
+    expect(html).toContain('id="claim-next"');
+  });
+
   it("uses progress copy instead of a disabled claim below floor", () => {
     const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false);
     expect(html).toContain("Needs");
@@ -221,5 +230,47 @@ describe("claimerIdentityHtml", () => {
   it("builds org and user identity markup", () => {
     expect(claimerIdentityHtml("acme", "org")).toContain("/org/acme");
     expect(claimerIdentityHtml("bob", "individual")).toContain("/u/bob");
+  });
+});
+
+describe("sessionIsClaimer", () => {
+  it("matches individual claimer by github/username", async () => {
+    const { sessionIsClaimer } = await import("./builder-panel");
+    const user = {
+      id: "github:1",
+      github: "alice",
+      username: "alice",
+    } as const;
+    expect(sessionIsClaimer(user as never, "alice", "individual")).toBe(true);
+    expect(sessionIsClaimer(user as never, "bob", "individual")).toBe(false);
+  });
+
+  it("org claims match claim_agent only, not linked co-admins", async () => {
+    const { sessionIsClaimer } = await import("./builder-panel");
+    const agent = {
+      id: "github:1",
+      github: "alice",
+      username: "alice",
+      github_orgs: [
+        {
+          login: "acme",
+          role: "admin",
+          attested_at: new Date().toISOString(),
+        },
+      ],
+    } as const;
+    const coAdmin = {
+      id: "github:2",
+      github: "bob",
+      username: "bob",
+      github_orgs: agent.github_orgs,
+    } as const;
+    expect(
+      sessionIsClaimer(agent as never, "acme", "org", "alice"),
+    ).toBe(true);
+    expect(
+      sessionIsClaimer(coAdmin as never, "acme", "org", "alice"),
+    ).toBe(false);
+    expect(sessionIsClaimer(coAdmin as never, "acme", "org")).toBe(false);
   });
 });

@@ -90,8 +90,8 @@ function audiencePathsHtml(): string {
     },
     {
       kicker: "Builders",
-      title: "Claim and deliver",
-      body: "When escrow clears the claim floor, claim the work and ship the deliverable. Payment follows public review.",
+      title: "Apply and deliver",
+      body: "When escrow clears the claim floor, apply with a bond, win the award, and ship the deliverable. Payment follows public review.",
       href: href("/", "?for=builders", "#projects"),
       cta: "See open projects",
     },
@@ -117,7 +117,7 @@ function howItWorksHtml(): string {
   const steps = [
     { n: "01", title: "Propose", body: "Describe the problem, deliverable, and how success is verified." },
     { n: "02", title: "Donate", body: "Anyone sends sats to the project’s public escrow address." },
-    { n: "03", title: "Claim", body: "A builder claims once funding clears the claim floor." },
+    { n: "03", title: "Apply", body: "Builders apply with a bond once funding clears the claim floor." },
     { n: "04", title: "Complete", body: "Reviewers verify the work. Keyholders release escrow in wallet — Plebly never moves funds." },
   ];
   return `<section class="landing-how">
@@ -171,7 +171,7 @@ function gapTickerHtml(
       <div>
         <span class="gap-ticker-label">Claim floor met</span>
         <span class="gap-ticker-note">Open projects are at or above the claim floor</span>
-        <strong>Ready to claim</strong>
+        <strong>Ready to apply</strong>
       </div>
       <a href="${href("/", "", "#projects")}">Browse projects →</a>
     </section>`;
@@ -283,7 +283,7 @@ function progressHtml(p: Proposal, floor: number): string {
         ? "Floor met · direct"
         : `${formatSats(remaining)} to floor`
       : open
-        ? "Open to claim"
+        ? "Open to apply"
         : near
           ? "Near floor"
           : isTakenStatus(String(p.status)) || p.claimer

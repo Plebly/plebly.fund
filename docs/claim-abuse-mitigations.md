@@ -17,7 +17,9 @@ Plebly’s claim market is permissionless: anyone authenticated may **apply** wh
 | Sybil swarm | Bond + public claim history; identity relink cooldown 7d |
 | Proposer never picks (`proposer_select`) | Decision grace then **auto-award earliest bonded** |
 | first_bonded sniping | Proposer chose that mode; bond still required |
-| Org sock puppets | Org apply requires GitHub session + **Account-linked** admin org (`read:org` once, 90d TTL); 1 open/awarded claim per `github-org:…` |
+| Org sock puppets | Org apply requires GitHub session + **Account-linked** admin org (`read:org` once, 90d TTL); 1 open/awarded claim per `github-org:…`; bond ledger on `github-org:…` while ops stay human; deliverable / Funds / checkpoints / workboard authorize **claim agent** (claimowner), not any co-admin; org apply does not overwrite the human profile payout |
+| Withdraw/reject × award race | Close application in KV before refund package; bond ledger id matches award (`github-org:*`); locked/forfeited bonds never package; settle requires `refundable`; award cancels premature bond-refund packages and closes orphan claim PRs |
+| Post-forfeit complete | Forfeit clears claimowner + claimfulfiller; `completed` cannot un-forfeit; reopen nulls `claimer_type` / `claim_agent` |
 | Proposer self-deal | Allowed (Q8); **Proposer-claimed** badge |
 | Deliverable theater | Public history; reviewer reject + reclaim cooldown |
 | Reject-loop grief | Same-project 30-day cooldown after `final_rejected` |
@@ -59,14 +61,14 @@ Window starts at **claim floor met**, not at propose time. Bond is verified **sy
 
 ### Delete-account tombstone
 
-`deleteProfile` removes profile, username, watches, and pending-user index, but **retains** `claimledger:{userId}` (opaque audit / bond history). Orphan keys such as `claimowner:*`, `claimactive:*`, and `claimpending:*` are left for the builder-claim lifecycle cron to clear when windows expire or challenges are accepted. Open `claimappuser:` keys should be cleared on withdraw/award/reject.
+`deleteProfile` removes profile, username, watches, and pending-user index, but **retains** `claimledger:{userId}` (opaque audit / bond history). Orphan keys such as `claimowner:*`, `claimactive:*`, and `claimpending:*` are left for the builder-claim lifecycle cron to clear when windows expire or challenges are accepted. Open `claimappuser:` keys (human session **and** `claimappuser:github-org:{login}`) are cleared on withdraw/award/reject/lose.
 
 ## Bond economics
 
 - Amount: `CLAIM_BOND_SATS` (default 10,000); escalates to **2×** after `CLAIM_ABUSE_ESCALATION_THRESHOLD` expired/abandoned outcomes without a completion.
 - Destination: fee address (same as submission fee unless published separately).
 - Not project escrow — refunds are ops batches, not automatic clawbacks from bounty UTXOs.
-- Winner: locked for delivery lifecycle. Losers / rejected / withdrawn: refundable index.
+- Winner: locked for delivery lifecycle (forfeited on final reject / rebuttal expiry). Losers / application rejected / withdrawn: refundable index seeded from application payout address. Apply wizard requires network-valid refund/payout address before bond pay.
 
 ## Explicitly out of scope
 

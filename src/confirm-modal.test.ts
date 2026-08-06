@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { confirmAction } from "./confirm-modal";
+import { confirmAction, promptText } from "./confirm-modal";
 
 describe("confirmAction", () => {
   afterEach(() => {
@@ -32,5 +32,34 @@ describe("confirmAction", () => {
       .querySelectorAll<HTMLButtonElement>("[data-confirm-cancel]")[1]
       ?.click();
     await expect(pending).resolves.toBe(false);
+  });
+});
+
+describe("promptText", () => {
+  afterEach(() => {
+    document.querySelectorAll(".confirm-modal").forEach((el) => el.remove());
+  });
+
+  it("resolves trimmed value on confirm", async () => {
+    const pending = promptText({
+      title: "Refund address",
+      body: "Set address",
+      defaultValue: "  tb1qabc  ",
+    });
+    document
+      .querySelector<HTMLButtonElement>("[data-confirm-ok]")
+      ?.click();
+    await expect(pending).resolves.toBe("tb1qabc");
+  });
+
+  it("resolves null on cancel", async () => {
+    const pending = promptText({
+      title: "Refund address",
+      body: "Set address",
+    });
+    document
+      .querySelectorAll<HTMLButtonElement>("[data-confirm-cancel]")[1]
+      ?.click();
+    await expect(pending).resolves.toBeNull();
   });
 });

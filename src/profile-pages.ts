@@ -17,7 +17,52 @@ import {
   type AuthUser,
   type ProposalNotification,
 } from "./auth";
+import {
+  fetchMyClaims,
+  fetchWatches,
+  isOpenToClaim,
+  type ClaimLedgerView,
+} from "./builder";
 import { BITCOIN_NETWORK, CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import {
+  applyCreditPreferencesToFields,
+  bindCreditPreferenceGates,
+  creditPreferenceFieldsHtml,
+  loadStoredCreditPreferences,
+  readCreditPreferences,
+  saveStoredCreditPreferences,
+  syncStoredCreditPreferencesFromProfile,
+} from "./funder-credit";
+import {
+  listAllPublicProposals,
+  listListedProposals,
+  proposalsForProfile,
+} from "./github";
+import { nostrAccountLink, socialAccountLink } from "./icons";
+import { addressBalanceSats } from "./mempool";
+import {
+  notificationTargetHref,
+  notificationTypeLabel,
+} from "./notify-labels";
+import { hydrateAvatarSlots } from "./profile-avatars";
+import { fetchReviewerMe } from "./reviewers";
+import {
+  applySeo,
+  href,
+  navigate,
+  orgHref,
+  proposalHref,
+  seoForRoute,
+} from "./router";
+import {
+  MAX_SKILLS_TAGS,
+  SKILLS_PRESET_TAGS,
+  SUGGESTED_SKILLS_TAGS,
+} from "./skills-tags";
+import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
+import { bindTagInput, tagInputHtml } from "./tag-input";
+import type { ProfileLink, Proposal } from "./types";
+import { escapeHtml, formatSats } from "./util";
 
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
@@ -28,47 +73,6 @@ function txExplorerLink(txid: string, label?: string): string {
   const short = `${txid.slice(0, 12)}…`;
   return `<a class="mono" href="${escapeHtml(`${MEMPOOL_WEB}/tx/${encodeURIComponent(txid)}`)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label || short)}</a>`;
 }
-import {
-  fetchMyClaims,
-  fetchWatches,
-  isOpenToClaim,
-  type ClaimLedgerView,
-} from "./builder";
-import {
-  applyCreditPreferencesToFields,
-  bindCreditPreferenceGates,
-  creditPreferenceFieldsHtml,
-  loadStoredCreditPreferences,
-  readCreditPreferences,
-  saveStoredCreditPreferences,
-  syncStoredCreditPreferencesFromProfile,
-} from "./funder-credit";
-import { nostrAccountLink, socialAccountLink } from "./icons";
-import { fetchReviewerMe } from "./reviewers";
-import {
-  listAllPublicProposals,
-  listListedProposals,
-  proposalsForProfile,
-} from "./github";
-import { addressBalanceSats } from "./mempool";
-import {
-  MAX_SKILLS_TAGS,
-  SKILLS_PRESET_TAGS,
-  SUGGESTED_SKILLS_TAGS,
-} from "./skills-tags";
-import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
-import { bindTagInput, tagInputHtml } from "./tag-input";
-import type { ProfileLink, Proposal } from "./types";
-import { hydrateAvatarSlots } from "./profile-avatars";
-import {
-  applySeo,
-  href,
-  navigate,
-  orgHref,
-  proposalHref,
-  seoForRoute,
-} from "./router";
-import { escapeHtml, formatSats } from "./util";
 
 export type ShellContext = {
   user: AuthUser | null;
@@ -87,31 +91,11 @@ type AccountTab =
   | "proposals"
   | "notifications";
 
-function notificationLabel(type: string): string {
-  const labels: Record<string, string> = {
-    listed: "Project listed",
-    floor_reached: "Claim floor reached",
-    target_reached: "Funding target reached",
-    claimed: "Project claimed",
-    claim_application: "Bonded applicant",
-    claim_application_awarded: "Claim awarded to you",
-    claim_application_rejected: "Application rejected",
-    claim_application_lost: "Another applicant won",
-    workboard_message: "New workboard message",
-    claim_window_grace: "Pick an applicant (grace)",
-    claim_auto_awarded: "Auto-awarded earliest bond",
-    checkpoint_submitted: "Checkpoint submitted",
-    deliverable_submitted: "Deliverable submitted",
-    completed: "Project completed",
-    bond_refundable: "Bond refundable",
-    bond_refunded: "Bond refunded",
-    refund_registered: "Refund address registered",
-    contrib_refunded: "Contribution refunded",
-    release_queued: "Escrow release queued",
-    release_broadcast: "Escrow release broadcast",
-    disburse_chat: "Keyholder coordination message",
-  };
-  return labels[type] || type.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+function notificationLabel(
+  type: string,
+  payload?: { needs_address?: boolean; needs_refund_address?: boolean },
+): string {
+  return notificationTypeLabel(type, payload);
 }
 
 function fundsPaneHtml(): string {
@@ -197,7 +181,7 @@ function claimsPaneHtml(
   if (!hasAny) {
     return `<div class="empty-state"><div class="empty-state-inner">
       <p class="empty-state-title">No claims yet</p>
-      <p class="empty-state-body">When escrow hits the claim floor, claim a project from its page.</p>
+      <p class="empty-state-body">When escrow hits the claim floor, apply with a bond from the project page.</p>
       <a class="btn" href="${href("/")}">Browse projects</a>
     </div></div>`;
   }
@@ -315,7 +299,7 @@ const ORG_ATTESTATION_MS = 90 * 86_400_000;
 
 function linkedOrgsPanelHtml(user: AuthUser): string {
   if (!user.id.startsWith("github:") || !user.github) {
-    return `<div class="identity-panel account-orgs">
+    return `<div class="identity-panel account-orgs" id="account-orgs">
       <p class="hint identity-panel-label">GitHub orgs for claims</p>
       <p class="hint">Sign in with GitHub to link orgs you admin. Org claims are not available for Nostr/X-only sessions.</p>
     </div>`;
@@ -343,7 +327,7 @@ function linkedOrgsPanelHtml(user: AuthUser): string {
       </li>`;
     })
     .join("");
-  return `<div class="identity-panel account-orgs">
+  return `<div class="identity-panel account-orgs" id="account-orgs">
       <p class="hint identity-panel-label">GitHub orgs for claims</p>
       <p class="hint">Resync refreshes admin membership and avatars (<code>read:org</code>). Apply-as-org only offers linked orgs. Re-sync every 90 days.</p>
       ${
@@ -366,7 +350,7 @@ export async function renderAccount(
     app.innerHTML = ctx.shell(`
       <section class="wrap detail">
         <h1>Account</h1>
-        <p class="lede">Sign in to watch projects, claim funded work, and manage your profile.</p>
+        <p class="lede">Sign in to watch projects, apply for funded work, and manage your profile.</p>
         ${loginChoicesHtml(undefined, loginReturn)}
       </section>
     `);
@@ -565,7 +549,7 @@ export async function renderAccount(
                     );
                   return `<li>
                     <a href="${href}">${escapeHtml(title)}</a>
-                    <span class="pill">${open ? "Open to claim" : formatSats(bal ?? 0)}</span>
+                    <span class="pill">${open ? "Open to apply" : formatSats(bal ?? 0)}</span>
                   </li>`;
                 })
                 .join("")}</ul>`
@@ -612,10 +596,13 @@ export async function renderAccount(
               </div></div>`
             : `<ul class="work-list notify-list">${notifications
                 .map((notification) => {
-                  const label = notificationLabel(notification.type);
+                  const label = notificationLabel(
+                    notification.type,
+                    notification.payload,
+                  );
                   const when = formatNotifyWhen(notification.created_at);
                   return `<li class="notify-row ${notification.read_at ? "is-read" : "is-new"}">
-                    <a class="notify-main" href="${proposalHref(notification.proposal_path, notification.proposal_id)}">
+                    <a class="notify-main" href="${notificationTargetHref(notification)}">
                       <span class="notify-title">${escapeHtml(label)}</span>
                       <span class="notify-id mono">${escapeHtml(notification.proposal_id)}</span>
                     </a>
@@ -686,6 +673,9 @@ export async function renderAccount(
             refund_address?: string;
             refund_txid?: string;
             address_frozen?: boolean;
+            needs_refund_address?: boolean;
+            claimer_login?: string;
+            claimer_type?: string;
           }[];
         };
         bondsEl.innerHTML = data.bonds.length
@@ -694,9 +684,28 @@ export async function renderAccount(
                 (b) => `<li class="work-row">
                 <div>
                   <a href="${href(`/p/${encodeURIComponent(b.proposal_id)}`)}">${escapeHtml(b.proposal_id)}</a>
+                  ${
+                    b.claimer_type === "org" && b.claimer_login
+                      ? `<span class="pill">@${escapeHtml(b.claimer_login)}</span>`
+                      : ""
+                  }
                   <span class="pill">${escapeHtml(b.status)}</span>
+                  ${
+                    b.needs_refund_address
+                      ? `<span class="pill">needs address</span>`
+                      : ""
+                  }
                   <span class="muted">${formatSats(b.amount_sats)}</span>
                   <p class="muted">Bond ${txExplorerLink(b.txid)}</p>
+                  ${
+                    b.status === "forfeited" || b.status === "locked"
+                      ? `<p class="muted">${
+                          b.status === "forfeited"
+                            ? "Forfeited (expired, abandoned, or final reject) — not refundable."
+                            : "Locked while the claim is active or in rebuttal."
+                        }</p>`
+                      : ""
+                  }
                   ${
                     b.status === "refundable"
                       ? `<label class="sr-only" for="bond-addr-${escapeHtml(b.proposal_id)}">Refund address</label>
@@ -706,7 +715,11 @@ export async function renderAccount(
                          ${
                            b.address_frozen
                              ? `<p class="muted">Address frozen for keyholder batch.</p>`
-                             : `<button type="button" class="btn ghost" data-bond-addr="${escapeHtml(b.proposal_id)}">Save address</button>`
+                             : `<button type="button" class="btn ghost" data-bond-addr="${escapeHtml(b.proposal_id)}">${
+                                 b.needs_refund_address
+                                   ? "Set refund address"
+                                   : "Save address"
+                               }</button>`
                          }`
                       : ""
                   }
@@ -742,14 +755,20 @@ export async function renderAccount(
               );
               const body = (await res.json().catch(() => ({}))) as {
                 error?: string;
+                package_error?: boolean;
+                note?: string;
               };
               if (msgEl) {
                 msgEl.hidden = false;
-                msgEl.textContent = res.ok
-                  ? "Refund address saved."
-                  : body.error || "Could not save.";
+                msgEl.textContent =
+                  res.ok || body.package_error
+                    ? body.package_error
+                      ? body.note ||
+                        "Address saved, but the keyholder package failed — try again."
+                      : "Refund address saved."
+                    : body.error || "Could not save.";
               }
-              if (res.ok) void loadFundsPane();
+              if (res.ok || body.package_error) void loadFundsPane();
             });
           },
         );
@@ -764,8 +783,14 @@ export async function renderAccount(
             proposal_id: string;
             amount_sats: number;
             status: string;
+            rail?: string;
+            swap_id?: string;
+            txid?: string;
+            vout?: number;
             refund_address?: string;
             refund_txid?: string;
+            needs_address?: boolean;
+            non_refundable_dust?: boolean;
           }[];
         };
         refundsEl.innerHTML = data.refunds.length
@@ -774,20 +799,32 @@ export async function renderAccount(
                 (r) => `<li class="work-row">
                 <a href="${href(`/p/${encodeURIComponent(r.proposal_id)}`)}">${escapeHtml(r.proposal_id)}</a>
                 <span class="pill">${escapeHtml(r.status)}</span>
+                ${r.rail ? `<span class="pill">${escapeHtml(r.rail)}</span>` : ""}
                 <span class="muted">${formatSats(r.amount_sats)}</span>
+                ${
+                  r.swap_id
+                    ? `<p class="mono muted">swap ${escapeHtml(r.swap_id)}</p>`
+                    : r.txid != null
+                      ? `<p class="mono muted">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout ?? 0}</p>`
+                      : ""
+                }
                 ${
                   r.refund_txid
                     ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>`
-                    : r.refund_address
-                      ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
-                      : `<p class="muted">Register on the proposal page when status is refunding.</p>`
+                    : r.non_refundable_dust
+                      ? `<p class="muted">Below dust — not packaged for refund.</p>`
+                      : r.refund_address
+                        ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
+                        : `<p class="muted">Needs address — register on the proposal when status is refunding${
+                            r.rail === "lightning" ? " (use your swap id)" : ""
+                          }.</p>`
                 }
               </li>`,
               )
               .join("")}</ul>`
           : `<div class="empty-state"><div class="empty-state-inner">
               <p class="empty-state-title">No contribution refunds</p>
-              <p class="empty-state-body">If a project enters refunding, register your address on the proposal page. Paid refunds appear here with a txid.</p>
+              <p class="empty-state-body">If a project enters refunding, register your address on the proposal page (on-chain outpoint or Lightning swap id). Paid refunds appear here with a txid.</p>
             </div></div>`;
       }
     }

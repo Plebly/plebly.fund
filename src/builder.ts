@@ -1,3 +1,4 @@
+import { authFetch } from "./auth";
 import {
   CLAIM_BOND_SATS,
   CLAIM_FLOOR_SATS,
@@ -54,6 +55,9 @@ export type ClaimStatus = {
     rejected: number;
     abandoned: number;
   } | null;
+  claim_extension_used?: boolean;
+  review_decision_open?: boolean;
+  can_challenge_abandoned?: boolean;
 };
 
 export type ClaimLedgerView = {
@@ -296,7 +300,7 @@ export async function fetchClaimStatus(
   proposalPath: string,
 ): Promise<ClaimStatus | null> {
   if (!WORKERS_API) return null;
-  const res = await fetch(
+  const res = await authFetch(
     `${API()}/claims/${encodeURIComponent(proposalPath)}`,
   );
   if (!res.ok) return null;
@@ -394,6 +398,7 @@ export async function submitClaim(input: {
   proposal_id: string;
   bond_sats?: number;
   awarded?: boolean;
+  unwound?: boolean;
   state?: string;
 }> {
   const res = await fetch(`${API()}/claims`, {
@@ -408,6 +413,7 @@ export async function submitClaim(input: {
     proposal_id?: string;
     bond_sats?: number;
     awarded?: boolean;
+    unwound?: boolean;
     state?: string;
     error?: string;
     pending?: { pr_url?: string };
@@ -424,6 +430,7 @@ export async function submitClaim(input: {
     proposal_id: data.proposal_id || "",
     bond_sats: data.bond_sats,
     awarded: data.awarded,
+    unwound: data.unwound,
     state: data.state,
   };
 }

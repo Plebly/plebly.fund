@@ -110,7 +110,7 @@ describe("proposal UI critical render helpers", () => {
     expect(statusLabel("abandoned_vote")).toBe("abandoned vote");
     expect(statusClass("abandoned_vote")).toBe("status-active");
     expect(statusClass("refunding")).toBe("status-bad");
-    expect(statusClass("underfunded")).toBe("status-bad");
+    expect(statusClass("underfunded")).toBe("status-active");
     expect(statusClass("in_review")).toBe("status-active");
     expect(statusClass("rejected")).toBe("status-bad");
   });
@@ -147,11 +147,29 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain("Sparrow");
   });
 
+  it("lifecycle banners open contributor ballot for underfunded with escrow", () => {
+    const withBal = proposalLifecycleBannersHtml(
+      { status: "underfunded", milestones: [] } as Proposal,
+      50_000,
+    );
+    expect(withBal).toContain("Ballot open");
+    expect(withBal).toContain("underfunded");
+
+    const empty = proposalLifecycleBannersHtml(
+      { status: "underfunded", milestones: [] } as Proposal,
+      0,
+    );
+    expect(empty).toContain("Underfunded");
+    expect(empty).toContain("empty escrow");
+    expect(empty).not.toContain("Ballot open");
+  });
+
   it("refundRegisterHtml includes status host for signed-in funder", () => {
     const html = refundRegisterHtml("p1");
     expect(html).toContain("refund-status");
     expect(html).toContain("refund-register-form");
-    expect(html).toContain("Account → Funds");
+    expect(html).toContain("refund_rail");
+    expect(html).toContain("refund-swap-id");
   });
 
   it("lifecycle banners cover direct delivery window expiry", () => {
@@ -331,7 +349,7 @@ describe("proposal UI critical render helpers", () => {
     expect(isPastFundingTarget(1_000_000, null)).toBe(false);
 
     const pastFloor = fundingProgressHtml(50_000, 10_000, 100_000);
-    expect(pastFloor).toContain("Open to claim");
+    expect(pastFloor).toContain("Open to apply");
     expect(pastFloor).not.toContain("Overfunded");
 
     const pastTarget = fundingProgressHtml(250_000, 10_000, 100_000);
@@ -340,7 +358,7 @@ describe("proposal UI critical render helpers", () => {
     expect(pastTarget).not.toContain("claim floor");
 
     const noTarget = fundingProgressHtml(50_000, 10_000, null);
-    expect(noTarget).toContain("Open to claim");
+    expect(noTarget).toContain("Open to apply");
     expect(noTarget).not.toContain("Overfunded");
   });
 

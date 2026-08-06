@@ -20,6 +20,8 @@ export type FeePayOpts = {
   txidName?: string;
   /** Start on the txid step if a value is already present. */
   initialTxid?: string;
+  /** Submission fee vs claim bond copy (default fee). */
+  kind?: "fee" | "bond";
 };
 
 function networkLabel(): string {
@@ -35,6 +37,8 @@ export function feePayHtml(opts: FeePayOpts): string {
   const amount = formatSats(opts.amountSats);
   const addr = opts.address?.trim() || "";
   const hasAddr = Boolean(addr);
+  const kind = opts.kind === "bond" ? "bond" : "fee";
+  const noun = kind === "bond" ? "bond" : "fee";
   const nameAttr = opts.txidName
     ? ` name="${escapeHtml(opts.txidName)}"`
     : "";
@@ -44,7 +48,7 @@ export function feePayHtml(opts: FeePayOpts): string {
 
   const payBody = hasAddr
     ? `<div class="fee-pay-qr-wrap">
-        <img class="donate-qr" id="${escapeHtml(opts.id)}-qr" alt="QR code for fee payment" width="168" height="168" />
+        <img class="donate-qr" id="${escapeHtml(opts.id)}-qr" alt="QR code for ${escapeHtml(noun)} payment" width="168" height="168" />
       </div>
       <p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong></p>
       ${signetPayNoteHtml("fee")}
@@ -60,19 +64,19 @@ export function feePayHtml(opts: FeePayOpts): string {
       <div class="fee-pay-nav">
         <button type="button" class="btn ghost" id="${escapeHtml(opts.id)}-manual">Enter txid manually</button>
       </div>`
-    : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong> to the published fee address.</p>
+    : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong> to the published ${escapeHtml(noun)} address.</p>
       ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${opts.note}</p>` : ""}
-      <p class="field-hint">Fee address is not available from the API yet. Pay using the published address, then continue.</p>
+      <p class="field-hint">${kind === "bond" ? "Bond" : "Fee"} address is not available from the API yet. Pay using the published address, then continue.</p>
       <div class="fee-pay-nav">
         <button type="button" class="btn ghost" id="${escapeHtml(opts.id)}-manual">Enter txid manually</button>
       </div>`;
 
-  return `<div class="fee-pay" id="${escapeHtml(opts.id)}" data-amount="${opts.amountSats}" data-address="${escapeHtml(addr)}">
-    <ol class="fee-pay-progress" aria-label="Fee payment steps">
+  return `<div class="fee-pay" id="${escapeHtml(opts.id)}" data-amount="${opts.amountSats}" data-address="${escapeHtml(addr)}" data-kind="${kind}">
+    <ol class="fee-pay-progress" aria-label="${escapeHtml(noun)} payment steps">
       <li class="fee-pay-progress-item is-current" data-progress="pay">
         <span class="fee-pay-progress-num">1</span>
-        <span>Send fee</span>
+        <span>Send ${escapeHtml(noun)}</span>
       </li>
       <li class="fee-pay-progress-item" data-progress="txid">
         <span class="fee-pay-progress-num">2</span>
@@ -81,7 +85,7 @@ export function feePayHtml(opts: FeePayOpts): string {
     </ol>
 
     <div class="fee-pay-step" data-step="pay" id="${escapeHtml(opts.id)}-step-pay">
-      <h4 class="fee-pay-step-title">1. Send the fee</h4>
+      <h4 class="fee-pay-step-title">1. Send the ${escapeHtml(noun)}</h4>
       ${payBody}
     </div>
 
@@ -152,6 +156,8 @@ export async function bindFeePay(
 
   let amountSats = Number(el.dataset.amount || "0");
   const address = el.dataset.address || "";
+  const kind = el.dataset.kind === "bond" ? "bond" : "fee";
+  const noun = kind === "bond" ? "Bond" : "Fee";
   let detected = false;
   let stopWatch: (() => void) | null = null;
 
@@ -175,8 +181,8 @@ export async function bindFeePay(
     setFeeStatus(
       statusEl,
       confirmed
-        ? `Fee payment detected · ${formatSats(amountSats)}`
-        : `Fee payment seen · confirming…`,
+        ? `${noun} payment detected · ${formatSats(amountSats)}`
+        : `${noun} payment seen · confirming…`,
       confirmed ? "ok" : "live",
     );
     if (txidTitle) txidTitle.textContent = "2. Payment detected";

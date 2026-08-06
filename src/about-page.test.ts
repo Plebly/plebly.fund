@@ -1,5 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bindAboutPage } from "./about-page";
+import { aboutTeamMembersHtml, bindAboutPage } from "./about-page";
+
+describe("aboutTeamMembersHtml", () => {
+  it("links members to Plebly /u profiles", () => {
+    const html = aboutTeamMembersHtml([
+      { login: "alice", avatar_url: "https://example.com/a.png" },
+      { login: "bob", avatar_url: "" },
+    ]);
+    expect(html).toContain("/u/alice");
+    expect(html).toContain("/u/bob");
+    expect(html).toContain("@alice");
+    expect(html).not.toContain("github.com/alice");
+  });
+
+  it("shows empty copy when there are no members", () => {
+    expect(aboutTeamMembersHtml([])).toContain("No public members");
+  });
+});
 
 describe("bindAboutPage", () => {
   afterEach(() => {

@@ -111,11 +111,15 @@ function chipPayload(
     };
   }
 
+  // Legacy: catalog sometimes counted pre-bond apps; apply is sync-bonded now.
   if (total != null && total > 0) {
+    const label =
+      total === 1 ? "1 applying" : `${total} applying`;
     return {
-      label: `${total} awaiting bond`,
-      title: "Applications awaiting bond",
+      label,
+      title: "Builders applied with bond; proposer picks",
       chipKind: "static",
+      bonded: total,
     };
   }
 

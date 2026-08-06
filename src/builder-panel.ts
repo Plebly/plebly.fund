@@ -30,8 +30,9 @@ import {
 } from "./claim-mode-ui";
 import { BITCOIN_NETWORK, WORKERS_API } from "./config";
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
-import { authFetch, loginChoicesHtml } from "./auth";
+import { authFetch, loginChoicesHtml, updateProfile } from "./auth";
 import type { AuthUser } from "./auth";
+import { confirmAction, promptText } from "./confirm-modal";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
 import {
@@ -66,10 +67,12 @@ export function claimerIdentityHtml(
   return `${avatarSlotHtml(handle)}<a href="${profileHref(handle)}"><strong>${escapeHtml(handle)}</strong></a>`;
 }
 
-function sessionIsClaimer(
+/** True when session is the claim ops agent (claimowner), not every org co-admin. */
+export function sessionIsClaimer(
   user: AuthUser | null,
   claimer: string | null | undefined,
   claimerType?: string | null,
+  claimAgent?: string | null,
 ): boolean {
   if (!user || !claimer) return false;
   if (
@@ -80,20 +83,13 @@ function sessionIsClaimer(
     return true;
   }
   if (claimerType === "org") {
-    return Boolean(findFreshOrg(user, claimer));
+    const agent = (claimAgent || "").replace(/^@/, "").trim().toLowerCase();
+    if (!agent) return false;
+    const gh = (user.github || "").replace(/^@/, "").trim().toLowerCase();
+    const un = (user.username || "").replace(/^@/, "").trim().toLowerCase();
+    return agent === gh || agent === un;
   }
   return false;
-}
-
-function findFreshOrg(
-  user: AuthUser,
-  orgLogin: string,
-): GithubOrgAttestation | null {
-  const want = orgLogin.replace(/^@/, "").trim().toLowerCase();
-  for (const o of freshLinkedOrgs(user)) {
-    if (o.login.toLowerCase() === want) return o;
-  }
-  return null;
 }
 
 const ORG_ATTESTATION_MS = 90 * 86_400_000;
@@ -191,8 +187,9 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
       graceNote = `<p class="builder-status claim-grace-note muted">Decision window open — no bonded applicants to auto-award.</p>`;
     }
   }
+  // Bond is verified at apply — ignore legacy pending_bond rows in the open list.
   const visible = apps.applications.filter((a) =>
-    ["pending_bond", "bonded", "awarded"].includes(a.bond_status),
+    ["bonded", "awarded"].includes(a.bond_status),
   );
   const rows =
     visible.length === 0
@@ -206,20 +203,18 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
                 ? a.claim_bond_txid
                   ? `<a href="${escapeHtml(mempoolTxUrl(a.claim_bond_txid))}" target="_blank" rel="noreferrer">Bond paid</a>`
                   : "Bond paid"
-                : a.bond_status === "pending_bond"
-                  ? "Awaiting bond"
-                  : escapeHtml(a.bond_status.replace(/_/g, " "));
+                : escapeHtml(a.bond_status.replace(/_/g, " "));
             const proposerActions =
               apps.is_proposer &&
               apps.claim_mode === "proposer_select" &&
               a.bond_status === "bonded" &&
               !apps.awarded_application_id
-                ? `<button type="button" class="btn" data-accept-app="${escapeHtml(a.id)}">Accept</button>
+                ? `<button type="button" class="btn" data-accept-app="${escapeHtml(a.id)}">Award</button>
                     <button type="button" class="btn ghost" data-reject-app="${escapeHtml(a.id)}">Reject</button>`
                 : "";
             const mineWithdraw =
               a.is_mine &&
-              (a.bond_status === "bonded" || a.bond_status === "pending_bond") &&
+              a.bond_status === "bonded" &&
               !apps.awarded_application_id
                 ? `<button type="button" class="btn ghost" data-withdraw-app="${escapeHtml(a.id)}">Withdraw</button>`
                 : "";
@@ -239,7 +234,7 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
           .join("")}</ul>`;
   return `<div class="claim-apps" id="claim-apps-panel">
     <p class="builder-status"><strong>${escapeHtml(modeLabel)}</strong>${timer}<br/>
-    ${apps.summary.total} applicants · ${apps.summary.bonded} bonds confirmed · ${apps.summary.pending_bond} awaiting payment</p>
+    ${apps.summary.bonded} bonded applicant${apps.summary.bonded === 1 ? "" : "s"}</p>
     ${graceNote}
     ${rows}
   </div>`;
@@ -335,9 +330,10 @@ export function builderPanelHtml(
       <div class="site-modal-card builder-claim-card" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title">
         <button type="button" class="site-modal-close" id="claim-close" aria-label="Close">${solidIcon("xmark")}</button>
         <h3 id="claim-modal-title">Apply with bond</h3>
+        <p id="claim-modal-step" class="builder-claim-hint muted">Step 1 of 4 — Who</p>
         <p id="claim-modal-awareness" class="builder-claim-hint">Review current applicants before paying the bond.</p>
 
-        <div class="claim-modal-section">
+        <div class="claim-modal-section" id="claim-step-who">
           <fieldset class="field">
             <span>Apply as</span>
             <label class="radio-row"><input type="radio" name="claimer_type" value="individual" checked /> Me (individual)</label>
@@ -348,19 +344,26 @@ export function builderPanelHtml(
                 <option value="">Select a linked org…</option>
               </select>
               <p class="builder-claim-hint muted" id="claim-org-hint">
-                Resync orgs on <a href="/account">Account</a> (GitHub <code>read:org</code>).
+                Resync orgs on <a href="${href("/account", "", "#account-orgs")}">Account</a> (GitHub <code>read:org</code>).
               </p>
             </div>
           </fieldset>
         </div>
 
-        <div class="claim-modal-section">
-          <label class="donate-amount-label" for="claim-payout">Payout address</label>
-          <p class="builder-claim-hint muted">Where keyholders send escrow when they release it. Plebly never moves funds.</p>
-          <input id="claim-payout" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
+        <div class="claim-modal-section" id="claim-step-refund" hidden>
+          <label class="donate-amount-label" for="claim-payout" id="claim-payout-label">Bond refund + claim payout address</label>
+          <p class="builder-claim-hint muted" id="claim-payout-hint">
+            Keyholders return your bond here if you withdraw or lose, and send escrow here if you complete.
+            This is not the fee/bond pay address. Plebly never moves funds.
+          </p>
+          <input id="claim-payout" class="donate-amount mono" type="text" placeholder="${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}" />
+          <label class="radio-row" style="margin-top:0.75rem">
+            <input type="checkbox" id="claim-payout-ack" />
+            I control this address and can receive on ${BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"}.
+          </label>
         </div>
 
-        <div class="claim-modal-section" id="claim-bond-slot"></div>
+        <div class="claim-modal-section" id="claim-bond-slot" hidden></div>
 
         <div class="claim-modal-section" id="claim-finalize" hidden>
           <label class="donate-amount-label" for="claim-note">Note (optional)</label>
@@ -368,6 +371,8 @@ export function builderPanelHtml(
         </div>
         <p class="builder-msg" id="claim-modal-msg" hidden></p>
         <div class="donate-actions claim-modal-actions">
+          <button type="button" class="btn ghost" id="claim-back" hidden>Back</button>
+          <button type="button" class="btn" id="claim-next">Continue</button>
           <button type="button" class="btn" id="claim-confirm" hidden>Submit application</button>
           <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
         </div>
@@ -376,7 +381,20 @@ export function builderPanelHtml(
   </div>`;
 }
 
-function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
+function fundsAccountHref(): string {
+  return href("/account", "?tab=funds");
+}
+
+function fundsAccountLinkHtml(label = "Account → Funds"): string {
+  return `<a href="${fundsAccountHref()}">${escapeHtml(label)}</a>`;
+}
+
+function setMsg(
+  el: HTMLElement | null,
+  text: string | null,
+  cls = "",
+  opts?: { html?: boolean },
+): void {
   if (!el) return;
   if (!text) {
     el.hidden = true;
@@ -385,7 +403,8 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
     return;
   }
   el.hidden = false;
-  el.textContent = text;
+  if (opts?.html) el.innerHTML = text;
+  else el.textContent = text;
   el.className = `builder-msg ${cls}`.trim();
 }
 
@@ -517,7 +536,12 @@ function renderStatusBody(
     status.claimed_at,
     status.claim_window_ends_at,
   );
-  const isYou = sessionIsClaimer(user, status.claimer, status.claimer_type);
+  const isYou = sessionIsClaimer(
+    user,
+    status.claimer,
+    status.claimer_type,
+    status.claim_agent,
+  );
   const showWb =
     isProposer &&
     (status.state === "claimed" || status.state === "in_review");
@@ -537,11 +561,26 @@ function renderStatusBody(
     days != null
       ? ` · ${days} day${days === 1 ? "" : "s"} left`
       : "";
-  const extensionTools = isYou
-    ? `<div class="builder-extension">
+  const extensionTools =
+    isYou && !status.claim_extension_used
+      ? `<div class="builder-extension">
         <button type="button" class="btn ghost" id="builder-request-extension">Request 30-day extension</button>
       </div>`
-    : "";
+      : isYou && status.claim_extension_used
+        ? `<p class="builder-status muted">30-day extension already used.</p>`
+        : "";
+  const deliverableResubmit =
+    isYou && !status.review_decision_open
+      ? `<div class="builder-claim-tools">
+          <button type="button" class="btn" id="builder-deliverable">Resubmit deliverable</button>
+        </div>
+        ${deliverableFormHtml().replace(
+          'class="deliverable-form"',
+          'class="deliverable-form" hidden',
+        )}`
+      : isYou && status.review_decision_open
+        ? `<p class="builder-status muted">Reviewer decision open — wait for tally before resubmitting.</p>`
+        : "";
 
   switch (status.state) {
     case "open":
@@ -565,7 +604,7 @@ function renderStatusBody(
     case "claimed":
       if (isYou) {
         body.innerHTML = `${track}${meta}<p class="builder-status">You claimed this project${windowLabel}.</p>
-        <p class="builder-status muted" id="claim-award-reason"></p>
+        <p class="builder-status muted" id="claim-award-reason" hidden></p>
         ${wbSlot}
         <div id="claim-collab-host"></div>
         <div class="builder-claim-tools">
@@ -583,24 +622,35 @@ function renderStatusBody(
           'class="deliverable-form" hidden',
         )}`;
       } else {
+        const challengeBit = status.can_challenge_abandoned
+          ? `<p class="builder-status muted">You funded this project — you can challenge if the claim looks abandoned.</p>
+        <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`
+          : user
+            ? `<p class="builder-status muted">Confirmed funders can challenge an abandoned claim.</p>`
+            : `<p class="builder-status muted">Confirmed funders can challenge an abandoned claim after signing in.</p>`;
         body.innerHTML = `${track}${meta}<p class="builder-status">Claimed by ${claimerLabel}${windowLabel}.</p>
-        <p class="builder-status muted" id="claim-award-reason"></p>
+        <p class="builder-status muted" id="claim-award-reason" hidden></p>
         ${wbSlot}
         <div id="claim-collab-host"></div>
-        <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
+        ${challengeBit}`;
       }
       break;
     case "in_review":
       body.innerHTML = `${track}${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${claimerLabel}` : ""
-      }${windowLabel}. AI triage finished. Reviewers confirm in the panel below.</p>
+      }${windowLabel}. AI triage finished.</p>
+      <p class="builder-status muted">Next: reviewers confirm the deliverable in the <a href="#review-panel">review panel</a>.</p>
       ${wbSlot}
-      ${isYou ? extensionTools : ""}`;
+      ${isYou ? `${deliverableResubmit}${extensionTools}` : ""}`;
       break;
     case "completed":
       body.innerHTML = `${track}${meta}<p class="builder-status">Completed${
         status.claimer ? ` · ${claimerLabel}` : ""
-      }. Fulfiller earns a reviewer seat. Escrow release is by keyholders — Plebly never moves funds.</p>
+      }. ${
+        status.claimer_type === "org" && status.claim_agent
+          ? `Agent @${escapeHtml(status.claim_agent)} earns a reviewer seat.`
+          : "Fulfiller earns a reviewer seat."
+      } Escrow release is by keyholders — Plebly never moves funds.</p>
       ${wbSlot}`;
       break;
     default:
@@ -763,10 +813,25 @@ export async function bindBuilderPanel(
   }
 
   let feePay: FeePayBinding | null = null;
+  type ClaimWizardStep = "who" | "refund" | "bond" | "submit";
+  let claimStep: ClaimWizardStep = "who";
+  const stepWho = panel.querySelector<HTMLElement>("#claim-step-who");
+  const stepRefund = panel.querySelector<HTMLElement>("#claim-step-refund");
+  const stepLabel = panel.querySelector<HTMLElement>("#claim-modal-step");
+  const claimNext = panel.querySelector<HTMLButtonElement>("#claim-next");
+  const claimBack = panel.querySelector<HTMLButtonElement>("#claim-back");
+  const payoutAck = panel.querySelector<HTMLInputElement>("#claim-payout-ack");
+
+  const networkHrp = BITCOIN_NETWORK === "signet" ? "tb1" : "bc1";
+  const payoutLooksValid = (addr: string): boolean =>
+    new RegExp(`^${networkHrp}[a-z0-9]{20,90}$`, "i").test(addr.trim());
 
   const syncClaimFeeStep = (step: "pay" | "txid") => {
-    if (finalize) finalize.hidden = step !== "txid";
-    if (claimConfirm) claimConfirm.hidden = step !== "txid";
+    if (claimStep !== "bond" && claimStep !== "submit") return;
+    if (step === "txid") {
+      claimStep = "submit";
+      void showClaimStep("submit");
+    }
   };
 
   const mountClaimFeePay = async () => {
@@ -776,18 +841,67 @@ export async function bindBuilderPanel(
       id: "claim-bond",
       amountSats: params.claim_bond_sats,
       address: params.fee_address,
-      note: "Same address as the submission fee · refunded on completion · forfeited on expiry or abandoned checkpoint",
+      kind: "bond",
+      note: "Pay to the published bond address (not your payout). Bond refunds to the address from the previous step · forfeited on expiry or abandoned checkpoint",
     });
     feePay = await bindFeePay(panel, "claim-bond", {
       onStep: syncClaimFeeStep,
     });
-    syncClaimFeeStep("pay");
+    feePay.setStep("pay");
   };
-  await mountClaimFeePay();
+
+  const showClaimStep = async (step: ClaimWizardStep) => {
+    claimStep = step;
+    if (stepWho) stepWho.hidden = step !== "who";
+    if (stepRefund) stepRefund.hidden = step !== "refund";
+    if (bondSlot) bondSlot.hidden = step !== "bond" && step !== "submit";
+    if (finalize) finalize.hidden = step !== "submit";
+    if (claimConfirm) claimConfirm.hidden = step !== "submit";
+    if (claimNext) {
+      claimNext.hidden = step === "submit";
+      claimNext.textContent =
+        step === "bond" ? "I paid — enter txid" : "Continue";
+    }
+    if (claimBack) claimBack.hidden = step === "who";
+    if (stepLabel) {
+      const labels: Record<ClaimWizardStep, string> = {
+        who: "Step 1 of 4 — Who",
+        refund: "Step 2 of 4 — Refund readiness",
+        bond: "Step 3 of 4 — Pay bond",
+        submit: "Step 4 of 4 — Submit",
+      };
+      stepLabel.textContent = labels[step];
+    }
+    const payoutLabel = panel.querySelector("#claim-payout-label");
+    const payoutHint = panel.querySelector("#claim-payout-hint");
+    if (step === "refund" && payoutLabel && payoutHint) {
+      const orgApply =
+        (
+          panel.querySelector(
+            'input[name="claimer_type"]:checked',
+          ) as HTMLInputElement | null
+        )?.value === "org";
+      if (orgApply) {
+        payoutLabel.textContent = "Org bond refund / payout address";
+        payoutHint.textContent =
+          "Saved on this org application (not your personal Account payout). Keyholders return the bond and send escrow here if the claim completes.";
+      } else {
+        payoutLabel.textContent = "Bond refund + claim payout address";
+        payoutHint.textContent =
+          "Keyholders return your bond here if you withdraw or lose, and send escrow here if you complete. This is not the fee/bond pay address. Plebly never moves funds.";
+      }
+    }
+    if (step === "bond" || step === "submit") {
+      if (!bondSlot?.querySelector("#claim-bond")) {
+        await mountClaimFeePay();
+      }
+    }
+  };
 
   if (payoutInput && opts.user?.payout_address) {
     payoutInput.value = opts.user.payout_address;
   }
+  await showClaimStep("who");
 
   const syncHeroClaimChip = (apps: ClaimApplicationsResponse | null) => {
     const html = apps
@@ -832,6 +946,14 @@ export async function bindBuilderPanel(
       btn.addEventListener("click", async () => {
         const id = btn.dataset.acceptApp;
         if (!id) return;
+        const app = apps.applications.find((a) => a.id === id);
+        const login = app?.claimer_login || "this applicant";
+        const ok = await confirmAction({
+          title: "Award claim?",
+          body: `Award @${login}? Their bond stays locked until completion; other bonded applicants become refundable. This opens the claim PR and cannot be undone from the UI.`,
+          confirmLabel: "Award",
+        });
+        if (!ok) return;
         btn.disabled = true;
         try {
           const result = await acceptClaimApplication({
@@ -850,13 +972,27 @@ export async function bindBuilderPanel(
       btn.addEventListener("click", async () => {
         const id = btn.dataset.rejectApp;
         if (!id) return;
+        const app = apps.applications.find((a) => a.id === id);
+        const login = app?.claimer_login || "this applicant";
+        const ok = await confirmAction({
+          title: "Reject applicant?",
+          body: `Reject @${login}? Their bond becomes refundable. This cannot be undone from the UI.`,
+          confirmLabel: "Reject",
+          danger: true,
+        });
+        if (!ok) return;
         btn.disabled = true;
         try {
           await rejectClaimApplication({
             proposal_path: opts.proposal.path,
             application_id: id,
           });
-          setMsg(msg, "Applicant rejected; bond refundable.", "success");
+          setMsg(
+            msg,
+            `Applicant rejected; bond refundable under ${fundsAccountLinkHtml()}.`,
+            "success",
+            { html: true },
+          );
           await refreshStatus();
         } catch (e) {
           setMsg(msg, (e as Error).message, "error");
@@ -868,23 +1004,99 @@ export async function bindBuilderPanel(
       btn.addEventListener("click", async () => {
         const id = btn.dataset.withdrawApp;
         if (!id) return;
-        if (
-          !window.confirm(
-            "Withdraw your application? Your bond becomes refundable.",
-          )
-        ) {
-          return;
-        }
+        const ok = await confirmAction({
+          title: "Withdraw application?",
+          body: "Your bond becomes refundable to the payout address you set at apply. Keyholders batch returns in Sparrow.",
+          confirmLabel: "Withdraw",
+          danger: true,
+        });
+        if (!ok) return;
         btn.disabled = true;
         try {
           await withdrawClaimApplication({
             proposal_path: opts.proposal.path,
             application_id: id,
           });
+          const proposalId = opts.proposal.id;
+          let needsAddr = false;
+          try {
+            const bondsRes = await authFetch(`${WORKERS_API}/claims/bonds/mine`);
+            if (bondsRes.ok) {
+              const data = (await bondsRes.json()) as {
+                bonds?: { proposal_id: string; needs_refund_address?: boolean }[];
+              };
+              needsAddr = Boolean(
+                data.bonds?.find((b) => b.proposal_id === proposalId)
+                  ?.needs_refund_address,
+              );
+            }
+          } catch {
+            /* ignore */
+          }
+          if (needsAddr) {
+            const addr = await promptText({
+              title: "Bond refund address",
+              body: "Required before keyholders can return your bond. Cancel leaves it under Account → Funds.",
+              defaultValue: opts.user?.payout_address || "",
+              placeholder: `${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}…`,
+              confirmLabel: "Save address",
+              validate: (v) =>
+                payoutLooksValid(v)
+                  ? null
+                  : `Enter a valid ${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}… address.`,
+            });
+            if (addr) {
+              const put = await authFetch(
+                `${WORKERS_API}/claims/bonds/${encodeURIComponent(proposalId)}/refund-address`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ refund_address: addr }),
+                },
+              );
+              const putBody = (await put.json().catch(() => ({}))) as {
+                error?: string;
+                package_error?: boolean;
+                note?: string;
+              };
+              if (!put.ok && !putBody.package_error) {
+                setMsg(
+                  msg,
+                  putBody.error ||
+                    `Withdrawn, but refund address failed — set it under ${fundsAccountLinkHtml()}.`,
+                  "error",
+                  { html: true },
+                );
+                await refreshStatus();
+                return;
+              }
+              if (putBody.package_error) {
+                setMsg(
+                  msg,
+                  putBody.note ||
+                    `Withdrawn and address saved, but the keyholder package failed — retry under ${fundsAccountLinkHtml()}.`,
+                  "error",
+                  { html: true },
+                );
+                await refreshStatus();
+                return;
+              }
+            } else {
+              setMsg(
+                msg,
+                `Withdrawn — set your refund address under ${fundsAccountLinkHtml()} before keyholders can pay.`,
+                "success",
+                { html: true },
+              );
+              await refreshStatus();
+              return;
+            }
+          }
           setMsg(
             msg,
-            "Application withdrawn; bond refundable — track it under Account → Funds.",
+            `Application withdrawn; bond refundable — track it under ${fundsAccountLinkHtml()}.`,
             "success",
+            { html: true },
           );
           await refreshStatus();
         } catch (e) {
@@ -895,7 +1107,6 @@ export async function bindBuilderPanel(
         }
       });
     });
-    void apps;
   };
 
   const inviteGithub = async (login: string) => {
@@ -987,6 +1198,16 @@ export async function bindBuilderPanel(
       fetchClaimApplications(opts.proposal.path),
     ]);
     syncHeroClaimChip(apps);
+    if (!status && body) {
+      body.innerHTML = `<p class="builder-status muted">Couldn’t load claim status.</p>
+        <button type="button" class="btn ghost" id="builder-status-retry">Retry</button>`;
+      body
+        .querySelector("#builder-status-retry")
+        ?.addEventListener("click", () => {
+          void refreshStatus();
+        });
+      return;
+    }
     if (status && body) {
       if (!status.claimer_type && opts.proposal.claimer_type) {
         status.claimer_type = opts.proposal.claimer_type;
@@ -1024,7 +1245,7 @@ export async function bindBuilderPanel(
         claimBtn.hidden = true;
       }
       if (apps?.award_reason) {
-        const reasonEl = body.querySelector("#claim-award-reason");
+        const reasonEl = body.querySelector<HTMLElement>("#claim-award-reason");
         if (reasonEl) {
           const label =
             apps.award_reason === "proposer_accept"
@@ -1034,6 +1255,7 @@ export async function bindBuilderPanel(
                 : apps.award_reason === "first_bonded"
                   ? "First bonded"
                   : apps.award_reason;
+          reasonEl.hidden = false;
           reasonEl.textContent = label;
         }
       }
@@ -1042,6 +1264,7 @@ export async function bindBuilderPanel(
           opts.user,
           status.claimer,
           status.claimer_type,
+          status.claim_agent,
         );
         await bindCollaboratorUi(apps, isYou);
       }
@@ -1055,7 +1278,7 @@ export async function bindBuilderPanel(
               : "";
         awareness.textContent = `Mode: ${
           apps.claim_mode === "first_bonded" ? "first bonded wins" : "proposer picks"
-        } · ${apps.summary.bonded} bonded · ${apps.summary.pending_bond} awaiting bond${phaseBit}. Continue?`;
+        } · ${apps.summary.bonded} bonded${phaseBit}. Continue?`;
       }
       bindClaimButton();
       bindDeliverable(refreshStatus);
@@ -1104,8 +1327,9 @@ export async function bindBuilderPanel(
     document.body.classList.remove("modal-open");
     window.removeEventListener("keydown", onClaimEscape);
     setMsg(modalMsg(), null);
-    feePay?.setStep("pay");
-    // Keep watching while modal can reopen; remount resets on next open via setStep.
+    feePay?.stop();
+    if (bondSlot) bondSlot.innerHTML = "";
+    void showClaimStep("who");
     panel.querySelector<HTMLButtonElement>("#builder-claim")?.focus();
   };
 
@@ -1119,8 +1343,8 @@ export async function bindBuilderPanel(
     document.body.classList.add("modal-open");
     window.addEventListener("keydown", onClaimEscape);
     setMsg(modalMsg(), null);
-    feePay?.setStep("pay");
-    payoutInput?.focus();
+    if (payoutAck) payoutAck.checked = false;
+    void showClaimStep("who");
   };
 
   const bindClaimButton = () => {
@@ -1128,7 +1352,7 @@ export async function bindBuilderPanel(
       "click",
       () => {
         if (!opts.user) {
-          requireLogin("Sign in to claim this project.");
+          requireLogin("Sign in to apply for this project.");
           return;
         }
         openClaimModal();
@@ -1143,20 +1367,109 @@ export async function bindBuilderPanel(
     .querySelector("[data-close-claim]")
     ?.addEventListener("click", closeClaimModal);
 
+  claimNext?.addEventListener("click", async () => {
+    setMsg(modalMsg(), null);
+    if (claimStep === "who") {
+      const claimerType =
+        (
+          panel.querySelector(
+            'input[name="claimer_type"]:checked',
+          ) as HTMLInputElement | null
+        )?.value === "org"
+          ? "org"
+          : "individual";
+      const orgLogin =
+        panel.querySelector<HTMLSelectElement>("#claim-org-login")?.value.trim() ||
+        "";
+      if (claimerType === "org" && !orgLogin) {
+        setMsg(
+          modalMsg(),
+          "Select a linked GitHub org (or link one on Account).",
+          "error",
+        );
+        return;
+      }
+      await showClaimStep("refund");
+      payoutInput?.focus();
+      return;
+    }
+    if (claimStep === "refund") {
+      const payout = payoutInput?.value.trim() || "";
+      if (!payoutLooksValid(payout)) {
+        setMsg(
+          modalMsg(),
+          `Enter a valid ${networkHrp}… address for this network.`,
+          "error",
+        );
+        payoutInput?.focus();
+        return;
+      }
+      if (!payoutAck?.checked) {
+        setMsg(
+          modalMsg(),
+          "Confirm you control this address before paying the bond.",
+          "error",
+        );
+        return;
+      }
+      // Individual only — org awards keep payout on the application / org ledger.
+      const orgApply =
+        (
+          panel.querySelector(
+            'input[name="claimer_type"]:checked',
+          ) as HTMLInputElement | null
+        )?.value === "org";
+      if (!orgApply) {
+        try {
+          await updateProfile({ payout_address: payout });
+          if (opts.user) opts.user.payout_address = payout;
+        } catch (e) {
+          setMsg(modalMsg(), (e as Error).message, "error");
+          return;
+        }
+      }
+      await showClaimStep("bond");
+      return;
+    }
+    if (claimStep === "bond") {
+      feePay?.setStep("txid");
+      await showClaimStep("submit");
+      return;
+    }
+  });
+
+  claimBack?.addEventListener("click", async () => {
+    setMsg(modalMsg(), null);
+    if (claimStep === "refund") await showClaimStep("who");
+    else if (claimStep === "bond") {
+      // Returning to refund readiness — require a fresh address ack.
+      if (payoutAck) payoutAck.checked = false;
+      await showClaimStep("refund");
+    } else if (claimStep === "submit") {
+      claimStep = "bond";
+      await showClaimStep("bond");
+      feePay?.setStep("txid");
+    }
+  });
+
+  payoutInput?.addEventListener("input", () => {
+    if (payoutAck) payoutAck.checked = false;
+  });
+
   panel.querySelector("#claim-confirm")?.addEventListener("click", async () => {
     if (!opts.user) {
-      requireLogin("Sign in to claim this project.");
+      requireLogin("Sign in to apply for this project.");
       return;
     }
     const payout = payoutInput?.value.trim() || "";
     const bond = feePay?.getTxid() || "";
-    if (!payout) {
-      feePay?.setStep("pay");
-      setMsg(modalMsg(), "Enter a payout address.", "error");
-      payoutInput?.focus();
+    if (!payoutLooksValid(payout) || !payoutAck?.checked) {
+      await showClaimStep("refund");
+      setMsg(modalMsg(), "Complete refund readiness before submitting.", "error");
       return;
     }
     if (!bond || bond.length !== 64) {
+      await showClaimStep("bond");
       feePay?.setStep("txid");
       setMsg(modalMsg(), "Enter the 64-character claim bond txid.", "error");
       return;
@@ -1193,12 +1506,17 @@ export async function bindBuilderPanel(
       closeClaimModal();
       setMsg(
         msg,
-        result.awarded && result.pr_url
-          ? `Awarded. Claim PR: ${result.pr_url}`
-          : `Application bonded. ${
-              result.pr_url ? `PR: ${result.pr_url}` : "Awaiting proposer / auto-award."
-            }`,
+        result.unwound
+          ? `Award race lost — your bond is refundable under ${fundsAccountLinkHtml()}.`
+          : result.awarded && result.pr_url
+            ? `Awarded. Claim PR: ${result.pr_url}`
+            : `Application bonded. ${
+                result.pr_url
+                  ? `PR: ${result.pr_url}`
+                  : "Awaiting proposer / auto-award."
+              }`,
         "success",
+        result.unwound ? { html: true } : undefined,
       );
       await refreshStatus();
     } catch (e) {
@@ -1262,10 +1580,10 @@ export async function bindBuilderPanel(
     }
     if (hint) {
       hint.innerHTML = linked.length
-        ? `Using orgs linked on <a href="${href("/account")}">Account</a>.`
+        ? `Using orgs linked on <a href="${href("/account", "", "#account-orgs")}">Account</a>.`
         : opts.user?.id.startsWith("github:")
-          ? `No linked orgs. <a href="${href("/account")}">Link GitHub orgs</a> on Account first.`
-          : `Org apply requires a GitHub session. <a href="${href("/account")}">Account</a>`;
+          ? `No linked orgs. <a href="${href("/account", "", "#account-orgs")}">Link GitHub orgs</a> on Account first.`
+          : `Org apply requires a GitHub session. <a href="${href("/account", "", "#account-orgs")}">Account</a>`;
     }
     if (slot) {
       const showOrg =
@@ -1315,11 +1633,25 @@ export async function bindBuilderPanel(
         requireLogin("Sign in to challenge this claim.");
         return;
       }
-      const reason = window.prompt(
-        "Why is this claim abandoned? (visible in challenge PR)",
-        "No progress / missed checkpoint",
-      );
+      const reason = await promptText({
+        title: "Challenge as abandoned?",
+        body: "Explain why this claim looks abandoned. Confirmed funders only — your note is included in the challenge PR.",
+        defaultValue: "No progress / missed checkpoint",
+        placeholder: "Short rationale…",
+        confirmLabel: "Open challenge",
+        validate: (v) =>
+          v.trim().length < 12
+            ? "Add a bit more detail (at least 12 characters)."
+            : null,
+      });
       if (reason == null) return;
+      const ok = await confirmAction({
+        title: "Submit abandoned-claim challenge?",
+        body: "This opens a public challenge for reviewers. Only confirmed funders can do this.",
+        confirmLabel: "Challenge",
+        danger: true,
+      });
+      if (!ok) return;
       setMsg(msg, "Opening abandoned-claim challenge…");
       try {
         const result = await submitAbandonedChallenge({
@@ -1334,8 +1666,15 @@ export async function bindBuilderPanel(
           "success",
         );
       } catch (e) {
-        if ((e as Error).message === "login_required") requireLogin("Sign in to challenge this claim.");
-        else setMsg(msg, (e as Error).message, "error");
+        const err = (e as Error).message;
+        if (err === "login_required") requireLogin("Sign in to challenge this claim.");
+        else if (/contributor|funder|confirmed/i.test(err)) {
+          setMsg(
+            msg,
+            "Only confirmed funders of this project can open an abandoned-claim challenge.",
+            "error",
+          );
+        } else setMsg(msg, err, "error");
       }
     });
   };
@@ -1348,6 +1687,12 @@ export async function bindBuilderPanel(
           requireLogin("Sign in to request an extension.");
           return;
         }
+        const ok = await confirmAction({
+          title: "Request 30-day extension?",
+          body: "Opens a reviewer ballot for one +30-day claim-window extension. You can only use this once per claim.",
+          confirmLabel: "Request extension",
+        });
+        if (!ok) return;
         const btn = panel.querySelector<HTMLButtonElement>(
           "#builder-request-extension",
         );

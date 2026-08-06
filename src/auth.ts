@@ -1,6 +1,10 @@
 import { WORKERS_API } from "./config";
 import { btnWithBrandIcon, btnWithNostrIcon } from "./icons";
 import {
+  notificationTargetHref,
+  notificationTypeLabel,
+} from "./notify-labels";
+import {
   currentReturnPath,
   href,
   profileHref as profilePath,
@@ -66,17 +70,15 @@ export type AuthUser = UserProfile;
 
 export type ProposalNotification = {
   id: string;
-  type:
-    | "listed"
-    | "floor_reached"
-    | "target_reached"
-    | "claimed"
-    | "deliverable_submitted"
-    | "completed";
+  type: string;
   proposal_id: string;
   proposal_path: string;
   created_at: string;
   read_at?: string;
+  payload?: {
+    needs_address?: boolean;
+    [key: string]: unknown;
+  };
 };
 
 function oauthReturnTo(returnPath?: string): string {
@@ -570,24 +572,11 @@ export function updateNavUnreadBadge(count: number): void {
   else host.insertAdjacentHTML("beforeend", html);
 }
 
-function notifyTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    listed: "Listed",
-    floor_reached: "Floor reached",
-    target_reached: "Target reached",
-    claimed: "Claimed",
-    checkpoint_submitted: "Checkpoint",
-    deliverable_submitted: "Deliverable",
-    completed: "Completed",
-    bond_refundable: "Bond refundable",
-    bond_refunded: "Bond refunded",
-    refund_registered: "Refund registered",
-    contrib_refunded: "Contribution refunded",
-    release_queued: "Release queued",
-    release_broadcast: "Release broadcast",
-    disburse_chat: "Keyholder message",
-  };
-  return labels[type] || "Update";
+function notifyTypeLabel(
+  type: string,
+  payload?: ProposalNotification["payload"],
+): string {
+  return notificationTypeLabel(type, payload);
 }
 
 /** Bind badge → compact dropdown (falls back to account tab link inside). */
@@ -621,20 +610,12 @@ export function bindNotificationDropdown(root: ParentNode = document): void {
       list.innerHTML = recent.length
         ? recent
             .map((n) => {
-              const hrefPath = n.proposal_id
-                ? href(`/p/${encodeURIComponent(n.proposal_id)}`)
-                : n.proposal_path
-                  ? href(
-                      `/proposal/${n.proposal_path
-                        .replace(/^proposals\//, "")
-                        .replace(/\.md$/, "")}`,
-                    )
-                  : href("/account", "?tab=notifications");
+              const hrefPath = notificationTargetHref(n);
               const when = n.created_at
                 ? new Date(n.created_at).toLocaleDateString()
                 : "";
               return `<a class="nav-notify-item${n.read_at ? "" : " is-unread"}" href="${hrefPath}">
-                <span class="nav-notify-type">${escapeHtml(notifyTypeLabel(n.type))}</span>
+                <span class="nav-notify-type">${escapeHtml(notifyTypeLabel(n.type, n.payload))}</span>
                 <span class="nav-notify-id mono">${escapeHtml(n.proposal_id || "")}</span>
                 <span class="nav-notify-when muted">${escapeHtml(when)}</span>
               </a>`;
@@ -664,8 +645,8 @@ export async function fetchPublicProfile(
 }
 
 export async function updateProfile(input: {
-  bio: string;
-  links: ProfileLink[];
+  bio?: string;
+  links?: ProfileLink[];
   payout_address?: string;
   skills_tags?: string[];
   funder_credit?: {

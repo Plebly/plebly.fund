@@ -51,6 +51,18 @@ describe("feePayHtml", () => {
     expect(html).toContain("Fee address is not available from the API yet");
     expect(html).not.toContain("bitcoin:");
   });
+
+  it("uses bond copy when kind is bond", () => {
+    const html = feePayHtml({
+      id: "claim-bond",
+      amountSats: 10_000,
+      address: null,
+      kind: "bond",
+    });
+    expect(html).toContain("Send bond");
+    expect(html).toContain("Bond address is not available from the API yet");
+    expect(html).toContain('data-kind="bond"');
+  });
 });
 
 describe("bindFeePay auto-detect", () => {
