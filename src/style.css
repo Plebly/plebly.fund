@@ -7251,6 +7251,27 @@ a.proposal-comment-author:hover {
   line-height: 1.45;
 }
 
+.web-push-panel {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.web-push-lede {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.web-push-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .notify-list {
   display: grid;
   gap: 0.5rem;

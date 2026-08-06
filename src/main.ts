@@ -46,6 +46,7 @@ import type { Route } from "./types";
 import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
 import { escapeHtml } from "./util";
+import { syncWebPushIfEnabled } from "./web-push";
 
 /** Styles land with this module — first paint used index.html skeleton chrome. */
 document.documentElement.classList.add("app-ready");
@@ -197,6 +198,7 @@ async function render() {
   unreadNotifications = currentUser
     ? await fetchUnreadNotificationCount().catch(() => 0)
     : 0;
+  if (currentUser) void syncWebPushIfEnabled();
   await refreshKeyholderNav();
   const r = route();
   const ctx = {

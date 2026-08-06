@@ -63,6 +63,7 @@ import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
 import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
+import { bindWebPushPanel, webPushPanelHtml } from "./web-push";
 
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
@@ -588,6 +589,7 @@ export async function renderAccount(
           <p class="notify-toolbar-lede">Lifecycle updates for projects you watch.</p>
           <button type="button" class="btn ghost" id="notifications-read-btn" ${notifications.some((n) => !n.read_at) ? "" : "disabled"}>Mark all read</button>
         </div>
+        ${webPushPanelHtml()}
         ${
           notifications.length === 0
             ? `<div class="empty-state"><div class="empty-state-inner">
@@ -897,6 +899,7 @@ export async function renderAccount(
 
   bindCreditPreferenceGates(app, "account-credit");
   applyCreditPreferencesToFields(app, creditPrefs, "account-credit");
+  void bindWebPushPanel(app);
   const skillsTags = bindTagInput(app, "skills-tags", {
     vocabulary: SUGGESTED_SKILLS_TAGS,
   });
