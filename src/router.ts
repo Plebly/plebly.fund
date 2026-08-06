@@ -71,6 +71,7 @@ export function parseLocation(
   if (path === "stats") return { name: "stats" };
   if (path === "declined") return { name: "declined" };
   if (path === "completed") return { name: "completed" };
+  if (path === "keyholders") return { name: "keyholders" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
@@ -444,6 +445,13 @@ export function seoForRoute(
         description:
           "Archive of finished Plebly bounties kept for public record.",
         path: "/completed",
+      };
+    case "keyholders":
+      return {
+        title: "Keyholders",
+        description:
+          "Escrow keyholder console for Sparrow cosign coordination. Plebly never holds keys.",
+        path: "/keyholders",
       };
     case "propose":
       return {

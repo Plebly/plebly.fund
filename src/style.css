@@ -6531,6 +6531,31 @@ a.project-card-by:hover .project-card-by-text {
   margin: 0;
 }
 
+.kh-outputs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.kh-outputs th,
+.kh-outputs td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+
+.kh-verify-outputs {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.account-funds section {
+  margin-top: 1.25rem;
+}
+
 .proposal-engagement-list {
   display: grid;
   gap: 0;

@@ -579,6 +579,13 @@ function notifyTypeLabel(type: string): string {
     checkpoint_submitted: "Checkpoint",
     deliverable_submitted: "Deliverable",
     completed: "Completed",
+    bond_refundable: "Bond refundable",
+    bond_refunded: "Bond refunded",
+    refund_registered: "Refund registered",
+    contrib_refunded: "Contribution refunded",
+    release_queued: "Release queued",
+    release_broadcast: "Release broadcast",
+    disburse_chat: "Keyholder message",
   };
   return labels[type] || "Update";
 }

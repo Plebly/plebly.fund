@@ -10,13 +10,15 @@ permissions:
   pages: write
   id-token: write
 
+# Cancel superseded deploys so a stuck Pages queue does not burn the timeout.
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,10 +38,13 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-        timeout-minutes: 30
+        with:
+          # Default action timeout is 10m; Pages often stays deployment_queued longer.
+          timeout: 1800000

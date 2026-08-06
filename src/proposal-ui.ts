@@ -335,7 +335,7 @@ export function proposalLifecycleBannersHtml(
   }
   if (String(p.status) === "refunding") {
     parts.push(
-      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Refunds</span><p>Register a refund address for your contribution outpoint. No platform fee on refunds.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Refunding</span><p>Register a refund address for your contribution below. Keyholders batch returns in Sparrow — track status under Account → Funds. No platform fee.</p></div>`,
     );
   }
   return parts.join("");
@@ -1531,14 +1531,21 @@ export function refundRegisterHtml(proposalId: string | null): string {
   if (!proposalId) return "";
   return `<div class="refund-panel" id="refund-panel">
     <h3 class="milestones-title">Register refund</h3>
-    <p class="muted">Prove your funding outpoint and set a refund address. No platform fee.</p>
-    <label class="donate-amount-label" for="refund-txid">Funding txid</label>
-    <input id="refund-txid" class="donate-amount mono" type="text" maxlength="64" />
-    <label class="donate-amount-label" for="refund-vout">Vout</label>
-    <input id="refund-vout" class="donate-amount mono" type="number" min="0" value="0" />
-    <label class="donate-amount-label" for="refund-address">Refund address</label>
-    <input id="refund-address" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
-    <button type="button" class="btn" id="refund-submit">Register</button>
+    <p class="muted">Prove your funding outpoint and set a refund address. Keyholders batch returns in Sparrow — no platform fee. Track under Account → Funds.</p>
+    <div id="refund-status" class="lifecycle-banner" hidden>
+      <span class="lifecycle-k">Your contributions</span>
+      <p id="refund-status-body" class="muted"></p>
+      <ul id="refund-status-list" class="kh-verify-outputs"></ul>
+    </div>
+    <div id="refund-register-form">
+      <label class="donate-amount-label" for="refund-txid">Funding txid</label>
+      <input id="refund-txid" class="donate-amount mono" type="text" maxlength="64" />
+      <label class="donate-amount-label" for="refund-vout">Vout</label>
+      <input id="refund-vout" class="donate-amount mono" type="number" min="0" value="0" />
+      <label class="donate-amount-label" for="refund-address">Refund address</label>
+      <input id="refund-address" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
+      <button type="button" class="btn" id="refund-submit">Register</button>
+    </div>
     <p class="muted" id="refund-msg" hidden></p>
   </div>`;
 }

@@ -881,7 +881,11 @@ export async function bindBuilderPanel(
             proposal_path: opts.proposal.path,
             application_id: id,
           });
-          setMsg(msg, "Application withdrawn; bond refundable.", "success");
+          setMsg(
+            msg,
+            "Application withdrawn; bond refundable — track it under Account → Funds.",
+            "success",
+          );
           await refreshStatus();
         } catch (e) {
           if ((e as Error).message === "login_required") {

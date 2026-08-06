@@ -71,6 +71,76 @@ export type ProposalShell = (inner: string) => string;
 
 function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
   const api = WORKERS_API.replace(/\/$/, "");
+
+  const loadRefundStatus = async () => {
+    if (!match.id) return;
+    const statusEl = root.querySelector<HTMLElement>("#refund-status");
+    const bodyEl = root.querySelector<HTMLElement>("#refund-status-body");
+    const listEl = root.querySelector<HTMLElement>("#refund-status-list");
+    const formEl = root.querySelector<HTMLElement>("#refund-register-form");
+    if (!statusEl || !bodyEl || !listEl) return;
+    try {
+      const res = await authFetch(
+        `${api}/refunds/status/${encodeURIComponent(match.id)}`,
+      );
+      if (res.status === 401) {
+        statusEl.hidden = false;
+        bodyEl.textContent =
+          "Sign in to see whether your contributions still need a refund address.";
+        return;
+      }
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        linked: boolean;
+        needs_address: number;
+        registered: number;
+        paid: number;
+        addresses_frozen?: boolean;
+        contributions: {
+          txid: string;
+          vout: number;
+          amount_sats: number;
+          status: string;
+          refund_address?: string | null;
+          refund_txid?: string | null;
+        }[];
+      };
+      statusEl.hidden = false;
+      if (!data.linked) {
+        bodyEl.textContent =
+          "No contribution linked to this account yet. Register with your funding txid and vout below.";
+        listEl.innerHTML = "";
+        if (formEl) formEl.hidden = false;
+        return;
+      }
+      const parts = [
+        data.needs_address ? `${data.needs_address} still need an address` : "",
+        data.registered ? `${data.registered} registered` : "",
+        data.paid ? `${data.paid} paid` : "",
+      ].filter(Boolean);
+      bodyEl.textContent = data.addresses_frozen
+        ? `${parts.join(" · ")}. Addresses frozen for keyholder batch.`
+        : `${parts.join(" · ")}.`;
+      listEl.innerHTML = data.contributions
+        .map(
+          (r) =>
+            `<li class="mono">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout} · ${escapeHtml(r.status)}${
+              r.refund_address ? ` · ${escapeHtml(r.refund_address.slice(0, 12))}…` : ""
+            }</li>`,
+        )
+        .join("");
+      if (formEl) {
+        formEl.hidden = Boolean(
+          data.addresses_frozen ||
+            (data.needs_address === 0 && data.registered + data.paid > 0),
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+  void loadRefundStatus();
+
   root.querySelector("#refund-submit")?.addEventListener("click", async () => {
     const msg = root.querySelector<HTMLElement>("#refund-msg");
     const txid = (
@@ -98,9 +168,10 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       if (msg) {
         msg.hidden = false;
         msg.textContent = res.ok
-          ? "Refund address registered."
+          ? "Refund address registered — track under Account → Funds."
           : String(body.error || "failed");
       }
+      if (res.ok) void loadRefundStatus();
     } catch (e) {
       if (msg) {
         msg.hidden = false;

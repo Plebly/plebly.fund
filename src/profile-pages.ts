@@ -1,4 +1,5 @@
 import {
+  authFetch,
   claimUsername,
   deleteAccount,
   fetchPublicProfile,
@@ -16,7 +17,17 @@ import {
   type AuthUser,
   type ProposalNotification,
 } from "./auth";
-import { CLAIM_FLOOR_SATS } from "./config";
+import { BITCOIN_NETWORK, CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+
+const MEMPOOL_WEB =
+  BITCOIN_NETWORK === "signet"
+    ? "https://mempool.space/signet"
+    : "https://mempool.space";
+
+function txExplorerLink(txid: string, label?: string): string {
+  const short = `${txid.slice(0, 12)}…`;
+  return `<a class="mono" href="${escapeHtml(`${MEMPOOL_WEB}/tx/${encodeURIComponent(txid)}`)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label || short)}</a>`;
+}
 import {
   fetchMyClaims,
   fetchWatches,
@@ -68,7 +79,13 @@ export type ShellContext = {
   setUnreadNotifications?: (count: number) => void;
 };
 
-type AccountTab = "profile" | "watching" | "claims" | "proposals" | "notifications";
+type AccountTab =
+  | "profile"
+  | "watching"
+  | "claims"
+  | "funds"
+  | "proposals"
+  | "notifications";
 
 function notificationLabel(type: string): string {
   const labels: Record<string, string> = {
@@ -86,8 +103,64 @@ function notificationLabel(type: string): string {
     checkpoint_submitted: "Checkpoint submitted",
     deliverable_submitted: "Deliverable submitted",
     completed: "Project completed",
+    bond_refundable: "Bond refundable",
+    bond_refunded: "Bond refunded",
+    refund_registered: "Refund address registered",
+    contrib_refunded: "Contribution refunded",
+    release_queued: "Escrow release queued",
+    release_broadcast: "Escrow release broadcast",
+    disburse_chat: "Keyholder coordination message",
   };
   return labels[type] || type.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function fundsPaneHtml(): string {
+  return `<div class="account-funds">
+    <section>
+      <h2 class="proposal-block-title">Claim bonds</h2>
+      <p class="muted">Refundable bonds are batched by keyholders in Sparrow. Set a refund address while status is refundable.</p>
+      <div id="funds-bonds"><p class="muted">Loading…</p></div>
+    </section>
+    <section>
+      <h2 class="proposal-block-title">Contribution refunds</h2>
+      <p class="muted">When a project is refunding, register an address on the proposal page. Paid refunds show a txid here.</p>
+      <div id="funds-refunds"><p class="muted">Loading…</p></div>
+    </section>
+    <p class="builder-msg" id="funds-msg" hidden></p>
+  </div>`;
+}
+
+function keyholderKeysCardHtml(kh: {
+  status: string;
+  fingerprint?: string | null;
+  xpub?: string | null;
+} | null): string {
+  if (!kh) return "";
+  if (
+    kh.status !== "invited" &&
+    kh.status !== "pending_attest" &&
+    kh.status !== "active"
+  ) {
+    return "";
+  }
+  const fp = kh.fingerprint
+    ? `<p class="mono">${escapeHtml(kh.fingerprint)}</p>`
+    : `<p class="muted">Fingerprint not submitted yet.</p>`;
+  const xpub = kh.xpub
+    ? `<p class="mono muted" style="word-break:break-all">${escapeHtml(kh.xpub.slice(0, 28))}…</p>`
+    : "";
+  const wait =
+    kh.status === "pending_attest"
+      ? `<p class="muted">Waiting for two active keyholders to co-attest.</p>`
+      : kh.status === "invited"
+        ? `<p class="muted">Submit fingerprint + xpub in the console.</p>`
+        : "";
+  return `<div class="form-panel" id="account-keyholder-card">
+    <h2 class="proposal-block-title">Keyholder keys</h2>
+    <p><span class="pill">${escapeHtml(kh.status)}</span></p>
+    ${fp}${xpub}${wait}
+    <p><a class="btn ghost" href="${href("/keyholders")}">Open keyholders console</a></p>
+  </div>`;
 }
 
 function claimsPaneHtml(
@@ -305,17 +378,33 @@ export async function renderAccount(
   const needsCatalog = tab === "watching" || tab === "proposals";
   // Only pull the full notification list when that tab is open — badge uses cache.
   const needsNotifications = tab === "notifications";
-  const [watches, myClaims, allProps, reviewerMe, notifications] = await Promise.all([
-    fetchWatches().catch(() => []),
-    fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
-    needsCatalog
-      ? listListedProposals().catch(() => [] as Proposal[])
-      : Promise.resolve([] as Proposal[]),
-    fetchReviewerMe().catch(() => null),
-    needsNotifications
-      ? fetchNotifications().catch(() => [] as ProposalNotification[])
-      : Promise.resolve([] as ProposalNotification[]),
-  ]);
+  const [watches, myClaims, allProps, reviewerMe, notifications, keyholderMe] =
+    await Promise.all([
+      fetchWatches().catch(() => []),
+      fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
+      needsCatalog
+        ? listListedProposals().catch(() => [] as Proposal[])
+        : Promise.resolve([] as Proposal[]),
+      fetchReviewerMe().catch(() => null),
+      needsNotifications
+        ? fetchNotifications().catch(() => [] as ProposalNotification[])
+        : Promise.resolve([] as ProposalNotification[]),
+      WORKERS_API
+        ? authFetch(`${WORKERS_API.replace(/\/$/, "")}/keyholders/me`)
+            .then(async (r) =>
+              r.ok
+                ? ((await r.json()) as {
+                    keyholder: {
+                      status: string;
+                      fingerprint?: string | null;
+                      xpub?: string | null;
+                    } | null;
+                  })
+                : { keyholder: null },
+            )
+            .catch(() => ({ keyholder: null }))
+        : Promise.resolve({ keyholder: null }),
+    ]);
   const cachedUnread = peekUnreadNotificationCount() ?? 0;
   const pendingClaims = myClaims.pending;
   const ledger = myClaims.ledger;
@@ -371,6 +460,7 @@ export async function renderAccount(
         <button type="button" class="account-tab ${tab === "profile" ? "active" : ""}" data-tab="profile">Profile</button>
         <button type="button" class="account-tab ${tab === "watching" ? "active" : ""}" data-tab="watching">Watching</button>
         <button type="button" class="account-tab ${tab === "claims" ? "active" : ""}" data-tab="claims">Claims</button>
+        <button type="button" class="account-tab ${tab === "funds" ? "active" : ""}" data-tab="funds">Funds</button>
         <button type="button" class="account-tab ${tab === "proposals" ? "active" : ""}" data-tab="proposals">Proposals</button>
         <button type="button" class="account-tab ${tab === "notifications" ? "active" : ""}" data-tab="notifications">Notifications${
           (needsNotifications
@@ -386,6 +476,7 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
+      ${keyholderKeysCardHtml(keyholderMe.keyholder)}
       <form id="account-form" class="form-panel form-panel-wide account-form">
         <fieldset class="form-block account-block-narrow">
           <legend>Username</legend>
@@ -485,6 +576,10 @@ export async function renderAccount(
         ${claimsPaneHtml(pendingClaims, ledger)}
       </div>
 
+      <div class="account-pane" data-pane="funds" ${tab === "funds" ? "" : "hidden"}>
+        ${fundsPaneHtml()}
+      </div>
+
       <div class="account-pane" data-pane="proposals" ${tab === "proposals" ? "" : "hidden"}>
         ${
           myProposals.length === 0
@@ -564,8 +659,141 @@ export async function renderAccount(
         "",
         name === "profile" ? href("/account") : href("/account", `?tab=${name}`),
       );
+      if (name === "funds") void loadFundsPane();
     });
   });
+
+  const loadFundsPane = async () => {
+    if (!WORKERS_API) return;
+    const api = WORKERS_API.replace(/\/$/, "");
+    const bondsEl = app.querySelector("#funds-bonds");
+    const refundsEl = app.querySelector("#funds-refunds");
+    const msgEl = app.querySelector<HTMLElement>("#funds-msg");
+    const [bondsRes, refundsRes] = await Promise.all([
+      authFetch(`${api}/claims/bonds/mine`),
+      authFetch(`${api}/refunds/mine`),
+    ]);
+    if (bondsEl) {
+      if (!bondsRes.ok) {
+        bondsEl.innerHTML = `<p class="muted">Could not load bonds.</p>`;
+      } else {
+        const data = (await bondsRes.json()) as {
+          bonds: {
+            proposal_id: string;
+            status: string;
+            amount_sats: number;
+            txid: string;
+            refund_address?: string;
+            refund_txid?: string;
+            address_frozen?: boolean;
+          }[];
+        };
+        bondsEl.innerHTML = data.bonds.length
+          ? `<ul class="work-list">${data.bonds
+              .map(
+                (b) => `<li class="work-row">
+                <div>
+                  <a href="${href(`/p/${encodeURIComponent(b.proposal_id)}`)}">${escapeHtml(b.proposal_id)}</a>
+                  <span class="pill">${escapeHtml(b.status)}</span>
+                  <span class="muted">${formatSats(b.amount_sats)}</span>
+                  <p class="muted">Bond ${txExplorerLink(b.txid)}</p>
+                  ${
+                    b.status === "refundable"
+                      ? `<label class="sr-only" for="bond-addr-${escapeHtml(b.proposal_id)}">Refund address</label>
+                         <input id="bond-addr-${escapeHtml(b.proposal_id)}" class="donate-amount mono" ${
+                           b.address_frozen ? "disabled" : ""
+                         } value="${escapeHtml(b.refund_address || "")}" placeholder="tb1… / bc1…" />
+                         ${
+                           b.address_frozen
+                             ? `<p class="muted">Address frozen for keyholder batch.</p>`
+                             : `<button type="button" class="btn ghost" data-bond-addr="${escapeHtml(b.proposal_id)}">Save address</button>`
+                         }`
+                      : ""
+                  }
+                  ${
+                    b.refund_txid
+                      ? `<p class="muted">Refunded ${txExplorerLink(b.refund_txid)}</p>`
+                      : ""
+                  }
+                </div>
+              </li>`,
+              )
+              .join("")}</ul>`
+          : `<div class="empty-state"><div class="empty-state-inner">
+              <p class="empty-state-title">No bond refunds yet</p>
+              <p class="empty-state-body">When you withdraw an application or finish a claim, refundable bonds show up here so you can set a refund address.</p>
+            </div></div>`;
+        bondsEl.querySelectorAll<HTMLButtonElement>("[data-bond-addr]").forEach(
+          (btn) => {
+            btn.addEventListener("click", async () => {
+              const id = btn.dataset.bondAddr || "";
+              const input = app.querySelector<HTMLInputElement>(
+                `#bond-addr-${CSS.escape(id)}`,
+              );
+              const res = await authFetch(
+                `${api}/claims/bonds/${encodeURIComponent(id)}/refund-address`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    refund_address: input?.value.trim() || "",
+                  }),
+                },
+              );
+              const body = (await res.json().catch(() => ({}))) as {
+                error?: string;
+              };
+              if (msgEl) {
+                msgEl.hidden = false;
+                msgEl.textContent = res.ok
+                  ? "Refund address saved."
+                  : body.error || "Could not save.";
+              }
+              if (res.ok) void loadFundsPane();
+            });
+          },
+        );
+      }
+    }
+    if (refundsEl) {
+      if (!refundsRes.ok) {
+        refundsEl.innerHTML = `<p class="muted">Could not load contribution refunds.</p>`;
+      } else {
+        const data = (await refundsRes.json()) as {
+          refunds: {
+            proposal_id: string;
+            amount_sats: number;
+            status: string;
+            refund_address?: string;
+            refund_txid?: string;
+          }[];
+        };
+        refundsEl.innerHTML = data.refunds.length
+          ? `<ul class="work-list">${data.refunds
+              .map(
+                (r) => `<li class="work-row">
+                <a href="${href(`/p/${encodeURIComponent(r.proposal_id)}`)}">${escapeHtml(r.proposal_id)}</a>
+                <span class="pill">${escapeHtml(r.status)}</span>
+                <span class="muted">${formatSats(r.amount_sats)}</span>
+                ${
+                  r.refund_txid
+                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>`
+                    : r.refund_address
+                      ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
+                      : `<p class="muted">Register on the proposal page when status is refunding.</p>`
+                }
+              </li>`,
+              )
+              .join("")}</ul>`
+          : `<div class="empty-state"><div class="empty-state-inner">
+              <p class="empty-state-title">No contribution refunds</p>
+              <p class="empty-state-body">If a project enters refunding, register your address on the proposal page. Paid refunds appear here with a txid.</p>
+            </div></div>`;
+      }
+    }
+  };
+
+  if (tab === "funds") void loadFundsPane();
 
   const form = document.getElementById("account-form") as HTMLFormElement | null;
   const msg = document.getElementById("account-msg");

@@ -14,6 +14,7 @@ import {
   proposalLifecycleBannersHtml,
   proposalShareUrl,
   proposerBylineHtml,
+  refundRegisterHtml,
   shareSlotHtml,
   statusClass,
   statusLabel,
@@ -134,6 +135,23 @@ describe("proposal UI critical render helpers", () => {
     } as Proposal);
     expect(rejected).toContain("Rejected");
     expect(rejected).toContain("rebuttal");
+  });
+
+  it("lifecycle banners cover refunding with Funds copy", () => {
+    const html = proposalLifecycleBannersHtml({
+      status: "refunding",
+      milestones: [],
+    } as Proposal);
+    expect(html).toContain("Refunding");
+    expect(html).toContain("Account → Funds");
+    expect(html).toContain("Sparrow");
+  });
+
+  it("refundRegisterHtml includes status host for signed-in funder", () => {
+    const html = refundRegisterHtml("p1");
+    expect(html).toContain("refund-status");
+    expect(html).toContain("refund-register-form");
+    expect(html).toContain("Account → Funds");
   });
 
   it("lifecycle banners cover direct delivery window expiry", () => {

@@ -5,10 +5,12 @@ import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
 import { renderCompleted } from "./completed-page";
 import { renderDeclined } from "./declined-page";
+import { renderKeyholders } from "./keyholders-page";
 import { WORKERS_API } from "./config";
 import { renderGovernance } from "./governance-page";
 import { renderHome } from "./home-page";
 import {
+  authFetch,
   consumeSessionFromHash,
   fetchCurrentUser,
   fetchUnreadNotificationCount,
@@ -51,9 +53,31 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 let currentUser: AuthUser | null = null;
 let unreadNotifications = 0;
+/** Set when GET /keyholders/me returns invited | pending_attest | active. */
+let keyholderNavStatus: string | null = null;
 
 function route(): Route {
   return parseLocation();
+}
+
+async function refreshKeyholderNav(): Promise<void> {
+  keyholderNavStatus = null;
+  if (!currentUser || !WORKERS_API) return;
+  try {
+    const res = await authFetch(
+      `${WORKERS_API.replace(/\/$/, "")}/keyholders/me`,
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      keyholder?: { status?: string } | null;
+    };
+    const st = data.keyholder?.status || "";
+    if (st === "active" || st === "invited" || st === "pending_attest") {
+      keyholderNavStatus = st;
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 function authNavHtml(): string {
@@ -61,7 +85,14 @@ function authNavHtml(): string {
   if (currentUser) {
     const label = accountNavLabel(currentUser);
     const badge = notificationNavBadgeHtml(unreadNotifications);
+    const kh =
+      keyholderNavStatus != null
+        ? `<a href="${href("/keyholders")}" class="${route().name === "keyholders" ? "active" : ""}"${
+            route().name === "keyholders" ? ' aria-current="page"' : ""
+          }>Keyholders</a>`
+        : "";
     return `<span class="nav-divider" aria-hidden="true"></span>
+      ${kh}
       <span class="nav-account-wrap" data-nav-account-wrap>
         <a href="${href("/account")}" data-nav-account class="nav-account ${route().name === "account" ? "active" : ""}">${escapeHtml(label)}</a>
         ${badge}
@@ -163,6 +194,7 @@ async function render() {
   unreadNotifications = currentUser
     ? await fetchUnreadNotificationCount().catch(() => 0)
     : 0;
+  await refreshKeyholderNav();
   const r = route();
   const ctx = {
     user: currentUser,
@@ -184,6 +216,7 @@ async function render() {
     const initialTab = (
       tabParam === "watching" ||
       tabParam === "claims" ||
+      tabParam === "funds" ||
       tabParam === "proposals" ||
       tabParam === "notifications" ||
       tabParam === "profile"
@@ -193,6 +226,7 @@ async function render() {
       | "profile"
       | "watching"
       | "claims"
+      | "funds"
       | "proposals"
       | "notifications"
       | undefined;
@@ -253,6 +287,13 @@ async function render() {
   if (r.name === "completed") {
     applySeo(seoForRoute(r));
     await renderCompleted(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "keyholders") {
+    applySeo(seoForRoute(r));
+    await renderKeyholders(shell, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();
     return;
