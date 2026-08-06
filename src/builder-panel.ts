@@ -373,29 +373,30 @@ export function builderPanelHtml(
         </div>
 
         <div class="claim-modal-section claim-refund" id="claim-step-refund" hidden>
-          <div class="claim-refund-intro">
-            <h4 class="claim-refund-title" id="claim-refund-heading">Refund &amp; payout destination</h4>
-            <p class="claim-refund-lede" id="claim-payout-hint">
-              One destination for your claim bond refund and, if you win and finish, the escrow payout.
-              Not the fee/bond pay address. Keyholders batch returns — Plebly never moves funds.
-            </p>
-          </div>
+          <p class="claim-refund-lede" id="claim-payout-hint" tabindex="-1">
+            One destination for bond refunds and, if you win and finish, escrow payout.
+            Not the fee/bond pay address.
+          </p>
 
-          <section class="claim-refund-rules" aria-labelledby="claim-refund-when-title">
-            <h5 class="claim-refund-rules-title" id="claim-refund-when-title">You get the bond back when</h5>
-            <ul class="claim-refund-list claim-refund-list-yes">
-              <li>You withdraw before anyone is awarded</li>
-              <li>The proposer rejects your application</li>
-              <li>Someone else wins the award (you were not picked, or lost first-bonded)</li>
-              <li>You complete the claim — the bond unlocks after successful completion</li>
-            </ul>
-            <h5 class="claim-refund-rules-title claim-refund-rules-title-warn" id="claim-refund-never-title">The bond is forfeited when</h5>
-            <ul class="claim-refund-list claim-refund-list-no" aria-describedby="claim-refund-never-title">
-              <li>The exclusive claim window expires without delivery</li>
-              <li>A required checkpoint is abandoned</li>
-              <li>Deliverable is finally rejected, or the rebuttal window ends</li>
-            </ul>
-          </section>
+          <div class="claim-refund-rules" role="group" aria-label="Bond refund conditions">
+            <section class="claim-refund-rules-col" aria-labelledby="claim-refund-when-title">
+              <h5 class="claim-refund-rules-title" id="claim-refund-when-title">Bond returned</h5>
+              <ul class="claim-refund-list claim-refund-list-yes">
+                <li>You withdraw before award</li>
+                <li>Proposer rejects you</li>
+                <li>Someone else is awarded</li>
+                <li>You complete successfully</li>
+              </ul>
+            </section>
+            <section class="claim-refund-rules-col" aria-labelledby="claim-refund-never-title">
+              <h5 class="claim-refund-rules-title claim-refund-rules-title-warn" id="claim-refund-never-title">Bond forfeited</h5>
+              <ul class="claim-refund-list claim-refund-list-no">
+                <li>Claim window expires</li>
+                <li>Checkpoint abandoned</li>
+                <li>Final reject / rebuttal ends</li>
+              </ul>
+            </section>
+          </div>
 
           <fieldset class="claim-refund-rail" id="claim-payout-rail">
             <legend class="claim-refund-legend" id="claim-rail-legend">Receive via</legend>
@@ -406,11 +407,21 @@ export function builderPanelHtml(
                 <span class="claim-refund-rail-name">On-chain</span>
                 <span class="claim-refund-rail-meta mono">${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}</span>
               </label>
-              <label class="claim-refund-rail-card"${lightningUiAllowed() ? "" : " hidden"}>
-                <input type="radio" name="claim_payout_rail" value="lightning"${lightningUiAllowed() ? "" : " disabled"} />
+              <label class="claim-refund-rail-card${!lightningUiAllowed() ? " is-disabled" : ""}" title="${
+                lightningUiAllowed()
+                  ? "Lightning Address or LNURL"
+                  : "Lightning refunds unavailable on signet — use mainnet"
+              }">
+                <input type="radio" name="claim_payout_rail" value="lightning"${
+                  lightningUiAllowed() ? "" : " disabled"
+                } aria-describedby="claim-ln-rail-note" />
                 <span class="claim-refund-rail-kicker">Lightning</span>
                 <span class="claim-refund-rail-name">Lightning</span>
-                <span class="claim-refund-rail-meta">you@host · lnurl</span>
+                <span class="claim-refund-rail-meta" id="claim-ln-rail-note">${
+                  lightningUiAllowed()
+                    ? "you@host · lnurl"
+                    : "Unavailable on signet"
+                }</span>
               </label>
             </div>
           </fieldset>
@@ -429,7 +440,7 @@ export function builderPanelHtml(
               aria-describedby="claim-payout-desc"
             />
             <p class="claim-refund-dest-hint muted" id="claim-payout-desc">
-              Use a wallet you control on ${BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"}.
+              Wallet you control on ${BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"}.
             </p>
           </div>
 
@@ -1029,10 +1040,6 @@ export async function bindBuilderPanel(
         ? "Saved on this org application (not your personal Account payout). Same refund and forfeit rules. Keyholders batch returns — Plebly never moves funds."
         : "One destination for your claim bond refund and, if you win and finish, the escrow payout. Not the fee/bond pay address. Keyholders batch returns — Plebly never moves funds.";
       syncPayoutRailUi();
-      // Announce the step for screen readers without stealing the destination focus later.
-      panel
-        .querySelector<HTMLElement>("#claim-refund-heading")
-        ?.setAttribute("tabindex", "-1");
     }
     if (step === "bond" || step === "submit") {
       if (!bondSlot?.querySelector("#claim-bond")) {
@@ -1548,9 +1555,7 @@ export async function bindBuilderPanel(
         return;
       }
       await showClaimStep("refund");
-      panel.querySelector<HTMLElement>("#claim-refund-heading")?.focus();
-      // Destination is the primary control after the conditions are visible.
-      window.setTimeout(() => payoutInput?.focus(), 0);
+      payoutInput?.focus();
       return;
     }
     if (claimStep === "refund") {

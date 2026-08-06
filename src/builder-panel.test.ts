@@ -56,13 +56,16 @@ describe("builderPanelHtml proposal types", () => {
     expect(html).toContain("claim-step-refund");
     expect(html).toContain("claim-payout-ack");
     expect(html).toContain('id="claim-bond-slot" hidden');
-    expect(html).toContain("Refund &amp; payout destination");
-    expect(html).toContain("You get the bond back when");
-    expect(html).toContain("The bond is forfeited when");
-    expect(html).toContain("withdraw before anyone is awarded");
-    expect(html).toContain("exclusive claim window expires");
+    expect(html).toContain("Bond returned");
+    expect(html).toContain("Bond forfeited");
+    expect(html).toContain("withdraw before award");
+    expect(html).toContain("Claim window expires");
     expect(html).toContain('name="claim_payout_rail"');
     expect(html).toContain('value="lightning"');
+    // Visible even when disabled (signet) so users know LN exists on mainnet.
+    expect(html).toContain("Unavailable on signet");
+    expect(html).toContain("is-disabled");
+    expect(html).not.toMatch(/claim-refund-rail-card[^>]*\bhidden\b/);
     expect(html).toContain('aria-describedby="claim-payout-desc"');
     expect(html).toContain('id="claim-next"');
   });
