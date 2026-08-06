@@ -6477,6 +6477,59 @@ a.project-card-by:hover .project-card-by-text {
   margin: 0.35rem 0 0;
 }
 
+.engagement-tabs {
+  display: flex;
+  gap: 0.15rem;
+  margin: 0.85rem 0 0.5rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.engagement-tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.45rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.engagement-tab:hover {
+  color: var(--ink);
+}
+
+.engagement-tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 600;
+}
+
+.engagement-workboard-hint {
+  margin: 0.35rem 0 0.65rem;
+  font-size: 0.8125rem;
+}
+
+.workboard-settings {
+  margin: 0.65rem 0 0.85rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.workboard-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.workboard-toggle input {
+  margin: 0;
+}
+
 .proposal-engagement-list {
   display: grid;
   gap: 0;

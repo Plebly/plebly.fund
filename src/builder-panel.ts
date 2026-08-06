@@ -28,9 +28,9 @@ import {
   refreshClaimModeChips,
   refreshRelDeadlines,
 } from "./claim-mode-ui";
-import { BITCOIN_NETWORK } from "./config";
+import { BITCOIN_NETWORK, WORKERS_API } from "./config";
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
-import { loginChoicesHtml } from "./auth";
+import { authFetch, loginChoicesHtml } from "./auth";
 import type { AuthUser } from "./auth";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
@@ -433,17 +433,99 @@ function metaBits(status: ClaimStatus): string {
     : "";
 }
 
+function workboardSettingsHtml(enabled: boolean): string {
+  return `<div class="workboard-settings" id="workboard-settings">
+    <label class="radio-row workboard-toggle">
+      <input type="checkbox" id="workboard-enabled" ${enabled ? "checked" : ""} />
+      Workboard for claim team
+    </label>
+    <p class="builder-claim-hint muted">Non-public discussion for proposer, claimer, and collaborators. Default on.</p>
+  </div>`;
+}
+
+async function bindWorkboardSettings(
+  root: ParentNode,
+  proposalId: string,
+  isProposer: boolean,
+  state: string,
+): Promise<void> {
+  const host = root.querySelector<HTMLElement>("#workboard-settings-host");
+  if (
+    !host ||
+    !isProposer ||
+    !WORKERS_API ||
+    !(state === "claimed" || state === "in_review" || state === "completed")
+  ) {
+    return;
+  }
+  const api = WORKERS_API.replace(/\/$/, "");
+  let enabled = true;
+  try {
+    const metaRes = await authFetch(
+      `${api}/workboard/${encodeURIComponent(proposalId)}/meta`,
+    );
+    if (metaRes.ok) {
+      const meta = (await metaRes.json()) as {
+        enabled?: boolean;
+        is_participant?: boolean;
+      };
+      if (typeof meta.enabled === "boolean") enabled = meta.enabled;
+    }
+  } catch {
+    /* default on */
+  }
+  host.innerHTML = workboardSettingsHtml(enabled);
+  const checkbox = host.querySelector<HTMLInputElement>("#workboard-enabled");
+  checkbox?.addEventListener("change", async () => {
+    const next = Boolean(checkbox.checked);
+    checkbox.disabled = true;
+    try {
+      const res = await authFetch(
+        `${api}/workboard/${encodeURIComponent(proposalId)}/settings`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: next }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        checkbox.checked = !next;
+        throw new Error(data.error || "Could not update workboard.");
+      }
+      window.dispatchEvent(
+        new CustomEvent("plebly:workboard-settings", {
+          detail: { proposalId, enabled: next },
+        }),
+      );
+    } catch {
+      checkbox.checked = !next;
+    } finally {
+      checkbox.disabled = false;
+    }
+  });
+}
+
 function renderStatusBody(
   body: HTMLElement,
   status: ClaimStatus,
   user: AuthUser | null,
   proposalPath: string,
+  isProposer = false,
 ): void {
   const days = claimWindowDaysLeft(
     status.claimed_at,
     status.claim_window_ends_at,
   );
   const isYou = sessionIsClaimer(user, status.claimer, status.claimer_type);
+  const showWb =
+    isProposer &&
+    (status.state === "claimed" ||
+      status.state === "in_review" ||
+      status.state === "completed");
+  const wbSlot = showWb
+    ? `<div id="workboard-settings-host"></div>`
+    : "";
   const meta = metaBits(status);
   const track = claimerTrackHtml(status);
   const claimerLabel = status.claimer
@@ -486,6 +568,7 @@ function renderStatusBody(
       if (isYou) {
         body.innerHTML = `${track}${meta}<p class="builder-status">You claimed this project${windowLabel}.</p>
         <p class="builder-status muted" id="claim-award-reason"></p>
+        ${wbSlot}
         <div id="claim-collab-host"></div>
         <div class="builder-claim-tools">
           <button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>
@@ -504,6 +587,7 @@ function renderStatusBody(
       } else {
         body.innerHTML = `${track}${meta}<p class="builder-status">Claimed by ${claimerLabel}${windowLabel}.</p>
         <p class="builder-status muted" id="claim-award-reason"></p>
+        ${wbSlot}
         <div id="claim-collab-host"></div>
         <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
       }
@@ -512,12 +596,14 @@ function renderStatusBody(
       body.innerHTML = `${track}${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${claimerLabel}` : ""
       }${windowLabel}. AI triage finished. Reviewers confirm in the panel below.</p>
+      ${wbSlot}
       ${isYou ? extensionTools : ""}`;
       break;
     case "completed":
       body.innerHTML = `${track}${meta}<p class="builder-status">Completed${
         status.claimer ? ` · ${claimerLabel}` : ""
-      }. Fulfiller earns a reviewer seat. Escrow release is by keyholders — Plebly never moves funds.</p>`;
+      }. Fulfiller earns a reviewer seat. Escrow release is by keyholders — Plebly never moves funds.</p>
+      ${wbSlot}`;
       break;
     default:
       body.innerHTML = `<p class="builder-status muted">Not available for claim.</p>`;
@@ -906,7 +992,25 @@ export async function bindBuilderPanel(
       if (!status.claim_agent && opts.proposal.claim_agent) {
         status.claim_agent = opts.proposal.claim_agent;
       }
-      renderStatusBody(body, status, opts.user, opts.proposal.path);
+      const isProposer = userMatchesProposer(
+        opts.user,
+        opts.proposal.proposer,
+      );
+      renderStatusBody(
+        body,
+        status,
+        opts.user,
+        opts.proposal.path,
+        isProposer,
+      );
+      if (opts.proposal.id) {
+        await bindWorkboardSettings(
+          body,
+          opts.proposal.id,
+          isProposer,
+          status.state,
+        );
+      }
       const host = body.querySelector("#claim-apps-host");
       if (host && apps && status.state === "open") {
         host.innerHTML = applicationsPanelHtml(apps);

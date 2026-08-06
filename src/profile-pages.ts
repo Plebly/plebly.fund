@@ -80,6 +80,7 @@ function notificationLabel(type: string): string {
     claim_application_awarded: "Claim awarded to you",
     claim_application_rejected: "Application rejected",
     claim_application_lost: "Another applicant won",
+    workboard_message: "New workboard message",
     claim_window_grace: "Pick an applicant (grace)",
     claim_auto_awarded: "Auto-awarded earliest bond",
     checkpoint_submitted: "Checkpoint submitted",

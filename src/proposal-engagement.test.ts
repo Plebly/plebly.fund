@@ -4,6 +4,7 @@ import {
   commentsListHtml,
   funderCreditHtml,
   fundersListHtml,
+  workboardListHtml,
 } from "./proposal-engagement";
 
 const locationState = {
@@ -46,10 +47,21 @@ describe("commentsHtml", () => {
     expect(commentsHtml(null, true)).toBe("");
   });
 
+  it("shows Discussion shell with hidden workboard tabs by default", () => {
+    const html = commentsHtml("PLEBLY-1", true);
+    expect(html).toContain("Discussion");
+    expect(html).toContain('id="proposal-engagement-tabs"');
+    expect(html).toContain("hidden");
+    expect(html).toContain("Workboard");
+    expect(html).toContain("Only the proposer, claimer, and collaborators");
+    expect(html).not.toContain("encrypt");
+  });
+
   it("shows comment composer when signed in", () => {
     const html = commentsHtml("PLEBLY-1", true);
     expect(html).toContain("proposal-comment-input");
     expect(html).toContain("Post comment");
+    expect(html).toContain("proposal-workboard-input");
     expect(html).not.toContain("Sign in to comment");
   });
 
@@ -58,6 +70,27 @@ describe("commentsHtml", () => {
     expect(html).toContain("Sign in to comment");
     expect(html).toContain("login-choices");
     expect(html).toContain("comment-login-msg");
+    expect(html).not.toContain("proposal-workboard-input");
+  });
+});
+
+describe("workboardListHtml", () => {
+  it("renders empty state and posts without moderation actions", () => {
+    expect(workboardListHtml([])).toContain("No workboard posts yet");
+    const html = workboardListHtml([
+      {
+        id: "w1",
+        author: "alice",
+        username: "alice",
+        body: "Ship the checkpoint",
+        created_at: "2026-07-26T16:40:00.000Z",
+        user_id: "github:1",
+      },
+    ]);
+    expect(html).toContain("Ship the checkpoint");
+    expect(html).toContain('href="/u/alice"');
+    expect(html).not.toContain("data-comment-report");
+    expect(html).not.toContain("data-comment-delete");
   });
 });
 

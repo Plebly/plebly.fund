@@ -44,24 +44,66 @@ export function funderCreditHtml(proposalId: string | null): string {
 export function commentsHtml(proposalId: string | null, signedIn: boolean): string {
   if (!proposalId) return "";
   return `<section class="proposal-engagement" id="proposal-comments" data-proposal-id="${escapeHtml(proposalId)}">
-    <h2 class="proposal-block-title">Comments</h2>
-    <p id="proposal-discussion-link" class="proposal-discussion-link" hidden></p>
-    <div id="proposal-comment-list"><p class="muted">Loading comments…</p></div>
-    ${
-      signedIn
-        ? `<label class="sr-only" for="proposal-comment-input">Comment</label>
-           <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write a comment…"></textarea>
-           <div class="comment-compose-actions">
-             <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>
-           </div>`
-        : `<div class="proposal-engagement-empty">
-             <p>Sign in to comment.</p>
-             ${loginChoicesHtml(undefined, currentReturnPath())}
-             <p class="builder-msg" id="comment-login-msg" hidden></p>
-           </div>`
-    }
-    <p class="builder-msg" id="proposal-comment-msg" hidden></p>
+    <h2 class="proposal-block-title">Discussion</h2>
+    <div class="engagement-tabs" id="proposal-engagement-tabs" hidden role="tablist" aria-label="Discussion">
+      <button type="button" class="engagement-tab is-active" role="tab" aria-selected="true" data-eng-tab="public" id="eng-tab-public">Public</button>
+      <button type="button" class="engagement-tab" role="tab" aria-selected="false" data-eng-tab="workboard" id="eng-tab-workboard">Workboard</button>
+    </div>
+    <div id="proposal-public-pane" class="engagement-pane" data-eng-pane="public">
+      <p id="proposal-discussion-link" class="proposal-discussion-link" hidden></p>
+      <div id="proposal-comment-list"><p class="muted">Loading comments…</p></div>
+      ${
+        signedIn
+          ? `<label class="sr-only" for="proposal-comment-input">Comment</label>
+             <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write a comment…"></textarea>
+             <div class="comment-compose-actions">
+               <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>
+             </div>`
+          : `<div class="proposal-engagement-empty">
+               <p>Sign in to comment.</p>
+               ${loginChoicesHtml(undefined, currentReturnPath())}
+               <p class="builder-msg" id="comment-login-msg" hidden></p>
+             </div>`
+      }
+      <p class="builder-msg" id="proposal-comment-msg" hidden></p>
+    </div>
+    <div id="proposal-workboard-pane" class="engagement-pane" data-eng-pane="workboard" hidden>
+      <p class="muted engagement-workboard-hint">Only the proposer, claimer, and collaborators can see these posts.</p>
+      <div id="proposal-workboard-list"><p class="muted">Loading…</p></div>
+      ${
+        signedIn
+          ? `<label class="sr-only" for="proposal-workboard-input">Workboard message</label>
+             <textarea id="proposal-workboard-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write to the claim team…"></textarea>
+             <div class="comment-compose-actions">
+               <button type="button" class="btn" id="proposal-workboard-submit">Post to workboard</button>
+             </div>`
+          : ""
+      }
+      <p class="builder-msg" id="proposal-workboard-msg" hidden></p>
+    </div>
   </section>`;
+}
+
+/** Pure workboard list (same chrome as comments; no public moderation actions). */
+export function workboardListHtml(messages: ProposalComment[]): string {
+  if (!messages.length) {
+    return `<div class="proposal-engagement-empty"><p>No workboard posts yet. Coordinate here with the claim team.</p></div>`;
+  }
+  return `<div class="proposal-comment-list">${messages
+    .map((comment) => {
+      const when = timeAgoHtml(comment.created_at);
+      return `<article class="proposal-comment" data-comment-id="${escapeHtml(comment.id)}">
+        ${commentAvatarHtml(comment)}
+        <div class="proposal-comment-body">
+          <header>
+            ${commentNameHtml(comment)}
+            ${when ? `<span class="proposal-comment-when"> · ${when}</span>` : ""}
+          </header>
+          <p>${linkifyText(comment.body)}</p>
+        </div>
+      </article>`;
+    })
+    .join("")}</div>`;
 }
 
 export function profileUrlForIdentity(identity: string | null): string | null {
@@ -260,6 +302,27 @@ export async function bindProposalEngagement(
     }
   };
 
+  const tabs = root.querySelector<HTMLElement>("#proposal-engagement-tabs");
+  const publicPane = root.querySelector<HTMLElement>("#proposal-public-pane");
+  const workboardPane = root.querySelector<HTMLElement>("#proposal-workboard-pane");
+  const workboardList = root.querySelector<HTMLElement>("#proposal-workboard-list");
+  const tabStorageKey = `plebly-eng-tab:${proposalId}`;
+
+  const showEngTab = (tab: "public" | "workboard") => {
+    tabs?.querySelectorAll<HTMLButtonElement>("[data-eng-tab]").forEach((btn) => {
+      const on = btn.dataset.engTab === tab;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (publicPane) publicPane.hidden = tab !== "public";
+    if (workboardPane) workboardPane.hidden = tab !== "workboard";
+    try {
+      sessionStorage.setItem(tabStorageKey, tab);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const loadComments = async () => {
     const res = await fetch(`${api()}/comments/${encodeURIComponent(proposalId)}`);
     if (!res.ok) throw new Error("Could not load comments.");
@@ -278,6 +341,55 @@ export async function bindProposalEngagement(
     }
   };
 
+  const loadWorkboard = async (): Promise<boolean> => {
+    if (!signedIn || !opts.user) {
+      if (tabs) tabs.hidden = true;
+      showEngTab("public");
+      return false;
+    }
+    const metaRes = await authFetch(
+      `${api()}/workboard/${encodeURIComponent(proposalId)}/meta`,
+    );
+    if (!metaRes.ok) {
+      if (tabs) tabs.hidden = true;
+      showEngTab("public");
+      return false;
+    }
+    const meta = (await metaRes.json()) as {
+      enabled?: boolean;
+      is_participant?: boolean;
+    };
+    if (!meta.enabled || !meta.is_participant) {
+      if (tabs) tabs.hidden = true;
+      showEngTab("public");
+      return false;
+    }
+    if (tabs) tabs.hidden = false;
+    const listRes = await authFetch(
+      `${api()}/workboard/${encodeURIComponent(proposalId)}`,
+    );
+    if (!listRes.ok) {
+      // Stale / disabled mid-flight — hide tabs silently.
+      if (tabs) tabs.hidden = true;
+      showEngTab("public");
+      return false;
+    }
+    const data = (await listRes.json()) as { messages?: ProposalComment[] };
+    if (workboardList) {
+      workboardList.innerHTML = workboardListHtml(data.messages || []);
+      void hydrateAvatarSlots(workboardList);
+    }
+    let preferred: "public" | "workboard" = "public";
+    try {
+      const stored = sessionStorage.getItem(tabStorageKey);
+      if (stored === "workboard" || stored === "public") preferred = stored;
+    } catch {
+      /* ignore */
+    }
+    showEngTab(preferred);
+    return true;
+  };
+
   const reload = async () => {
     await loadFunders().catch(() => {
       if (funder) funder.hidden = true;
@@ -294,13 +406,42 @@ export async function bindProposalEngagement(
         commentList.innerHTML = `<p class="muted">Could not load comments. The API may still be deploying.</p>`;
       }
     }),
+    loadWorkboard().catch(() => {
+      if (tabs) tabs.hidden = true;
+      showEngTab("public");
+    }),
   ]);
 
+  tabs?.querySelectorAll<HTMLButtonElement>("[data-eng-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.engTab === "workboard" ? "workboard" : "public";
+      showEngTab(tab);
+    });
+  });
+
+  const onWorkboardSettings = (ev: Event) => {
+    if (!root.querySelector("#proposal-engagement-tabs")) {
+      window.removeEventListener(
+        "plebly:workboard-settings",
+        onWorkboardSettings,
+      );
+      return;
+    }
+    const detail = (ev as CustomEvent<{ proposalId?: string }>).detail;
+    if (detail?.proposalId && detail.proposalId !== proposalId) return;
+    void loadWorkboard().catch(() => {
+      if (tabs) tabs.hidden = true;
+      showEngTab("public");
+    });
+  };
+  window.addEventListener("plebly:workboard-settings", onWorkboardSettings);
+
   const commentMsg = root.querySelector<HTMLElement>("#proposal-comment-msg");
-  const setMsg = (text: string) => {
-    if (!commentMsg) return;
-    commentMsg.hidden = !text;
-    commentMsg.textContent = text;
+  const workboardMsg = root.querySelector<HTMLElement>("#proposal-workboard-msg");
+  const setMsg = (el: HTMLElement | null, text: string) => {
+    if (!el) return;
+    el.hidden = !text;
+    el.textContent = text;
   };
 
   const submit = root.querySelector<HTMLButtonElement>("#proposal-comment-submit");
@@ -318,12 +459,50 @@ export async function bindProposalEngagement(
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Could not post comment.");
       if (input) input.value = "";
-      setMsg("Comment posted.");
+      setMsg(commentMsg, "Comment posted.");
       await loadComments();
     } catch (error) {
-      setMsg((error as Error).message);
+      setMsg(commentMsg, (error as Error).message);
     } finally {
       submit.disabled = false;
+    }
+  });
+
+  const wbSubmit = root.querySelector<HTMLButtonElement>(
+    "#proposal-workboard-submit",
+  );
+  const wbInput = root.querySelector<HTMLTextAreaElement>(
+    "#proposal-workboard-input",
+  );
+  wbSubmit?.addEventListener("click", async () => {
+    const body = wbInput?.value.trim() || "";
+    if (!body) return;
+    wbSubmit.disabled = true;
+    try {
+      const res = await authFetch(
+        `${api()}/workboard/${encodeURIComponent(proposalId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 404) {
+          if (tabs) tabs.hidden = true;
+          showEngTab("public");
+        }
+        throw new Error(data.error || "Could not post to workboard.");
+      }
+      if (wbInput) wbInput.value = "";
+      setMsg(workboardMsg, "Posted to workboard.");
+      await loadWorkboard();
+      showEngTab("workboard");
+    } catch (error) {
+      setMsg(workboardMsg, (error as Error).message);
+    } finally {
+      wbSubmit.disabled = false;
     }
   });
 
@@ -353,13 +532,14 @@ export async function bindProposalEngagement(
           reason: reason.trim(),
         });
         setMsg(
+          commentMsg,
           result.comment_hidden
             ? "Report received — comment was auto-hidden."
             : "Report filed for reviewers. Thanks.",
         );
         await loadComments();
       } catch (error) {
-        setMsg((error as Error).message);
+        setMsg(commentMsg, (error as Error).message);
       }
       return;
     }
@@ -379,10 +559,10 @@ export async function bindProposalEngagement(
         );
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         if (!res.ok) throw new Error(data.error || "Could not delete comment.");
-        setMsg("Comment deleted.");
+        setMsg(commentMsg, "Comment deleted.");
         await loadComments();
       } catch (error) {
-        setMsg((error as Error).message);
+        setMsg(commentMsg, (error as Error).message);
       }
       return;
     }
@@ -402,10 +582,10 @@ export async function bindProposalEngagement(
         );
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         if (!res.ok) throw new Error(data.error || "Could not hide comment.");
-        setMsg("Comment hidden.");
+        setMsg(commentMsg, "Comment hidden.");
         await loadComments();
       } catch (error) {
-        setMsg((error as Error).message);
+        setMsg(commentMsg, (error as Error).message);
       }
     }
   });
