@@ -135,6 +135,34 @@ export async function unlinkGithubOrg(login: string): Promise<AuthUser> {
   return data.user;
 }
 
+export type PendingGithubOrg = { login: string; avatar_url?: string };
+
+export async function fetchPendingGithubOrgs(): Promise<PendingGithubOrg[]> {
+  const res = await authFetch(`${API()}/auth/github/orgs/pending`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { orgs?: PendingGithubOrg[] };
+  return Array.isArray(data.orgs) ? data.orgs : [];
+}
+
+export async function confirmGithubOrgs(
+  logins: string[],
+): Promise<{ user: AuthUser; linked: string[] }> {
+  const res = await authFetch(`${API()}/auth/github/orgs/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ logins }),
+  });
+  const data = (await res.json()) as {
+    user?: AuthUser;
+    linked?: string[];
+    error?: string;
+  };
+  if (!res.ok || !data.user) {
+    throw new Error(data.error || `Confirm orgs failed (${res.status})`);
+  }
+  return { user: data.user, linked: data.linked || [] };
+}
+
 /** @deprecated X OAuth hidden until secrets are configured. */
 export function xLoginUrl(returnPath?: string): string {
   return `${API()}/auth/x?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;

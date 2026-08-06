@@ -1,7 +1,9 @@
 import {
   authFetch,
   claimUsername,
+  confirmGithubOrgs,
   deleteAccount,
+  fetchPendingGithubOrgs,
   fetchPublicProfile,
   fetchNotifications,
   loginChoicesHtml,
@@ -332,16 +334,18 @@ export function connectedAccountsHtml(user: AuthUser): string {
         <p class="account-orgs-title">Organizations</p>
         <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Refresh from GitHub</button>
       </div>
-      <p class="hint">Org <strong>owners</strong> (GitHub “admin” role) can apply for claims. Refresh every 90 days.</p>
+      <p class="hint">Link multiple org <strong>owners</strong> (up to 10). Refresh every 90 days.</p>
       <ul class="account-org-list">${rows}</ul>
+      <div id="org-pick-panel" class="account-org-pick" hidden></div>
       <p class="hint" id="org-access-hint">Missing an org? Grant this app access for that organization on GitHub, then refresh.</p>
       <p class="form-msg" id="org-link-msg" hidden></p>
     </div>`;
   } else {
     orgBlock = `<div class="account-orgs" id="account-orgs">
       <p class="account-orgs-title">Organizations</p>
-      <p class="hint">Link GitHub orgs you <strong>own</strong> (admin) to apply for claims as that organization.</p>
-      <p class="hint" id="org-access-hint">If GitHub only offers one org, open Organization access for this app, enable the others, then link again.</p>
+      <p class="hint">Link GitHub orgs you <strong>own</strong> (admin) — you can select multiple after authorize.</p>
+      <p class="hint" id="org-access-hint">Enable each org under Organization access for this app, then link.</p>
+      <div id="org-pick-panel" class="account-org-pick" hidden></div>
       <p class="form-msg" id="org-link-msg" hidden></p>
       <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Link organizations</button>
     </div>`;
@@ -853,6 +857,77 @@ export async function renderAccount(
 
   const orgParams = new URLSearchParams(location.search);
   const orgLinkParam = orgParams.get("org_link");
+  const orgPickPanel = document.getElementById("org-pick-panel");
+
+  const showOrgPick = async () => {
+    if (!orgPickPanel || !orgMsg) return;
+    const pending = await fetchPendingGithubOrgs();
+    if (!pending.length) {
+      orgMsg.hidden = false;
+      orgMsg.className = "form-msg error";
+      orgMsg.textContent =
+        "Org discovery expired or empty — grant org access on GitHub, then refresh.";
+      return;
+    }
+    orgPickPanel.hidden = false;
+    orgPickPanel.innerHTML = `
+      <p class="account-orgs-title">Choose organizations to link</p>
+      <p class="hint">Select one or more orgs you own. You can refresh again later to add more.</p>
+      <ul class="account-org-pick-list">
+        ${pending
+          .map((o) => {
+            const login = escapeHtml(o.login);
+            return `<li>
+              <label class="account-org-pick-row">
+                <input type="checkbox" name="org-pick" value="${login}" checked />
+                <span>@${login}</span>
+              </label>
+            </li>`;
+          })
+          .join("")}
+      </ul>
+      <div class="account-org-pick-actions">
+        <button type="button" class="btn btn-compact" id="org-pick-confirm">Link selected</button>
+        <button type="button" class="btn ghost btn-compact" id="org-pick-cancel">Cancel</button>
+      </div>`;
+    document.getElementById("org-pick-cancel")?.addEventListener("click", () => {
+      orgPickPanel.hidden = true;
+      orgPickPanel.innerHTML = "";
+    });
+    document
+      .getElementById("org-pick-confirm")
+      ?.addEventListener("click", async () => {
+        const logins = [
+          ...orgPickPanel.querySelectorAll<HTMLInputElement>(
+            'input[name="org-pick"]:checked',
+          ),
+        ].map((el) => el.value);
+        if (!logins.length) {
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg error";
+          orgMsg.textContent = "Select at least one organization.";
+          return;
+        }
+        const btn = document.getElementById(
+          "org-pick-confirm",
+        ) as HTMLButtonElement | null;
+        if (btn) btn.disabled = true;
+        try {
+          const { user: next, linked } = await confirmGithubOrgs(logins);
+          ctx.user = next;
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg success";
+          orgMsg.textContent = `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`;
+          void renderAccount(ctx, "profile");
+        } catch (e) {
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg error";
+          orgMsg.textContent = (e as Error).message;
+          if (btn) btn.disabled = false;
+        }
+      });
+  };
+
   if (orgMsg && orgLinkParam) {
     orgMsg.hidden = false;
     if (orgLinkParam === "ok") {
@@ -864,11 +939,18 @@ export async function renderAccount(
       orgMsg.textContent = linked.length
         ? `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`
         : "No admin orgs returned from GitHub. Grant org access for this app, then refresh.";
+    } else if (orgLinkParam === "pick") {
+      orgMsg.className = "form-msg";
+      orgMsg.textContent = "Select which organizations to link.";
+      void showOrgPick();
+    } else if (orgLinkParam === "empty") {
+      orgMsg.className = "form-msg error";
+      orgMsg.textContent =
+        "GitHub returned no owner orgs. Grant organization access for this app, then try again.";
     } else if (orgLinkParam === "github_required") {
       orgMsg.className = "form-msg error";
       orgMsg.textContent = "Sign in with GitHub before linking orgs.";
     }
-    // Drop one-shot query params from the URL bar.
     const clean = new URL(location.href);
     clean.searchParams.delete("org_link");
     clean.searchParams.delete("linked_orgs");
@@ -884,7 +966,7 @@ export async function renderAccount(
           configured?: boolean;
         };
         if (!data.org_access_url) return;
-        orgAccessHint.innerHTML = `Missing an org? <a href="${escapeHtml(data.org_access_url)}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for this app, then refresh. Only org <strong>owners</strong> are linked.`;
+        orgAccessHint.innerHTML = `Missing an org? <a href="${escapeHtml(data.org_access_url)}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for each org, then refresh. You can link multiple owners (up to 10).`;
       })
       .catch(() => undefined);
   }
