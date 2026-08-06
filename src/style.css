@@ -4189,6 +4189,258 @@ a.project-card-by:hover .project-card-by-text {
   line-height: 1.4;
 }
 
+/* Apply wizard — refund readiness */
+.claim-refund {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.claim-refund-intro {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.claim-refund-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.claim-refund-lede {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.claim-refund-rules {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.04), transparent 55%),
+    var(--bg);
+}
+
+.claim-refund-rules-title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.claim-refund-rules-title-warn {
+  margin-top: 0.35rem;
+  color: var(--warn, #b45309);
+}
+
+.claim-refund-list {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+.claim-refund-list li::marker {
+  color: var(--muted);
+}
+
+.claim-refund-list-yes li::marker {
+  color: var(--accent-text);
+}
+
+.claim-refund-list-no li::marker {
+  color: var(--warn, #b45309);
+}
+
+.claim-refund-rail {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.claim-refund-legend {
+  margin: 0 0 0.45rem;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.claim-refund-rails {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.claim-refund-rail-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.claim-refund-rail-card:hover {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--bg-hover);
+}
+
+.claim-refund-rail-card.is-active {
+  color: var(--ink);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.14), transparent 70%),
+    var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.18);
+}
+
+.claim-refund-rail-card:has(input[value="lightning"]):is(.is-active) {
+  border-color: rgba(var(--tertiary-rgb), 0.55);
+  background:
+    linear-gradient(135deg, rgba(var(--tertiary-rgb), 0.14), transparent 70%),
+    var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px rgba(var(--tertiary-rgb), 0.18);
+}
+
+.claim-refund-rail-card:focus-within {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.claim-refund-rail-card input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  overflow: hidden;
+}
+
+.claim-refund-rail-kicker {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.claim-refund-rail-card.is-active .claim-refund-rail-kicker {
+  color: var(--accent-text);
+}
+
+.claim-refund-rail-card:has(input[value="lightning"]):is(.is-active)
+  .claim-refund-rail-kicker {
+  color: var(--tertiary-text);
+}
+
+.claim-refund-rail-name {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+
+.claim-refund-rail-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.claim-refund-dest {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.claim-refund-dest .donate-amount-label {
+  margin: 0;
+}
+
+.claim-refund-dest #claim-payout[aria-invalid="true"] {
+  border-color: var(--danger, #b91c1c);
+  box-shadow: 0 0 0 1px rgba(185, 28, 28, 0.25);
+}
+
+.claim-refund-dest-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.claim-refund-ack {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.65rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.claim-refund-ack:focus-within {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.claim-refund-ack:has(input:checked) {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  color: var(--ink);
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), transparent 70%),
+    var(--bg-elevated);
+}
+
+.claim-refund-ack input {
+  width: auto;
+  min-width: 1rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 420px) {
+  .claim-refund-rails {
+    grid-template-columns: 1fr;
+  }
+}
+
 .claim-apps {
   margin: 0.75rem 0 1rem;
   padding: 0.75rem 0;

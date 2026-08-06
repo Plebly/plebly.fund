@@ -28,13 +28,18 @@ import {
   refreshClaimModeChips,
   refreshRelDeadlines,
 } from "./claim-mode-ui";
-import { BITCOIN_NETWORK, WORKERS_API } from "./config";
+import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
 import { authFetch, loginChoicesHtml, updateProfile } from "./auth";
 import type { AuthUser } from "./auth";
 import { confirmAction, promptText } from "./confirm-modal";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
+import {
+  isLightningPayoutDestination,
+  payoutLooksValid,
+  type PayoutRail,
+} from "./payout-destination";
 import {
   avatarSlotHtml,
   hydrateAvatarSlots,
@@ -170,10 +175,18 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
     apps.claim_mode === "first_bonded"
       ? "First bonded wins"
       : `Proposer picks · ${apps.claim_window_days}d window`;
+  // Countdown only matters once someone is bonded — otherwise it reads like a
+  // pick deadline with nothing to pick.
+  const bondedCount = Math.max(0, Number(apps.summary?.bonded) || 0);
   let timer = "";
-  if (apps.claim_mode === "proposer_select" && apps.phase === "collecting" && apps.window_ends_at) {
+  if (
+    bondedCount > 0 &&
+    apps.claim_mode === "proposer_select" &&
+    apps.phase === "collecting" &&
+    apps.window_ends_at
+  ) {
     timer = ` · until ${escapeHtml(new Date(apps.window_ends_at).toUTCString())} (${relDeadlineHtml(apps.window_ends_at)})`;
-  } else if (apps.phase === "grace" && apps.decision_ends_at) {
+  } else if (bondedCount > 0 && apps.phase === "grace" && apps.decision_ends_at) {
     timer = ` · auto-award ${escapeHtml(new Date(apps.decision_ends_at).toUTCString())} (${relDeadlineHtml(apps.decision_ends_at)})`;
   }
   const earliest = earliestBondedLogin(apps);
@@ -191,11 +204,17 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
   const visible = apps.applications.filter((a) =>
     ["bonded", "awarded"].includes(a.bond_status),
   );
+  const empty =
+    visible.length === 0
+      ? apps.phase === "grace" && !earliest
+        ? "" // graceNote already covers “no bonded applicants”
+        : apps.phase === "grace"
+          ? `<p class="builder-status muted">No open applications.</p>`
+          : `<p class="builder-status muted">No applicants yet.</p>`
+      : "";
   const rows =
     visible.length === 0
-      ? apps.phase === "grace"
-        ? `<p class="builder-status muted">No open applications.</p>`
-        : `<p class="builder-status muted">No applicants yet.</p>`
+      ? empty
       : `<ul class="claim-app-list">${visible
           .map((a) => {
             const bond =
@@ -232,9 +251,12 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
             </li>`;
           })
           .join("")}</ul>`;
+  const countLine =
+    visible.length === 0
+      ? ""
+      : `<br/>${bondedCount} bonded applicant${bondedCount === 1 ? "" : "s"}`;
   return `<div class="claim-apps" id="claim-apps-panel">
-    <p class="builder-status"><strong>${escapeHtml(modeLabel)}</strong>${timer}<br/>
-    ${apps.summary.bonded} bonded applicant${apps.summary.bonded === 1 ? "" : "s"}</p>
+    <p class="builder-status"><strong>${escapeHtml(modeLabel)}</strong>${timer}${countLine}</p>
     ${graceNote}
     ${rows}
   </div>`;
@@ -350,16 +372,70 @@ export function builderPanelHtml(
           </fieldset>
         </div>
 
-        <div class="claim-modal-section" id="claim-step-refund" hidden>
-          <label class="donate-amount-label" for="claim-payout" id="claim-payout-label">Bond refund + claim payout address</label>
-          <p class="builder-claim-hint muted" id="claim-payout-hint">
-            Keyholders return your bond here if you withdraw or lose, and send escrow here if you complete.
-            This is not the fee/bond pay address. Plebly never moves funds.
-          </p>
-          <input id="claim-payout" class="donate-amount mono" type="text" placeholder="${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}" />
-          <label class="radio-row" style="margin-top:0.75rem">
+        <div class="claim-modal-section claim-refund" id="claim-step-refund" hidden>
+          <div class="claim-refund-intro">
+            <h4 class="claim-refund-title" id="claim-refund-heading">Refund &amp; payout destination</h4>
+            <p class="claim-refund-lede" id="claim-payout-hint">
+              One destination for your claim bond refund and, if you win and finish, the escrow payout.
+              Not the fee/bond pay address. Keyholders batch returns — Plebly never moves funds.
+            </p>
+          </div>
+
+          <section class="claim-refund-rules" aria-labelledby="claim-refund-when-title">
+            <h5 class="claim-refund-rules-title" id="claim-refund-when-title">You get the bond back when</h5>
+            <ul class="claim-refund-list claim-refund-list-yes">
+              <li>You withdraw before anyone is awarded</li>
+              <li>The proposer rejects your application</li>
+              <li>Someone else wins the award (you were not picked, or lost first-bonded)</li>
+              <li>You complete the claim — the bond unlocks after successful completion</li>
+            </ul>
+            <h5 class="claim-refund-rules-title claim-refund-rules-title-warn" id="claim-refund-never-title">The bond is forfeited when</h5>
+            <ul class="claim-refund-list claim-refund-list-no" aria-describedby="claim-refund-never-title">
+              <li>The exclusive claim window expires without delivery</li>
+              <li>A required checkpoint is abandoned</li>
+              <li>Deliverable is finally rejected, or the rebuttal window ends</li>
+            </ul>
+          </section>
+
+          <fieldset class="claim-refund-rail" id="claim-payout-rail">
+            <legend class="claim-refund-legend" id="claim-rail-legend">Receive via</legend>
+            <div class="claim-refund-rails">
+              <label class="claim-refund-rail-card is-active">
+                <input type="radio" name="claim_payout_rail" value="onchain" checked />
+                <span class="claim-refund-rail-kicker">Bitcoin</span>
+                <span class="claim-refund-rail-name">On-chain</span>
+                <span class="claim-refund-rail-meta mono">${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}</span>
+              </label>
+              <label class="claim-refund-rail-card"${lightningUiAllowed() ? "" : " hidden"}>
+                <input type="radio" name="claim_payout_rail" value="lightning"${lightningUiAllowed() ? "" : " disabled"} />
+                <span class="claim-refund-rail-kicker">Lightning</span>
+                <span class="claim-refund-rail-name">Lightning</span>
+                <span class="claim-refund-rail-meta">you@host · lnurl</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="claim-refund-dest">
+            <label class="donate-amount-label" for="claim-payout" id="claim-payout-label">On-chain address</label>
+            <input
+              id="claim-payout"
+              class="donate-amount mono"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              spellcheck="false"
+              autocapitalize="off"
+              placeholder="${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}"
+              aria-describedby="claim-payout-desc"
+            />
+            <p class="claim-refund-dest-hint muted" id="claim-payout-desc">
+              Use a wallet you control on ${BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"}.
+            </p>
+          </div>
+
+          <label class="claim-refund-ack" for="claim-payout-ack">
             <input type="checkbox" id="claim-payout-ack" />
-            I control this address and can receive on ${BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"}.
+            <span id="claim-payout-ack-label">I control this destination and can receive the refund or payout.</span>
           </label>
         </div>
 
@@ -822,10 +898,6 @@ export async function bindBuilderPanel(
   const claimBack = panel.querySelector<HTMLButtonElement>("#claim-back");
   const payoutAck = panel.querySelector<HTMLInputElement>("#claim-payout-ack");
 
-  const networkHrp = BITCOIN_NETWORK === "signet" ? "tb1" : "bc1";
-  const payoutLooksValid = (addr: string): boolean =>
-    new RegExp(`^${networkHrp}[a-z0-9]{20,90}$`, "i").test(addr.trim());
-
   const syncClaimFeeStep = (step: "pay" | "txid") => {
     if (claimStep !== "bond" && claimStep !== "submit") return;
     if (step === "txid") {
@@ -842,12 +914,71 @@ export async function bindBuilderPanel(
       amountSats: params.claim_bond_sats,
       address: params.fee_address,
       kind: "bond",
-      note: "Pay to the published bond address (not your payout). Bond refunds to the address from the previous step · forfeited on expiry or abandoned checkpoint",
+      note: "Pay on-chain to the published bond address (not your payout). Bond refunds to the destination from the previous step · forfeited on expiry or abandoned checkpoint",
     });
     feePay = await bindFeePay(panel, "claim-bond", {
       onStep: syncClaimFeeStep,
     });
     feePay?.setStep("pay");
+  };
+
+  const selectedPayoutRail = (): PayoutRail => {
+    const v = (
+      panel.querySelector(
+        'input[name="claim_payout_rail"]:checked',
+      ) as HTMLInputElement | null
+    )?.value;
+    return v === "lightning" && lightningUiAllowed() ? "lightning" : "onchain";
+  };
+
+  const syncPayoutRailUi = () => {
+    const rail = selectedPayoutRail();
+    panel
+      .querySelectorAll<HTMLLabelElement>(".claim-refund-rail-card")
+      .forEach((card) => {
+        const input = card.querySelector<HTMLInputElement>(
+          'input[name="claim_payout_rail"]',
+        );
+        card.classList.toggle("is-active", Boolean(input?.checked));
+      });
+    if (payoutInput) {
+      payoutInput.placeholder =
+        rail === "lightning"
+          ? "you@wallet.com or lnurl1…"
+          : BITCOIN_NETWORK === "signet"
+            ? "tb1…"
+            : "bc1…";
+      payoutInput.setAttribute(
+        "aria-invalid",
+        payoutInput.value.trim() &&
+          !payoutLooksValid(payoutInput.value, rail)
+          ? "true"
+          : "false",
+      );
+    }
+    const payoutLabel = panel.querySelector("#claim-payout-label");
+    const destHint = panel.querySelector("#claim-payout-desc");
+    if (payoutLabel) {
+      payoutLabel.textContent =
+        rail === "lightning" ? "Lightning Address or LNURL" : "On-chain address";
+    }
+    if (destHint) {
+      destHint.textContent =
+        rail === "lightning"
+          ? "Keyholders pay this via a Boltz submarine lockup. Use a Lightning Address or lnurl1… you control."
+          : `Use a wallet you control on ${
+              BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"
+            }.`;
+    }
+    const ackLabel = panel.querySelector("#claim-payout-ack-label");
+    if (ackLabel) {
+      ackLabel.textContent =
+        rail === "lightning"
+          ? "I control this Lightning destination and can receive the refund or payout."
+          : `I control this on-chain address and can receive on ${
+              BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"
+            }.`;
+    }
   };
 
   const showClaimStep = async (step: ClaimWizardStep) => {
@@ -872,24 +1003,36 @@ export async function bindBuilderPanel(
       };
       stepLabel.textContent = labels[step];
     }
-    const payoutLabel = panel.querySelector("#claim-payout-label");
+    const awareness = panel.querySelector("#claim-modal-awareness");
+    if (awareness && step === "refund") {
+      awareness.textContent =
+        "Set where keyholders return your bond — and where escrow goes if you complete.";
+    } else if (awareness && step === "who") {
+      awareness.textContent =
+        "Review current applicants before paying the bond.";
+    } else if (awareness && step === "bond") {
+      awareness.textContent =
+        "Pay the claim bond on-chain. Refunds go to the destination from the previous step.";
+    } else if (awareness && step === "submit") {
+      awareness.textContent =
+        "Confirm the bond txid and submit your application.";
+    }
     const payoutHint = panel.querySelector("#claim-payout-hint");
-    if (step === "refund" && payoutLabel && payoutHint) {
+    if (step === "refund" && payoutHint) {
       const orgApply =
         (
           panel.querySelector(
             'input[name="claimer_type"]:checked',
           ) as HTMLInputElement | null
         )?.value === "org";
-      if (orgApply) {
-        payoutLabel.textContent = "Org bond refund / payout address";
-        payoutHint.textContent =
-          "Saved on this org application (not your personal Account payout). Keyholders return the bond and send escrow here if the claim completes.";
-      } else {
-        payoutLabel.textContent = "Bond refund + claim payout address";
-        payoutHint.textContent =
-          "Keyholders return your bond here if you withdraw or lose, and send escrow here if you complete. This is not the fee/bond pay address. Plebly never moves funds.";
-      }
+      payoutHint.textContent = orgApply
+        ? "Saved on this org application (not your personal Account payout). Same refund and forfeit rules. Keyholders batch returns — Plebly never moves funds."
+        : "One destination for your claim bond refund and, if you win and finish, the escrow payout. Not the fee/bond pay address. Keyholders batch returns — Plebly never moves funds.";
+      syncPayoutRailUi();
+      // Announce the step for screen readers without stealing the destination focus later.
+      panel
+        .querySelector<HTMLElement>("#claim-refund-heading")
+        ?.setAttribute("tabindex", "-1");
     }
     if (step === "bond" || step === "submit") {
       if (!bondSlot?.querySelector("#claim-bond")) {
@@ -900,6 +1043,15 @@ export async function bindBuilderPanel(
 
   if (payoutInput && opts.user?.payout_address) {
     payoutInput.value = opts.user.payout_address;
+    if (
+      lightningUiAllowed() &&
+      isLightningPayoutDestination(opts.user.payout_address)
+    ) {
+      const ln = panel.querySelector<HTMLInputElement>(
+        'input[name="claim_payout_rail"][value="lightning"]',
+      );
+      if (ln) ln.checked = true;
+    }
   }
   await showClaimStep("who");
 
@@ -1006,7 +1158,7 @@ export async function bindBuilderPanel(
         if (!id) return;
         const ok = await confirmAction({
           title: "Withdraw application?",
-          body: "Your bond becomes refundable to the payout address you set at apply. Keyholders batch returns in Sparrow.",
+          body: "Your bond becomes refundable to the payout destination you set at apply. Keyholders batch returns (on-chain or Lightning via Boltz lockup).",
           confirmLabel: "Withdraw",
           danger: true,
         });
@@ -1036,15 +1188,19 @@ export async function bindBuilderPanel(
           }
           if (needsAddr && proposalId) {
             const addr = await promptText({
-              title: "Bond refund address",
-              body: "Required before keyholders can return your bond. Cancel leaves it under Account → Funds.",
+              title: "Bond refund destination",
+              body: "Required before keyholders can return your bond (on-chain bc1…/tb1… or Lightning Address). Cancel leaves it under Account → Funds.",
               defaultValue: opts.user?.payout_address || "",
-              placeholder: `${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}…`,
-              confirmLabel: "Save address",
+              placeholder: lightningUiAllowed()
+                ? "bc1… / tb1… or you@host"
+                : `${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}…`,
+              confirmLabel: "Save",
               validate: (v) =>
                 payoutLooksValid(v)
                   ? null
-                  : `Enter a valid ${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}… address.`,
+                  : lightningUiAllowed()
+                    ? "Enter a network bech32 address or Lightning Address."
+                    : `Enter a valid ${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}… address.`,
             });
             if (addr) {
               const put = await authFetch(
@@ -1270,11 +1426,12 @@ export async function bindBuilderPanel(
         await bindCollaboratorUi(apps, isYou);
       }
       const awareness = panel.querySelector("#claim-modal-awareness");
-      if (awareness && apps) {
+      // Don't clobber step-specific copy after the wizard has advanced.
+      if (awareness && apps && claimStep === "who") {
         const phaseBit =
           apps.phase === "grace" && apps.decision_ends_at
             ? ` · auto-award ${relativeTimeLeft(apps.decision_ends_at)}`
-            : apps.window_ends_at
+            : apps.window_ends_at && apps.summary.bonded > 0
               ? ` · ${relativeTimeLeft(apps.window_ends_at)} in window`
               : "";
         awareness.textContent = `Mode: ${
@@ -1391,26 +1548,34 @@ export async function bindBuilderPanel(
         return;
       }
       await showClaimStep("refund");
-      payoutInput?.focus();
+      panel.querySelector<HTMLElement>("#claim-refund-heading")?.focus();
+      // Destination is the primary control after the conditions are visible.
+      window.setTimeout(() => payoutInput?.focus(), 0);
       return;
     }
     if (claimStep === "refund") {
       const payout = payoutInput?.value.trim() || "";
-      if (!payoutLooksValid(payout)) {
+      const rail = selectedPayoutRail();
+      if (!payoutLooksValid(payout, rail)) {
+        payoutInput?.setAttribute("aria-invalid", "true");
         setMsg(
           modalMsg(),
-          `Enter a valid ${networkHrp}… address for this network.`,
+          rail === "lightning"
+            ? "Enter a Lightning Address (you@host) or lnurl1…"
+            : `Enter a valid ${BITCOIN_NETWORK === "signet" ? "tb1" : "bc1"}… address for this network.`,
           "error",
         );
         payoutInput?.focus();
         return;
       }
+      payoutInput?.setAttribute("aria-invalid", "false");
       if (!payoutAck?.checked) {
         setMsg(
           modalMsg(),
-          "Confirm you control this address before paying the bond.",
+          "Confirm you control this destination before paying the bond.",
           "error",
         );
+        panel.querySelector<HTMLInputElement>("#claim-payout-ack")?.focus();
         return;
       }
       // Individual only — org awards keep payout on the application / org ledger.
@@ -1455,7 +1620,27 @@ export async function bindBuilderPanel(
 
   payoutInput?.addEventListener("input", () => {
     if (payoutAck) payoutAck.checked = false;
+    // Auto-select Lightning rail when the value looks like an LN destination.
+    if (lightningUiAllowed() && isLightningPayoutDestination(payoutInput.value)) {
+      const ln = panel.querySelector<HTMLInputElement>(
+        'input[name="claim_payout_rail"][value="lightning"]',
+      );
+      if (ln && !ln.checked) {
+        ln.checked = true;
+        syncPayoutRailUi();
+      }
+    }
   });
+
+  panel.querySelectorAll<HTMLInputElement>('input[name="claim_payout_rail"]').forEach(
+    (radio) => {
+      radio.addEventListener("change", () => {
+        if (payoutAck) payoutAck.checked = false;
+        syncPayoutRailUi();
+        void showClaimStep("refund");
+      });
+    },
+  );
 
   panel.querySelector("#claim-confirm")?.addEventListener("click", async () => {
     if (!opts.user) {
@@ -1464,7 +1649,7 @@ export async function bindBuilderPanel(
     }
     const payout = payoutInput?.value.trim() || "";
     const bond = feePay?.getTxid() || "";
-    if (!payoutLooksValid(payout) || !payoutAck?.checked) {
+    if (!payoutLooksValid(payout, selectedPayoutRail()) || !payoutAck?.checked) {
       await showClaimStep("refund");
       setMsg(modalMsg(), "Complete refund readiness before submitting.", "error");
       return;

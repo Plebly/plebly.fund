@@ -118,6 +118,22 @@ describe("claimModeChipHtml", () => {
     );
   });
 
+  it("does not show picks countdown with zero bonded applicants", () => {
+    const html = claimModeChipHtml(
+      openBounty({
+        claim_apps_bonded: 0,
+        claim_apps_total: 0,
+        claim_phase: "collecting",
+        claim_window_ends_at: ends,
+      }),
+      100_000,
+      now,
+    );
+    expect(html).toContain("Open to apply");
+    expect(html).not.toContain("Picks in");
+    expect(html).not.toContain("data-claim-chip");
+  });
+
   it("hero chip uses proposal meta classes", () => {
     const html = claimModeHeroChipHtml(
       openBounty({ claim_mode: "first_bonded" }),

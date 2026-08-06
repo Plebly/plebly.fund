@@ -106,7 +106,7 @@ function fundsPaneHtml(): string {
   return `<div class="account-funds">
     <section>
       <h2 class="proposal-block-title">Claim bonds</h2>
-      <p class="muted">Refundable bonds are batched by keyholders in Sparrow. Set a refund address while status is refundable.</p>
+      <p class="muted">Refundable bonds are batched by keyholders (Sparrow). Set an on-chain address or Lightning Address while status is refundable.</p>
       <div id="funds-bonds"><p class="muted">Loading…</p></div>
     </section>
     <section>
@@ -521,9 +521,9 @@ export async function renderAccount(
         </fieldset>
 
         <fieldset class="form-block account-block-payout">
-          <legend>Payout address</legend>
-          <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… or tb1…" maxlength="120" />
-          <p class="hint">Default for claims; overrideable per claim.</p>
+          <legend>Payout destination</legend>
+          <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… / tb1… or you@host" maxlength="120" />
+          <p class="hint">Default for bond refunds and claim escrow payouts — on-chain bech32 or Lightning Address.</p>
         </fieldset>
 
         <fieldset class="form-block account-block-links">
@@ -768,14 +768,14 @@ export async function renderAccount(
                       ? `<label class="sr-only" for="bond-addr-${escapeHtml(b.proposal_id)}">Refund address</label>
                          <input id="bond-addr-${escapeHtml(b.proposal_id)}" class="donate-amount mono" ${
                            b.address_frozen ? "disabled" : ""
-                         } value="${escapeHtml(b.refund_address || "")}" placeholder="tb1… / bc1…" />
+                         } value="${escapeHtml(b.refund_address || "")}" placeholder="bc1… / tb1… or you@host" />
                          ${
                            b.address_frozen
-                             ? `<p class="muted">Address frozen for keyholder batch.</p>`
+                             ? `<p class="muted">Destination frozen for keyholder batch.</p>`
                              : `<button type="button" class="btn ghost" data-bond-addr="${escapeHtml(b.proposal_id)}">${
                                  b.needs_refund_address
-                                   ? "Set refund address"
-                                   : "Save address"
+                                   ? "Set refund destination"
+                                   : "Save destination"
                                }</button>`
                          }`
                       : ""

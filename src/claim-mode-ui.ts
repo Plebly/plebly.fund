@@ -85,16 +85,14 @@ function chipPayload(
     typeof p.claim_apps_total === "number" ? p.claim_apps_total : null;
   const phase = String(p.claim_phase || "");
 
-  if (phase === "grace" && p.claim_decision_ends_at) {
+  if (phase === "grace" && p.claim_decision_ends_at && bonded != null && bonded > 0) {
     const left = deadlineChipLabel(p.claim_decision_ends_at, "auto", nowMs);
-    const n =
-      bonded != null && bonded > 0 ? `${bonded} bonded · ${left}` : left;
     return {
-      label: n,
+      label: `${bonded} bonded · ${left}`,
       title: "Decision grace — auto-awards earliest bond if no pick",
       endsAt: p.claim_decision_ends_at,
       chipKind: "auto",
-      bonded: bonded ?? 0,
+      bonded,
     };
   }
 
@@ -123,16 +121,7 @@ function chipPayload(
     };
   }
 
-  if (p.claim_window_ends_at) {
-    return {
-      label: deadlineChipLabel(p.claim_window_ends_at, "picks", nowMs),
-      title: "Builders apply with bond; proposer picks",
-      endsAt: p.claim_window_ends_at,
-      chipKind: "picks",
-      bonded: 0,
-    };
-  }
-
+  // No bonded applicants yet — don't surface a pick/auto countdown.
   return {
     label: "Open to apply",
     title: "Builders apply with bond; proposer picks",

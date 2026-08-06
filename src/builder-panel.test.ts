@@ -56,7 +56,14 @@ describe("builderPanelHtml proposal types", () => {
     expect(html).toContain("claim-step-refund");
     expect(html).toContain("claim-payout-ack");
     expect(html).toContain('id="claim-bond-slot" hidden');
-    expect(html).toContain("Bond refund + claim payout");
+    expect(html).toContain("Refund &amp; payout destination");
+    expect(html).toContain("You get the bond back when");
+    expect(html).toContain("The bond is forfeited when");
+    expect(html).toContain("withdraw before anyone is awarded");
+    expect(html).toContain("exclusive claim window expires");
+    expect(html).toContain('name="claim_payout_rail"');
+    expect(html).toContain('value="lightning"');
+    expect(html).toContain('aria-describedby="claim-payout-desc"');
     expect(html).toContain('id="claim-next"');
   });
 
@@ -176,6 +183,20 @@ describe("applicationsPanelHtml", () => {
     });
     expect(html).toContain("First bonded wins");
     expect(html).toContain("No applicants yet");
+  });
+
+  it("hides pick countdown when no bonded applicants", () => {
+    const html = applicationsPanelHtml({
+      ...baseApps(),
+      applications: [],
+      summary: { total: 0, bonded: 0, pending_bond: 0 },
+      is_proposer: false,
+    });
+    expect(html).toContain("Proposer picks · 7d window");
+    expect(html).toContain("No applicants yet");
+    expect(html).not.toContain("bonded applicant");
+    expect(html).not.toContain(" until ");
+    expect(html).not.toContain("data-rel-deadline");
   });
 
   it("shows grace auto-award copy for proposers", () => {

@@ -16,6 +16,8 @@ type DisburseItem = {
   settle_proposed_by?: string;
   psbts?: { sha256: string; uploader: string; created_at: string }[];
   addresses_frozen?: boolean;
+  ln_destination?: string;
+  ln_amount_sats?: number;
 };
 
 type KeyholderMe = {
@@ -173,15 +175,37 @@ export async function renderKeyholders(
     const data = (await res.json()) as {
       item: DisburseItem;
       requires_dual_settle: boolean;
+      needs_ln_lockup?: boolean;
     };
     const item = data.item;
+    const needsLn = Boolean(data.needs_ln_lockup);
+    const canPsbt = item.outputs.length > 0 && !needsLn;
     detailEl.hidden = false;
     detailEl.innerHTML = `
       <div class="form-panel form-panel-wide">
         <h2 class="proposal-block-title">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
         <p class="muted">State: ${escapeHtml(item.state)}${item.addresses_frozen ? " · addresses frozen" : ""}</p>
         ${
-          item.outputs.length === 0
+          item.ln_destination
+            ? `<p class="lifecycle-banner"><span class="lifecycle-k">Lightning payout</span>
+                <span class="mono">${escapeHtml(item.ln_destination)}</span>
+                ${item.ln_amount_sats != null ? ` · ${formatSats(item.ln_amount_sats)}` : ""}
+               </p>`
+            : ""
+        }
+        ${
+          needsLn
+            ? `<div class="lifecycle-banner lifecycle-warn">
+                <span class="lifecycle-k">Boltz lockup required</span>
+                <p>Create a Boltz submarine swap to that Lightning destination for the amount above, then paste the lockup address. Signing stays in Sparrow — Plebly never holds swap keys.</p>
+                <label class="donate-amount-label" for="kh-lockup">Boltz lockup address</label>
+                <input id="kh-lockup" class="donate-amount mono" placeholder="bc1… / tb1…" />
+                <button type="button" class="btn" id="kh-lockup-save">Attach lockup</button>
+              </div>`
+            : ""
+        }
+        ${
+          !canPsbt && !needsLn
             ? `<p class="builder-msg bad">Waiting on refund/payout addresses — settle and PSBT upload are blocked until outputs exist.</p>`
             : ""
         }
@@ -203,10 +227,10 @@ export async function renderKeyholders(
         <div class="comment-compose-actions">
           <label class="donate-amount-label" for="kh-psbt">PSBT (base64)</label>
           <textarea id="kh-psbt" class="comment-input mono" rows="3" placeholder="cHNidP8…" ${
-            item.outputs.length ? "" : "disabled"
+            canPsbt ? "" : "disabled"
           }></textarea>
           <button type="button" class="btn" id="kh-psbt-upload" ${
-            item.outputs.length ? "" : "disabled"
+            canPsbt ? "" : "disabled"
           }>Upload PSBT</button>
           ${
             item.psbts?.[0]
@@ -216,7 +240,7 @@ export async function renderKeyholders(
         </div>
         <label class="donate-amount-label" for="kh-txid">Broadcast txid</label>
         <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
-          item.outputs.length ? "" : "disabled"
+          canPsbt ? "" : "disabled"
         } />
         <div id="kh-verify-panel" class="lifecycle-banner" hidden>
           <span class="lifecycle-k">Verify before settle</span>
@@ -232,12 +256,12 @@ export async function renderKeyholders(
         </div>
         <div class="comment-compose-actions">
           <button type="button" class="btn" id="kh-propose" ${
-            item.outputs.length ? "" : "disabled"
+            canPsbt ? "" : "disabled"
           }>Propose settle</button>
           ${
             data.requires_dual_settle
               ? `<button type="button" class="btn ghost" id="kh-confirm"${
-                  item.settle_proposed_by === kh.user_id || !item.outputs.length
+                  item.settle_proposed_by === kh.user_id || !canPsbt
                     ? " disabled"
                     : ""
                 }>Confirm settle</button>`
@@ -258,9 +282,31 @@ export async function renderKeyholders(
       el.textContent = t;
     };
 
+    detailEl.querySelector("#kh-lockup-save")?.addEventListener("click", async () => {
+      const lockup =
+        detailEl.querySelector<HTMLInputElement>("#kh-lockup")?.value.trim() ||
+        "";
+      if (!lockup) {
+        setMsg("Paste the Boltz lockup address.");
+        return;
+      }
+      const res = await authFetch(`${api()}/disburse/${id}/lockup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lockup_address: lockup }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setMsg(res.ok ? "Lockup attached." : body.error || "Could not attach lockup");
+      if (res.ok) void openDetail(id);
+    });
+
     detailEl.querySelector("#kh-psbt-upload")?.addEventListener("click", async () => {
-      if (!item.outputs.length) {
-        setMsg("No outputs yet — waiting on refund/payout addresses.");
+      if (!canPsbt) {
+        setMsg(
+          needsLn
+            ? "Attach Boltz lockup for the Lightning payout first."
+            : "No outputs yet — waiting on refund/payout addresses.",
+        );
         return;
       }
       const outs = item.outputs
@@ -300,8 +346,12 @@ export async function renderKeyholders(
     });
 
     detailEl.querySelector("#kh-propose")?.addEventListener("click", async () => {
-      if (!item.outputs.length) {
-        setMsg("No outputs yet — waiting on refund/payout addresses.");
+      if (!canPsbt) {
+        setMsg(
+          needsLn
+            ? "Attach Boltz lockup for the Lightning payout first."
+            : "No outputs yet — waiting on refund/payout addresses.",
+        );
         return;
       }
       const txid = detailEl.querySelector<HTMLInputElement>("#kh-txid")?.value || "";
