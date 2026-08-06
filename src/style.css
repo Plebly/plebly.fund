@@ -6326,6 +6326,10 @@ a.project-card-by:hover .project-card-by-text {
   font-size: 0.875rem;
 }
 
+.work-list .work-list-action {
+  margin-left: auto;
+}
+
 /* profile link Remove uses .editor-remove */
 
 @media (max-width: 640px) {

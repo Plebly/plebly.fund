@@ -23,6 +23,7 @@ import {
   fetchMyClaims,
   fetchWatches,
   isOpenToClaim,
+  removeWatch,
   type ClaimLedgerView,
 } from "./builder";
 import { BITCOIN_NETWORK, CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
@@ -564,7 +565,7 @@ export async function renderAccount(
                 <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
                 <a class="btn" href="${href("/")}">Browse projects</a>
               </div></div>`
-            : `<ul class="work-list">${watchRows
+            : `<ul class="work-list" id="watching-list">${watchRows
                 .map(({ w, p, bal }) => {
                   const title = p?.title || w.proposal_id;
                   const href = proposalHref(w.proposal_path, p?.id || w.proposal_id);
@@ -577,6 +578,7 @@ export async function renderAccount(
                   return `<li>
                     <a href="${href}">${escapeHtml(title)}</a>
                     <span class="pill">${open ? "Open to apply" : formatSats(bal ?? 0)}</span>
+                    <button type="button" class="btn ghost btn-compact work-list-action" data-unwatch="${escapeHtml(w.proposal_path)}">Unwatch</button>
                   </li>`;
                 })
                 .join("")}</ul>`
@@ -645,6 +647,33 @@ export async function renderAccount(
       </div>
     </section>
   `);
+
+  const watchingPane = app.querySelector<HTMLElement>('[data-pane="watching"]');
+  watchingPane
+    ?.querySelectorAll<HTMLButtonElement>("[data-unwatch]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const path = btn.dataset.unwatch;
+        if (!path) return;
+        btn.disabled = true;
+        try {
+          await removeWatch(path);
+          const row = btn.closest("li");
+          row?.remove();
+          const list = watchingPane.querySelector("#watching-list");
+          if (list && list.children.length === 0) {
+            watchingPane.innerHTML = `<div class="empty-state"><div class="empty-state-inner">
+                <p class="empty-state-title">No watched projects</p>
+                <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
+                <a class="btn" href="${href("/")}">Browse projects</a>
+              </div></div>`;
+          }
+        } catch (e) {
+          btn.disabled = false;
+          window.alert((e as Error).message || "Could not unwatch.");
+        }
+      });
+    });
 
   app.querySelectorAll<HTMLButtonElement>(".account-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
