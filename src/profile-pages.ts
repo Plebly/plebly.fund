@@ -332,14 +332,16 @@ export function connectedAccountsHtml(user: AuthUser): string {
         <p class="account-orgs-title">Organizations</p>
         <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Refresh from GitHub</button>
       </div>
-      <p class="hint">Linked admin orgs can apply for claims. Refresh every 90 days (<code>read:org</code>).</p>
+      <p class="hint">Org <strong>owners</strong> (GitHub “admin” role) can apply for claims. Refresh every 90 days.</p>
       <ul class="account-org-list">${rows}</ul>
+      <p class="hint" id="org-access-hint">Missing an org? Grant this app access for that organization on GitHub, then refresh.</p>
       <p class="form-msg" id="org-link-msg" hidden></p>
     </div>`;
   } else {
     orgBlock = `<div class="account-orgs" id="account-orgs">
       <p class="account-orgs-title">Organizations</p>
-      <p class="hint">Link GitHub orgs you admin so you can apply for claims as that organization.</p>
+      <p class="hint">Link GitHub orgs you <strong>own</strong> (admin) to apply for claims as that organization.</p>
+      <p class="hint" id="org-access-hint">If GitHub only offers one org, open Organization access for this app, enable the others, then link again.</p>
       <p class="form-msg" id="org-link-msg" hidden></p>
       <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Link organizations</button>
     </div>`;
@@ -849,16 +851,42 @@ export async function renderAccount(
   const linksList = document.getElementById("links-list");
   const orgMsg = document.getElementById("org-link-msg");
 
-  const orgLinkParam = new URLSearchParams(location.search).get("org_link");
+  const orgParams = new URLSearchParams(location.search);
+  const orgLinkParam = orgParams.get("org_link");
   if (orgMsg && orgLinkParam) {
     orgMsg.hidden = false;
     if (orgLinkParam === "ok") {
+      const linked = (orgParams.get("linked_orgs") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       orgMsg.className = "form-msg success";
-      orgMsg.textContent = "GitHub orgs resynced from your admin memberships.";
+      orgMsg.textContent = linked.length
+        ? `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`
+        : "No admin orgs returned from GitHub. Grant org access for this app, then refresh.";
     } else if (orgLinkParam === "github_required") {
       orgMsg.className = "form-msg error";
       orgMsg.textContent = "Sign in with GitHub before linking orgs.";
     }
+    // Drop one-shot query params from the URL bar.
+    const clean = new URL(location.href);
+    clean.searchParams.delete("org_link");
+    clean.searchParams.delete("linked_orgs");
+    history.replaceState(null, "", clean.pathname + clean.search + clean.hash);
+  }
+  const orgAccessHint = document.getElementById("org-access-hint");
+  if (orgAccessHint && WORKERS_API) {
+    void fetch(`${WORKERS_API.replace(/\/$/, "")}/auth/github/public`)
+      .then(async (r) => {
+        if (!r.ok) return;
+        const data = (await r.json()) as {
+          org_access_url?: string;
+          configured?: boolean;
+        };
+        if (!data.org_access_url) return;
+        orgAccessHint.innerHTML = `Missing an org? <a href="${escapeHtml(data.org_access_url)}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for this app, then refresh. Only org <strong>owners</strong> are linked.`;
+      })
+      .catch(() => undefined);
   }
   void hydrateAvatarSlots(app);
 

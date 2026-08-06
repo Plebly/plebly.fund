@@ -19,6 +19,7 @@ describe("connectedAccountsHtml", () => {
     expect(html).toContain("Link organizations");
     expect(html).toContain('id="link-github-orgs-btn"');
     expect(html).toContain("btn-compact");
+    expect(html).toContain("org-access-hint");
     expect(html).not.toContain("Resync GitHub orgs");
   });
 
