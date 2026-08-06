@@ -1,4 +1,4 @@
-name: Deploy GitHub Pages
+name: Deploy
 
 on:
   push:
@@ -7,19 +7,16 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# Cancel superseded deploys so a stuck Pages queue does not burn the timeout.
+# Cancel superseded deploys so a stuck queue does not burn the timeout.
 concurrency:
-  group: pages
+  group: deploy-plebly-fund
   cancel-in-progress: true
 
 jobs:
-  build:
-    # GitHub-hosted: org has no online self-hosted runner with label `plebly`.
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  deploy:
+    runs-on: [self-hosted, Linux, X64, plebly]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,20 +29,6 @@ jobs:
           VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://plebly-api.securesovereigns.workers.dev' }}
           VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          # Default action timeout is 10m; Pages often stays deployment_queued longer.
-          timeout: 1800000
+      # Live apex is Cloudflare Workers assets (wrangler.toml routes), not GitHub Pages.
+      - name: Deploy to Cloudflare
+        run: npx wrangler deploy
