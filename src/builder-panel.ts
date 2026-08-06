@@ -847,7 +847,7 @@ export async function bindBuilderPanel(
     feePay = await bindFeePay(panel, "claim-bond", {
       onStep: syncClaimFeeStep,
     });
-    feePay.setStep("pay");
+    feePay?.setStep("pay");
   };
 
   const showClaimStep = async (step: ClaimWizardStep) => {
@@ -1017,7 +1017,7 @@ export async function bindBuilderPanel(
             proposal_path: opts.proposal.path,
             application_id: id,
           });
-          const proposalId = opts.proposal.id;
+          const proposalId = opts.proposal.id?.trim() || "";
           let needsAddr = false;
           try {
             const bondsRes = await authFetch(`${WORKERS_API}/claims/bonds/mine`);
@@ -1026,14 +1026,15 @@ export async function bindBuilderPanel(
                 bonds?: { proposal_id: string; needs_refund_address?: boolean }[];
               };
               needsAddr = Boolean(
-                data.bonds?.find((b) => b.proposal_id === proposalId)
-                  ?.needs_refund_address,
+                proposalId &&
+                  data.bonds?.find((b) => b.proposal_id === proposalId)
+                    ?.needs_refund_address,
               );
             }
           } catch {
             /* ignore */
           }
-          if (needsAddr) {
+          if (needsAddr && proposalId) {
             const addr = await promptText({
               title: "Bond refund address",
               body: "Required before keyholders can return your bond. Cancel leaves it under Account → Funds.",
