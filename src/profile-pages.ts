@@ -268,7 +268,10 @@ function linkRowHtml(links: ProfileLink[]): string {
     .join("");
 }
 
-function identityPanelHtml(user: AuthUser): string {
+const ORG_ATTESTATION_MS = 90 * 86_400_000;
+
+/** Profile fieldset: sign-in identities + GitHub org linking (apply-as-org). */
+export function connectedAccountsHtml(user: AuthUser): string {
   const links: string[] = [];
   if (user.github) {
     links.push(
@@ -287,26 +290,14 @@ function identityPanelHtml(user: AuthUser): string {
       socialAccountLink("x-twitter", `https://x.com/${user.x.replace(/^@/, "")}`, user.x),
     );
   }
-  if (!links.length) return "";
-  return `<div class="identity-panel">
-        <p class="hint identity-panel-label">Signed in with</p>
-        <div class="social-row identity-links">
-          ${links.join("")}
-        </div>
-      </div>`;
-}
+  const identities = links.length
+    ? `<div class="account-connected-identities social-row">${links.join("")}</div>`
+    : `<p class="hint">No linked login providers on this session.</p>`;
 
-const ORG_ATTESTATION_MS = 90 * 86_400_000;
-
-function linkedOrgsPanelHtml(user: AuthUser): string {
-  if (!user.id.startsWith("github:") || !user.github) {
-    return `<div class="identity-panel account-orgs" id="account-orgs">
-      <p class="hint identity-panel-label">GitHub orgs for claims</p>
-      <p class="hint">Sign in with GitHub to link orgs you admin. Org claims are not available for Nostr/X-only sessions.</p>
-    </div>`;
-  }
+  const githubSession = user.id.startsWith("github:") && Boolean(user.github);
+  const orgs = user.github_orgs || [];
   const now = Date.now();
-  const rows = (user.github_orgs || [])
+  const rows = orgs
     .map((o) => {
       const at = Date.parse(o.verified_at);
       const fresh = Number.isFinite(at) && now - at <= ORG_ATTESTATION_MS;
@@ -319,26 +310,46 @@ function linkedOrgsPanelHtml(user: AuthUser): string {
       return `<li class="account-org-row">
         <span class="account-org-identity">
           ${avatar}
-          <span>
+          <span class="account-org-meta">
             <a href="${orgHref(o.login)}"><strong>@${escapeHtml(o.login)}</strong></a>
-            <span class="muted mono">${fresh ? `admin · verified ${when}` : "stale — resync"}</span>
+            <span class="muted">${fresh ? `Admin · verified ${when}` : "Stale — refresh"}</span>
           </span>
         </span>
-        <button type="button" class="btn ghost" data-unlink-org="${escapeHtml(o.login)}">Unlink</button>
+        <button type="button" class="btn ghost btn-compact" data-unlink-org="${escapeHtml(o.login)}">Unlink</button>
       </li>`;
     })
     .join("");
-  return `<div class="identity-panel account-orgs" id="account-orgs">
-      <p class="hint identity-panel-label">GitHub orgs for claims</p>
-      <p class="hint">Resync refreshes admin membership and avatars (<code>read:org</code>). Apply-as-org only offers linked orgs. Re-sync every 90 days.</p>
-      ${
-        rows
-          ? `<ul class="account-org-list">${rows}</ul>`
-          : `<p class="hint muted">No orgs linked yet.</p>`
-      }
-      <p class="form-msg" id="org-link-msg" hidden></p>
-      <button type="button" class="btn" id="link-github-orgs-btn">Resync GitHub orgs</button>
+
+  let orgBlock: string;
+  if (!githubSession) {
+    orgBlock = `<div class="account-orgs" id="account-orgs">
+      <p class="account-orgs-title">Organizations</p>
+      <p class="hint">Sign in with GitHub to link organizations you admin. Then you can apply for claims as that org.</p>
     </div>`;
+  } else if (rows) {
+    orgBlock = `<div class="account-orgs" id="account-orgs">
+      <div class="account-orgs-head">
+        <p class="account-orgs-title">Organizations</p>
+        <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Refresh from GitHub</button>
+      </div>
+      <p class="hint">Linked admin orgs can apply for claims. Refresh every 90 days (<code>read:org</code>).</p>
+      <ul class="account-org-list">${rows}</ul>
+      <p class="form-msg" id="org-link-msg" hidden></p>
+    </div>`;
+  } else {
+    orgBlock = `<div class="account-orgs" id="account-orgs">
+      <p class="account-orgs-title">Organizations</p>
+      <p class="hint">Link GitHub orgs you admin so you can apply for claims as that organization.</p>
+      <p class="form-msg" id="org-link-msg" hidden></p>
+      <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Link organizations</button>
+    </div>`;
+  }
+
+  return `<fieldset class="form-block account-block-connected">
+    <legend>Connected accounts</legend>
+    ${identities}
+    ${orgBlock}
+  </fieldset>`;
 }
 
 export async function renderAccount(
@@ -509,6 +520,8 @@ export async function renderAccount(
           </div>
         </fieldset>
 
+        ${connectedAccountsHtml(user)}
+
         <fieldset class="form-block account-funder-credit account-block-narrow">
           <legend>Funder appearance</legend>
           <p class="hint">How you show up on project funder lists after a donation is linked to your account. Amounts stay private unless you opt in.</p>
@@ -520,9 +533,6 @@ export async function renderAccount(
         </div>
         <p class="form-msg" id="account-msg" hidden></p>
       </form>
-
-      ${identityPanelHtml(user)}
-      ${linkedOrgsPanelHtml(user)}
 
       <div class="account-danger">
         <button type="button" class="btn-text-danger" id="delete-account-btn">Delete account</button>

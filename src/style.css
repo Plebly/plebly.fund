@@ -4233,13 +4233,59 @@ a.project-card-by:hover .project-card-by-text {
   border-color: rgba(var(--good-rgb), 0.4);
 }
 
+.account-block-connected {
+  max-width: 42rem;
+}
+
+.account-connected-identities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.account-orgs {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.account-orgs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.account-orgs-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.account-orgs .btn,
+.account-block-connected .btn-compact {
+  width: auto;
+  justify-self: start;
+}
+
+.btn-compact {
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8125rem;
+}
+
 .account-org-list {
   list-style: none;
-  margin: 0.5rem 0 0.75rem;
+  margin: 0.15rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .account-org-row {
@@ -4247,14 +4293,32 @@ a.project-card-by:hover .project-card-by-text {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
+  padding: 0.45rem 0;
   font-size: 0.875rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.account-org-row:last-child {
+  border-bottom: 0;
 }
 
 .account-org-identity {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   min-width: 0;
+}
+
+.account-org-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.account-org-meta .muted {
+  font-size: 0.75rem;
 }
 
 .account-org-avatar,
