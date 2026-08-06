@@ -95,6 +95,37 @@ export function githubLoginUrl(returnPath?: string): string {
   return `${API()}/auth/github?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
 }
 
+/** Start Account org-link OAuth (Bearer session → GitHub authorize URL). */
+export async function startGithubOrgLink(
+  returnPath = "/account",
+): Promise<string> {
+  const res = await authFetch(`${API()}/auth/github/link-org`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ return_to: oauthReturnTo(returnPath) }),
+  });
+  const data = (await res.json()) as {
+    authorize_url?: string;
+    error?: string;
+  };
+  if (!res.ok || !data.authorize_url) {
+    throw new Error(data.error || `Link org failed (${res.status})`);
+  }
+  return data.authorize_url;
+}
+
+export async function unlinkGithubOrg(login: string): Promise<AuthUser> {
+  const res = await authFetch(
+    `${API()}/auth/github/orgs/${encodeURIComponent(login)}`,
+    { method: "DELETE" },
+  );
+  const data = (await res.json()) as { user?: AuthUser; error?: string };
+  if (!res.ok || !data.user) {
+    throw new Error(data.error || `Unlink failed (${res.status})`);
+  }
+  return data.user;
+}
+
 /** @deprecated X OAuth hidden until secrets are configured. */
 export function xLoginUrl(returnPath?: string): string {
   return `${API()}/auth/x?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
@@ -738,6 +769,8 @@ export type ProposalAuthorInput = {
   target_sats?: number | null;
   cover_image?: string | null;
   notes?: string | null;
+  claim_mode?: "first_bonded" | "proposer_select";
+  claim_window_days?: number | null;
   milestones?: ProposalMilestoneInput[];
   depends_on?: {
     kind: "plebly" | "external";

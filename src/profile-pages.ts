@@ -4,9 +4,11 @@ import {
   fetchPublicProfile,
   fetchNotifications,
   loginChoicesHtml,
+  startGithubOrgLink,
   markNotificationsRead,
   peekUnreadNotificationCount,
   profilePath,
+  unlinkGithubOrg,
   updateNavUnreadBadge,
   updateProfile,
   accountNavLabel,
@@ -72,6 +74,12 @@ function notificationLabel(type: string): string {
     floor_reached: "Claim floor reached",
     target_reached: "Funding target reached",
     claimed: "Project claimed",
+    claim_application: "Bonded applicant",
+    claim_application_awarded: "Claim awarded to you",
+    claim_application_rejected: "Application rejected",
+    claim_application_lost: "Another applicant won",
+    claim_window_grace: "Pick an applicant (grace)",
+    claim_auto_awarded: "Auto-awarded earliest bond",
     checkpoint_submitted: "Checkpoint submitted",
     deliverable_submitted: "Deliverable submitted",
     completed: "Project completed",
@@ -225,6 +233,44 @@ function identityPanelHtml(user: AuthUser): string {
           ${links.join("")}
         </div>
       </div>`;
+}
+
+const ORG_ATTESTATION_MS = 90 * 86_400_000;
+
+function linkedOrgsPanelHtml(user: AuthUser): string {
+  if (!user.id.startsWith("github:") || !user.github) {
+    return `<div class="identity-panel account-orgs">
+      <p class="hint identity-panel-label">GitHub orgs for claims</p>
+      <p class="hint">Sign in with GitHub to link orgs you admin. Org claims are not available for Nostr/X-only sessions.</p>
+    </div>`;
+  }
+  const now = Date.now();
+  const rows = (user.github_orgs || [])
+    .map((o) => {
+      const at = Date.parse(o.verified_at);
+      const fresh = Number.isFinite(at) && now - at <= ORG_ATTESTATION_MS;
+      const when = Number.isFinite(at)
+        ? new Date(at).toISOString().slice(0, 10)
+        : "?";
+      return `<li class="account-org-row">
+        <span><strong>@${escapeHtml(o.login)}</strong>
+          <span class="muted mono">${fresh ? `admin · verified ${when}` : "stale — link again"}</span>
+        </span>
+        <button type="button" class="btn ghost" data-unlink-org="${escapeHtml(o.login)}">Unlink</button>
+      </li>`;
+    })
+    .join("");
+  return `<div class="identity-panel account-orgs">
+      <p class="hint identity-panel-label">GitHub orgs for claims</p>
+      <p class="hint">Link orgs you admin (one-time GitHub <code>read:org</code>). Apply-as-org on bounties only offers linked orgs. Re-link every 90 days.</p>
+      ${
+        rows
+          ? `<ul class="account-org-list">${rows}</ul>`
+          : `<p class="hint muted">No orgs linked yet.</p>`
+      }
+      <p class="form-msg" id="org-link-msg" hidden></p>
+      <button type="button" class="btn" id="link-github-orgs-btn">Link GitHub orgs</button>
+    </div>`;
 }
 
 export async function renderAccount(
@@ -390,6 +436,7 @@ export async function renderAccount(
       </form>
 
       ${identityPanelHtml(user)}
+      ${linkedOrgsPanelHtml(user)}
 
       <div class="account-danger">
         <button type="button" class="btn-text-danger" id="delete-account-btn">Delete account</button>
@@ -513,6 +560,64 @@ export async function renderAccount(
   const form = document.getElementById("account-form") as HTMLFormElement | null;
   const msg = document.getElementById("account-msg");
   const linksList = document.getElementById("links-list");
+  const orgMsg = document.getElementById("org-link-msg");
+
+  const orgLinkParam = new URLSearchParams(location.search).get("org_link");
+  if (orgMsg && orgLinkParam) {
+    orgMsg.hidden = false;
+    if (orgLinkParam === "ok") {
+      orgMsg.className = "form-msg success";
+      orgMsg.textContent = "GitHub orgs updated from your admin memberships.";
+    } else if (orgLinkParam === "github_required") {
+      orgMsg.className = "form-msg error";
+      orgMsg.textContent = "Sign in with GitHub before linking orgs.";
+    }
+  }
+
+  document
+    .getElementById("link-github-orgs-btn")
+    ?.addEventListener("click", async () => {
+      const btn = document.getElementById(
+        "link-github-orgs-btn",
+      ) as HTMLButtonElement | null;
+      if (btn) btn.disabled = true;
+      try {
+        const url = await startGithubOrgLink("/account");
+        window.location.href = url;
+      } catch (e) {
+        if (orgMsg) {
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg error";
+          orgMsg.textContent = (e as Error).message;
+        }
+        if (btn) btn.disabled = false;
+      }
+    });
+
+  app.querySelectorAll<HTMLButtonElement>("[data-unlink-org]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const login = btn.dataset.unlinkOrg;
+      if (!login) return;
+      btn.disabled = true;
+      try {
+        const next = await unlinkGithubOrg(login);
+        ctx.user = next;
+        if (orgMsg) {
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg success";
+          orgMsg.textContent = `Unlinked @${login}.`;
+        }
+        void renderAccount(ctx, "profile");
+      } catch (e) {
+        if (orgMsg) {
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg error";
+          orgMsg.textContent = (e as Error).message;
+        }
+        btn.disabled = false;
+      }
+    });
+  });
 
   bindCreditPreferenceGates(app, "account-credit");
   applyCreditPreferencesToFields(app, creditPrefs, "account-credit");

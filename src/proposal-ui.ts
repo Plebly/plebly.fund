@@ -5,6 +5,7 @@ import {
   currentReturnPath,
   loginChoicesHtml,
 } from "./auth";
+import { claimModeHeroChipHtml } from "./claim-mode-ui";
 import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
@@ -1506,7 +1507,7 @@ export function onChainPanelHtml(p: Proposal): string {
   </details>`;
 }
 
-/** Quiet meta line: created date, id, type, and tags (status/byline live elsewhere). */
+/** Quiet meta line: created date, id, type, claim mode, and tags (status/byline live elsewhere). */
 export function metaChipsHtml(p: Proposal): string {
   const bits: string[] = [];
   const created = timeAgoHtml(p.created_at);
@@ -1516,6 +1517,9 @@ export function metaChipsHtml(p: Proposal): string {
   }
   const type = String(p.proposal_type || "bounty").toLowerCase();
   bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Direct" : "Bounty")}</span>`);
+  // Live-updated from applications API in bindBuilderPanel.
+  const claimChip = claimModeHeroChipHtml(p);
+  if (claimChip) bits.push(claimChip);
   for (const tag of (p.tags || []).map((item) => item.trim()).filter(Boolean).slice(0, 12)) {
     bits.push(`<span class="proposal-meta-chip proposal-tag">${escapeHtml(tag)}</span>`);
   }

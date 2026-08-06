@@ -103,6 +103,10 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     related_work: parseRelatedWork(data.related_work),
     proposer: parseProposer(data),
     claimer: (data.claimer as string) || null,
+    claim_mode:
+      typeof data.claim_mode === "string" ? data.claim_mode : null,
+    claim_window_days:
+      typeof data.claim_window_days === "number" ? data.claim_window_days : null,
     claimed_at: (data.claimed_at as string) || null,
     payout_address: (data.payout_address as string) || null,
     deliverable_url: (data.deliverable_url as string) || null,
@@ -161,6 +165,13 @@ type CatalogProposal = {
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
   claimer?: string | null;
+  claim_mode?: string | null;
+  claim_window_days?: number | null;
+  claim_apps_total?: number | null;
+  claim_apps_bonded?: number | null;
+  claim_phase?: string | null;
+  claim_window_ends_at?: string | null;
+  claim_decision_ends_at?: string | null;
   proposer?: ProposalProposer | null;
   rescue?: boolean;
   rescue_gap_sats?: number | null;
@@ -186,6 +197,17 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     funding_window_ends_at: entry.funding_window_ends_at ?? null,
     delivery_window_ends_at: entry.delivery_window_ends_at ?? null,
     claimer: entry.claimer ?? null,
+    claim_mode: entry.claim_mode ?? null,
+    claim_window_days: entry.claim_window_days ?? null,
+    claim_apps_total:
+      typeof entry.claim_apps_total === "number" ? entry.claim_apps_total : null,
+    claim_apps_bonded:
+      typeof entry.claim_apps_bonded === "number"
+        ? entry.claim_apps_bonded
+        : null,
+    claim_phase: entry.claim_phase ?? null,
+    claim_window_ends_at: entry.claim_window_ends_at ?? null,
+    claim_decision_ends_at: entry.claim_decision_ends_at ?? null,
     proposer: entry.proposer ?? null,
     submission_fee_txid: null,
     escrow_index: null,

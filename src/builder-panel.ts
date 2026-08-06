@@ -1,27 +1,55 @@
 import {
+  acceptClaimApplication,
+  acceptClaimCollaboratorInvite,
   addWatch,
   claimWindowDaysLeft,
+  fetchClaimApplications,
   fetchClaimParams,
   fetchClaimStatus,
+  fetchGithubFollowing,
+  inviteClaimCollaborator,
   isOpenToClaim,
+  rejectClaimApplication,
   removeWatch,
   requestClaimExtension,
+  searchGithubUsers,
   submitAbandonedChallenge,
   submitCheckpoint,
   submitClaim,
   submitDeliverable,
+  withdrawClaimApplication,
+  type ClaimApplicationsResponse,
   type ClaimParams,
   type ClaimStatus,
 } from "./builder";
+import {
+  claimModeHeroChipHtml,
+  relativeTimeLeft,
+  refreshClaimModeChips,
+  refreshRelDeadlines,
+} from "./claim-mode-ui";
+import { BITCOIN_NETWORK } from "./config";
 import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
 import { loginChoicesHtml } from "./auth";
 import type { AuthUser } from "./auth";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
+import { href } from "./router";
 import { userMatchesProposer } from "./proposal-ui";
 import { aiReviewCardHtml } from "./review-panel";
-import type { Proposal } from "./types";
+import type { GithubOrgAttestation, Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
+
+const ORG_ATTESTATION_MS = 90 * 86_400_000;
+
+function freshLinkedOrgs(user: AuthUser | null): GithubOrgAttestation[] {
+  if (!user?.id.startsWith("github:") || !user.github_orgs?.length) return [];
+  const now = Date.now();
+  return user.github_orgs.filter((o) => {
+    const at = Date.parse(o.verified_at);
+    return o.role === "admin" && Number.isFinite(at) && now - at <= ORG_ATTESTATION_MS;
+  });
+}
 
 function deliverableFormHtml(): string {
   return `<div id="deliverable-form" class="deliverable-form">
@@ -43,7 +71,164 @@ function watchBtnHtml(watching: boolean): string {
 }
 
 function claimBtnHtml(disabled = false): string {
-  return `<button type="button" class="btn" id="builder-claim"${disabled ? " disabled" : ""}>${btnWithIcon("handshake", "Claim this project")}</button>`;
+  return `<button type="button" class="btn" id="builder-claim"${disabled ? " disabled" : ""}>${btnWithIcon("handshake", "Apply with bond")}</button>`;
+}
+
+function mempoolTxUrl(txid: string): string {
+  const base =
+    BITCOIN_NETWORK === "mainnet"
+      ? "https://mempool.space/tx/"
+      : "https://mempool.space/signet/tx/";
+  return `${base}${txid}`;
+}
+
+function applicantTrackHtml(s: {
+  active: number;
+  completed: number;
+  expired: number;
+  rejected: number;
+  abandoned: number;
+} | null): string {
+  if (!s) return "";
+  const submitted = s.active + s.completed + s.expired + s.rejected + s.abandoned;
+  const failed = s.expired + s.abandoned + s.rejected;
+  if (submitted === 0) return `<span class="claimer-track muted">First claim</span>`;
+  const denom = s.completed + failed;
+  const rate = denom > 0 ? Math.round((s.completed / denom) * 100) : 0;
+  return `<span class="claimer-track mono muted">${submitted} claims · ${s.completed} completed · ${failed} failed · ${rate}%</span>`;
+}
+
+function earliestBondedLogin(apps: ClaimApplicationsResponse): string | null {
+  const bonded = apps.applications
+    .filter((a) => a.bond_status === "bonded")
+    .slice()
+    .sort((a, b) =>
+      (a.bonded_at || a.applied_at).localeCompare(b.bonded_at || b.applied_at),
+    );
+  return bonded[0]?.claimer_login ?? null;
+}
+
+function relDeadlineHtml(iso: string): string {
+  return `<span data-rel-deadline="${escapeHtml(iso)}">${escapeHtml(relativeTimeLeft(iso))}</span>`;
+}
+
+/** Exported for unit tests (applicant list + proposer actions). */
+export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
+  const modeLabel =
+    apps.claim_mode === "first_bonded"
+      ? "First bonded wins"
+      : `Proposer picks · ${apps.claim_window_days}d window`;
+  let timer = "";
+  if (apps.claim_mode === "proposer_select" && apps.phase === "collecting" && apps.window_ends_at) {
+    timer = ` · until ${escapeHtml(new Date(apps.window_ends_at).toUTCString())} (${relDeadlineHtml(apps.window_ends_at)})`;
+  } else if (apps.phase === "grace" && apps.decision_ends_at) {
+    timer = ` · auto-award ${escapeHtml(new Date(apps.decision_ends_at).toUTCString())} (${relDeadlineHtml(apps.decision_ends_at)})`;
+  }
+  const earliest = earliestBondedLogin(apps);
+  let graceNote = "";
+  if (apps.phase === "grace" && apps.claim_mode === "proposer_select") {
+    if (earliest) {
+      graceNote = apps.is_proposer
+        ? `<p class="builder-status claim-grace-note">Auto-awards <strong>@${escapeHtml(earliest)}</strong> unless you pick.</p>`
+        : `<p class="builder-status claim-grace-note muted">Auto-awards <strong>@${escapeHtml(earliest)}</strong> if no pick.</p>`;
+    } else {
+      graceNote = `<p class="builder-status claim-grace-note muted">Decision window open — no bonded applicants to auto-award.</p>`;
+    }
+  }
+  const visible = apps.applications.filter((a) =>
+    ["pending_bond", "bonded", "awarded"].includes(a.bond_status),
+  );
+  const rows =
+    visible.length === 0
+      ? apps.phase === "grace"
+        ? `<p class="builder-status muted">No open applications.</p>`
+        : `<p class="builder-status muted">No applicants yet.</p>`
+      : `<ul class="claim-app-list">${visible
+          .map((a) => {
+            const bond =
+              a.bond_status === "bonded" || a.bond_status === "awarded"
+                ? a.claim_bond_txid
+                  ? `<a href="${escapeHtml(mempoolTxUrl(a.claim_bond_txid))}" target="_blank" rel="noreferrer">Bond paid</a>`
+                  : "Bond paid"
+                : a.bond_status === "pending_bond"
+                  ? "Awaiting bond"
+                  : escapeHtml(a.bond_status.replace(/_/g, " "));
+            const proposerActions =
+              apps.is_proposer &&
+              apps.claim_mode === "proposer_select" &&
+              a.bond_status === "bonded" &&
+              !apps.awarded_application_id
+                ? `<button type="button" class="btn" data-accept-app="${escapeHtml(a.id)}">Accept</button>
+                    <button type="button" class="btn ghost" data-reject-app="${escapeHtml(a.id)}">Reject</button>`
+                : "";
+            const mineWithdraw =
+              a.is_mine &&
+              (a.bond_status === "bonded" || a.bond_status === "pending_bond") &&
+              !apps.awarded_application_id
+                ? `<button type="button" class="btn ghost" data-withdraw-app="${escapeHtml(a.id)}">Withdraw</button>`
+                : "";
+            const actions =
+              proposerActions || mineWithdraw
+                ? `<span class="claim-app-actions">${proposerActions}${mineWithdraw}</span>`
+                : "";
+            return `<li class="claim-app-row">
+              <div><strong>${escapeHtml(a.claimer_login)}</strong>${
+                a.claimer_type === "org"
+                  ? ` <span class="muted">(org${a.claim_agent ? ` · @${escapeHtml(a.claim_agent)}` : ""})</span>`
+                  : ""
+              }${a.is_mine ? ` <span class="muted">(you)</span>` : ""} · ${bond}<br/>${applicantTrackHtml(a.summary)}</div>
+              ${actions}
+            </li>`;
+          })
+          .join("")}</ul>`;
+  return `<div class="claim-apps" id="claim-apps-panel">
+    <p class="builder-status"><strong>${escapeHtml(modeLabel)}</strong>${timer}<br/>
+    ${apps.summary.total} applicants · ${apps.summary.bonded} bonds confirmed · ${apps.summary.pending_bond} awaiting payment</p>
+    ${graceNote}
+    ${rows}
+  </div>`;
+}
+
+function collaboratorsPanelHtml(
+  apps: ClaimApplicationsResponse,
+  user: AuthUser | null,
+  canInvite: boolean,
+): string {
+  const list =
+    apps.collaborators.length === 0
+      ? `<p class="builder-status muted">No credit collaborators yet.</p>`
+      : `<ul class="claim-app-list">${apps.collaborators
+          .map(
+            (c) =>
+              `<li class="claim-app-row"><div><strong>@${escapeHtml(c.github)}</strong> · ${escapeHtml(
+                c.status,
+              )}</div></li>`,
+          )
+          .join("")}</ul>`;
+  const myGh = (user?.github || "").toLowerCase();
+  const pendingForMe =
+    myGh &&
+    apps.collaborators.some(
+      (c) => c.github.toLowerCase() === myGh && c.status === "pending",
+    );
+  const acceptBtn = pendingForMe
+    ? `<button type="button" class="btn" id="collab-accept">Accept credit invite</button>`
+    : "";
+  const invite = canInvite
+    ? `<div class="claim-collab-invite">
+        <label class="donate-amount-label" for="collab-search">Credit a collaborator (GitHub)</label>
+        <p class="builder-claim-hint muted">Credit-only — they don’t operate the claim or earn completion badges.</p>
+        <input id="collab-search" class="donate-amount mono" type="search" placeholder="Search GitHub users…" autocomplete="off" />
+        <div id="collab-suggestions" class="claim-collab-suggestions"></div>
+        <div id="collab-following" class="claim-collab-following"></div>
+      </div>`
+    : "";
+  return `<div class="claim-collab" id="claim-collab-panel">
+    <p class="builder-status"><strong>Collaborators</strong> (credit)</p>
+    ${list}
+    ${acceptBtn}
+    ${invite}
+  </div>`;
 }
 
 export function builderPanelHtml(
@@ -93,8 +278,24 @@ export function builderPanelHtml(
       <div class="site-modal-backdrop" data-close-claim tabindex="-1" aria-hidden="true"></div>
       <div class="site-modal-card builder-claim-card" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title">
         <button type="button" class="site-modal-close" id="claim-close" aria-label="Close">${solidIcon("xmark")}</button>
-        <h3 id="claim-modal-title">Claim this project</h3>
-        <p>Exclusive after merge. One active claim per identity.</p>
+        <h3 id="claim-modal-title">Apply with bond</h3>
+        <p id="claim-modal-awareness" class="builder-claim-hint">Review current applicants before paying the bond.</p>
+
+        <div class="claim-modal-section">
+          <fieldset class="field">
+            <span>Apply as</span>
+            <label class="radio-row"><input type="radio" name="claimer_type" value="individual" checked /> Me (individual)</label>
+            <label class="radio-row"><input type="radio" name="claimer_type" value="org" id="claimer-type-org" /> GitHub org (linked admin)</label>
+            <div id="claim-org-slot" hidden>
+              <select id="claim-org-login" class="donate-amount mono" aria-label="Linked GitHub org">
+                <option value="">Select a linked org…</option>
+              </select>
+              <p class="builder-claim-hint muted" id="claim-org-hint">
+                Link orgs you admin from <a href="/account">Account</a> (GitHub <code>read:org</code>).
+              </p>
+            </div>
+          </fieldset>
+        </div>
 
         <div class="claim-modal-section">
           <label class="donate-amount-label" for="claim-payout">Payout address</label>
@@ -110,7 +311,7 @@ export function builderPanelHtml(
         </div>
         <p class="builder-msg" id="claim-modal-msg" hidden></p>
         <div class="donate-actions claim-modal-actions">
-          <button type="button" class="btn" id="claim-confirm" hidden>Open claim PR</button>
+          <button type="button" class="btn" id="claim-confirm" hidden>Submit application</button>
           <button type="button" class="btn ghost" id="claim-cancel">Cancel</button>
         </div>
       </div>
@@ -205,7 +406,7 @@ function renderStatusBody(
 
   switch (status.state) {
     case "open":
-      body.innerHTML = `${track}${claimBtnHtml()}`;
+      body.innerHTML = `${track}<div id="claim-apps-host"></div>${claimBtnHtml()}`;
       break;
     case "below_floor": {
       const need = Math.max(
@@ -225,6 +426,8 @@ function renderStatusBody(
     case "claimed":
       if (isYou) {
         body.innerHTML = `${track}${meta}<p class="builder-status">You claimed this project${windowLabel}.</p>
+        <p class="builder-status muted" id="claim-award-reason"></p>
+        <div id="claim-collab-host"></div>
         <div class="builder-claim-tools">
           <button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>
           <button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
@@ -243,6 +446,8 @@ function renderStatusBody(
         body.innerHTML = `${track}${meta}<p class="builder-status">Claimed by <strong>${escapeHtml(
           status.claimer || "another builder",
         )}</strong>${windowLabel}.</p>
+        <p class="builder-status muted" id="claim-award-reason"></p>
+        <div id="claim-collab-host"></div>
         <button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`;
       }
       break;
@@ -443,10 +648,246 @@ export async function bindBuilderPanel(
     payoutInput.value = opts.user.payout_address;
   }
 
+  const syncHeroClaimChip = (apps: ClaimApplicationsResponse | null) => {
+    const html = apps
+      ? claimModeHeroChipHtml({
+          ...opts.proposal,
+          claim_mode: apps.claim_mode,
+          claim_phase: apps.phase,
+          claim_window_ends_at: apps.window_ends_at,
+          claim_decision_ends_at: apps.decision_ends_at,
+          claim_apps_total: apps.summary.total,
+          claim_apps_bonded: apps.summary.bonded,
+        })
+      : claimModeHeroChipHtml(opts.proposal);
+    const existing = document.querySelector("#proposal-claim-mode-chip");
+    if (!html) {
+      if (existing) {
+        const prev = existing.previousElementSibling;
+        if (prev?.classList.contains("proposal-meta-sep")) prev.remove();
+        existing.remove();
+      }
+      return;
+    }
+    if (existing) {
+      existing.outerHTML = html;
+      return;
+    }
+    const meta = document.querySelector(".proposal-meta-line");
+    if (!meta) return;
+    const sep = `<span class="proposal-meta-sep" aria-hidden="true">·</span>`;
+    const typeChip = [...meta.querySelectorAll(".proposal-meta-chip")].find(
+      (el) => !el.classList.contains("proposal-tag"),
+    );
+    if (typeChip) {
+      typeChip.insertAdjacentHTML("afterend", `${sep}${html}`);
+    } else {
+      meta.insertAdjacentHTML("beforeend", `${sep}${html}`);
+    }
+  };
+
+  const bindApplicantActions = (apps: ClaimApplicationsResponse) => {
+    panel.querySelectorAll<HTMLButtonElement>("[data-accept-app]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.acceptApp;
+        if (!id) return;
+        btn.disabled = true;
+        try {
+          const result = await acceptClaimApplication({
+            proposal_path: opts.proposal.path,
+            application_id: id,
+          });
+          setMsg(msg, `Awarded. Claim PR: ${result.pr_url}`, "success");
+          await refreshStatus();
+        } catch (e) {
+          setMsg(msg, (e as Error).message, "error");
+          btn.disabled = false;
+        }
+      });
+    });
+    panel.querySelectorAll<HTMLButtonElement>("[data-reject-app]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.rejectApp;
+        if (!id) return;
+        btn.disabled = true;
+        try {
+          await rejectClaimApplication({
+            proposal_path: opts.proposal.path,
+            application_id: id,
+          });
+          setMsg(msg, "Applicant rejected; bond refundable.", "success");
+          await refreshStatus();
+        } catch (e) {
+          setMsg(msg, (e as Error).message, "error");
+          btn.disabled = false;
+        }
+      });
+    });
+    panel.querySelectorAll<HTMLButtonElement>("[data-withdraw-app]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.withdrawApp;
+        if (!id) return;
+        if (
+          !window.confirm(
+            "Withdraw your application? Your bond becomes refundable.",
+          )
+        ) {
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await withdrawClaimApplication({
+            proposal_path: opts.proposal.path,
+            application_id: id,
+          });
+          setMsg(msg, "Application withdrawn; bond refundable.", "success");
+          await refreshStatus();
+        } catch (e) {
+          if ((e as Error).message === "login_required") {
+            requireLogin("Sign in to withdraw your application.");
+          } else setMsg(msg, (e as Error).message, "error");
+          btn.disabled = false;
+        }
+      });
+    });
+    void apps;
+  };
+
+  const inviteGithub = async (login: string) => {
+    try {
+      await inviteClaimCollaborator({
+        proposal_path: opts.proposal.path,
+        github: login,
+      });
+      setMsg(msg, `Invited @${login} for credit.`, "success");
+      await refreshStatus();
+    } catch (e) {
+      if ((e as Error).message === "login_required") {
+        requireLogin("Sign in to invite collaborators.");
+      } else setMsg(msg, (e as Error).message, "error");
+    }
+  };
+
+  const bindCollaboratorUi = async (
+    apps: ClaimApplicationsResponse,
+    canInvite: boolean,
+  ) => {
+    const host = body?.querySelector("#claim-collab-host");
+    if (!host) return;
+    host.innerHTML = collaboratorsPanelHtml(apps, opts.user, canInvite);
+    host.querySelector("#collab-accept")?.addEventListener("click", async () => {
+      try {
+        await acceptClaimCollaboratorInvite({
+          proposal_path: opts.proposal.path,
+        });
+        setMsg(msg, "Collaborator credit accepted.", "success");
+        await refreshStatus();
+      } catch (e) {
+        if ((e as Error).message === "login_required") {
+          requireLogin("Sign in with GitHub to accept.");
+        } else setMsg(msg, (e as Error).message, "error");
+      }
+    });
+    if (!canInvite) return;
+    const search = host.querySelector<HTMLInputElement>("#collab-search");
+    const suggestions = host.querySelector<HTMLElement>("#collab-suggestions");
+    const followingEl = host.querySelector<HTMLElement>("#collab-following");
+    let searchTimer: ReturnType<typeof setTimeout> | null = null;
+    const renderHits = (
+      el: HTMLElement | null,
+      users: { login: string; avatar_url?: string }[],
+      empty: string,
+    ) => {
+      if (!el) return;
+      if (!users.length) {
+        el.innerHTML = empty
+          ? `<p class="muted" style="font-size:0.8125rem">${escapeHtml(empty)}</p>`
+          : "";
+        return;
+      }
+      el.innerHTML = users
+        .map(
+          (u) =>
+            `<button type="button" class="btn ghost claim-collab-hit" data-gh="${escapeHtml(u.login)}">@${escapeHtml(u.login)}</button>`,
+        )
+        .join(" ");
+      el.querySelectorAll<HTMLButtonElement>("[data-gh]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const gh = btn.dataset.gh;
+          if (gh) void inviteGithub(gh);
+        });
+      });
+    };
+    if (followingEl && opts.user?.github) {
+      const following = await fetchGithubFollowing();
+      renderHits(followingEl, following.slice(0, 12), "");
+    }
+    search?.addEventListener("input", () => {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(async () => {
+        const q = search.value.trim();
+        if (q.length < 2) {
+          if (suggestions) suggestions.innerHTML = "";
+          return;
+        }
+        const users = await searchGithubUsers(q);
+        renderHits(suggestions, users, "No users found");
+      }, 250);
+    });
+  };
+
   const refreshStatus = async () => {
-    const status = await fetchClaimStatus(opts.proposal.path);
+    const [status, apps] = await Promise.all([
+      fetchClaimStatus(opts.proposal.path),
+      fetchClaimApplications(opts.proposal.path),
+    ]);
+    syncHeroClaimChip(apps);
     if (status && body) {
       renderStatusBody(body, status, opts.user, opts.proposal.path);
+      const host = body.querySelector("#claim-apps-host");
+      if (host && apps && status.state === "open") {
+        host.innerHTML = applicationsPanelHtml(apps);
+        bindApplicantActions(apps);
+      }
+      const claimBtn = body.querySelector<HTMLButtonElement>("#builder-claim");
+      if (claimBtn && apps?.mine_application_id) {
+        claimBtn.hidden = true;
+      }
+      if (apps?.award_reason) {
+        const reasonEl = body.querySelector("#claim-award-reason");
+        if (reasonEl) {
+          const label =
+            apps.award_reason === "proposer_accept"
+              ? "Selected by proposer"
+              : apps.award_reason === "auto_earliest_bonded"
+                ? "Auto-awarded (earliest bond)"
+                : apps.award_reason === "first_bonded"
+                  ? "First bonded"
+                  : apps.award_reason;
+          reasonEl.textContent = label;
+        }
+      }
+      if (apps && status.state === "claimed") {
+        const isYou =
+          !!opts.user &&
+          !!status.claimer &&
+          (status.claimer === opts.user.username ||
+            status.claimer === opts.user.github ||
+            status.claimer === opts.user.id);
+        await bindCollaboratorUi(apps, isYou);
+      }
+      const awareness = panel.querySelector("#claim-modal-awareness");
+      if (awareness && apps) {
+        const phaseBit =
+          apps.phase === "grace" && apps.decision_ends_at
+            ? ` · auto-award ${relativeTimeLeft(apps.decision_ends_at)}`
+            : apps.window_ends_at
+              ? ` · ${relativeTimeLeft(apps.window_ends_at)} in window`
+              : "";
+        awareness.textContent = `Mode: ${
+          apps.claim_mode === "first_bonded" ? "first bonded wins" : "proposer picks"
+        } · ${apps.summary.bonded} bonded · ${apps.summary.pending_bond} awaiting bond${phaseBit}. Continue?`;
+      }
       bindClaimButton();
       bindDeliverable(refreshStatus);
       bindCheckpoint();
@@ -454,6 +895,37 @@ export async function bindBuilderPanel(
       bindExtension();
     }
   };
+
+  const tickDeadlines = () => {
+    refreshRelDeadlines(panel);
+    refreshClaimModeChips(document);
+  };
+  const deadlineTimer = window.setInterval(tickDeadlines, 60_000);
+  const onTabVisible = () => {
+    if (document.visibilityState !== "visible") return;
+    tickDeadlines();
+    // Avoid clobbering an open claim modal (re-render resets the panel body).
+    if (modal && !modal.hidden) return;
+    void refreshStatus();
+  };
+  document.addEventListener("visibilitychange", onTabVisible);
+  window.addEventListener("focus", tickDeadlines);
+  const stopLive = () => {
+    window.clearInterval(deadlineTimer);
+    document.removeEventListener("visibilitychange", onTabVisible);
+    window.removeEventListener("focus", tickDeadlines);
+  };
+  // SPA navigations replace #app; clear timers when panel is gone.
+  const detachObserver = new MutationObserver(() => {
+    if (!document.contains(panel)) {
+      stopLive();
+      detachObserver.disconnect();
+    }
+  });
+  detachObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 
   const modalMsg = () => panel.querySelector<HTMLElement>("#claim-modal-msg");
 
@@ -520,28 +992,110 @@ export async function bindBuilderPanel(
       setMsg(modalMsg(), "Enter the 64-character claim bond txid.", "error");
       return;
     }
-    setMsg(modalMsg(), "Opening claim PR…");
+    const claimerType =
+      (
+        panel.querySelector(
+          'input[name="claimer_type"]:checked',
+        ) as HTMLInputElement | null
+      )?.value === "org"
+        ? ("org" as const)
+        : ("individual" as const);
+    const orgLogin =
+      panel.querySelector<HTMLSelectElement>("#claim-org-login")?.value.trim() ||
+      undefined;
+    if (claimerType === "org" && !orgLogin) {
+      setMsg(
+        modalMsg(),
+        "Select a linked GitHub org (or link one on Account).",
+        "error",
+      );
+      return;
+    }
+    setMsg(modalMsg(), "Submitting bonded application…");
     try {
       const result = await submitClaim({
         proposal_path: opts.proposal.path,
         payout_address: payout,
         note: noteInput?.value.trim() || undefined,
         claim_bond_txid: bond,
+        claimer_type: claimerType,
+        org_login: claimerType === "org" ? orgLogin : undefined,
       });
       closeClaimModal();
       setMsg(
         msg,
-        `Claim PR opened (bond ${formatSats(result.bond_sats || params.claim_bond_sats)}). Exclusive after merge: ${result.pr_url}`,
+        result.awarded && result.pr_url
+          ? `Awarded. Claim PR: ${result.pr_url}`
+          : `Application bonded. ${
+              result.pr_url ? `PR: ${result.pr_url}` : "Awaiting proposer / auto-award."
+            }`,
         "success",
       );
       await refreshStatus();
     } catch (e) {
       if ((e as Error).message === "login_required") {
         closeClaimModal();
-        requireLogin("Sign in to claim this project.");
+        requireLogin("Sign in to apply for this project.");
       } else setMsg(modalMsg(), (e as Error).message, "error");
     }
   });
+
+  const syncOrgSlot = () => {
+    const org =
+      (
+        panel.querySelector(
+          'input[name="claimer_type"]:checked',
+        ) as HTMLInputElement | null
+      )?.value === "org";
+    const slot = panel.querySelector<HTMLElement>("#claim-org-slot");
+    const select = panel.querySelector<HTMLSelectElement>("#claim-org-login");
+    const hint = panel.querySelector<HTMLElement>("#claim-org-hint");
+    const orgRadio = panel.querySelector<HTMLInputElement>("#claimer-type-org");
+    const linked = freshLinkedOrgs(opts.user);
+    if (orgRadio) {
+      const canOrg = Boolean(opts.user?.id.startsWith("github:"));
+      orgRadio.disabled = !canOrg;
+      if (!canOrg && org) {
+        const ind = panel.querySelector<HTMLInputElement>(
+          'input[name="claimer_type"][value="individual"]',
+        );
+        if (ind) ind.checked = true;
+      }
+    }
+    if (select) {
+      const prev = select.value;
+      select.innerHTML =
+        `<option value="">Select a linked org…</option>` +
+        linked
+          .map(
+            (o) =>
+              `<option value="${escapeHtml(o.login)}"${
+                o.login === prev ? " selected" : ""
+              }>@${escapeHtml(o.login)}</option>`,
+          )
+          .join("");
+    }
+    if (hint) {
+      hint.innerHTML = linked.length
+        ? `Using orgs linked on <a href="${href("/account")}">Account</a>.`
+        : opts.user?.id.startsWith("github:")
+          ? `No linked orgs. <a href="${href("/account")}">Link GitHub orgs</a> on Account first.`
+          : `Org apply requires a GitHub session. <a href="${href("/account")}">Account</a>`;
+    }
+    if (slot) {
+      const showOrg =
+        (
+          panel.querySelector(
+            'input[name="claimer_type"]:checked',
+          ) as HTMLInputElement | null
+        )?.value === "org";
+      slot.hidden = !showOrg;
+    }
+  };
+  panel.querySelectorAll('input[name="claimer_type"]').forEach((el) => {
+    el.addEventListener("change", syncOrgSlot);
+  });
+  syncOrgSlot();
 
   const bindCheckpoint = () => {
     panel.querySelector("#builder-checkpoint")?.addEventListener("click", () => {

@@ -261,14 +261,37 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const feeLabel = formatSats(SUBMISSION_FEE_SATS);
   const networkLabel = BITCOIN_NETWORK === "signet" ? "signet" : "mainnet";
   let feeAddress: string | null = null;
+  let claimModeDefault = "proposer_select";
+  let claimWindowPresets = [3, 7, 14];
+  let claimWindowDefault = 7;
   if (!isEdit) {
     try {
       const params = await fetchClaimParams();
       feeAddress = params.fee_address;
+      if (params.claim_mode_default === "first_bonded") {
+        claimModeDefault = "first_bonded";
+      }
+      if (
+        Array.isArray(params.claim_window_days_presets) &&
+        params.claim_window_days_presets.length
+      ) {
+        claimWindowPresets = params.claim_window_days_presets.map(Number);
+      }
+      if (typeof params.claim_window_days_default === "number") {
+        claimWindowDefault = params.claim_window_days_default;
+      }
     } catch {
       /* optional */
     }
   }
+  const windowChips = claimWindowPresets
+    .map(
+      (d) =>
+        `<label class="chip"><input type="radio" name="claim_window_days" value="${d}"${
+          d === claimWindowDefault ? " checked" : ""
+        } /> ${d} days</label>`,
+    )
+    .join("\n                  ");
 
   const reviewLede = isEdit
     ? "Confirm the amend, then open the pull request. Lifecycle fields stay intact until merge."
@@ -336,6 +359,21 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               <span>Proposal type</span>
               <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open to claim by a builder</span></label>
               <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Direct</strong>: you are the recipient (no claim step)</span></label>
+            </fieldset>
+            <fieldset class="field propose-claim-mode" data-claim-mode-fields>
+              <span>Who gets the claim</span>
+              <label class="radio-row"><input type="radio" name="claim_mode" value="proposer_select"${
+                claimModeDefault !== "first_bonded" ? " checked" : ""
+              } /><span><strong>I pick</strong>: builders apply with bond for a window; you choose one. If you don’t, earliest bonded wins.</span></label>
+              <label class="radio-row"><input type="radio" name="claim_mode" value="first_bonded"${
+                claimModeDefault === "first_bonded" ? " checked" : ""
+              } /><span><strong>First bonded</strong>: first builder who pays the claim bond gets the exclusive claim.</span></label>
+              <div class="claim-window-presets" data-claim-window-presets>
+                <span class="field-hint">Application window (starts when claim floor is met)</span>
+                <div class="chip-row">
+                  ${windowChips}
+                </div>
+              </div>
             </fieldset>
             <div class="field">
               <span>Tags <em class="optional">(optional)</em></span>
@@ -469,6 +507,21 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const tagsInput = bindTagInput(document, "propose-tags");
   let coverUrl: string | null = prefill?.cover_image || null;
   let coverUploading = false;
+
+  const syncClaimModeFields = () => {
+    const bounty =
+      readNamedValue(form, "proposal_type") !== "direct";
+    const modeFields = form.querySelector<HTMLElement>("[data-claim-mode-fields]");
+    const presets = form.querySelector<HTMLElement>("[data-claim-window-presets]");
+    if (modeFields) modeFields.hidden = !bounty;
+    const selectMode =
+      readNamedValue(form, "claim_mode") !== "first_bonded";
+    if (presets) presets.hidden = !bounty || !selectMode;
+  };
+  form
+    .querySelectorAll('input[name="proposal_type"], input[name="claim_mode"]')
+    .forEach((el) => el.addEventListener("change", syncClaimModeFields));
+  syncClaimModeFields();
 
   let currentStep: ProposeWizardStepId = "basics";
   let maxReachedIdx = 0;
@@ -1205,12 +1258,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     }
 
     const tags = tagsInput?.getTags() || parseTagList(String(fd.get("tags") || ""));
+    const proposal_type =
+      String(fd.get("proposal_type") || "bounty") === "direct"
+        ? ("direct" as const)
+        : ("bounty" as const);
+    const claim_mode =
+      String(fd.get("claim_mode") || "proposer_select") === "first_bonded"
+        ? ("first_bonded" as const)
+        : ("proposer_select" as const);
+    const claim_window_raw = Number(fd.get("claim_window_days") || 7);
     const author = {
       title: String(fd.get("title") || ""),
-      proposal_type:
-        String(fd.get("proposal_type") || "bounty") === "direct"
-          ? ("direct" as const)
-          : ("bounty" as const),
+      proposal_type,
       tags,
       parent_initiative: String(fd.get("parent_initiative") || "").trim() || null,
       problem: String(fd.get("problem") || ""),
@@ -1220,6 +1279,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       target_sats,
       cover_image: coverUrl,
       notes: String(fd.get("notes") || "").trim() || null,
+      claim_mode: proposal_type === "bounty" ? claim_mode : undefined,
+      claim_window_days:
+        proposal_type === "bounty" && claim_mode === "proposer_select"
+          ? [3, 7, 14].includes(claim_window_raw)
+            ? claim_window_raw
+            : 7
+          : undefined,
       milestones: checked.milestones,
       depends_on: depOk.value,
       related_work: relOk.value,

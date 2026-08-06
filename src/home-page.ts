@@ -15,6 +15,7 @@ import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
+import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import {
   fundingBarTrackHtml,
   fundingTargetSats,
@@ -319,13 +320,13 @@ function proposalCardHtml(
       : `<span class="project-card-by"><span class="project-card-by-text">by ${escapeHtml(proposerName)}</span></span>`
     : "";
   const donateHref = `${proposalHref(p.path, p.id)}?donate`;
-  const open = isOpenToClaim(p, floor);
   const isDirect = String(p.proposal_type || "bounty").toLowerCase() === "direct";
   const typeBadge = isDirect
     ? `<span class="project-card-type" title="Proposer is the recipient">Direct</span>`
     : "";
-  const secondaryBadge = open
-    ? `<span class="project-card-open" title="Confirmed funding meets claim floor">Open to claim</span>`
+  const claimModeBadge = claimModeChipHtml(p, floor);
+  const secondaryBadge = claimModeBadge
+    ? claimModeBadge
     : watching
       ? `<span class="project-card-watch">Watching</span>`
       : lightningEnabled && p.escrow_address
@@ -892,6 +893,28 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     }
     bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled, watchPaths);
     void hydrateAvatarSlots(app);
+    const chipTimer = window.setInterval(
+      () => refreshClaimModeChips(app),
+      60_000,
+    );
+    const onHomeFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      refreshClaimModeChips(app);
+    };
+    document.addEventListener("visibilitychange", onHomeFocus);
+    window.addEventListener("focus", onHomeFocus);
+    const stopHomeLive = () => {
+      window.clearInterval(chipTimer);
+      document.removeEventListener("visibilitychange", onHomeFocus);
+      window.removeEventListener("focus", onHomeFocus);
+    };
+    const homeObs = new MutationObserver(() => {
+      if (!document.contains(app) || !app.querySelector("#list")) {
+        stopHomeLive();
+        homeObs.disconnect();
+      }
+    });
+    homeObs.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {
     listEl.className = "error";
     listEl.textContent = `Could not load projects: ${(e as Error).message}`;

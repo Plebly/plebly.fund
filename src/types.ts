@@ -8,6 +8,12 @@ export type FunderCreditPreferences = {
   show_amount: boolean;
 };
 
+export type GithubOrgAttestation = {
+  login: string;
+  role: "admin";
+  verified_at: string;
+};
+
 export type UserProfile = {
   id: string;
   username?: string;
@@ -21,6 +27,8 @@ export type UserProfile = {
   skills_tags?: string[];
   /** Default appearance on public funder lists. */
   funder_credit?: FunderCreditPreferences;
+  /** Private: linked GitHub orgs for claim-as-org (from Account). */
+  github_orgs?: GithubOrgAttestation[];
   created_at?: string;
   updated_at?: string;
   username_claimed_at?: string;
@@ -126,6 +134,14 @@ export type Proposal = {
   balance_sats?: number;
   proposer?: ProposalProposer | null;
   claimer?: string | null;
+  claim_mode?: "first_bonded" | "proposer_select" | string | null;
+  claim_window_days?: number | null;
+  /** Catalog enrich from claim application pool (optional). */
+  claim_apps_total?: number | null;
+  claim_apps_bonded?: number | null;
+  claim_phase?: string | null;
+  claim_window_ends_at?: string | null;
+  claim_decision_ends_at?: string | null;
   claimed_at?: string | null;
   payout_address?: string | null;
   deliverable_url?: string | null;

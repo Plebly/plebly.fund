@@ -4176,6 +4176,103 @@ a.project-card-by:hover .project-card-by-text {
   line-height: 1.4;
 }
 
+.claim-apps {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+}
+
+.claim-app-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.claim-app-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  font-size: 0.875rem;
+}
+
+.claim-app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.claim-grace-note {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  font-size: 0.875rem;
+}
+
+.proposal-claim-mode {
+  color: var(--good);
+  border-color: rgba(var(--good-rgb), 0.4);
+}
+
+.account-org-list {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.account-org-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.claim-collab {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--hairline, rgba(0, 0, 0, 0.08));
+}
+
+.claim-collab-invite {
+  margin-top: 0.75rem;
+}
+
+.claim-collab-suggestions,
+.claim-collab-following {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.claim-collab-hit {
+  font-size: 0.8125rem;
+}
+
+.propose-claim-mode .chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.propose-claim-mode .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
 .claim-modal-section:last-child {
   margin-bottom: 0;
 }

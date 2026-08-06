@@ -82,6 +82,55 @@ export type ClaimParams = {
   checkpoint_day: number;
   checkpoint_grace_days: number;
   fee_address: string | null;
+  claim_mode_default?: string;
+  claim_window_days_presets?: number[];
+  claim_window_days_default?: number;
+  claim_decision_grace_days?: number;
+  max_claim_applications?: number;
+  max_claim_collaborators?: number;
+};
+
+export type ClaimApplicationView = {
+  id: string;
+  claimer_login: string;
+  claimer_type: "individual" | "org";
+  claim_agent?: string;
+  bond_status: string;
+  bond_sats: number;
+  claim_bond_txid?: string;
+  applied_at: string;
+  bonded_at?: string;
+  is_mine?: boolean;
+  summary: {
+    active: number;
+    completed: number;
+    expired: number;
+    rejected: number;
+    abandoned: number;
+  } | null;
+};
+
+export type ClaimApplicationsResponse = {
+  proposal_id: string;
+  proposal_path: string;
+  claim_mode: "first_bonded" | "proposer_select";
+  claim_window_days: number;
+  window_started_at: string | null;
+  window_ends_at: string | null;
+  decision_ends_at: string | null;
+  phase: string;
+  awarded_application_id: string | null;
+  award_reason: string | null;
+  summary: { total: number; bonded: number; pending_bond: number };
+  applications: ClaimApplicationView[];
+  collaborators: {
+    github: string;
+    status: string;
+    invited_at: string;
+    accepted_at?: string;
+  }[];
+  is_proposer?: boolean;
+  mine_application_id?: string | null;
 };
 
 const CLAIMABLE_STATUSES = new Set(["listed", "funding", "claimable"]);
@@ -319,12 +368,32 @@ export async function fetchMyPendingClaims(): Promise<
   return pending;
 }
 
+export async function fetchClaimApplications(
+  proposalPath: string,
+): Promise<ClaimApplicationsResponse | null> {
+  if (!WORKERS_API) return null;
+  const res = await fetch(
+    `${API()}/claims/applications?proposal_path=${encodeURIComponent(proposalPath)}`,
+    { headers: authHeaders(), credentials: "include" },
+  );
+  if (!res.ok) return null;
+  return (await res.json()) as ClaimApplicationsResponse;
+}
+
 export async function submitClaim(input: {
   proposal_path: string;
   payout_address: string;
   note?: string;
   claim_bond_txid: string;
-}): Promise<{ pr_url: string; proposal_id: string; bond_sats?: number }> {
+  claimer_type?: "individual" | "org";
+  org_login?: string;
+}): Promise<{
+  pr_url?: string;
+  proposal_id: string;
+  bond_sats?: number;
+  awarded?: boolean;
+  state?: string;
+}> {
   const res = await fetch(`${API()}/claims`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
@@ -336,11 +405,13 @@ export async function submitClaim(input: {
     pr_url?: string;
     proposal_id?: string;
     bond_sats?: number;
+    awarded?: boolean;
+    state?: string;
     error?: string;
     pending?: { pr_url?: string };
   };
   if (res.status === 401) throw new Error("login_required");
-  if (!res.ok || !data.pr_url) {
+  if (!res.ok) {
     const hint = data.pending?.pr_url
       ? ` Pending: ${data.pending.pr_url}`
       : "";
@@ -350,7 +421,123 @@ export async function submitClaim(input: {
     pr_url: data.pr_url,
     proposal_id: data.proposal_id || "",
     bond_sats: data.bond_sats,
+    awarded: data.awarded,
+    state: data.state,
   };
+}
+
+export async function acceptClaimApplication(input: {
+  proposal_path: string;
+  application_id: string;
+}): Promise<{ pr_url: string }> {
+  const res = await fetch(
+    `${API()}/claims/applications/${encodeURIComponent(input.application_id)}/accept`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ proposal_path: input.proposal_path }),
+    },
+  );
+  const data = (await res.json()) as { ok?: boolean; pr_url?: string; error?: string };
+  if (!res.ok || !data.pr_url) {
+    throw new Error(data.error || `Accept failed (${res.status})`);
+  }
+  return { pr_url: data.pr_url };
+}
+
+export async function rejectClaimApplication(input: {
+  proposal_path: string;
+  application_id: string;
+}): Promise<void> {
+  const res = await fetch(
+    `${API()}/claims/applications/${encodeURIComponent(input.application_id)}/reject`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ proposal_path: input.proposal_path }),
+    },
+  );
+  const data = (await res.json()) as { error?: string };
+  if (!res.ok) throw new Error(data.error || `Reject failed (${res.status})`);
+}
+
+export async function withdrawClaimApplication(input: {
+  proposal_path: string;
+  application_id: string;
+}): Promise<void> {
+  const res = await fetch(
+    `${API()}/claims/applications/${encodeURIComponent(input.application_id)}/withdraw`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ proposal_path: input.proposal_path }),
+    },
+  );
+  const data = (await res.json()) as { error?: string };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok) throw new Error(data.error || `Withdraw failed (${res.status})`);
+}
+
+export async function searchGithubUsers(
+  q: string,
+): Promise<{ login: string; avatar_url: string; type: string }[]> {
+  if (!WORKERS_API || q.trim().length < 2) return [];
+  const res = await fetch(
+    `${API()}/claims/github/user-search?q=${encodeURIComponent(q.trim())}`,
+    { headers: authHeaders(), credentials: "include" },
+  );
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    users?: { login: string; avatar_url: string; type: string }[];
+  };
+  return data.users || [];
+}
+
+export async function fetchGithubFollowing(): Promise<
+  { login: string; avatar_url: string }[]
+> {
+  if (!WORKERS_API) return [];
+  const res = await fetch(`${API()}/claims/github/following`, {
+    headers: authHeaders(),
+    credentials: "include",
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    users?: { login: string; avatar_url: string }[];
+  };
+  return data.users || [];
+}
+
+export async function inviteClaimCollaborator(input: {
+  proposal_path: string;
+  github: string;
+}): Promise<void> {
+  const res = await fetch(`${API()}/claims/collaborators`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as { error?: string };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok) throw new Error(data.error || `Invite failed (${res.status})`);
+}
+
+export async function acceptClaimCollaboratorInvite(input: {
+  proposal_path: string;
+}): Promise<void> {
+  const res = await fetch(`${API()}/claims/collaborators/accept`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as { error?: string };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok) throw new Error(data.error || `Accept failed (${res.status})`);
 }
 
 export async function submitCheckpoint(input: {
