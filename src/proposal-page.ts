@@ -53,6 +53,7 @@ import { hydrateAvatarSlots } from "./profile-avatars";
 import {
   bindProposalEngagement,
   commentsHtml,
+  discussionClosedForStatus,
   funderCreditHtml,
 } from "./proposal-engagement";
 import { fetchReviewerMe } from "./reviewers";
@@ -392,7 +393,9 @@ export async function renderProposalPage(
             }
             ${proposalContextHtml(match.depends_on || [], match.related_work || [])}
             ${funderCreditHtml(match.id)}
-            ${commentsHtml(match.id, Boolean(user))}
+            ${commentsHtml(match.id, Boolean(user), {
+              discussionClosed: discussionClosedForStatus(status),
+            })}
           </div>
 
           <aside class="proposal-sidebar">
@@ -509,6 +512,7 @@ export async function renderProposalPage(
         user,
         canModerate: Boolean(reviewerMe?.active),
         proposalId: match.id,
+        discussionClosed: discussionClosedForStatus(status),
       },
     );
     void hydrateAvatarSlots(app);

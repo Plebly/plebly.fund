@@ -70,6 +70,7 @@ export function parseLocation(
   if (path === "about") return { name: "about" };
   if (path === "stats") return { name: "stats" };
   if (path === "declined") return { name: "declined" };
+  if (path === "completed") return { name: "completed" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
@@ -436,6 +437,13 @@ export function seoForRoute(
         description:
           "Archive of declined or closed Plebly listings kept for public record.",
         path: "/declined",
+      };
+    case "completed":
+      return {
+        title: "Completed projects",
+        description:
+          "Archive of finished Plebly bounties kept for public record.",
+        path: "/completed",
       };
     case "propose":
       return {

@@ -6507,7 +6507,8 @@ a.project-card-by:hover .project-card-by-text {
   font-weight: 600;
 }
 
-.engagement-workboard-hint {
+.engagement-workboard-hint,
+.engagement-closed-notice {
   margin: 0.35rem 0 0.65rem;
   font-size: 0.8125rem;
 }

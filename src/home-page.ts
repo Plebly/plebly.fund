@@ -396,17 +396,22 @@ function railHtml(
   floor: number,
   lightningEnabled: boolean,
   watchPaths: Set<string>,
-  opts: { hideWhenEmpty?: boolean } = {},
+  opts: { hideWhenEmpty?: boolean; browseHref?: string } = {},
 ): string {
+  const browse = opts.browseHref || href("/", "", "#projects");
   if (!proposals.length) {
     if (opts.hideWhenEmpty) return "";
     const emptyBody =
       id === "completed-projects"
         ? "Nothing here yet. Projects move here after public review and release."
         : `No ${title.toLowerCase()} yet.`;
+    const emptyBrowse = opts.browseHref
+      ? `<a href="${escapeHtml(opts.browseHref)}">Browse archive →</a>`
+      : "";
     return `<section class="wrap-wide project-rail project-rail-empty" aria-labelledby="${id}">
       <div class="rail-head">
         <div><h2 id="${id}">${escapeHtml(title)}</h2><p>${escapeHtml(description)}</p></div>
+        ${emptyBrowse}
       </div>
       <div class="rail-empty">
         <p class="rail-empty-line">${escapeHtml(emptyBody)}</p>
@@ -416,7 +421,7 @@ function railHtml(
   return `<section class="wrap-wide project-rail" aria-labelledby="${id}">
     <div class="rail-head">
       <div><h2 id="${id}">${escapeHtml(title)}</h2><p>${escapeHtml(description)}</p></div>
-      <a href="${href("/", "", "#projects")}">Browse all →</a>
+      <a href="${escapeHtml(browse)}">Browse all →</a>
     </div>
     <div class="project-rail-list">${proposals
       .map((p) => proposalCardHtml(p, floor, lightningEnabled, watchPaths.has(p.path) || Boolean(p.id && watchPaths.has(p.id))))
@@ -878,7 +883,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
         CLAIM_FLOOR_SATS,
         lightningEnabled,
         watchPaths,
-        { hideWhenEmpty: true },
+        { hideWhenEmpty: true, browseHref: href("/completed") },
       );
       bindCardWatches(completedRail, watchPaths);
     }

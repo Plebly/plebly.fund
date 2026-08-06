@@ -454,7 +454,7 @@ async function bindWorkboardSettings(
     !host ||
     !isProposer ||
     !WORKERS_API ||
-    !(state === "claimed" || state === "in_review" || state === "completed")
+    !(state === "claimed" || state === "in_review")
   ) {
     return;
   }
@@ -520,9 +520,7 @@ function renderStatusBody(
   const isYou = sessionIsClaimer(user, status.claimer, status.claimer_type);
   const showWb =
     isProposer &&
-    (status.state === "claimed" ||
-      status.state === "in_review" ||
-      status.state === "completed");
+    (status.state === "claimed" || status.state === "in_review");
   const wbSlot = showWb
     ? `<div id="workboard-settings-host"></div>`
     : "";

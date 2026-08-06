@@ -41,9 +41,53 @@ export function funderCreditHtml(proposalId: string | null): string {
   </section>`;
 }
 
-export function commentsHtml(proposalId: string | null, signedIn: boolean): string {
+export function discussionClosedForStatus(status: string | undefined): boolean {
+  return [
+    "completed",
+    "declined",
+    "declined_fundable",
+    "underfunded",
+    "refunding",
+    "redirected",
+  ].includes(String(status || ""));
+}
+
+function closedNoticeHtml(): string {
+  return `<p class="muted engagement-closed-notice">Discussion closed — this project is finished. History stays readable.</p>`;
+}
+
+export function commentsHtml(
+  proposalId: string | null,
+  signedIn: boolean,
+  opts: { discussionClosed?: boolean } = {},
+): string {
   if (!proposalId) return "";
-  return `<section class="proposal-engagement" id="proposal-comments" data-proposal-id="${escapeHtml(proposalId)}">
+  const closed = Boolean(opts.discussionClosed);
+  const publicCompose = closed
+    ? closedNoticeHtml()
+    : signedIn
+      ? `<label class="sr-only" for="proposal-comment-input">Comment</label>
+             <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write a comment…"></textarea>
+             <div class="comment-compose-actions">
+               <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>
+             </div>`
+      : `<div class="proposal-engagement-empty">
+               <p>Sign in to comment.</p>
+               ${loginChoicesHtml(undefined, currentReturnPath())}
+               <p class="builder-msg" id="comment-login-msg" hidden></p>
+             </div>`;
+  const workboardCompose = closed
+    ? closedNoticeHtml()
+    : signedIn
+      ? `<label class="sr-only" for="proposal-workboard-input">Workboard message</label>
+             <textarea id="proposal-workboard-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write to the claim team…"></textarea>
+             <div class="comment-compose-actions">
+               <button type="button" class="btn" id="proposal-workboard-submit">Post to workboard</button>
+             </div>`
+      : "";
+  return `<section class="proposal-engagement" id="proposal-comments" data-proposal-id="${escapeHtml(proposalId)}"${
+    closed ? ' data-discussion-closed="1"' : ""
+  }>
     <h2 class="proposal-block-title">Discussion</h2>
     <div class="engagement-tabs" id="proposal-engagement-tabs" hidden role="tablist" aria-label="Discussion">
       <button type="button" class="engagement-tab is-active" role="tab" aria-selected="true" data-eng-tab="public" id="eng-tab-public">Public</button>
@@ -52,33 +96,13 @@ export function commentsHtml(proposalId: string | null, signedIn: boolean): stri
     <div id="proposal-public-pane" class="engagement-pane" data-eng-pane="public">
       <p id="proposal-discussion-link" class="proposal-discussion-link" hidden></p>
       <div id="proposal-comment-list"><p class="muted">Loading comments…</p></div>
-      ${
-        signedIn
-          ? `<label class="sr-only" for="proposal-comment-input">Comment</label>
-             <textarea id="proposal-comment-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write a comment…"></textarea>
-             <div class="comment-compose-actions">
-               <button type="button" class="btn" id="proposal-comment-submit">Post comment</button>
-             </div>`
-          : `<div class="proposal-engagement-empty">
-               <p>Sign in to comment.</p>
-               ${loginChoicesHtml(undefined, currentReturnPath())}
-               <p class="builder-msg" id="comment-login-msg" hidden></p>
-             </div>`
-      }
+      ${publicCompose}
       <p class="builder-msg" id="proposal-comment-msg" hidden></p>
     </div>
     <div id="proposal-workboard-pane" class="engagement-pane" data-eng-pane="workboard" hidden>
       <p class="muted engagement-workboard-hint">Only the proposer, claimer, and collaborators can see these posts.</p>
       <div id="proposal-workboard-list"><p class="muted">Loading…</p></div>
-      ${
-        signedIn
-          ? `<label class="sr-only" for="proposal-workboard-input">Workboard message</label>
-             <textarea id="proposal-workboard-input" class="comment-input" rows="3" maxlength="2000" placeholder="Write to the claim team…"></textarea>
-             <div class="comment-compose-actions">
-               <button type="button" class="btn" id="proposal-workboard-submit">Post to workboard</button>
-             </div>`
-          : ""
-      }
+      ${workboardCompose}
       <p class="builder-msg" id="proposal-workboard-msg" hidden></p>
     </div>
   </section>`;
@@ -263,6 +287,7 @@ export async function bindProposalEngagement(
     user?: AuthUser | null;
     canModerate?: boolean;
     proposalId?: string | null;
+    discussionClosed?: boolean;
   } = {},
 ): Promise<() => Promise<void>> {
   const noop = async () => undefined;
@@ -274,6 +299,9 @@ export async function bindProposalEngagement(
     funder?.dataset.proposalId ||
     comments?.dataset.proposalId;
   if (!proposalId) return noop;
+  let discussionClosed =
+    Boolean(opts.discussionClosed) ||
+    comments?.dataset.discussionClosed === "1";
 
   bindLoginHandlers(onAuthed);
 
@@ -358,13 +386,33 @@ export async function bindProposalEngagement(
     const meta = (await metaRes.json()) as {
       enabled?: boolean;
       is_participant?: boolean;
+      can_post?: boolean;
+      discussion_closed?: boolean;
     };
+    if (meta.discussion_closed) discussionClosed = true;
     if (!meta.enabled || !meta.is_participant) {
       if (tabs) tabs.hidden = true;
       showEngTab("public");
       return false;
     }
     if (tabs) tabs.hidden = false;
+    if (discussionClosed || meta.can_post === false) {
+      const wbInput = root.querySelector<HTMLElement>("#proposal-workboard-input");
+      const wbSubmit = root.querySelector<HTMLButtonElement>(
+        "#proposal-workboard-submit",
+      );
+      if (wbInput) wbInput.hidden = true;
+      if (wbSubmit?.parentElement) wbSubmit.parentElement.hidden = true;
+      if (
+        workboardPane &&
+        !workboardPane.querySelector(".engagement-closed-notice")
+      ) {
+        workboardPane.insertAdjacentHTML(
+          "beforeend",
+          `<p class="muted engagement-closed-notice">Discussion closed — this project is finished. History stays readable.</p>`,
+        );
+      }
+    }
     const listRes = await authFetch(
       `${api()}/workboard/${encodeURIComponent(proposalId)}`,
     );
@@ -447,6 +495,10 @@ export async function bindProposalEngagement(
   const submit = root.querySelector<HTMLButtonElement>("#proposal-comment-submit");
   const input = root.querySelector<HTMLTextAreaElement>("#proposal-comment-input");
   submit?.addEventListener("click", async () => {
+    if (discussionClosed) {
+      setMsg(commentMsg, "Discussion closed — this project is finished.");
+      return;
+    }
     const body = input?.value.trim() || "";
     if (!body) return;
     submit.disabled = true;
@@ -475,6 +527,10 @@ export async function bindProposalEngagement(
     "#proposal-workboard-input",
   );
   wbSubmit?.addEventListener("click", async () => {
+    if (discussionClosed) {
+      setMsg(workboardMsg, "Discussion closed — this project is finished.");
+      return;
+    }
     const body = wbInput?.value.trim() || "";
     if (!body) return;
     wbSubmit.disabled = true;

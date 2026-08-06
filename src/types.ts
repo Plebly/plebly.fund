@@ -175,6 +175,7 @@ export type Route =
   | { name: "about" }
   | { name: "stats" }
   | { name: "declined" }
+  | { name: "completed" }
   | { name: "params" }
   | { name: "account" }
   | { name: "work" }

@@ -57,6 +57,14 @@ describe("commentsHtml", () => {
     expect(html).not.toContain("encrypt");
   });
 
+  it("hides composers when discussion is closed", () => {
+    const html = commentsHtml("PLEBLY-1", true, { discussionClosed: true });
+    expect(html).toContain("Discussion closed");
+    expect(html).toContain('data-discussion-closed="1"');
+    expect(html).not.toContain("proposal-comment-input");
+    expect(html).not.toContain("proposal-workboard-input");
+  });
+
   it("shows comment composer when signed in", () => {
     const html = commentsHtml("PLEBLY-1", true);
     expect(html).toContain("proposal-comment-input");
