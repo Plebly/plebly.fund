@@ -322,32 +322,42 @@ export function connectedAccountsHtml(user: AuthUser): string {
     })
     .join("");
 
+  const orgCount = orgs.length;
+  const orgTitle =
+    orgCount > 0
+      ? `Organizations · ${orgCount} linked`
+      : "Organizations";
+
   let orgBlock: string;
   if (!githubSession) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <p class="account-orgs-title">Organizations</p>
-      <p class="hint">Sign in with GitHub to link organizations you admin. Then you can apply for claims as that org.</p>
+      <p class="account-orgs-title">${orgTitle}</p>
+      <p class="hint">Sign in with GitHub to view and link organizations you own. Then you can apply for claims as that org.</p>
     </div>`;
   } else if (rows) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
       <div class="account-orgs-head">
-        <p class="account-orgs-title">Organizations</p>
-        <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Refresh from GitHub</button>
+        <p class="account-orgs-title">${orgTitle}</p>
       </div>
-      <p class="hint">Link multiple org <strong>owners</strong> (up to 10). Refresh every 90 days.</p>
-      <ul class="account-org-list">${rows}</ul>
+      <p class="hint">Your linked org owners (up to 10). Open an org profile from the name below.</p>
+      <ul class="account-org-list" aria-label="Linked GitHub organizations">${rows}</ul>
+      <div class="account-org-actions">
+        <button type="button" class="btn btn-compact" id="link-github-orgs-btn">Add organization</button>
+      </div>
       <div id="org-pick-panel" class="account-org-pick" hidden></div>
-      <p class="hint" id="org-access-hint">Missing an org? Grant this app access for that organization on GitHub, then refresh.</p>
+      <p class="hint" id="org-access-hint">To add another org, grant this app access for it on GitHub, then use Add organization.</p>
       <p class="form-msg" id="org-link-msg" hidden></p>
     </div>`;
   } else {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <p class="account-orgs-title">Organizations</p>
-      <p class="hint">Link GitHub orgs you <strong>own</strong> (admin) — you can select multiple after authorize.</p>
-      <p class="hint" id="org-access-hint">Enable each org under Organization access for this app, then link.</p>
+      <p class="account-orgs-title">${orgTitle}</p>
+      <p class="hint">No organizations linked yet. Link orgs you <strong>own</strong> to apply for claims as that organization.</p>
+      <div class="account-org-actions">
+        <button type="button" class="btn btn-compact" id="link-github-orgs-btn">Add organization</button>
+      </div>
+      <p class="hint" id="org-access-hint">Enable each org under Organization access for this app, then add it here.</p>
       <div id="org-pick-panel" class="account-org-pick" hidden></div>
       <p class="form-msg" id="org-link-msg" hidden></p>
-      <button type="button" class="btn ghost btn-compact" id="link-github-orgs-btn">Link organizations</button>
     </div>`;
   }
 

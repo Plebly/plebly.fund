@@ -10,20 +10,20 @@ function user(partial: Partial<AuthUser> & Pick<AuthUser, "id">): AuthUser {
 }
 
 describe("connectedAccountsHtml", () => {
-  it("offers Link organizations when GitHub session has no orgs", () => {
+  it("offers Add organization when GitHub session has no orgs", () => {
     const html = connectedAccountsHtml(
       user({ id: "github:1", github: "alice" }),
     );
     expect(html).toContain("Connected accounts");
     expect(html).toContain("Organizations");
-    expect(html).toContain("Link organizations");
+    expect(html).toContain("Add organization");
     expect(html).toContain('id="link-github-orgs-btn"');
     expect(html).toContain("btn-compact");
     expect(html).toContain("org-access-hint");
     expect(html).not.toContain("Resync GitHub orgs");
   });
 
-  it("shows Refresh when orgs are already linked", () => {
+  it("lists linked orgs and keeps Add organization for a second org", () => {
     const html = connectedAccountsHtml(
       user({
         id: "github:1",
@@ -38,9 +38,10 @@ describe("connectedAccountsHtml", () => {
       }),
     );
     expect(html).toContain("@bitcoindevkit");
-    expect(html).toContain("Refresh from GitHub");
+    expect(html).toContain("Organizations · 1 linked");
+    expect(html).toContain("Add organization");
     expect(html).toContain("Unlink");
-    expect(html).not.toContain("Link organizations");
+    expect(html).toContain('aria-label="Linked GitHub organizations"');
   });
 
   it("explains GitHub login is required for org linking", () => {

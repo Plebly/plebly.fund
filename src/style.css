@@ -4267,8 +4267,17 @@ a.project-card-by:hover .project-card-by-text {
   color: var(--ink);
 }
 
+.account-org-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .account-orgs .btn,
-.account-block-connected .btn-compact {
+.account-block-connected .btn-compact,
+.account-org-actions .btn {
   width: auto;
   justify-self: start;
 }
