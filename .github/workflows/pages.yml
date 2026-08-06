@@ -17,7 +17,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted, Linux, X64, plebly]
+    # GitHub-hosted: org has no online self-hosted runner with label `plebly`.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +38,7 @@ jobs:
 
   deploy:
     needs: build
-    # Self-hosted so Pages deploy is not blocked by GitHub-hosted runner outages.
-    runs-on: [self-hosted, Linux, X64, plebly]
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     environment:
       name: github-pages
