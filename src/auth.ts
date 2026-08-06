@@ -106,10 +106,17 @@ export async function startGithubOrgLink(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ return_to: oauthReturnTo(returnPath) }),
   });
-  const data = (await res.json()) as {
-    authorize_url?: string;
-    error?: string;
-  };
+  const raw = await res.text();
+  let data: { authorize_url?: string; error?: string } = {};
+  try {
+    data = raw ? (JSON.parse(raw) as typeof data) : {};
+  } catch {
+    throw new Error(
+      res.status === 404
+        ? "Org linking API is unavailable — Workers need a deploy."
+        : `Link org failed (${res.status})`,
+    );
+  }
   if (!res.ok || !data.authorize_url) {
     throw new Error(data.error || `Link org failed (${res.status})`);
   }
