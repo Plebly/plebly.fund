@@ -476,8 +476,25 @@ function fundingDetailTrackHtml(
     </div>`;
 }
 
-export function overfundRatioLabel(funded: number, floor: number): string {
-  const ratio = funded / Math.max(1, floor);
+/** Soft target only — claim floor is a minimum to start work, never a funding ceiling. */
+export function fundingTargetSats(target: number | null | undefined): number | null {
+  if (target != null && Number.isFinite(target) && target > 0) {
+    return Math.floor(target);
+  }
+  return null;
+}
+
+/** True only when funded past the soft target (not merely past the claim floor). */
+export function isPastFundingTarget(
+  funded: number,
+  target: number | null | undefined,
+): boolean {
+  const t = fundingTargetSats(target);
+  return t != null && funded > t;
+}
+
+export function overfundRatioLabel(funded: number, target: number): string {
+  const ratio = funded / Math.max(1, target);
   if (ratio < 1.05) return "";
   const pretty =
     ratio >= 100
@@ -485,7 +502,7 @@ export function overfundRatioLabel(funded: number, floor: number): string {
       : ratio >= 10
         ? `${ratio.toFixed(0)}×`
         : `${ratio.toFixed(1)}×`;
-  return `${pretty} claim floor`;
+  return `${pretty} target`;
 }
 
 export function fundingProgressHtml(
@@ -497,20 +514,20 @@ export function fundingProgressHtml(
   const funded = balance ?? 0;
   const { scale, markers } = fundingBarScale(floor, target, milestones);
   const claimable = funded >= floor;
-  const over = funded > floor;
+  const targetSats = fundingTargetSats(target);
+  const over = isPastFundingTarget(funded, targetSats);
   const remaining = Math.max(0, floor - funded);
-  const overLabel = overfundRatioLabel(funded, floor);
-  const hasTarget =
-    target != null && Number.isFinite(target) && target > 0;
+  const overLabel = over && targetSats ? overfundRatioLabel(funded, targetSats) : "";
+  const hasTarget = targetSats != null;
   const floorPct = Math.min(
     999,
     Math.round((funded / Math.max(1, floor)) * 100),
   );
   const targetPct = hasTarget
-    ? Math.min(999, Math.round((funded / Math.max(1, target!)) * 100))
+    ? Math.min(999, Math.round((funded / Math.max(1, targetSats!)) * 100))
     : floorPct;
   const label = over
-    ? `Overfunded · ${overLabel}`
+    ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
     : claimable
       ? "Open to claim"
       : `${formatSats(remaining)} to claim floor`;

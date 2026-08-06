@@ -17,6 +17,8 @@ import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import {
   fundingBarTrackHtml,
+  fundingTargetSats,
+  isPastFundingTarget,
   overfundRatioLabel,
   statusLabel,
   statusPillHtml,
@@ -268,15 +270,13 @@ function progressHtml(p: Proposal, floor: number): string {
   const remaining = Math.max(0, floor - bal);
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
-  const over = bal > floor;
-  const overLabel = overfundRatioLabel(bal, floor);
   const isDirect = String(p.proposal_type || "bounty").toLowerCase() === "direct";
-  const target =
-    p.target_sats != null && Number.isFinite(p.target_sats) && p.target_sats > 0
-      ? p.target_sats
-      : null;
+  const target = fundingTargetSats(p.target_sats);
+  // Claim floor is the minimum to start work — "overfunded" only past the soft target.
+  const over = isPastFundingTarget(bal, target);
+  const overLabel = over && target ? overfundRatioLabel(bal, target) : "";
   const label = over
-    ? `Overfunded · ${overLabel}`
+    ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
     : isDirect
       ? bal >= floor
         ? "Floor met · direct"
@@ -288,8 +288,7 @@ function progressHtml(p: Proposal, floor: number): string {
           : isTakenStatus(String(p.status)) || p.claimer
             ? "Taken"
             : `${formatSats(remaining)} to claim floor`;
-  const labelClass = over ? "overfunded" : open ? "claimable" : "";
-  // Match detail page: never present claim floor as the funding ceiling.
+  const labelClass = over ? "overfunded" : open || (isDirect && bal >= floor) ? "claimable" : "";
   const satsLine = target
     ? `${formatSats(bal)} · floor ${formatSats(floor)} · target ${formatSats(target)}`
     : `${formatSats(bal)} / ${formatSats(floor)} floor`;
@@ -596,9 +595,14 @@ function bindDiscover(
     if (size === "below-floor") {
       filtered = filtered.filter((p) => (p.balance_sats ?? 0) < floor);
     } else if (size === "at-floor") {
-      filtered = filtered.filter((p) => (p.balance_sats ?? 0) >= floor);
+      filtered = filtered.filter((p) => {
+        const bal = p.balance_sats ?? 0;
+        return bal >= floor && !isPastFundingTarget(bal, p.target_sats);
+      });
     } else if (size === "overfunded") {
-      filtered = filtered.filter((p) => (p.balance_sats ?? 0) > floor);
+      filtered = filtered.filter((p) =>
+        isPastFundingTarget(p.balance_sats ?? 0, p.target_sats),
+      );
     }
     if (window !== "all") {
       const now = Date.now();

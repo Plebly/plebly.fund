@@ -5,6 +5,8 @@ import {
   donatePanelHtml,
   fundingBarScale,
   fundingBarTrackHtml,
+  fundingProgressHtml,
+  isPastFundingTarget,
   metaChipsHtml,
   milestonesHtml,
   proposalContextHtml,
@@ -303,6 +305,25 @@ describe("proposal UI critical render helpers", () => {
     expect(pastFloor).toContain("progress-toward-target");
     expect(pastFloor).toContain('style="width:10%"'); // green to floor
     expect(pastFloor).toContain('style="width:40%"'); // tertiary toward target
+  });
+
+  it("labels open-to-claim past floor and overfunded only past target", () => {
+    expect(isPastFundingTarget(50_000, 100_000)).toBe(false);
+    expect(isPastFundingTarget(100_001, 100_000)).toBe(true);
+    expect(isPastFundingTarget(1_000_000, null)).toBe(false);
+
+    const pastFloor = fundingProgressHtml(50_000, 10_000, 100_000);
+    expect(pastFloor).toContain("Open to claim");
+    expect(pastFloor).not.toContain("Overfunded");
+
+    const pastTarget = fundingProgressHtml(250_000, 10_000, 100_000);
+    expect(pastTarget).toContain("Overfunded");
+    expect(pastTarget).toContain("target");
+    expect(pastTarget).not.toContain("claim floor");
+
+    const noTarget = fundingProgressHtml(50_000, 10_000, null);
+    expect(noTarget).toContain("Open to claim");
+    expect(noTarget).not.toContain("Overfunded");
   });
 
   it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {
