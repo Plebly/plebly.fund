@@ -4699,6 +4699,11 @@ a.project-card-by:hover .project-card-by-text {
   margin-bottom: 1.75rem;
 }
 
+.org-page h2.section-title + .work-list,
+.org-page h2.section-title + .empty-state {
+  margin-bottom: 1.75rem;
+}
+
 .about-team-grid {
   margin-top: 1rem;
 }
