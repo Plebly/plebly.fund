@@ -898,6 +898,10 @@ export async function renderAccount(
   const orgLinkParam = orgParams.get("org_link");
   const orgPickPanel = document.getElementById("org-pick-panel");
 
+  const linkedOrgSet = new Set(
+    (ctx.user.github_orgs || []).map((o) => o.login.toLowerCase()),
+  );
+
   const showOrgPick = async () => {
     if (!orgPickPanel || !orgMsg) return;
     const pending = await fetchPendingGithubOrgs();
@@ -905,21 +909,34 @@ export async function renderAccount(
       orgMsg.hidden = false;
       orgMsg.className = "form-msg error";
       orgMsg.textContent =
-        "Org discovery expired or empty — grant org access on GitHub, then refresh.";
+        "Org discovery expired or empty — grant org access on GitHub, then try Add organization again.";
+      return;
+    }
+    const fresh = pending.filter(
+      (o) => !linkedOrgSet.has(o.login.toLowerCase()),
+    );
+    if (!fresh.length) {
+      orgMsg.hidden = false;
+      orgMsg.className = "form-msg";
+      orgMsg.textContent =
+        "GitHub only returned orgs you already linked. Grant this app access for another org you own, then try Add organization again.";
       return;
     }
     orgPickPanel.hidden = false;
     orgPickPanel.innerHTML = `
       <p class="account-orgs-title">Choose organizations to link</p>
-      <p class="hint">Select one or more orgs you own. You can refresh again later to add more.</p>
+      <p class="hint">Select orgs you own that are not linked yet. Already-linked orgs stay as they are.</p>
       <ul class="account-org-pick-list">
         ${pending
           .map((o) => {
             const login = escapeHtml(o.login);
+            const already = linkedOrgSet.has(o.login.toLowerCase());
             return `<li>
-              <label class="account-org-pick-row">
-                <input type="checkbox" name="org-pick" value="${login}" checked />
-                <span>@${login}</span>
+              <label class="account-org-pick-row${already ? " is-linked" : ""}">
+                <input type="checkbox" name="org-pick" value="${login}" ${
+                  already ? "disabled" : "checked"
+                } />
+                <span>@${login}${already ? ` <span class="muted">(already linked)</span>` : ""}</span>
               </label>
             </li>`;
           })
@@ -938,13 +955,13 @@ export async function renderAccount(
       ?.addEventListener("click", async () => {
         const logins = [
           ...orgPickPanel.querySelectorAll<HTMLInputElement>(
-            'input[name="org-pick"]:checked',
+            'input[name="org-pick"]:checked:not(:disabled)',
           ),
         ].map((el) => el.value);
         if (!logins.length) {
           orgMsg.hidden = false;
           orgMsg.className = "form-msg error";
-          orgMsg.textContent = "Select at least one organization.";
+          orgMsg.textContent = "Select at least one new organization.";
           return;
         }
         const btn = document.getElementById(
@@ -956,7 +973,9 @@ export async function renderAccount(
           ctx.user = next;
           orgMsg.hidden = false;
           orgMsg.className = "form-msg success";
-          orgMsg.textContent = `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`;
+          orgMsg.textContent = linked.length
+            ? `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`
+            : "No new organizations were linked.";
           void renderAccount(ctx, "profile");
         } catch (e) {
           orgMsg.hidden = false;
@@ -978,6 +997,15 @@ export async function renderAccount(
       orgMsg.textContent = linked.length
         ? `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`
         : "No admin orgs returned from GitHub. Grant org access for this app, then refresh.";
+    } else if (orgLinkParam === "already") {
+      const refreshed = (orgParams.get("linked_orgs") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      orgMsg.className = "form-msg";
+      orgMsg.textContent = refreshed.length
+        ? `Already linked${refreshed.length === 1 ? "" : ` (${refreshed.map((l) => `@${l}`).join(", ")})`}. Grant this app access for another org you own on GitHub, then use Add organization again.`
+        : "Already linked. Grant this app access for another org you own on GitHub, then use Add organization again.";
     } else if (orgLinkParam === "pick") {
       orgMsg.className = "form-msg";
       orgMsg.textContent = "Select which organizations to link.";
