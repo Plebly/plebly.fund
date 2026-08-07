@@ -90,7 +90,7 @@ function orgPageInnerHtml(
     : "";
   const members =
     org.public_members.length === 0
-      ? `<p class="muted">No public members listed.</p>`
+      ? `<p class="muted">No public members yet. On GitHub, org members must set their membership to <strong>Public</strong> under <a href="${escapeHtml(org.html_url)}/people" target="_blank" rel="noreferrer">People</a> before they appear here.</p>`
       : `<ul class="org-member-grid">${org.public_members
           .map((m) => {
             const login = m.login.replace(/^@/, "").trim();

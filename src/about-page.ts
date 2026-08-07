@@ -213,7 +213,7 @@ export function aboutTeamMembersHtml(
   members: { login: string; avatar_url: string }[],
 ): string {
   if (!members.length) {
-    return `<p class="muted">No public members listed yet.</p>`;
+    return `<p class="muted">No public members listed yet. On GitHub → <a href="${escapeHtml(PLEBLY_GITHUB_URL)}/people" target="_blank" rel="noreferrer">@${escapeHtml(PLEBLY_ORG_LOGIN)} People</a>, set membership to Public for anyone who should appear here.</p>`;
   }
   return `<ul class="org-member-grid about-team-grid">${members
     .map((m) => {
