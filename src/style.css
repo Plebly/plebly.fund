@@ -4717,6 +4717,58 @@ a.project-card-by:hover .project-card-by-text {
   vertical-align: baseline;
 }
 
+.org-page .org-profile-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem 1.25rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.org-profile-avatar {
+  flex-shrink: 0;
+}
+
+.org-profile-avatar-img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.org-profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.org-profile-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.org-profile-title-row h1 {
+  margin: 0;
+}
+
+.org-profile-name {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.org-profile-links {
+  margin: 0;
+}
+
+.org-profile-bio {
+  margin-top: 0;
+}
+
 .claim-collab {
   margin: 0.75rem 0 1rem;
   padding: 0.75rem 0;

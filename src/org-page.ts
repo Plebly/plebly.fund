@@ -33,20 +33,41 @@ export type PublicOrg = {
   claim_summary?: ClaimSummary;
 };
 
+export type FetchPublicOrgResult =
+  | { status: "ok"; org: PublicOrg; can_resync: boolean }
+  | { status: "not_found" }
+  | { status: "unavailable"; message: string };
+
 export async function fetchPublicOrg(
   login: string,
-): Promise<{ org: PublicOrg; can_resync: boolean } | null> {
-  if (!WORKERS_API) return null;
+): Promise<FetchPublicOrgResult> {
+  if (!WORKERS_API) {
+    return { status: "unavailable", message: "API not configured" };
+  }
   const res = await authFetch(
     `${API()}/orgs/${encodeURIComponent(login.replace(/^@/, "").trim())}`,
   );
-  if (!res.ok) return null;
+  if (res.status === 404) return { status: "not_found" };
+  if (!res.ok) {
+    let message = `Org service error (${res.status})`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      /* ignore */
+    }
+    return { status: "unavailable", message };
+  }
   const data = (await res.json()) as {
     org?: PublicOrg;
     can_resync?: boolean;
   };
-  if (!data.org?.login) return null;
-  return { org: data.org, can_resync: Boolean(data.can_resync) };
+  if (!data.org?.login) return { status: "not_found" };
+  return {
+    status: "ok",
+    org: data.org,
+    can_resync: Boolean(data.can_resync),
+  };
 }
 
 export async function resyncPublicOrg(login: string): Promise<PublicOrg> {
@@ -108,27 +129,34 @@ function orgPageInnerHtml(
           .join("")}</ul>`;
 
   const synced = relativeSynced(org.synced_at);
+  const displayName = org.name?.trim();
   return `
-      <div class="profile-header">
+      <header class="profile-header org-profile-header">
         ${
           org.avatar_url
-            ? `<img class="avatar" src="${escapeHtml(org.avatar_url)}" alt="" width="64" height="64" />`
+            ? `<div class="org-profile-avatar">
+                <img class="avatar org-profile-avatar-img" src="${escapeHtml(org.avatar_url)}" alt="" width="72" height="72" loading="lazy" />
+              </div>`
             : ""
         }
-        <div>
-          <h1>@${escapeHtml(org.login)}</h1>
-          <p class="muted">
+        <div class="org-profile-meta">
+          <div class="org-profile-title-row">
+            <h1>@${escapeHtml(org.login)}</h1>
             <span class="pill">GitHub org</span>
-            ${org.name ? ` · ${escapeHtml(org.name)}` : ""}
-          </p>
-          <p class="profile-links">
-            <a href="${escapeHtml(org.html_url)}" target="_blank" rel="noreferrer">github.com/${escapeHtml(org.login)}</a>
+          </div>
+          ${
+            displayName
+              ? `<p class="org-profile-name muted">${escapeHtml(displayName)}</p>`
+              : ""
+          }
+          <p class="profile-links org-profile-links">
+            <a class="profile-link profile-link-text" href="${escapeHtml(org.html_url)}" target="_blank" rel="noreferrer">github.com/${escapeHtml(org.login)}</a>
           </p>
         </div>
-      </div>
+      </header>
       ${
         org.description
-          ? `<p class="profile-bio">${escapeHtml(org.description)}</p>`
+          ? `<p class="profile-bio org-profile-bio">${escapeHtml(org.description)}</p>`
           : ""
       }
       <p class="muted org-synced" id="org-synced">
@@ -161,7 +189,7 @@ export async function renderPublicOrgProfile(
   `);
 
   const result = await fetchPublicOrg(login);
-  if (!result) {
+  if (result.status === "not_found") {
     applySeo({
       title: "Org not found",
       description: "This GitHub organization could not be found.",
@@ -172,6 +200,23 @@ export async function renderPublicOrgProfile(
       <section class="wrap detail">
         <h1>Org not found</h1>
         <p>No public org for <span class="mono">${escapeHtml(login)}</span>.</p>
+        <p><a href="${href("/")}">Back to projects</a></p>
+      </section>
+    `);
+    return;
+  }
+  if (result.status === "unavailable") {
+    applySeo({
+      title: `@${login} (org)`,
+      description: "GitHub organization profile on Plebly.",
+      path: `/org/${encodeURIComponent(login)}`,
+      noindex: true,
+    });
+    app.innerHTML = shell(`
+      <section class="wrap detail org-page">
+        <h1>@${escapeHtml(login.replace(/^@/, ""))}</h1>
+        <p class="form-msg error">${escapeHtml(result.message)}</p>
+        <p class="muted">The org roster is temporarily unavailable. If you operate this site, check GitHub App secrets on <code class="mono">plebly-api</code>.</p>
         <p><a href="${href("/")}">Back to projects</a></p>
       </section>
     `);

@@ -348,8 +348,11 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
     </section>
   `);
 
-  const orgResult = await fetchPublicOrg(PLEBLY_ORG_LOGIN).catch(() => null);
-  const org = orgResult?.org ?? null;
+  const orgResult = await fetchPublicOrg(PLEBLY_ORG_LOGIN).catch(
+    () =>
+      ({ status: "unavailable", message: "network error" }) as const,
+  );
+  const org = orgResult.status === "ok" ? orgResult.org : null;
 
   const details = [
     ABOUT_BUILDERS_HTML
