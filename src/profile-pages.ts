@@ -36,6 +36,7 @@ import {
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
 } from "./funder-credit";
+import { orgLoginLabel } from "./github-orgs-client";
 import {
   listAllPublicProposals,
   listListedProposals,
@@ -316,46 +317,41 @@ export function connectedAccountsHtml(user: AuthUser): string {
   const now = Date.now();
   const rows = orgs
     .map((o) => {
+      const login = orgLoginLabel(o.login);
       const at = Date.parse(o.verified_at);
       const fresh = Number.isFinite(at) && now - at <= ORG_ATTESTATION_MS;
       const when = Number.isFinite(at)
         ? new Date(at).toISOString().slice(0, 10)
         : "?";
       const avatar = o.avatar_url
-        ? `<img class="avatar account-org-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="28" height="28" />`
-        : `<span class="user-avatar-slot org-avatar-slot" data-avatar-org="${escapeHtml(o.login)}" hidden></span>`;
-      return `<li class="account-org-row">
-        <span class="account-org-identity">
+        ? `<img class="avatar account-org-card-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+        : `<span class="user-avatar-slot org-avatar-slot" data-avatar-org="${escapeHtml(login)}" hidden></span>`;
+      return `<li class="account-org-card">
+        <a class="account-org-card-link" href="${orgHref(login)}">
           ${avatar}
-          <span class="account-org-meta">
-            <a href="${orgHref(o.login)}"><strong>@${escapeHtml(o.login)}</strong></a>
-            <span class="muted">${fresh ? `Admin · verified ${when}` : "Stale — refresh"}</span>
-          </span>
-        </span>
-        <button type="button" class="btn ghost btn-compact" data-unlink-org="${escapeHtml(o.login)}">Unlink</button>
+          <span class="account-org-card-title">${escapeHtml(login)}</span>
+        </a>
+        <p class="account-org-card-meta muted">${fresh ? `Admin · verified ${when}` : "Stale — refresh"}</p>
+        <button type="button" class="btn ghost btn-compact account-org-unlink" data-unlink-org="${escapeHtml(login)}">Unlink</button>
       </li>`;
     })
     .join("");
 
   const orgCount = orgs.length;
-  const orgTitle =
-    orgCount > 0
-      ? `Organizations · ${orgCount} linked`
-      : "Organizations";
+  const orgHeading =
+    orgCount > 0 ? `Organizations · ${orgCount} linked` : "Organizations";
 
   let orgBlock: string;
   if (!githubSession) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <p class="account-orgs-title">${orgTitle}</p>
+      <h2 class="section-title account-orgs-heading">${orgHeading}</h2>
       <p class="hint">Sign in with GitHub to view and link organizations you own. Then you can apply for claims or propose projects as that org.</p>
     </div>`;
   } else if (rows) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <div class="account-orgs-head">
-        <p class="account-orgs-title">${orgTitle}</p>
-      </div>
-      <p class="hint">Your linked org owners (up to 10). Use them to apply or propose as that organization. Open an org profile from the name below.</p>
-      <ul class="account-org-list" aria-label="Linked GitHub organizations">${rows}</ul>
+      <h2 class="section-title account-orgs-heading">${orgHeading}</h2>
+      <p class="hint">Orgs you own on GitHub. Use them to apply or propose as that organization.</p>
+      <ul class="account-org-grid" aria-label="Linked GitHub organizations">${rows}</ul>
       <div class="account-org-actions">
         <a class="btn btn-compact" id="add-org-grant-link" href="#" rel="noreferrer noopener">Add organization</a>
         <button type="button" class="btn ghost btn-compact" id="sync-github-orgs-btn">Sync from GitHub</button>
@@ -366,7 +362,7 @@ export function connectedAccountsHtml(user: AuthUser): string {
     </div>`;
   } else {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <p class="account-orgs-title">${orgTitle}</p>
+      <h2 class="section-title account-orgs-heading">${orgHeading}</h2>
       <p class="hint">No organizations linked yet. Link orgs you <strong>own</strong> to apply or propose as that organization.</p>
       <div class="account-org-actions">
         <button type="button" class="btn btn-compact" id="link-github-orgs-btn">Add organization</button>
@@ -939,19 +935,23 @@ export async function renderAccount(
     }
     orgPickPanel.hidden = false;
     orgPickPanel.innerHTML = `
-      <p class="account-orgs-title">Choose organizations to link</p>
+      <h2 class="section-title account-orgs-heading">Choose organizations to link</h2>
       <p class="hint">Select orgs you own that are not linked yet. Already-linked orgs stay as they are.</p>
       <ul class="account-org-pick-list">
         ${pending
           .map((o) => {
-            const login = escapeHtml(o.login);
-            const already = linkedOrgSet.has(o.login.toLowerCase());
+            const login = orgLoginLabel(o.login);
+            const already = linkedOrgSet.has(login.toLowerCase());
+            const avatar = o.avatar_url
+              ? `<img class="avatar account-org-card-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+              : `<span class="user-avatar-slot org-avatar-slot" data-avatar-org="${escapeHtml(login)}" hidden></span>`;
             return `<li>
               <label class="account-org-pick-row${already ? " is-linked" : ""}">
-                <input type="checkbox" name="org-pick" value="${login}" ${
+                <input type="checkbox" name="org-pick" value="${escapeHtml(login)}" ${
                   already ? "disabled" : "checked"
                 } />
-                <span>@${login}${already ? ` <span class="muted">(already linked)</span>` : ""}</span>
+                ${avatar}
+                <span class="account-org-pick-label">${escapeHtml(login)}${already ? ` <span class="muted">(already linked)</span>` : ""}</span>
               </label>
             </li>`;
           })

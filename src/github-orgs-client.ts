@@ -31,6 +31,10 @@ export function isFreshLinkedOrgAdmin(
   );
 }
 
+export function orgLoginLabel(login: string): string {
+  return login.replace(/^@/, "").trim();
+}
+
 /** Home / browse card “by …” line (org → /org/:login). */
 export function projectCardProposerHtml(
   p: {

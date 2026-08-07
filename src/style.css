@@ -4525,24 +4525,78 @@ a.project-card-by:hover .project-card-by-text {
 
 .account-orgs {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.65rem;
   padding-top: 0.85rem;
   border-top: 1px solid var(--line-soft);
 }
 
-.account-orgs-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
+.account-orgs-heading {
+  margin-bottom: 0;
 }
 
-.account-orgs-title {
+.account-org-grid {
+  list-style: none;
   margin: 0;
-  font-size: 0.875rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.65rem;
+}
+
+.account-org-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.account-org-card-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
   font-weight: 600;
-  color: var(--ink);
+  font-size: 0.875rem;
+  line-height: 1.25;
+  color: inherit;
+  text-decoration: none;
+}
+
+.account-org-card-link:hover .account-org-card-title {
+  color: var(--accent-text);
+}
+
+.account-org-card-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-org-card-avatar,
+.org-member-avatar {
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.account-org-card-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+.account-org-card-meta {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  padding-left: calc(36px + 0.5rem);
+}
+
+.account-org-unlink {
+  align-self: flex-start;
+  margin-left: calc(36px + 0.5rem);
 }
 
 .account-org-actions {
@@ -4575,6 +4629,7 @@ a.project-card-by:hover .project-card-by-text {
   gap: 0.35rem;
 }
 
+/* legacy row layout — prefer .account-org-grid */
 .account-org-row {
   display: flex;
   justify-content: space-between;
@@ -4614,6 +4669,11 @@ a.project-card-by:hover .project-card-by-text {
   flex-shrink: 0;
 }
 
+.account-org-avatar {
+  width: 28px;
+  height: 28px;
+}
+
 .account-org-pick {
   display: grid;
   gap: 0.5rem;
@@ -4638,6 +4698,10 @@ a.project-card-by:hover .project-card-by-text {
   gap: 0.5rem;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.account-org-pick-label {
+  min-width: 0;
 }
 
 .account-org-pick-actions {
