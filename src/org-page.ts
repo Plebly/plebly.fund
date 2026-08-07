@@ -165,13 +165,28 @@ function orgPageInnerHtml(
         }
       </p>
       <p class="form-msg" id="org-resync-msg" hidden></p>
-      ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}
-      <h2 class="section-title">Public members</h2>
-      ${members}
-      <h2 class="section-title">Proposed projects</h2>
-      ${proposedHtml}
-      <h2 class="section-title">Claims on Plebly</h2>
-      ${workHtml}
+      <div class="org-page-blocks">
+        ${
+          claimStatsHtml
+            ? `<section class="org-page-block">
+                <h2 class="section-title">Claim record</h2>
+                ${claimStatsHtml}
+              </section>`
+            : ""
+        }
+        <section class="org-page-block">
+          <h2 class="section-title">Public members</h2>
+          ${members}
+        </section>
+        <section class="org-page-block">
+          <h2 class="section-title">Proposed projects</h2>
+          ${proposedHtml}
+        </section>
+        <section class="org-page-block">
+          <h2 class="section-title">Claims on Plebly</h2>
+          ${workHtml}
+        </section>
+      </div>
   `;
 }
 
