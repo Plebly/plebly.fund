@@ -45,10 +45,14 @@ describe("org profile HTML", () => {
     expect(admin).not.toContain("@alice");
     expect(admin).toContain("/u/alice");
     expect(admin).not.toContain("github.com/alice");
-    expect(admin).toContain("<h1>acme</h1>");
+    expect(admin).toContain("<h1>Acme</h1>");
+    expect(admin).not.toContain("GitHub org");
+    expect(admin).not.toContain("github.com/acme");
     expect(admin).toContain("org-resync-btn");
     expect(admin).toContain("Claims done 1");
-    expect(admin).toContain("GitHub org");
+
+    const noName = orgProfileShellHtml({ ...org, name: null }, false);
+    expect(noName).toContain("<h1>acme</h1>");
 
     const publicView = orgProfileShellHtml(org, false);
     expect(publicView).not.toContain("org-resync-btn");

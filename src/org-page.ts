@@ -93,6 +93,12 @@ function relativeSynced(iso: string): string {
   return new Date(t).toLocaleDateString();
 }
 
+function orgDisplayTitle(org: PublicOrg): string {
+  const name = org.name?.trim();
+  if (name) return name;
+  return org.login.replace(/^@/, "").trim();
+}
+
 function orgPageInnerHtml(
   org: PublicOrg,
   canResync: boolean,
@@ -129,7 +135,7 @@ function orgPageInnerHtml(
           .join("")}</ul>`;
 
   const synced = relativeSynced(org.synced_at);
-  const displayName = org.name?.trim();
+  const title = orgDisplayTitle(org);
   return `
       <header class="profile-hero profile-hero-org">
         ${
@@ -141,18 +147,7 @@ function orgPageInnerHtml(
         }
         <div class="profile-hero-content">
           <div class="profile-hero-head">
-            <h1>${escapeHtml(org.login)}</h1>
-            <span class="pill">GitHub org</span>
-          </div>
-          <div class="profile-hero-details">
-            ${
-              displayName
-                ? `<p class="profile-hero-subtitle muted">${escapeHtml(displayName)}</p>`
-                : ""
-            }
-            <p class="profile-hero-links">
-              <a class="profile-link profile-link-text" href="${escapeHtml(org.html_url)}" target="_blank" rel="noreferrer">github.com/${escapeHtml(org.login)}</a>
-            </p>
+            <h1>${escapeHtml(title)}</h1>
           </div>
         </div>
       </header>
@@ -232,10 +227,10 @@ export async function renderPublicOrgProfile(
     seoForRoute(
       { name: "org", login: org.login },
       {
-        title: `@${org.login} (org)`,
+        title: orgDisplayTitle(org),
         description:
           org.description?.trim().slice(0, 160) ||
-          `GitHub organization @${org.login} on Plebly.`,
+          `GitHub organization ${orgDisplayTitle(org)} on Plebly.`,
       },
     ),
   );
