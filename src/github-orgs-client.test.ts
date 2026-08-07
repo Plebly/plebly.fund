@@ -42,7 +42,8 @@ describe("projectCardProposerHtml", () => {
       },
     );
     expect(html).toContain('href="/org/plebly"');
-    expect(html).toContain("by @plebly");
+    expect(html).toContain("by plebly");
+    expect(html).not.toContain("@plebly");
   });
 });
 

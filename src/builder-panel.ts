@@ -68,7 +68,7 @@ export function claimerIdentityHtml(
     const agentBit = agent
       ? ` <span class="muted">(org · <a href="${escapeHtml(githubUserHref(agent))}" target="_blank" rel="noreferrer">@${escapeHtml(agent)}</a>)</span>`
       : ` <span class="muted">(org)</span>`;
-    return `${orgAvatarSlotHtml(handle)}<a href="${orgHref(handle)}"><strong>@${escapeHtml(handle)}</strong></a>${agentBit}`;
+    return `${orgAvatarSlotHtml(handle)}<a href="${orgHref(handle)}"><strong>${escapeHtml(handle)}</strong></a>${agentBit}`;
   }
   return `${avatarSlotHtml(handle)}<a href="${profileHref(handle)}"><strong>${escapeHtml(handle)}</strong></a>`;
 }
@@ -1764,7 +1764,7 @@ export async function bindBuilderPanel(
                   o.avatar_url
                     ? `<img class="avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="22" height="22" />`
                     : orgAvatarSlotHtml(o.login)
-                }@${escapeHtml(o.login)}</a>`,
+                }${escapeHtml(o.login)}</a>`,
             )
             .join("")
         : "";

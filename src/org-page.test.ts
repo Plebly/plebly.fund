@@ -41,9 +41,11 @@ describe("org profile HTML", () => {
     expect(admin).toContain("org-profile-header");
     expect(admin).toContain("org-profile-avatar-img");
     expect(admin).toContain("avatars.example/acme");
-    expect(admin).toContain("@alice");
+    expect(admin).toContain(">alice<");
+    expect(admin).not.toContain("@alice");
     expect(admin).toContain("/u/alice");
     expect(admin).not.toContain("github.com/alice");
+    expect(admin).toContain("<h1>acme</h1>");
     expect(admin).toContain("org-resync-btn");
     expect(admin).toContain("Claims done 1");
     expect(admin).toContain("GitHub org");

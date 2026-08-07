@@ -47,7 +47,7 @@ import {
   notificationTargetHref,
   notificationTypeLabel,
 } from "./notify-labels";
-import { hydrateAvatarSlots } from "./profile-avatars";
+import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
 import { fetchReviewerMe } from "./reviewers";
 import {
   applySeo,
@@ -1298,6 +1298,30 @@ function formatNotifyWhen(iso: string): string {
   return new Date(t).toLocaleDateString();
 }
 
+function profilePublicOrgsHtml(
+  orgs: { login: string; avatar_url: string; name: string | null }[],
+): string {
+  if (!orgs.length) return "";
+  return `<h2 class="section-title">Organizations</h2>
+      <ul class="org-member-grid profile-org-grid">${orgs
+        .map((o) => {
+          const login = o.login.replace(/^@/, "").trim();
+          const label = o.name?.trim() || login;
+          return `<li class="org-member-card">
+            <a href="${orgHref(login)}" title="${escapeHtml(login)}">
+              ${
+                o.avatar_url
+                  ? `<img class="avatar org-member-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+                  : orgAvatarSlotHtml(login)
+              }
+              <span>${escapeHtml(label)}</span>
+            </a>
+          </li>`;
+        })
+        .join("")}</ul>
+      <p class="hint">Public GitHub org memberships only.</p>`;
+}
+
 export async function renderPublicProfile(
   ctx: ShellContext,
   username: string,
@@ -1338,6 +1362,7 @@ export async function renderPublicProfile(
   const work = proposalsForProfile(all, profile);
 
   const linksHtml = profileLinksListHtml(profile);
+  const orgsHtml = profilePublicOrgsHtml(profile.public_orgs || []);
 
   const workHtml =
     work.length === 0
@@ -1417,10 +1442,12 @@ export async function renderPublicProfile(
       ${muteHtml}
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
       ${linksHtml}
+      ${orgsHtml}
       ${impactHtml}
       ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}
       <h2 class="section-title">Proposals</h2>
       ${workHtml}
     </section>
   `);
+  void hydrateAvatarSlots(app);
 }

@@ -60,6 +60,8 @@ export type PublicProfile = Pick<
   funder_streak_best?: number;
   reviewer_active?: boolean;
   reviewer_kind?: "bootstrap" | "earned";
+  /** Public GitHub orgs where this user's linked GitHub is a public member. */
+  public_orgs?: { login: string; avatar_url: string; name: string | null }[];
 };
 
 export type ProposalStatus =

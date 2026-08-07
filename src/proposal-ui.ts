@@ -1798,7 +1798,7 @@ export function proposerBylineHtml(
     return `<span class="proposal-byline">
       ${orgAvatarSlotHtml(github)}
       <span class="proposal-byline-label">by</span>
-      <a class="proposal-byline-link" href="${escapeHtml(link)}">@${escapeHtml(github)}</a>
+      <a class="proposal-byline-link" href="${escapeHtml(link)}">${escapeHtml(github)}</a>
     </span>`;
   }
   const username = proposer.username?.trim();

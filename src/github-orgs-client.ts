@@ -53,7 +53,7 @@ export function projectCardProposerHtml(
     const avatar = opts.orgAvatarSlotHtml
       ? opts.orgAvatarSlotHtml(github)
       : "";
-    return `<a class="project-card-by" href="${opts.orgHref(github)}">${avatar}<span class="project-card-by-text">by @${opts.escapeHtml(github)}</span></a>`;
+    return `<a class="project-card-by" href="${opts.orgHref(github)}">${avatar}<span class="project-card-by-text">by ${opts.escapeHtml(github)}</span></a>`;
   }
   const proposerName = p.proposer?.username || p.proposer?.github || "";
   const proposerUsername = p.proposer?.username?.trim().toLowerCase() || "";

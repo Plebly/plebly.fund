@@ -73,7 +73,8 @@ describe("proposal UI critical render helpers", () => {
       { proposer_type: "org", orgHref: (l) => `/org/${l}` },
     );
     expect(html).toContain('href="/org/plebly"');
-    expect(html).toContain("@plebly");
+    expect(html).toContain(">plebly<");
+    expect(html).not.toContain("@plebly");
     expect(html).not.toContain("https://github.com/plebly");
     expect(html).not.toContain("/u/");
   });

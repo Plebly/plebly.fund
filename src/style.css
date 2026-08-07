@@ -4717,11 +4717,12 @@ a.project-card-by:hover .project-card-by-text {
   vertical-align: baseline;
 }
 
-.org-page .org-profile-header {
+.org-page .org-profile-header,
+.profile-page.org-page .profile-header.org-profile-header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 1rem 1.25rem;
-  align-items: start;
+  align-items: center;
   margin-bottom: 1rem;
 }
 
@@ -4767,6 +4768,14 @@ a.project-card-by:hover .project-card-by-text {
 
 .org-profile-bio {
   margin-top: 0;
+}
+
+.profile-org-grid {
+  margin-top: 0.75rem;
+}
+
+.profile-org-grid .org-member-card a {
+  font-weight: 500;
 }
 
 .claim-collab {

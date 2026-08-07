@@ -122,7 +122,7 @@ function orgPageInnerHtml(
                       ? `<img class="avatar org-member-avatar" src="${escapeHtml(m.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
                       : `<span class="org-member-avatar-fallback" aria-hidden="true"></span>`
                   }
-                  <span>@${escapeHtml(login)}</span>
+                  <span>${escapeHtml(login)}</span>
                 </a>
               </li>`;
           })
@@ -141,7 +141,7 @@ function orgPageInnerHtml(
         }
         <div class="org-profile-meta">
           <div class="org-profile-title-row">
-            <h1>@${escapeHtml(org.login)}</h1>
+            <h1>${escapeHtml(org.login)}</h1>
             <span class="pill">GitHub org</span>
           </div>
           ${

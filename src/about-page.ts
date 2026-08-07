@@ -225,7 +225,7 @@ export function aboutTeamMembersHtml(
               ? `<img class="avatar org-member-avatar" src="${escapeHtml(m.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
               : `<span class="org-member-avatar-fallback" aria-hidden="true"></span>`
           }
-          <span>@${escapeHtml(login)}</span>
+          <span>${escapeHtml(login)}</span>
         </a>
       </li>`;
     })
