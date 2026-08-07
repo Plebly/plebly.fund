@@ -45,10 +45,11 @@ import {
   hydrateAvatarSlots,
   orgAvatarSlotHtml,
 } from "./profile-avatars";
+import { freshLinkedOrgs } from "./github-orgs-client";
 import { href, orgHref, profileHref } from "./router";
 import { userMatchesProposer } from "./proposal-ui";
 import { aiReviewCardHtml } from "./review-panel";
-import type { GithubOrgAttestation, Proposal } from "./types";
+import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
 function githubUserHref(login: string): string {
@@ -95,17 +96,6 @@ export function sessionIsClaimer(
     return agent === gh || agent === un;
   }
   return false;
-}
-
-const ORG_ATTESTATION_MS = 90 * 86_400_000;
-
-function freshLinkedOrgs(user: AuthUser | null): GithubOrgAttestation[] {
-  if (!user?.id.startsWith("github:") || !user.github_orgs?.length) return [];
-  const now = Date.now();
-  return user.github_orgs.filter((o) => {
-    const at = Date.parse(o.verified_at);
-    return o.role === "admin" && Number.isFinite(at) && now - at <= ORG_ATTESTATION_MS;
-  });
 }
 
 function deliverableFormHtml(): string {
@@ -863,7 +853,11 @@ export async function bindBuilderPanel(
     const canSubmit = ["listed", "funding", "claimable", "in_review"].includes(
       status,
     );
-    const isProposer = userMatchesProposer(opts.user, opts.proposal.proposer);
+    const isProposer = userMatchesProposer(
+      opts.user,
+      opts.proposal.proposer,
+      opts.proposal.proposer_type,
+    );
     if (slot) {
       if (!floorMet) {
         slot.innerHTML = "";
@@ -872,7 +866,13 @@ export async function bindBuilderPanel(
       } else if (!opts.user) {
         slot.innerHTML = `<p class="builder-status muted">Sign in as the proposer to submit a deliverable.</p>`;
       } else if (!isProposer) {
-        slot.innerHTML = `<p class="builder-status muted">Only the proposer can submit the deliverable on a direct proposal.</p>`;
+        const orgLogin =
+          String(opts.proposal.proposer_type || "").toLowerCase() === "org"
+            ? opts.proposal.proposer?.github?.trim()
+            : "";
+        slot.innerHTML = orgLogin
+          ? `<p class="builder-status muted">Sign in as a linked admin of <a href="${orgHref(orgLogin)}">@${escapeHtml(orgLogin)}</a> to submit the deliverable.</p>`
+          : `<p class="builder-status muted">Only the proposer can submit the deliverable on a direct proposal.</p>`;
       } else {
         slot.innerHTML = `<button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>
           ${deliverableFormHtml().replace(
@@ -1382,6 +1382,7 @@ export async function bindBuilderPanel(
       const isProposer = userMatchesProposer(
         opts.user,
         opts.proposal.proposer,
+        opts.proposal.proposer_type,
       );
       renderStatusBody(
         body,

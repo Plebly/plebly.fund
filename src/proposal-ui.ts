@@ -36,8 +36,10 @@ import { watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
 import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
-import { avatarSlotHtml } from "./profile-avatars";
+import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
+import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
+import type { GithubOrgAttestation } from "./types";
 import {
   bitcoinUri,
   escapeHtml,
@@ -1780,8 +1782,25 @@ function milestoneDueHtml(iso: string, nowMs = Date.now()): string {
 export function proposerBylineHtml(
   proposer: Proposal["proposer"] | null | undefined,
   profileHref: (username: string) => string,
+  opts?: {
+    proposer_type?: string | null;
+    orgHref?: (login: string) => string;
+  },
 ): string {
   if (!proposer) return "";
+  const isOrg = String(opts?.proposer_type || "").toLowerCase() === "org";
+  const github = proposer.github?.trim();
+  if (isOrg && github) {
+    const hrefFn = opts?.orgHref;
+    const link = hrefFn
+      ? hrefFn(github)
+      : `https://github.com/${encodeURIComponent(github)}`;
+    return `<span class="proposal-byline">
+      ${orgAvatarSlotHtml(github)}
+      <span class="proposal-byline-label">by</span>
+      <a class="proposal-byline-link" href="${escapeHtml(link)}">@${escapeHtml(github)}</a>
+    </span>`;
+  }
   const username = proposer.username?.trim();
   if (username) {
     return `<span class="proposal-byline">
@@ -1790,7 +1809,6 @@ export function proposerBylineHtml(
       <a class="proposal-byline-link" href="${profileHref(username)}">${escapeHtml(username)}</a>
     </span>`;
   }
-  const github = proposer.github?.trim();
   if (github) {
     return `<span class="proposal-byline">
       <span class="proposal-byline-label">by</span>
@@ -1964,17 +1982,22 @@ export function proposalContextHtml(
 
 export function userMatchesProposer(
   user: {
+    id?: string;
     username?: string;
     github?: string;
     x?: string;
     nostr?: string;
+    github_orgs?: GithubOrgAttestation[];
   } | null,
   proposer: {
     username?: string | null;
     github?: string | null;
     x?: string | null;
     nostr?: string | null;
+    agent?: string | null;
+    id?: string | null;
   } | null | undefined,
+  proposerType?: string | null,
 ): boolean {
   if (!user || !proposer) return false;
   const norm = (v: unknown) =>
@@ -1982,6 +2005,15 @@ export function userMatchesProposer(
       .toLowerCase()
       .replace(/^@/, "")
       .trim();
+  const proposerId = String(proposer.id || "").trim();
+  if (proposerId && user.id && proposerId === user.id) return true;
+
+  if (String(proposerType || "").toLowerCase() === "org") {
+    const orgLogin = norm(proposer.github);
+    if (!orgLogin) return false;
+    return isFreshLinkedOrgAdmin(user, orgLogin);
+  }
+
   const pairs: [string, string][] = [
     [norm(user.username), norm(proposer.username)],
     [norm(user.github), norm(proposer.github)],
@@ -1993,21 +2025,26 @@ export function userMatchesProposer(
 
 export function canEditProposal(
   user: {
+    id?: string;
     username?: string;
     github?: string;
     x?: string;
     nostr?: string;
+    github_orgs?: GithubOrgAttestation[];
   } | null,
   proposer: {
     username?: string | null;
     github?: string | null;
     x?: string | null;
     nostr?: string | null;
+    agent?: string | null;
+    id?: string | null;
   } | null | undefined,
   status: string,
+  proposerType?: string | null,
 ): boolean {
   if (!EDITABLE_PROPOSAL_STATUSES.has(status)) return false;
-  return userMatchesProposer(user, proposer);
+  return userMatchesProposer(user, proposer, proposerType);
 }
 
 function verificationStepsHtml(body: string): string | null {

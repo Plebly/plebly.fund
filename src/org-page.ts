@@ -3,7 +3,11 @@
  */
 import { authFetch, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
-import { listAllPublicProposals, proposalsForOrgClaimer } from "./github";
+import {
+  listAllPublicProposals,
+  proposalsForOrgClaimer,
+  proposalsForOrgProposer,
+} from "./github";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import {
   applySeo,
@@ -71,6 +75,7 @@ function relativeSynced(iso: string): string {
 function orgPageInnerHtml(
   org: PublicOrg,
   canResync: boolean,
+  proposedHtml: string,
   workHtml: string,
 ): string {
   const s = org.claim_summary;
@@ -138,6 +143,8 @@ function orgPageInnerHtml(
       ${claimStatsHtml ? `<h2 class="section-title">Claim record</h2>${claimStatsHtml}` : ""}
       <h2 class="section-title">Public members</h2>
       ${members}
+      <h2 class="section-title">Proposed projects</h2>
+      ${proposedHtml}
       <h2 class="section-title">Claims on Plebly</h2>
       ${workHtml}
   `;
@@ -187,6 +194,19 @@ export async function renderPublicOrgProfile(
   );
 
   const all = await listAllPublicProposals();
+  const proposed = proposalsForOrgProposer(all, org.login);
+  const proposedHtml =
+    proposed.length === 0
+      ? `<div class="empty-state"><div class="empty-state-inner">
+          <p class="empty-state-title">No proposals yet</p>
+          <p class="empty-state-body">Projects listed by this organization will show here.</p>
+        </div></div>`
+      : `<ul class="work-list">${proposed
+          .map(
+            (p) =>
+              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+          )
+          .join("")}</ul>`;
   const work = proposalsForOrgClaimer(all, org.login);
   const workHtml =
     work.length === 0
@@ -206,11 +226,11 @@ export async function renderPublicOrgProfile(
     canResync = resync;
     const section = app.querySelector(".profile-page");
     if (section) {
-      section.innerHTML = orgPageInnerHtml(org, canResync, workHtml);
+      section.innerHTML = orgPageInnerHtml(org, canResync, proposedHtml, workHtml);
     } else {
       app.innerHTML = shell(`
         <section class="wrap detail profile-page org-page">
-          ${orgPageInnerHtml(org, canResync, workHtml)}
+          ${orgPageInnerHtml(org, canResync, proposedHtml, workHtml)}
         </section>
       `);
     }
@@ -251,6 +271,7 @@ export function orgProfileShellHtml(org: PublicOrg, canResync: boolean): string 
   return orgPageInnerHtml(
     org,
     canResync,
+    `<p class="muted">No proposals yet.</p>`,
     `<p class="muted">No claims yet.</p>`,
   );
 }

@@ -20,6 +20,7 @@ describe("connectedAccountsHtml", () => {
     expect(html).toContain('id="link-github-orgs-btn"');
     expect(html).toContain("btn-compact");
     expect(html).toContain("org-access-hint");
+    expect(html).toMatch(/apply or propose/i);
     expect(html).not.toContain("Resync GitHub orgs");
   });
 
@@ -45,6 +46,7 @@ describe("connectedAccountsHtml", () => {
     expect(html).not.toContain('id="link-github-orgs-btn"');
     expect(html).toContain("Unlink");
     expect(html).toContain('aria-label="Linked GitHub organizations"');
+    expect(html).toMatch(/apply or propose/i);
   });
 
   it("explains GitHub login is required for org linking", () => {

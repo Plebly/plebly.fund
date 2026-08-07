@@ -77,6 +77,27 @@ describe("propose wizard validation", () => {
     ).toEqual({ ok: true });
   });
 
+  it("requires org login when proposing as organization", () => {
+    const bad = validateBasicsDraft({
+      title: "Org project",
+      proposal_type: "bounty",
+      proposer_type: "org",
+      proposer_org_login: "",
+    });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.focus).toBe("proposer_org_login");
+    }
+    expect(
+      validateBasicsDraft({
+        title: "Org project",
+        proposal_type: "bounty",
+        proposer_type: "org",
+        proposer_org_login: "plebly",
+      }),
+    ).toEqual({ ok: true });
+  });
+
   it("enforces scope minimum lengths and collects every failing field", () => {
     const short = validateScopeDraft({
       problem: "too short",
@@ -173,11 +194,39 @@ describe("propose review summary", () => {
     });
     expect(html).toContain("Improve mempool docs");
     expect(html).toContain("Bounty");
+    expect(html).toContain("Proposed as");
     expect(html).toContain("docs");
     expect(html).toContain("1 stage");
     expect(html).toContain("1 link");
     expect(html).toContain("Submission fee");
     expect(html).toContain("10,000 sats");
     expect(html).toContain("…");
+  });
+
+  it("review summary shows organization proposer", () => {
+    const html = proposeReviewSummaryHtml({
+      title: "Org work",
+      proposal_type: "bounty",
+      tags: [],
+      parent_initiative: null,
+      cover_image: null,
+      problem: "x".repeat(40),
+      deliverable: "x".repeat(40),
+      verification: "x".repeat(40),
+      out_of_scope: "n/a enough",
+      notes: null,
+      target_sats: null,
+      milestones: [],
+      depends_on: [],
+      related_work: [],
+      isEdit: false,
+      feeLabel: "10,000 sats",
+      proposer_type: "org",
+      proposer_org_login: "plebly",
+      orgHref: (l) => `/org/${l}`,
+    });
+    expect(html).toContain("organization");
+    expect(html).toContain("@plebly");
+    expect(html).toContain('href="/org/plebly"');
   });
 });

@@ -4659,6 +4659,15 @@ a.project-card-by:hover .project-card-by-text {
   vertical-align: middle;
 }
 
+.propose-identity-legend {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.identity-org-slot {
+  margin-top: 0.5rem;
+}
+
 .claim-org-preview {
   display: flex;
   flex-wrap: wrap;

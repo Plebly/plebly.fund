@@ -116,6 +116,8 @@ export function proposeWizardNavHtml(opts: {
 export type BasicsDraft = {
   title: string;
   proposal_type: "bounty" | "direct";
+  proposer_type?: "individual" | "org";
+  proposer_org_login?: string;
 };
 
 export type ScopeDraft = {
@@ -170,6 +172,17 @@ export function validateBasicsDraft(
       field: "proposal_type",
       message: "Choose bounty or direct.",
     });
+  }
+  const proposerType =
+    draft.proposer_type === "org" ? "org" : "individual";
+  if (proposerType === "org") {
+    const org = (draft.proposer_org_login || "").replace(/^@/, "").trim();
+    if (!org) {
+      errors.push({
+        field: "proposer_org_login",
+        message: "Select a linked organization, or propose as yourself.",
+      });
+    }
   }
   return errors.length ? failNamed(errors) : { ok: true };
 }
@@ -310,6 +323,10 @@ export type ReviewSummaryInput = {
   related_work: RelatedWorkEntry[];
   isEdit: boolean;
   feeLabel: string;
+  proposer_type?: "individual" | "org";
+  proposer_org_login?: string | null;
+  proposer_label?: string | null;
+  orgHref?: (login: string) => string;
 };
 
 function clip(text: string, max = 160): string {
@@ -337,6 +354,14 @@ export function proposeReviewSummaryHtml(input: ReviewSummaryInput): string {
       ? `${input.related_work.length} link${input.related_work.length === 1 ? "" : "s"}`
       : "None";
 
+  const orgLogin = (input.proposer_org_login || "").replace(/^@/, "").trim();
+  const proposedAs =
+    input.proposer_type === "org" && orgLogin
+      ? input.orgHref
+        ? `<a href="${escapeHtml(input.orgHref(orgLogin))}">@${escapeHtml(orgLogin)}</a> (organization)`
+        : `@${escapeHtml(orgLogin)} (organization)`
+      : escapeHtml(input.proposer_label || "You (individual)");
+
   return `<div class="propose-review" id="propose-review">
     <div class="propose-review-card">
       <div class="propose-review-head">
@@ -344,6 +369,10 @@ export function proposeReviewSummaryHtml(input: ReviewSummaryInput): string {
         <span class="pill">${escapeHtml(typeLabel)}</span>
       </div>
       <dl class="propose-review-grid">
+        <div>
+          <dt>Proposed as</dt>
+          <dd>${proposedAs}</dd>
+        </div>
         <div>
           <dt>Tags</dt>
           <dd class="propose-review-tags">${tags}</dd>

@@ -17,7 +17,7 @@ Plebly’s claim market is permissionless: anyone authenticated may **apply** wh
 | Sybil swarm | Bond + public claim history; identity relink cooldown 7d |
 | Proposer never picks (`proposer_select`) | Decision grace then **auto-award earliest bonded** |
 | first_bonded sniping | Proposer chose that mode; bond still required |
-| Org sock puppets | Org apply requires GitHub session + **Account-linked** admin org (`read:org` once, 90d TTL); 1 open/awarded claim per `github-org:…`; bond ledger on `github-org:…` while ops stay human; deliverable / Funds / checkpoints / workboard authorize **claim agent** (claimowner), not any co-admin; org apply does not overwrite the human profile payout |
+| Org sock puppets | Org apply / **propose as org** require GitHub session + **Account-linked** admin org (`read:org` once, 90d TTL); 1 open/awarded claim per `github-org:…`; bond ledger on `github-org:…` while ops stay human; deliverable / Funds / checkpoints / workboard authorize **claim agent** (claimowner), not any co-admin; org apply does not overwrite the human profile payout; org propose stamps `proposer.agent` (submitter) and allows co-admins with fresh link to pick/amend |
 | Withdraw/reject × award race | Close application in KV before refund package; bond ledger id matches award (`github-org:*`); locked/forfeited bonds never package; settle requires `refundable`; award cancels premature bond-refund packages and closes orphan claim PRs |
 | Post-forfeit complete | Forfeit clears claimowner + claimfulfiller; `completed` cannot un-forfeit; reopen nulls `claimer_type` / `claim_agent` |
 | Proposer self-deal | Allowed (Q8); **Proposer-claimed** badge |

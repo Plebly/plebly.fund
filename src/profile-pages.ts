@@ -347,14 +347,14 @@ export function connectedAccountsHtml(user: AuthUser): string {
   if (!githubSession) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
       <p class="account-orgs-title">${orgTitle}</p>
-      <p class="hint">Sign in with GitHub to view and link organizations you own. Then you can apply for claims as that org.</p>
+      <p class="hint">Sign in with GitHub to view and link organizations you own. Then you can apply for claims or propose projects as that org.</p>
     </div>`;
   } else if (rows) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
       <div class="account-orgs-head">
         <p class="account-orgs-title">${orgTitle}</p>
       </div>
-      <p class="hint">Your linked org owners (up to 10). Open an org profile from the name below.</p>
+      <p class="hint">Your linked org owners (up to 10). Use them to apply or propose as that organization. Open an org profile from the name below.</p>
       <ul class="account-org-list" aria-label="Linked GitHub organizations">${rows}</ul>
       <div class="account-org-actions">
         <a class="btn btn-compact" id="add-org-grant-link" href="#" rel="noreferrer noopener">Add organization</a>
@@ -367,7 +367,7 @@ export function connectedAccountsHtml(user: AuthUser): string {
   } else {
     orgBlock = `<div class="account-orgs" id="account-orgs">
       <p class="account-orgs-title">${orgTitle}</p>
-      <p class="hint">No organizations linked yet. Link orgs you <strong>own</strong> to apply for claims as that organization.</p>
+      <p class="hint">No organizations linked yet. Link orgs you <strong>own</strong> to apply or propose as that organization.</p>
       <div class="account-org-actions">
         <button type="button" class="btn btn-compact" id="link-github-orgs-btn">Add organization</button>
       </div>

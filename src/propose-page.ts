@@ -44,6 +44,7 @@ import {
   validateMilestoneDrafts,
   type MilestoneDraft,
 } from "./propose-milestones";
+import { freshLinkedOrgs } from "./github-orgs-client";
 import { parseTagList } from "./proposal-tags";
 import { PROPOSAL_TEMPLATES } from "./proposal-templates";
 import {
@@ -61,7 +62,11 @@ import {
   validateScopeDraft,
   type ProposeWizardStepId,
 } from "./propose-wizard";
-import { href, proposalHref } from "./router";
+import { href, orgHref, proposalHref } from "./router";
+import {
+  hydrateAvatarSlots,
+  orgAvatarSlotHtml,
+} from "./profile-avatars";
 import { bindTagInput, tagInputHtml } from "./tag-input";
 import type {
   DependsOnEntry,
@@ -91,6 +96,8 @@ type Prefill = {
   depends_on: DependsOnEntry[];
   related_work: RelatedWorkEntry[];
   status: string;
+  proposer_type: "individual" | "org";
+  proposer_org_login: string | null;
 };
 
 async function loadPrefill(editPath: string): Promise<Prefill | null> {
@@ -142,6 +149,17 @@ async function loadPrefill(editPath: string): Promise<Prefill | null> {
     depends_on,
     related_work,
     status,
+    proposer_type:
+      String(data.proposer_type || "").toLowerCase() === "org"
+        ? "org"
+        : "individual",
+    proposer_org_login: (() => {
+      if (String(data.proposer_type || "").toLowerCase() !== "org") return null;
+      const p = data.proposer;
+      if (!p || typeof p !== "object") return null;
+      const gh = (p as { github?: unknown }).github;
+      return typeof gh === "string" && gh.trim() ? gh.trim() : null;
+    })(),
   };
 }
 
@@ -194,6 +212,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     `);
     return;
   }
+  const user = ctx.user;
 
   let prefill: Prefill | null = null;
   let bridgeSource: BridgeSource | null = null;
@@ -253,6 +272,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         },
       ],
       status: "pr_open",
+      proposer_type: "individual",
+      proposer_org_login: null,
     };
   }
 
@@ -260,6 +281,11 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const isBridge = Boolean(bridgeSource && !isEdit);
   const feeLabel = formatSats(SUBMISSION_FEE_SATS);
   const networkLabel = BITCOIN_NETWORK === "signet" ? "signet" : "mainnet";
+  const linkedOrgs = freshLinkedOrgs(user);
+  const canOrgPropose = Boolean(user.id.startsWith("github:"));
+  const editProposerType =
+    prefill?.proposer_type === "org" ? ("org" as const) : ("individual" as const);
+  const editOrgLogin = prefill?.proposer_org_login || "";
   let feeAddress: string | null = null;
   let claimModeDefault = "proposer_select";
   let claimWindowPresets = [3, 7, 14];
@@ -355,6 +381,49 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               <span>Title</span>
               <input name="title" required minlength="3" maxlength="200" placeholder="Short, specific name for the project" value="${escapeHtml(prefill?.title || "")}" />
             </label>
+            <fieldset class="field propose-identity">
+              <legend class="propose-identity-legend">Propose as</legend>
+              ${
+                isEdit
+                  ? `<p class="hint" role="status">Proposed as ${
+                      editProposerType === "org" && editOrgLogin
+                        ? `<a href="${orgHref(editOrgLogin)}">@${escapeHtml(editOrgLogin)}</a> (organization)`
+                        : "you (individual)"
+                    } · identity locked after submit</p>
+                  <input type="hidden" name="proposer_type" value="${editProposerType}" />
+                  ${
+                    editProposerType === "org" && editOrgLogin
+                      ? `<input type="hidden" name="proposer_org_login" value="${escapeHtml(editOrgLogin)}" />`
+                      : ""
+                  }`
+                  : `<label class="radio-row"><input type="radio" name="proposer_type" value="individual" checked /><span><strong>Me (individual)</strong></span></label>
+              <label class="radio-row"><input type="radio" name="proposer_type" value="org" id="proposer-type-org"${
+                canOrgPropose ? "" : " disabled"
+              } /><span><strong>GitHub organization</strong> (linked admin)</span></label>
+              <div id="propose-org-slot" class="identity-org-slot" hidden>
+                <label class="field" for="propose-org-login">
+                  <span>Organization</span>
+                  <select name="proposer_org_login" id="propose-org-login" aria-describedby="propose-org-hint">
+                    <option value="">Select a linked org…</option>
+                    ${linkedOrgs
+                      .map(
+                        (o) =>
+                          `<option value="${escapeHtml(o.login)}">@${escapeHtml(o.login)}</option>`,
+                      )
+                      .join("")}
+                  </select>
+                </label>
+                <div id="propose-org-preview" class="claim-org-preview"></div>
+                <p class="hint" id="propose-org-hint">${
+                  linkedOrgs.length
+                    ? `Using orgs linked on <a href="${href("/account", "", "#account-orgs")}">Account</a>.`
+                    : canOrgPropose
+                      ? `No linked orgs. <a href="${href("/account", "", "#account-orgs")}">Link GitHub orgs</a> on Account first.`
+                      : `Org propose requires a GitHub session. <a href="${href("/account", "", "#account-orgs")}">Account</a>`
+                }</p>
+              </div>`
+              }
+            </fieldset>
             <fieldset class="field propose-type">
               <span>Proposal type</span>
               <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open for builders to apply with a bond</span></label>
@@ -523,6 +592,56 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     .forEach((el) => el.addEventListener("change", syncClaimModeFields));
   syncClaimModeFields();
 
+  const syncProposeOrgSlot = () => {
+    if (isEdit) return;
+    const org =
+      (
+        form.querySelector(
+          'input[name="proposer_type"]:checked',
+        ) as HTMLInputElement | null
+      )?.value === "org";
+    const slot = form.querySelector<HTMLElement>("#propose-org-slot");
+    const select = form.querySelector<HTMLSelectElement>("#propose-org-login");
+    const preview = form.querySelector<HTMLElement>("#propose-org-preview");
+    const linked = freshLinkedOrgs(user);
+    if (select) {
+      const prev = org ? select.value : "";
+      select.disabled = !org;
+      select.innerHTML =
+        `<option value="">Select a linked org…</option>` +
+        linked
+          .map(
+            (o) =>
+              `<option value="${escapeHtml(o.login)}"${
+                o.login === prev ? " selected" : ""
+              }>@${escapeHtml(o.login)}</option>`,
+          )
+          .join("");
+      if (!org) select.value = "";
+    }
+    if (preview) {
+      preview.innerHTML =
+        org && linked.length
+          ? linked
+              .map(
+                (o) =>
+                  `<a class="claim-org-preview-item" href="${orgHref(o.login)}">${
+                    o.avatar_url
+                      ? `<img class="avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="22" height="22" />`
+                      : orgAvatarSlotHtml(o.login)
+                  }@${escapeHtml(o.login)}</a>`,
+              )
+              .join("")
+          : "";
+      if (preview.innerHTML) void hydrateAvatarSlots(preview);
+    }
+    if (slot) slot.hidden = !org;
+  };
+  form
+    .querySelectorAll('input[name="proposer_type"]')
+    .forEach((el) => el.addEventListener("change", syncProposeOrgSlot));
+  syncProposeOrgSlot();
+
   let currentStep: ProposeWizardStepId = "basics";
   let maxReachedIdx = 0;
 
@@ -626,6 +745,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const target_sats =
       targetRaw && String(targetRaw).length ? Number(targetRaw) : null;
     const drafts = collectMilestoneDrafts(milestonesList);
+    const proposer_type = isEdit
+      ? editProposerType
+      : String(fd.get("proposer_type") || "individual") === "org"
+        ? ("org" as const)
+        : ("individual" as const);
+    const proposer_org_login = isEdit
+      ? editOrgLogin || null
+      : String(fd.get("proposer_org_login") || "").trim() || null;
+    const youLabel =
+      user.username || user.github
+        ? `You (@${user.username || user.github})`
+        : "You (individual)";
     reviewHost.innerHTML = proposeReviewSummaryHtml({
       title: String(fd.get("title") || ""),
       proposal_type:
@@ -647,6 +778,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       related_work: collectRelatedWork(relatedList),
       isEdit,
       feeLabel,
+      proposer_type,
+      proposer_org_login,
+      proposer_label: youLabel,
+      orgHref,
     });
   };
 
@@ -659,6 +794,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           readNamedValue(form, "proposal_type") === "direct"
             ? "direct"
             : "bounty",
+        proposer_type:
+          readNamedValue(form, "proposer_type") === "org" ? "org" : "individual",
+        proposer_org_login: readNamedValue(form, "proposer_org_login"),
       });
       if (!checked.ok) return showNamedFieldErrors(checked.errors);
       if (coverUploading) {
@@ -1206,6 +1344,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       title: readNamedValue(form, "title"),
       proposal_type:
         readNamedValue(form, "proposal_type") === "direct" ? "direct" : "bounty",
+      proposer_type:
+        readNamedValue(form, "proposer_type") === "org" ? "org" : "individual",
+      proposer_org_login: readNamedValue(form, "proposer_org_login"),
     });
     if (!basics.ok) {
       setWizardStep("basics");
@@ -1267,6 +1408,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         ? ("first_bonded" as const)
         : ("proposer_select" as const);
     const claim_window_raw = Number(fd.get("claim_window_days") || 7);
+    const proposer_type =
+      String(fd.get("proposer_type") || "individual") === "org"
+        ? ("org" as const)
+        : ("individual" as const);
+    const proposer_org_login =
+      String(fd.get("proposer_org_login") || "").trim() || null;
     const author = {
       title: String(fd.get("title") || ""),
       proposal_type,
@@ -1286,6 +1433,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             ? claim_window_raw
             : 7
           : undefined,
+      proposer_type: isEdit ? undefined : proposer_type,
+      proposer_org_login:
+        isEdit || proposer_type !== "org" ? undefined : proposer_org_login,
       milestones: checked.milestones,
       depends_on: depOk.value,
       related_work: relOk.value,

@@ -794,6 +794,9 @@ export type ProposalAuthorInput = {
   notes?: string | null;
   claim_mode?: "first_bonded" | "proposer_select";
   claim_window_days?: number | null;
+  /** individual (default) | org — submit only; amend preserves FM */
+  proposer_type?: "individual" | "org";
+  proposer_org_login?: string | null;
   milestones?: ProposalMilestoneInput[];
   depends_on?: {
     kind: "plebly" | "external";

@@ -61,6 +61,7 @@ import { fetchReviewerMe } from "./reviewers";
 import {
   applySeo,
   href,
+  orgHref,
   proposalHref,
   proposalJsonLd,
   seoForRoute,
@@ -475,7 +476,10 @@ export async function renderProposalPage(
       }),
     });
 
-    const byline = proposerBylineHtml(match.proposer, profilePath);
+    const byline = proposerBylineHtml(match.proposer, profilePath, {
+      proposer_type: match.proposer_type,
+      orgHref,
+    });
     const listingReportHtml = listingReportControlHtml(
       String(match.status),
       match.path,
@@ -525,6 +529,7 @@ export async function renderProposalPage(
       user,
       match.proposer,
       String(match.status),
+      match.proposer_type,
     );
     const status = String(match.status);
 
@@ -729,7 +734,7 @@ export async function renderProposalPage(
       const isDirect =
         String(match.proposal_type || "bounty").toLowerCase() === "direct";
       const isFulfiller = isDirect
-        ? userMatchesProposer(user, match.proposer)
+        ? userMatchesProposer(user, match.proposer, match.proposer_type)
         : Boolean(
             user &&
               match.claimer &&

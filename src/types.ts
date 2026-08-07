@@ -97,6 +97,8 @@ export type ProposalProposer = {
   username?: string | null;
   nostr?: string | null;
   x?: string | null;
+  /** Submitting human GitHub login when proposer_type is org. */
+  agent?: string | null;
 };
 
 export type DependsOnEntry = {
@@ -135,6 +137,8 @@ export type Proposal = {
   body: string;
   balance_sats?: number;
   proposer?: ProposalProposer | null;
+  /** individual (default) | org */
+  proposer_type?: "individual" | "org" | string | null;
   claimer?: string | null;
   claimer_type?: "individual" | "org" | string | null;
   claim_agent?: string | null;

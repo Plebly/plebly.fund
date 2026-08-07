@@ -66,6 +66,18 @@ describe("proposal UI critical render helpers", () => {
     expect(proposerBylineHtml({}, (u) => `/u/${u}`)).toBe("");
   });
 
+  it("proposerBylineHtml links org proposers to /org/:login", () => {
+    const html = proposerBylineHtml(
+      { username: null, github: "plebly" },
+      (u) => `/u/${u}`,
+      { proposer_type: "org", orgHref: (l) => `/org/${l}` },
+    );
+    expect(html).toContain('href="/org/plebly"');
+    expect(html).toContain("@plebly");
+    expect(html).not.toContain("https://github.com/plebly");
+    expect(html).not.toContain("/u/");
+  });
+
   it("milestonesHtml renders rail with verify + sats total", () => {
     const milestones: ProposalMilestone[] = [
       {
@@ -240,6 +252,52 @@ describe("proposal UI critical render helpers", () => {
     expect(canEditProposal({ username: "alice" }, proposer, "claimed")).toBe(
       false,
     );
+  });
+
+  it("userMatchesProposer matches fresh org admin", () => {
+    const fresh = new Date().toISOString();
+    const stale = new Date(Date.now() - 100 * 86_400_000).toISOString();
+    const orgProposer = { github: "plebly", agent: "alice", id: "github:1" };
+    expect(
+      userMatchesProposer(
+        {
+          id: "github:2",
+          github: "carol",
+          github_orgs: [
+            { login: "plebly", role: "admin", verified_at: fresh },
+          ],
+        },
+        orgProposer,
+        "org",
+      ),
+    ).toBe(true);
+    expect(
+      userMatchesProposer(
+        {
+          id: "github:2",
+          github: "carol",
+          github_orgs: [
+            { login: "plebly", role: "admin", verified_at: stale },
+          ],
+        },
+        orgProposer,
+        "org",
+      ),
+    ).toBe(false);
+    expect(
+      canEditProposal(
+        {
+          id: "github:2",
+          github: "carol",
+          github_orgs: [
+            { login: "plebly", role: "admin", verified_at: fresh },
+          ],
+        },
+        orgProposer,
+        "listed",
+        "org",
+      ),
+    ).toBe(true);
   });
 
   it("deliverableChipHtml only accepts https URLs", () => {

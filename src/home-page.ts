@@ -26,8 +26,9 @@ import {
 } from "./proposal-ui";
 import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
-import { href, profileHref, proposalHref } from "./router";
-import { hydrateAvatarSlots } from "./profile-avatars";
+import { projectCardProposerHtml } from "./github-orgs-client";
+import { href, orgHref, profileHref, proposalHref } from "./router";
+import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
@@ -309,16 +310,12 @@ function proposalCardHtml(
   watching: boolean,
 ): string {
   const status = String(p.status);
-  const proposerName = p.proposer?.username || p.proposer?.github || "";
-  const proposerUsername = p.proposer?.username?.trim().toLowerCase() || "";
-  const proposerAvatar = proposerUsername
-    ? `<span class="user-avatar-slot" data-avatar-user="${escapeHtml(proposerUsername)}" hidden></span>`
-    : "";
-  const proposer = proposerName
-    ? p.proposer?.username
-      ? `<a class="project-card-by" href="${profileHref(p.proposer.username)}">${proposerAvatar}<span class="project-card-by-text">by ${escapeHtml(proposerName)}</span></a>`
-      : `<span class="project-card-by"><span class="project-card-by-text">by ${escapeHtml(proposerName)}</span></span>`
-    : "";
+  const proposer = projectCardProposerHtml(p, {
+    profileHref,
+    orgHref,
+    escapeHtml,
+    orgAvatarSlotHtml,
+  });
   const donateHref = `${proposalHref(p.path, p.id)}?donate`;
   const isDirect = String(p.proposal_type || "bounty").toLowerCase() === "direct";
   const typeBadge = isDirect

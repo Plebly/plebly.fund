@@ -47,6 +47,7 @@ function parseProposer(data: Record<string, unknown>): ProposalProposer | null {
     username: (o.username as string) || null,
     nostr: (o.nostr as string) || null,
     x: (o.x as string) || null,
+    agent: typeof o.agent === "string" ? o.agent : null,
   };
 }
 
@@ -102,6 +103,10 @@ export function proposalFromMarkdown(raw: string, path: string, dir = "unknown")
     depends_on: parseDependsOn(data.depends_on),
     related_work: parseRelatedWork(data.related_work),
     proposer: parseProposer(data),
+    proposer_type:
+      String(data.proposer_type || "").toLowerCase() === "org"
+        ? "org"
+        : "individual",
     claimer: (data.claimer as string) || null,
     claimer_type:
       typeof data.claimer_type === "string" ? data.claimer_type : null,
@@ -178,7 +183,8 @@ type CatalogProposal = {
   claim_phase?: string | null;
   claim_window_ends_at?: string | null;
   claim_decision_ends_at?: string | null;
-  proposer?: ProposalProposer | null;
+  proposer_type?: "individual" | "org" | string | null;
+  proposer?: (ProposalProposer & { agent?: string | null }) | null;
   rescue?: boolean;
   rescue_gap_sats?: number | null;
 };
@@ -216,7 +222,22 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     claim_phase: entry.claim_phase ?? null,
     claim_window_ends_at: entry.claim_window_ends_at ?? null,
     claim_decision_ends_at: entry.claim_decision_ends_at ?? null,
-    proposer: entry.proposer ?? null,
+    proposer_type:
+      String(entry.proposer_type || "").toLowerCase() === "org"
+        ? "org"
+        : "individual",
+    proposer: entry.proposer
+      ? {
+          username: entry.proposer.username ?? null,
+          github: entry.proposer.github ?? null,
+          nostr: entry.proposer.nostr ?? null,
+          x: entry.proposer.x ?? null,
+          agent:
+            typeof entry.proposer.agent === "string"
+              ? entry.proposer.agent
+              : null,
+        }
+      : null,
     submission_fee_txid: null,
     escrow_index: null,
     milestones: [],
@@ -349,9 +370,30 @@ export function proposalsForProfile(
     if (github && claimer === github) return true;
     const proposer = p.proposer;
     if (!proposer) return false;
+    const isOrg = String(p.proposer_type || "").toLowerCase() === "org";
+    if (isOrg) {
+      // Org face is not the human — list via agent for the submitter's profile.
+      const agent = proposer.agent?.toLowerCase().replace(/^@/, "");
+      if (github && agent && agent === github) return true;
+      return false;
+    }
     if (username && proposer.username?.toLowerCase() === username) return true;
     if (github && proposer.github?.toLowerCase() === github) return true;
     return false;
+  });
+}
+
+/** Projects listed (proposed) as this GitHub organization. */
+export function proposalsForOrgProposer(
+  proposals: Proposal[],
+  orgLogin: string,
+): Proposal[] {
+  const login = orgLogin.replace(/^@/, "").trim().toLowerCase();
+  if (!login) return [];
+  return proposals.filter((p) => {
+    if (String(p.proposer_type || "").toLowerCase() !== "org") return false;
+    const gh = p.proposer?.github?.toLowerCase().replace(/^@/, "");
+    return Boolean(gh && gh === login);
   });
 }
 
