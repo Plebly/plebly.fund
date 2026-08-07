@@ -4691,6 +4691,14 @@ a.project-card-by:hover .project-card-by-text {
   gap: 0.65rem;
 }
 
+.org-page .org-member-grid {
+  margin-bottom: 1.75rem;
+}
+
+.org-page h2.section-title + .muted {
+  margin-bottom: 1.75rem;
+}
+
 .about-team-grid {
   margin-top: 1rem;
 }
