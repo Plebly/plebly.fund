@@ -131,32 +131,34 @@ function orgPageInnerHtml(
   const synced = relativeSynced(org.synced_at);
   const displayName = org.name?.trim();
   return `
-      <header class="profile-header org-profile-header">
+      <header class="profile-hero profile-hero-org">
         ${
           org.avatar_url
-            ? `<div class="org-profile-avatar">
-                <img class="avatar org-profile-avatar-img" src="${escapeHtml(org.avatar_url)}" alt="" width="72" height="72" loading="lazy" />
+            ? `<div class="profile-hero-avatar">
+                <img class="avatar profile-hero-avatar-img" src="${escapeHtml(org.avatar_url)}" alt="" width="72" height="72" loading="lazy" />
               </div>`
             : ""
         }
-        <div class="org-profile-meta">
-          <div class="org-profile-title-row">
+        <div class="profile-hero-content">
+          <div class="profile-hero-head">
             <h1>${escapeHtml(org.login)}</h1>
             <span class="pill">GitHub org</span>
           </div>
-          ${
-            displayName
-              ? `<p class="org-profile-name muted">${escapeHtml(displayName)}</p>`
-              : ""
-          }
-          <p class="profile-links org-profile-links">
-            <a class="profile-link profile-link-text" href="${escapeHtml(org.html_url)}" target="_blank" rel="noreferrer">github.com/${escapeHtml(org.login)}</a>
-          </p>
+          <div class="profile-hero-details">
+            ${
+              displayName
+                ? `<p class="profile-hero-subtitle muted">${escapeHtml(displayName)}</p>`
+                : ""
+            }
+            <p class="profile-hero-links">
+              <a class="profile-link profile-link-text" href="${escapeHtml(org.html_url)}" target="_blank" rel="noreferrer">github.com/${escapeHtml(org.login)}</a>
+            </p>
+          </div>
         </div>
       </header>
       ${
         org.description
-          ? `<p class="profile-bio org-profile-bio">${escapeHtml(org.description)}</p>`
+          ? `<p class="profile-bio">${escapeHtml(org.description)}</p>`
           : ""
       }
       <p class="muted org-synced" id="org-synced">

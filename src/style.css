@@ -4717,57 +4717,78 @@ a.project-card-by:hover .project-card-by-text {
   vertical-align: baseline;
 }
 
-.org-page .org-profile-header,
-.profile-page.org-page .profile-header.org-profile-header {
+/* Shared profile / org page hero (avatar aligns with title row). */
+.profile-hero {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 1rem 1.25rem;
-  align-items: center;
+  column-gap: 1.25rem;
+  align-items: start;
   margin-bottom: 1rem;
 }
 
-.org-profile-avatar {
+.profile-hero-avatar {
   flex-shrink: 0;
 }
 
-.org-profile-avatar-img {
+.profile-hero-avatar-img {
   display: block;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
   object-fit: cover;
 }
 
-.org-profile-meta {
+.profile-hero-org {
+  --profile-hero-head-height: 4.5rem;
+}
+
+.profile-hero-org .profile-hero-avatar-img {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+}
+
+.profile-hero-user {
+  --profile-hero-head-height: 4rem;
+}
+
+.profile-hero-user .profile-hero-avatar-img {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius);
+}
+
+.profile-hero-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-height: var(--profile-hero-head-height);
+}
+
+.profile-hero-head h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.profile-hero-details {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   min-width: 0;
 }
 
-.org-profile-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 0.75rem;
-}
-
-.org-profile-title-row h1 {
-  margin: 0;
-}
-
-.org-profile-name {
+.profile-hero-subtitle {
   margin: 0;
   font-size: 0.9375rem;
   line-height: 1.35;
 }
 
-.org-profile-links {
+.profile-hero-links {
   margin: 0;
 }
 
-.org-profile-bio {
-  margin-top: 0;
+.profile-hero-details .reviewer-badge {
+  margin: 0;
 }
 
 .profile-org-grid {

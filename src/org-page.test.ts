@@ -38,8 +38,8 @@ describe("org profile HTML", () => {
 
   it("shows members, avatar, header layout, and Resync only for admins", () => {
     const admin = orgProfileShellHtml(org, true);
-    expect(admin).toContain("org-profile-header");
-    expect(admin).toContain("org-profile-avatar-img");
+    expect(admin).toContain("profile-hero-org");
+    expect(admin).toContain("profile-hero-avatar-img");
     expect(admin).toContain("avatars.example/acme");
     expect(admin).toContain(">alice<");
     expect(admin).not.toContain("@alice");

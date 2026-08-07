@@ -1318,8 +1318,7 @@ function profilePublicOrgsHtml(
             </a>
           </li>`;
         })
-        .join("")}</ul>
-      <p class="hint">Public GitHub org memberships only.</p>`;
+        .join("")}</ul>`;
 }
 
 export async function renderPublicProfile(
@@ -1427,17 +1426,27 @@ export async function renderPublicProfile(
 
   app.innerHTML = ctx.shell(`
     <section class="wrap detail profile-page">
-      <div class="profile-header">
-        ${profile.avatar_url ? `<img class="avatar" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" />` : ""}
-        <div>
-          <h1>${escapeHtml(profile.username || username)}</h1>
+      <header class="profile-hero profile-hero-user">
+        ${
+          profile.avatar_url
+            ? `<div class="profile-hero-avatar">
+                <img class="avatar profile-hero-avatar-img" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" loading="lazy" />
+              </div>`
+            : ""
+        }
+        <div class="profile-hero-content">
+          <div class="profile-hero-head">
+            <h1>${escapeHtml(profile.username || username)}</h1>
+          </div>
           ${
             profile.reviewer_active
-              ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(profile.reviewer_kind || "earned")} · <a href="${href("/reviewers")}">roster</a></span></p>`
+              ? `<div class="profile-hero-details">
+                  <p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(profile.reviewer_kind || "earned")} · <a href="${href("/reviewers")}">roster</a></span></p>
+                </div>`
               : ""
           }
         </div>
-      </div>
+      </header>
       ${suspendHtml}
       ${muteHtml}
       ${profile.bio ? `<p class="profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
