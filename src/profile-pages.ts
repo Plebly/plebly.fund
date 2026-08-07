@@ -274,6 +274,20 @@ function linkRowHtml(links: ProfileLink[]): string {
 const ORG_ATTESTATION_MS = 90 * 86_400_000;
 
 /** Profile fieldset: sign-in identities + GitHub org linking (apply-as-org). */
+async function fetchGithubOrgAccessUrl(): Promise<string | null> {
+  if (!WORKERS_API) return null;
+  try {
+    const res = await fetch(
+      `${WORKERS_API.replace(/\/$/, "")}/auth/github/public`,
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { org_access_url?: string };
+    return data.org_access_url?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export function connectedAccountsHtml(user: AuthUser): string {
   const links: string[] = [];
   if (user.github) {
@@ -343,10 +357,11 @@ export function connectedAccountsHtml(user: AuthUser): string {
       <p class="hint">Your linked org owners (up to 10). Open an org profile from the name below.</p>
       <ul class="account-org-list" aria-label="Linked GitHub organizations">${rows}</ul>
       <div class="account-org-actions">
-        <button type="button" class="btn btn-compact" id="link-github-orgs-btn">Add organization</button>
+        <a class="btn btn-compact" id="add-org-grant-link" href="#" rel="noreferrer noopener">Add organization</a>
+        <button type="button" class="btn ghost btn-compact" id="sync-github-orgs-btn">Sync from GitHub</button>
       </div>
       <div id="org-pick-panel" class="account-org-pick" hidden></div>
-      <p class="hint" id="org-access-hint">To add another org, grant this app access for it on GitHub, then use Add organization.</p>
+      <p class="hint" id="org-access-hint">Add organization opens GitHub so you can grant this app access to another org you own. Then Sync from GitHub to link it here.</p>
       <p class="form-msg" id="org-link-msg" hidden></p>
     </div>`;
   } else {
@@ -998,14 +1013,19 @@ export async function renderAccount(
         ? `Linked ${linked.length} org${linked.length === 1 ? "" : "s"}: ${linked.map((l) => `@${l}`).join(", ")}.`
         : "No admin orgs returned from GitHub. Grant org access for this app, then refresh.";
     } else if (orgLinkParam === "already") {
-      const refreshed = (orgParams.get("linked_orgs") || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      // Second+ org: OAuth only saw what was already linked — send them to GitHub
+      // Organization access for this app (no useful in-app workflow beyond that).
       orgMsg.className = "form-msg";
-      orgMsg.textContent = refreshed.length
-        ? `Already linked${refreshed.length === 1 ? "" : ` (${refreshed.map((l) => `@${l}`).join(", ")})`}. Grant this app access for another org you own on GitHub, then use Add organization again.`
-        : "Already linked. Grant this app access for another org you own on GitHub, then use Add organization again.";
+      orgMsg.textContent = "Opening GitHub to grant this app access to another organization…";
+      void fetchGithubOrgAccessUrl().then((url) => {
+        if (url) {
+          window.location.href = url;
+          return;
+        }
+        orgMsg.className = "form-msg error";
+        orgMsg.textContent =
+          "Could not open GitHub org access. Use Add organization on this page.";
+      });
     } else if (orgLinkParam === "pick") {
       orgMsg.className = "form-msg";
       orgMsg.textContent = "Select which organizations to link.";
@@ -1023,40 +1043,80 @@ export async function renderAccount(
     clean.searchParams.delete("linked_orgs");
     history.replaceState(null, "", clean.pathname + clean.search + clean.hash);
   }
+
+  const startOrgOauth = async (btn: HTMLButtonElement | null) => {
+    if (btn) btn.disabled = true;
+    try {
+      const url = await startGithubOrgLink("/account");
+      window.location.href = url;
+    } catch (e) {
+      if (orgMsg) {
+        orgMsg.hidden = false;
+        orgMsg.className = "form-msg error";
+        orgMsg.textContent = (e as Error).message;
+      }
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  const grantLink = document.getElementById(
+    "add-org-grant-link",
+  ) as HTMLAnchorElement | null;
+  if (grantLink && WORKERS_API) {
+    void fetchGithubOrgAccessUrl().then((url) => {
+      if (!url) return;
+      grantLink.href = url;
+      const hint = document.getElementById("org-access-hint");
+      if (hint) {
+        hint.innerHTML = `Add organization opens <a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">GitHub organization access</a> for this app. Grant another org you own, then Sync from GitHub.`;
+      }
+    });
+    grantLink.addEventListener("click", (e) => {
+      if (grantLink.getAttribute("href") && grantLink.getAttribute("href") !== "#") {
+        return;
+      }
+      e.preventDefault();
+      void fetchGithubOrgAccessUrl().then((url) => {
+        if (url) {
+          grantLink.href = url;
+          window.location.href = url;
+          return;
+        }
+        if (orgMsg) {
+          orgMsg.hidden = false;
+          orgMsg.className = "form-msg error";
+          orgMsg.textContent =
+            "GitHub org-access URL unavailable — try Sync from GitHub.";
+        }
+      });
+    });
+  }
+
   const orgAccessHint = document.getElementById("org-access-hint");
-  if (orgAccessHint && WORKERS_API) {
-    void fetch(`${WORKERS_API.replace(/\/$/, "")}/auth/github/public`)
-      .then(async (r) => {
-        if (!r.ok) return;
-        const data = (await r.json()) as {
-          org_access_url?: string;
-          configured?: boolean;
-        };
-        if (!data.org_access_url) return;
-        orgAccessHint.innerHTML = `Missing an org? <a href="${escapeHtml(data.org_access_url)}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for each org, then refresh. You can link multiple owners (up to 10).`;
-      })
-      .catch(() => undefined);
+  if (orgAccessHint && WORKERS_API && !grantLink) {
+    void fetchGithubOrgAccessUrl().then((url) => {
+      if (!url) return;
+      orgAccessHint.innerHTML = `Missing an org? <a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for each org, then add it here.`;
+    });
   }
   void hydrateAvatarSlots(app);
 
   document
     .getElementById("link-github-orgs-btn")
-    ?.addEventListener("click", async () => {
-      const btn = document.getElementById(
-        "link-github-orgs-btn",
-      ) as HTMLButtonElement | null;
-      if (btn) btn.disabled = true;
-      try {
-        const url = await startGithubOrgLink("/account");
-        window.location.href = url;
-      } catch (e) {
-        if (orgMsg) {
-          orgMsg.hidden = false;
-          orgMsg.className = "form-msg error";
-          orgMsg.textContent = (e as Error).message;
-        }
-        if (btn) btn.disabled = false;
-      }
+    ?.addEventListener("click", () => {
+      void startOrgOauth(
+        document.getElementById("link-github-orgs-btn") as HTMLButtonElement | null,
+      );
+    });
+
+  document
+    .getElementById("sync-github-orgs-btn")
+    ?.addEventListener("click", () => {
+      void startOrgOauth(
+        document.getElementById(
+          "sync-github-orgs-btn",
+        ) as HTMLButtonElement | null,
+      );
     });
 
   app.querySelectorAll<HTMLButtonElement>("[data-unlink-org]").forEach((btn) => {

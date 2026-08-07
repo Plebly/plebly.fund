@@ -23,7 +23,7 @@ describe("connectedAccountsHtml", () => {
     expect(html).not.toContain("Resync GitHub orgs");
   });
 
-  it("lists linked orgs and keeps Add organization for a second org", () => {
+  it("lists linked orgs and sends Add organization to GitHub grant page", () => {
     const html = connectedAccountsHtml(
       user({
         id: "github:1",
@@ -39,7 +39,10 @@ describe("connectedAccountsHtml", () => {
     );
     expect(html).toContain("@bitcoindevkit");
     expect(html).toContain("Organizations · 1 linked");
-    expect(html).toContain("Add organization");
+    expect(html).toContain('id="add-org-grant-link"');
+    expect(html).toContain("Sync from GitHub");
+    expect(html).toContain('id="sync-github-orgs-btn"');
+    expect(html).not.toContain('id="link-github-orgs-btn"');
     expect(html).toContain("Unlink");
     expect(html).toContain('aria-label="Linked GitHub organizations"');
   });
