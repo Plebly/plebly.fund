@@ -18,6 +18,7 @@ import {
   seoForRoute,
 } from "./router";
 import type { ClaimSummary } from "./types";
+import { sanitizePublicError } from "./public-errors";
 import { escapeHtml } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -42,7 +43,10 @@ export async function fetchPublicOrg(
   login: string,
 ): Promise<FetchPublicOrgResult> {
   if (!WORKERS_API) {
-    return { status: "unavailable", message: "API not configured" };
+    return {
+      status: "unavailable",
+      message: "This org profile is temporarily unavailable.",
+    };
   }
   const res = await authFetch(
     `${API()}/orgs/${encodeURIComponent(login.replace(/^@/, "").trim())}`,
@@ -56,7 +60,13 @@ export async function fetchPublicOrg(
     } catch {
       /* ignore */
     }
-    return { status: "unavailable", message };
+    return {
+      status: "unavailable",
+      message: sanitizePublicError(
+        message,
+        "This org profile is temporarily unavailable. Try again in a few minutes.",
+      ),
+    };
   }
   const data = (await res.json()) as {
     org?: PublicOrg;
@@ -77,7 +87,12 @@ export async function resyncPublicOrg(login: string): Promise<PublicOrg> {
   );
   const data = (await res.json()) as { org?: PublicOrg; error?: string };
   if (!res.ok || !data.org) {
-    throw new Error(data.error || `Resync failed (${res.status})`);
+    throw new Error(
+      sanitizePublicError(
+        data.error || `Resync failed (${res.status})`,
+        "Could not refresh this org profile. Try again in a few minutes.",
+      ),
+    );
   }
   return data.org;
 }
@@ -228,7 +243,7 @@ export async function renderPublicOrgProfile(
       <section class="wrap detail org-page">
         <h1>@${escapeHtml(login.replace(/^@/, ""))}</h1>
         <p class="form-msg error">${escapeHtml(result.message)}</p>
-        <p class="muted">The org roster is temporarily unavailable. If you operate this site, check GitHub App secrets on <code class="mono">plebly-api</code>.</p>
+        <p class="muted">Member list and project history will appear here when the profile is available again.</p>
         <p><a href="${href("/")}">Back to projects</a></p>
       </section>
     `);

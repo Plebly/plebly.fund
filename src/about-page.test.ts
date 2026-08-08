@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aboutTeamMembersHtml, bindAboutPage } from "./about-page";
+import { aboutTeamMembersHtml, bindAboutPage, publicKeyholderStatus } from "./about-page";
 
 describe("aboutTeamMembersHtml", () => {
   it("links members to Plebly /u profiles", () => {
@@ -9,12 +9,30 @@ describe("aboutTeamMembersHtml", () => {
     ]);
     expect(html).toContain("/u/alice");
     expect(html).toContain("/u/bob");
-    expect(html).toContain("@alice");
+    expect(html).toContain(">alice<");
     expect(html).not.toContain("github.com/alice");
   });
 
   it("shows empty copy when there are no members", () => {
     expect(aboutTeamMembersHtml([])).toContain("No public members");
+  });
+});
+
+describe("publicKeyholderStatus", () => {
+  it("hides pre-launch ops status on the public About page", () => {
+    expect(
+      publicKeyholderStatus(
+        "roster + descriptor still TBD (human publish).",
+        false,
+        false,
+      ),
+    ).toBeNull();
+  });
+
+  it("hides status once roster is published", () => {
+    expect(
+      publicKeyholderStatus("Published.", true, false),
+    ).toBeNull();
   });
 });
 

@@ -108,11 +108,30 @@ function publicLeadText(md) {
         s.includes("workers") ||
         s.includes("pending_keyholders") ||
         s.includes("/escrow") ||
-        s.includes("501")
+        s.includes("501") ||
+        s.includes("wrangler") ||
+        s.includes("npm run deploy") ||
+        s.includes("test_escrow") ||
+        s.includes("sparrow") ||
+        s.includes("descriptor") ||
+        s.includes("human publish")
       );
     })
     .join(" ")
     .trim();
+}
+
+/** Never ship KEYHOLDERS.md ops status lines to the public site. */
+function publicKeyholderStatus(status) {
+  const text = plainText(status || "");
+  if (!text) return "";
+  if (/TBD|human publish|descriptor|ops sequence|stall runbook/i.test(text)) {
+    return "";
+  }
+  if (/workers|pending_keyholders|501|wrangler|secret|github_app/i.test(text)) {
+    return "";
+  }
+  return text;
 }
 
 function extractH1Blocks(md) {
@@ -196,12 +215,7 @@ function parseKeyholdersMarkdown(md) {
     const beforeRules = production.body.split(/^##\s+/m)[0] || "";
     const statusMatch = beforeRules.match(/\*\*Status:\*\*\s*(.+)/i);
     if (statusMatch) {
-      status = plainText(statusMatch[1]);
-      // Keep the human status; drop ops/runbook pointers from the public page.
-      const cut = status.search(
-        /\.\s*(Ops sequence|After publishing|Stall runbook)/i,
-      );
-      if (cut !== -1) status = status.slice(0, cut + 1).trim();
+      status = publicKeyholderStatus(statusMatch[1]);
     }
     productionLead = publicLeadText(
       beforeRules

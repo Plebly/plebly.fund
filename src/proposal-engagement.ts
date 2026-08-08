@@ -452,7 +452,7 @@ export async function bindProposalEngagement(
     reload(),
     loadComments().catch(() => {
       if (commentList) {
-        commentList.innerHTML = `<p class="muted">Could not load comments. The API may still be deploying.</p>`;
+        commentList.innerHTML = `<p class="muted">Could not load comments right now.</p>`;
       }
     }),
     loadWorkboard().catch(() => {

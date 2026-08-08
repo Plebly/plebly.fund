@@ -144,7 +144,7 @@ export async function enableWebPush(): Promise<void> {
     throw new Error("Notification permission was not granted.");
   }
   const publicKey = await fetchVapidPublicKey();
-  if (!publicKey) throw new Error("Push is not configured on the server yet.");
+  if (!publicKey) throw new Error("Push notifications are not available yet.");
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {

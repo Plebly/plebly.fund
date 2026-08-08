@@ -12,6 +12,7 @@ import {
   WORKERS_API,
 } from "./config";
 import { bindFeePay, feePayHtml } from "./fee-pay";
+import { sanitizePublicError } from "./public-errors";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
 import { isSignet, signetFaucetLinksHtml } from "./signet";
 import {
@@ -653,7 +654,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       return;
     }
     msg.hidden = false;
-    msg.textContent = text;
+    msg.textContent =
+      kind === "error"
+        ? sanitizePublicError(
+            text,
+            "Could not complete this step. Try again in a few minutes.",
+          )
+        : text;
     msg.className = kind === "error" ? "form-msg error" : "form-msg";
   };
 

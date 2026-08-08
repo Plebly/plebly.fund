@@ -31,15 +31,17 @@ describe("connectedAccountsHtml", () => {
         github: "alice",
         github_orgs: [
           {
-            login: "bitcoindevkit",
+            login: "plebly",
+            name: "Plebly",
             role: "admin",
             verified_at: new Date().toISOString(),
           },
         ],
       }),
     );
-    expect(html).toContain("bitcoindevkit");
-    expect(html).not.toContain("@bitcoindevkit");
+    expect(html).toContain("Plebly");
+    expect(html).not.toContain(">plebly<");
+    expect(html).not.toContain("@plebly");
     expect(html).toContain("account-org-card");
     expect(html).toContain("account-org-grid");
     expect(html).toContain("section-title");

@@ -1,5 +1,6 @@
 import { authFetch } from "./auth";
 import { WORKERS_API } from "./config";
+import { sanitizePublicError } from "./public-errors";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -65,7 +66,10 @@ export async function uploadProjectCover(file: File): Promise<CoverUploadResult>
 
   if (res.status === 501) {
     const err = new Error(
-      data.hint || data.error || "Cover uploads are not enabled yet",
+      sanitizePublicError(
+        data.hint || data.error || "",
+        "Cover uploads are not available yet.",
+      ),
     ) as Error & { code?: string };
     err.code = "MEDIA_DISABLED";
     throw err;

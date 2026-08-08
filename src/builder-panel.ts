@@ -50,6 +50,7 @@ import { href, orgHref, profileHref } from "./router";
 import { userMatchesProposer } from "./proposal-ui";
 import { aiReviewCardHtml } from "./review-panel";
 import type { Proposal } from "./types";
+import { sanitizePublicError } from "./public-errors";
 import { escapeHtml, formatSats } from "./util";
 
 function githubUserHref(login: string): string {
@@ -480,8 +481,12 @@ function setMsg(
     return;
   }
   el.hidden = false;
-  if (opts?.html) el.innerHTML = text;
-  else el.textContent = text;
+  const out =
+    cls === "error"
+      ? sanitizePublicError(text, "Something went wrong. Try again in a few minutes.")
+      : text;
+  if (opts?.html) el.innerHTML = out;
+  else el.textContent = out;
   el.className = `builder-msg ${cls}`.trim();
 }
 

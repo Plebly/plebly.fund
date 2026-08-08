@@ -85,6 +85,16 @@ function networkNoteHtml(): string {
   </div>`;
 }
 
+/** Ops shorthand from KEYHOLDERS.md — hidden on the public About page (roster note covers it). */
+export function publicKeyholderStatus(
+  _status: string | undefined,
+  rosterPublished: boolean,
+  anyXpub: boolean,
+): string | null {
+  if (rosterPublished || anyXpub) return null;
+  return null;
+}
+
 function keyholdersHtml(): string {
   const kh = ABOUT_KEYHOLDERS;
   const onSignet = ABOUT_BITCOIN_NETWORK === "signet";
@@ -93,10 +103,11 @@ function keyholdersHtml(): string {
   );
   const anyXpub = kh.roster.some((s) => Boolean(s.xpub?.trim()));
 
-  const status = kh.status
+  const statusText = publicKeyholderStatus(kh.status, rosterPublished, anyXpub);
+  const status = statusText
     ? `<p class="about-keyholders-status" role="status">
         <span class="about-keyholders-status-label">Status</span>
-        <span>${escapeHtml(kh.status)}</span>
+        <span>${escapeHtml(statusText)}</span>
       </p>`
     : "";
 
@@ -422,7 +433,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       <section class="about-section" id="parameters">
         <h2>Key parameters</h2>
-        <p class="about-section-lede">Fixed at launch. Refreshed on every deploy from the public parameter source.</p>
+        <p class="about-section-lede">Fixed at launch. Values come from the public parameters in git.</p>
         ${paramsHtml()}
       </section>
 

@@ -13,6 +13,8 @@ export type GithubOrgAttestation = {
   role: "admin";
   verified_at: string;
   avatar_url?: string;
+  /** GitHub org display name (e.g. Plebly vs plebly). */
+  name?: string;
 };
 
 export type UserProfile = {

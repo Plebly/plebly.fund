@@ -35,6 +35,15 @@ export function orgLoginLabel(login: string): string {
   return login.replace(/^@/, "").trim();
 }
 
+/** Display title for a linked org attestation (name when known, else login). */
+export function orgAttestationTitle(
+  org: Pick<GithubOrgAttestation, "login" | "name">,
+): string {
+  const name = org.name?.trim();
+  if (name) return name;
+  return orgLoginLabel(org.login);
+}
+
 /** Home / browse card “by …” line (org → /org/:login). */
 export function projectCardProposerHtml(
   p: {

@@ -1,4 +1,5 @@
 import { WORKERS_API } from "./config";
+import { sanitizePublicError } from "./public-errors";
 import { btnWithBrandIcon, btnWithNostrIcon } from "./icons";
 import {
   notificationTargetHref,
@@ -113,12 +114,20 @@ export async function startGithubOrgLink(
   } catch {
     throw new Error(
       res.status === 404
-        ? "Org linking API is unavailable — Workers need a deploy."
-        : `Link org failed (${res.status})`,
+        ? "Org linking is temporarily unavailable."
+        : sanitizePublicError(
+            `Link org failed (${res.status})`,
+            "Org linking is temporarily unavailable.",
+          ),
     );
   }
   if (!res.ok || !data.authorize_url) {
-    throw new Error(data.error || `Link org failed (${res.status})`);
+    throw new Error(
+      sanitizePublicError(
+        data.error || `Link org failed (${res.status})`,
+        "Org linking is temporarily unavailable.",
+      ),
+    );
   }
   return data.authorize_url;
 }
@@ -135,7 +144,11 @@ export async function unlinkGithubOrg(login: string): Promise<AuthUser> {
   return data.user;
 }
 
-export type PendingGithubOrg = { login: string; avatar_url?: string };
+export type PendingGithubOrg = {
+  login: string;
+  avatar_url?: string;
+  name?: string;
+};
 
 export async function fetchPendingGithubOrgs(): Promise<PendingGithubOrg[]> {
   const res = await authFetch(`${API()}/auth/github/orgs/pending`);

@@ -36,7 +36,7 @@ import {
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
 } from "./funder-credit";
-import { orgLoginLabel } from "./github-orgs-client";
+import { orgAttestationTitle, orgLoginLabel } from "./github-orgs-client";
 import {
   listAllPublicProposals,
   listListedProposals,
@@ -318,6 +318,7 @@ export function connectedAccountsHtml(user: AuthUser): string {
   const rows = orgs
     .map((o) => {
       const login = orgLoginLabel(o.login);
+      const title = orgAttestationTitle(o);
       const at = Date.parse(o.verified_at);
       const fresh = Number.isFinite(at) && now - at <= ORG_ATTESTATION_MS;
       const when = Number.isFinite(at)
@@ -329,7 +330,7 @@ export function connectedAccountsHtml(user: AuthUser): string {
       return `<li class="account-org-card">
         <a class="account-org-card-link" href="${orgHref(login)}">
           ${avatar}
-          <span class="account-org-card-title">${escapeHtml(login)}</span>
+          <span class="account-org-card-title">${escapeHtml(title)}</span>
         </a>
         <p class="account-org-card-meta muted">${fresh ? `Admin · verified ${when}` : "Stale — refresh"}</p>
         <button type="button" class="btn ghost btn-compact account-org-unlink" data-unlink-org="${escapeHtml(login)}">Unlink</button>
