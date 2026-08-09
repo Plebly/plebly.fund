@@ -174,51 +174,58 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
   // Countdown only matters once someone is bonded — otherwise it reads like a
   // pick deadline with nothing to pick.
   const bondedCount = Math.max(0, Number(apps.summary?.bonded) || 0);
-  let timer = "";
+  let timerHtml = "";
   if (
     bondedCount > 0 &&
     apps.claim_mode === "proposer_select" &&
     apps.phase === "collecting" &&
     apps.window_ends_at
   ) {
-    timer = ` · until ${escapeHtml(new Date(apps.window_ends_at).toUTCString())} (${relDeadlineHtml(apps.window_ends_at)})`;
+    timerHtml = `<p class="claim-apps-deadline muted">Window closes ${relDeadlineHtml(apps.window_ends_at)}</p>`;
   } else if (bondedCount > 0 && apps.phase === "grace" && apps.decision_ends_at) {
-    timer = ` · auto-award ${escapeHtml(new Date(apps.decision_ends_at).toUTCString())} (${relDeadlineHtml(apps.decision_ends_at)})`;
+    timerHtml = `<p class="claim-apps-deadline muted">Auto-award ${relDeadlineHtml(apps.decision_ends_at)}</p>`;
   }
   const earliest = earliestBondedLogin(apps);
   let graceNote = "";
   if (apps.phase === "grace" && apps.claim_mode === "proposer_select") {
     if (earliest) {
       graceNote = apps.is_proposer
-        ? `<p class="builder-status claim-grace-note">Auto-awards <strong>@${escapeHtml(earliest)}</strong> unless you pick.</p>`
-        : `<p class="builder-status claim-grace-note muted">Auto-awards <strong>@${escapeHtml(earliest)}</strong> if no pick.</p>`;
+        ? `<p class="claim-grace-note">Auto-awards <strong>@${escapeHtml(earliest)}</strong> unless you pick.</p>`
+        : `<p class="claim-grace-note muted">Auto-awards <strong>@${escapeHtml(earliest)}</strong> if no pick.</p>`;
     } else {
-      graceNote = `<p class="builder-status claim-grace-note muted">Decision window open — no bonded applicants to auto-award.</p>`;
+      graceNote = `<p class="claim-grace-note muted">Decision window open — no bonded applicants to auto-award.</p>`;
     }
   }
   // Bond is verified at apply — ignore legacy pending_bond rows in the open list.
   const visible = apps.applications.filter((a) =>
     ["bonded", "awarded"].includes(a.bond_status),
   );
+  const countLabel =
+    bondedCount > 0
+      ? `${bondedCount} bonded`
+      : visible.length > 0
+        ? `${visible.length}`
+        : "";
   const empty =
     visible.length === 0
       ? apps.phase === "grace" && !earliest
         ? "" // graceNote already covers “no bonded applicants”
         : apps.phase === "grace"
-          ? `<p class="builder-status muted">No open applications.</p>`
-          : `<p class="builder-status muted">No applicants yet.</p>`
+          ? `<p class="claim-apps-empty muted">No open applications.</p>`
+          : `<p class="claim-apps-empty muted">No applicants yet.</p>`
       : "";
   const rows =
     visible.length === 0
       ? empty
       : `<ul class="claim-app-list">${visible
           .map((a) => {
-            const bond =
-              a.bond_status === "bonded" || a.bond_status === "awarded"
-                ? a.claim_bond_txid
-                  ? `<a href="${escapeHtml(mempoolTxUrl(a.claim_bond_txid))}" target="_blank" rel="noreferrer">Bond paid</a>`
-                  : "Bond paid"
-                : escapeHtml(a.bond_status.replace(/_/g, " "));
+            const bondPaid =
+              a.bond_status === "bonded" || a.bond_status === "awarded";
+            const bond = bondPaid
+              ? a.claim_bond_txid
+                ? `<a class="claim-app-bond" href="${escapeHtml(mempoolTxUrl(a.claim_bond_txid))}" target="_blank" rel="noreferrer">Bond paid</a>`
+                : `<span class="claim-app-bond">Bond paid</span>`
+              : `<span class="claim-app-bond is-pending">${escapeHtml(a.bond_status.replace(/_/g, " "))}</span>`;
             const proposerActions =
               apps.is_proposer &&
               apps.claim_mode === "proposer_select" &&
@@ -235,27 +242,36 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
                 : "";
             const actions =
               proposerActions || mineWithdraw
-                ? `<span class="claim-app-actions">${proposerActions}${mineWithdraw}</span>`
+                ? `<div class="claim-app-actions">${proposerActions}${mineWithdraw}</div>`
                 : "";
+            const you = a.is_mine
+              ? ` <span class="claim-app-you muted">(you)</span>`
+              : "";
             return `<li class="claim-app-row">
-              <div class="claim-app-identity">${claimerIdentityHtml(
-                a.claimer_login,
-                a.claimer_type,
-                a.claim_agent,
-              )}${a.is_mine ? ` <span class="muted">(you)</span>` : ""} · ${bond}<br/>${applicantTrackHtml(a.summary)}</div>
+              <div class="claim-app-main">
+                <div class="claim-app-identity">${claimerIdentityHtml(
+                  a.claimer_login,
+                  a.claimer_type,
+                  a.claim_agent,
+                )}${you}</div>
+                <div class="claim-app-meta">${bond}${applicantTrackHtml(a.summary)}</div>
+              </div>
               ${actions}
             </li>`;
           })
           .join("")}</ul>`;
-  const countLine =
-    visible.length === 0
-      ? ""
-      : `<br/>${bondedCount} bonded applicant${bondedCount === 1 ? "" : "s"}`;
-  return `<div class="claim-apps" id="claim-apps-panel">
-    <p class="builder-status"><strong>${escapeHtml(modeLabel)}</strong>${timer}${countLine}</p>
+  return `<section class="claim-apps" id="claim-apps-panel" aria-labelledby="claim-apps-title">
+    <header class="claim-apps-head">
+      <div class="claim-apps-head-text">
+        <h3 class="claim-apps-title" id="claim-apps-title">Applicants</h3>
+        <p class="claim-apps-mode">${escapeHtml(modeLabel)}</p>
+      </div>
+      ${countLabel ? `<span class="claim-apps-count mono">${escapeHtml(countLabel)}</span>` : ""}
+    </header>
+    ${timerHtml}
     ${graceNote}
     ${rows}
-  </div>`;
+  </section>`;
 }
 
 function collaboratorsPanelHtml(
@@ -292,12 +308,17 @@ function collaboratorsPanelHtml(
         <div id="collab-following" class="claim-collab-following"></div>
       </div>`
     : "";
-  return `<div class="claim-collab" id="claim-collab-panel">
-    <p class="builder-status"><strong>Collaborators</strong> (credit)</p>
+  return `<section class="claim-collab" id="claim-collab-panel" aria-labelledby="claim-collab-title">
+    <header class="claim-apps-head">
+      <div class="claim-apps-head-text">
+        <h3 class="claim-apps-title" id="claim-collab-title">Collaborators</h3>
+        <p class="claim-apps-mode">Credit only</p>
+      </div>
+    </header>
     ${list}
     ${acceptBtn}
     ${invite}
-  </div>`;
+  </section>`;
 }
 
 export function builderPanelHtml(
@@ -671,7 +692,8 @@ function renderStatusBody(
 
   switch (status.state) {
     case "open":
-      body.innerHTML = `${track}<div id="claim-apps-host"></div>${claimBtnHtml()}`;
+      // Primary CTA first (watch sits above); applicants list then leads into Donate.
+      body.innerHTML = `${track}${claimBtnHtml()}<div id="claim-apps-host"></div>`;
       break;
     case "below_floor": {
       const need = Math.max(

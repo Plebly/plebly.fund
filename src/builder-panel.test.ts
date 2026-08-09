@@ -163,12 +163,15 @@ describe("applicationsPanelHtml", () => {
 
   it("shows accept/reject for proposers and mempool bond link", () => {
     const html = applicationsPanelHtml(baseApps());
+    expect(html).toContain("Applicants");
     expect(html).toContain("Proposer picks");
+    expect(html).toContain("1 bonded");
     expect(html).toContain("data-accept-app=\"app-1\"");
     expect(html).toContain("data-reject-app=\"app-1\"");
     expect(html).toContain("Bond paid");
     expect(html).toContain("mempool.space");
     expect(html).toContain("1 completed");
+    expect(html).toContain("claim-apps-head");
   });
 
   it("hides accept actions for non-proposers", () => {
