@@ -24,6 +24,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: npm run build
         env:
           VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://plebly-api.securesovereigns.workers.dev' }}

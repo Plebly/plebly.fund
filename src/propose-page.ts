@@ -6,11 +6,13 @@ import {
 } from "./auth";
 import { fetchClaimParams } from "./builder";
 import {
-  BITCOIN_NETWORK,
   PROPOSALS_RAW,
   SUBMISSION_FEE_SATS,
   WORKERS_API,
+  escrowAddressMatchesNetwork,
+  networkLabel as bitcoinNetworkLabel,
 } from "./config";
+import { safeHrefAttr } from "./social-links";
 import { bindFeePay, feePayHtml } from "./fee-pay";
 import { sanitizePublicError } from "./public-errors";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
@@ -281,7 +283,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const isEdit = Boolean(editParam && prefill);
   const isBridge = Boolean(bridgeSource && !isEdit);
   const feeLabel = formatSats(SUBMISSION_FEE_SATS);
-  const networkLabel = BITCOIN_NETWORK === "signet" ? "signet" : "mainnet";
+  const networkLabel = bitcoinNetworkLabel();
   const linkedOrgs = freshLinkedOrgs(user);
   const canOrgPropose = Boolean(user.id.startsWith("github:"));
   const editProposerType =
@@ -294,7 +296,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   if (!isEdit) {
     try {
       const params = await fetchClaimParams();
-      feeAddress = params.fee_address;
+      const addr = params.fee_address?.trim() || null;
+      feeAddress =
+        addr && escrowAddressMatchesNetwork(addr) ? addr : null;
       if (params.claim_mode_default === "first_bonded") {
         claimModeDefault = "first_bonded";
       }
@@ -331,10 +335,21 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         ${
           isBridge && bridgeSource
             ? `<div class="edit-banner" role="status">
-              <p>Bridged from <a href="${escapeHtml(bridgeSource.html_url)}" target="_blank" rel="noreferrer">${escapeHtml(bridgeSource.owner)}/${escapeHtml(bridgeSource.repo)}#${bridgeSource.number}</a>${
-                bridgeDraftPr
-                  ? ` · <a href="${escapeHtml(bridgeDraftPr)}" target="_blank" rel="noreferrer">draft PR</a>`
-                  : ""
+              <p>Bridged from ${
+                (() => {
+                  const h = safeHrefAttr(bridgeSource.html_url);
+                  const label = `${escapeHtml(bridgeSource.owner)}/${escapeHtml(bridgeSource.repo)}#${bridgeSource.number}`;
+                  return h
+                    ? `<a href="${h}" target="_blank" rel="noreferrer">${label}</a>`
+                    : label;
+                })()
+              }${
+                (() => {
+                  const h = safeHrefAttr(bridgeDraftPr);
+                  return h
+                    ? ` · <a href="${h}" target="_blank" rel="noreferrer">draft PR</a>`
+                    : "";
+                })()
               }</p>
               <p class="hint">Finish Deliverable / Verification / Out of scope, then pay the fee. The draft PR is updated in place.</p>
             </div>`
@@ -1520,8 +1535,9 @@ function showProposeSuccess(opts: {
 }): void {
   const section = document.querySelector(".propose-page");
   if (!section) return;
-  const pr = opts.prUrl
-    ? `<p class="propose-success-pr"><a href="${escapeHtml(opts.prUrl)}" target="_blank" rel="noreferrer">${escapeHtml(opts.prUrl)}</a></p>`
+  const prHref = safeHrefAttr(opts.prUrl);
+  const pr = prHref
+    ? `<p class="propose-success-pr"><a href="${prHref}" target="_blank" rel="noreferrer">${escapeHtml(opts.prUrl!)}</a></p>`
     : "";
   section.innerHTML = `
     <div class="empty-state">

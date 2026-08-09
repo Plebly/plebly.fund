@@ -7,7 +7,12 @@ import {
   updateNavUnreadBadge,
   type AuthUser,
 } from "./auth";
-import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import {
+  CLAIM_FLOOR_SATS,
+  WORKERS_API,
+  escrowAddressMatchesNetwork,
+  isFundableStatus,
+} from "./config";
 import { promptText } from "./confirm-modal";
 import { proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
@@ -486,9 +491,14 @@ export async function renderProposalPage(
       match.id,
     );
 
+    const escrowOk =
+      Boolean(match.escrow_address) &&
+      escrowAddressMatchesNetwork(String(match.escrow_address)) &&
+      isFundableStatus(String(match.status));
     const wantsDonate =
-      /(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
-      /(?:^|[?&])rail=lightning(?:&|$)/.test(location.search);
+      escrowOk &&
+      (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
+        /(?:^|[?&])rail=lightning(?:&|$)/.test(location.search));
     const wantsLnRail =
       /(?:^|[?&])(?:rail=lightning|donate=ln)(?:&|$)/.test(location.search);
     const watches = user
@@ -591,7 +601,7 @@ export async function renderProposalPage(
           <aside class="proposal-sidebar">
             <div class="proposal-actions">
               ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
-              ${match.escrow_address ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
+              ${escrowOk ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
               ${shareSlotHtml(match.title, match.path, match.id)}
             </div>
             ${deliverableChipHtml(match.deliverable_url)}
@@ -619,8 +629,8 @@ export async function renderProposalPage(
             ${onChainPanelHtml(match)}
           </aside>
         </div>
-        ${match.escrow_address ? donateMobileCtaHtml() : ""}
-        ${match.escrow_address ? donateModalHtml(match, { signedIn: Boolean(user) }) : ""}
+        ${escrowOk ? donateMobileCtaHtml() : ""}
+        ${escrowOk ? donateModalHtml(match, { signedIn: Boolean(user) }) : ""}
       </article>
     `);
 
@@ -628,15 +638,15 @@ export async function renderProposalPage(
     bindShareButtons(app);
     let reloadEngagement: (() => Promise<void>) | null = null;
     // Open Donate before claim/lightning network work so guests are not stuck waiting.
-    if (match.escrow_address) {
+    if (escrowOk) {
       bindDonateModal(app, {
         open: wantsDonate,
         rail: wantsLnRail ? "lightning" : undefined,
       });
     }
-    const donateReady = match.escrow_address
+    const donateReady = escrowOk
       ? bindDonatePanel(app, {
-          address: match.escrow_address,
+          address: String(match.escrow_address),
           proposalId: match.id,
           proposalPath: match.path,
           signedIn: Boolean(user),

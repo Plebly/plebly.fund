@@ -2,7 +2,7 @@
  * Client-side payout destination checks (bond refund + claim payout).
  * Mirrors workers/src/lib/payout-destination.ts — server remains authoritative.
  */
-import { BITCOIN_NETWORK, lightningUiAllowed } from "./config";
+import { addressHrp, lightningUiAllowed } from "./config";
 
 export type PayoutRail = "onchain" | "lightning";
 
@@ -23,6 +23,6 @@ export function payoutLooksValid(raw: string, rail?: PayoutRail): boolean {
     if (!lightningUiAllowed()) return false;
     return isLightningPayoutDestination(s);
   }
-  const hrp = BITCOIN_NETWORK === "signet" ? "tb1" : "bc1";
+  const hrp = addressHrp();
   return new RegExp(`^${hrp}[a-z0-9]{20,90}$`, "i").test(s);
 }

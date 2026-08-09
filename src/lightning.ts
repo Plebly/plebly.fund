@@ -1,3 +1,4 @@
+import { assertLightningSwapMatches } from "./bolt11-amount";
 import { WORKERS_API } from "./config";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -57,6 +58,10 @@ export async function createLightningInvoice(input: {
   if (!res.ok || !data.bolt11) {
     throw new Error(data.error || `Invoice failed (${res.status})`);
   }
+  assertLightningSwapMatches(data, {
+    amount_sats: input.amount_sats,
+    escrow_address: input.escrow_address,
+  });
   return data;
 }
 

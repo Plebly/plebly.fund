@@ -4,12 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/build-about.mjs && vite",
-    "build": "node scripts/build-about.mjs && node scripts/build-sitemap.mjs && node scripts/build-llms.mjs && tsc && vite build && node scripts/spa-fallback.mjs && node scripts/build-og-pages.mjs",
+    "build": "node scripts/check-parameters-network.mjs && node scripts/build-about.mjs && node scripts/build-sitemap.mjs && node scripts/build-llms.mjs && tsc && vite build && node scripts/spa-fallback.mjs && node scripts/build-og-pages.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/qrcode": "^1.5.6",
     "happy-dom": "^20.11.1",
     "marked": "^15.0.7",
@@ -19,6 +20,7 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
+    "dompurify": "^3.4.13",
     "qrcode": "^1.5.4"
   }
 }

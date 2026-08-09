@@ -6,7 +6,9 @@ import { renderAbout } from "./about-page";
 import { renderCompleted } from "./completed-page";
 import { renderDeclined } from "./declined-page";
 import { renderKeyholders } from "./keyholders-page";
-import { WORKERS_API } from "./config";
+import { WORKERS_API, assertParametersNetwork } from "./config";
+
+assertParametersNetwork();
 import { renderGovernance } from "./governance-page";
 import { renderHome } from "./home-page";
 import {

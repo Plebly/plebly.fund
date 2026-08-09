@@ -33,10 +33,55 @@ export function lightningUiAllowed(): boolean {
   return n === "mainnet" || n === "bitcoin" || n === "testnet";
 }
 
-export const MEMPOOL_API =
-  BITCOIN_NETWORK === "signet"
-    ? "https://mempool.space/signet/api"
-    : "https://mempool.space/api";
+export const MEMPOOL_API = (() => {
+  const n = BITCOIN_NETWORK.toLowerCase();
+  if (n === "signet") return "https://mempool.space/signet/api";
+  if (n === "testnet") return "https://mempool.space/testnet/api";
+  return "https://mempool.space/api";
+})();
+
+/** Bech32 HRP for donate / payout addresses on this build. */
+export function addressHrp(network: string = BITCOIN_NETWORK): "tb1" | "bc1" {
+  const n = network.toLowerCase();
+  if (n === "mainnet" || n === "bitcoin") return "bc1";
+  return "tb1";
+}
+
+/** Human network label for UI copy. */
+export function networkLabel(network: string = BITCOIN_NETWORK): string {
+  const n = network.toLowerCase();
+  if (n === "signet") return "signet";
+  if (n === "testnet") return "testnet";
+  return "mainnet";
+}
+
+/** Mempool.space web base (not API) for this build. */
+export function mempoolWeb(network: string = BITCOIN_NETWORK): string {
+  const n = network.toLowerCase();
+  if (n === "signet") return "https://mempool.space/signet";
+  if (n === "testnet") return "https://mempool.space/testnet";
+  return "https://mempool.space";
+}
+
+export function escrowAddressMatchesNetwork(
+  address: string,
+  network: string = BITCOIN_NETWORK,
+): boolean {
+  const hrp = addressHrp(network);
+  return new RegExp(`^${hrp}[a-z0-9]{20,90}$`, "i").test(address.trim());
+}
+
+/** Statuses that may solicit donations (must match workers proposal-escrow). */
+export const FUNDABLE_STATUSES = new Set([
+  "listed",
+  "funding",
+  "claimable",
+  "declined_fundable",
+]);
+
+export function isFundableStatus(status: string): boolean {
+  return FUNDABLE_STATUSES.has(String(status || "").trim());
+}
 
 export {
   CLAIM_FLOOR_SATS,
@@ -57,10 +102,28 @@ export {
 } from "./generated/parameters";
 
 /** Build-time network for parameters.json must match VITE_BITCOIN_NETWORK. */
-const expectedParamsNetwork =
-  BITCOIN_NETWORK.toLowerCase() === "signet" ? "signet" : "mainnet";
-if (GENERATED_PARAMETERS_NETWORK !== expectedParamsNetwork) {
-  console.error(
-    `[plebly] parameters network mismatch: generated=${GENERATED_PARAMETERS_NETWORK} env=${BITCOIN_NETWORK} (claim floor ${GENERATED_CLAIM_FLOOR_SATS})`,
-  );
+export function expectedParametersNetwork(
+  bitcoinNetwork: string = BITCOIN_NETWORK,
+): "signet" | "mainnet" {
+  const n = bitcoinNetwork.toLowerCase();
+  // testnet staging shares the signet parameter overlay (tb1 / signet floors).
+  if (n === "mainnet" || n === "bitcoin") return "mainnet";
+  return "signet";
+}
+
+/**
+ * Fail closed when generated parameters.json network disagrees with
+ * VITE_BITCOIN_NETWORK (wrong claim floor / fee UX). Call from main + build.
+ */
+export function assertParametersNetwork(
+  bitcoinNetwork: string = BITCOIN_NETWORK,
+  generatedNetwork: string = GENERATED_PARAMETERS_NETWORK,
+  claimFloor: number = GENERATED_CLAIM_FLOOR_SATS,
+): void {
+  const expected = expectedParametersNetwork(bitcoinNetwork);
+  if (generatedNetwork !== expected) {
+    throw new Error(
+      `[plebly] parameters network mismatch: generated=${generatedNetwork} env=${bitcoinNetwork} (claim floor ${claimFloor})`,
+    );
+  }
 }

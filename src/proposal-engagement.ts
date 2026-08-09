@@ -10,6 +10,7 @@ import { confirmAction } from "./confirm-modal";
 import { WORKERS_API } from "./config";
 import { fileModerationReport } from "./reports";
 import { profileHref } from "./router";
+import { safeHrefAttr } from "./social-links";
 import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
 
 type PublicContribution = {
@@ -365,8 +366,11 @@ export async function bindProposalEngagement(
     }
     const discussion = root.querySelector<HTMLElement>("#proposal-discussion-link");
     if (discussion && data.discussion_url) {
-      discussion.innerHTML = `<a href="${escapeHtml(data.discussion_url)}" target="_blank" rel="noreferrer">Discuss on GitHub →</a>`;
-      discussion.hidden = false;
+      const href = safeHrefAttr(data.discussion_url);
+      discussion.innerHTML = href
+        ? `<a href="${href}" target="_blank" rel="noreferrer">Discuss on GitHub →</a>`
+        : "";
+      discussion.hidden = !href;
     }
   };
 

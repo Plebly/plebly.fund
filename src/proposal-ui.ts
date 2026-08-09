@@ -55,6 +55,8 @@ export { bitcoinUri };
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
     ? "https://mempool.space/signet"
+    : BITCOIN_NETWORK === "testnet"
+      ? "https://mempool.space/testnet"
     : "https://mempool.space";
 
 const DONATE_PRESETS_SATS = [10_000, 50_000, 100_000, 500_000];
@@ -1913,15 +1915,26 @@ function relatedWorkItemsHtml(
     .map((d) => {
       const labelMatchesUrl =
         d.label.trim().toLowerCase() === d.url.trim().toLowerCase();
-      const safeUrl = escapeHtml(d.url);
+      const href = (() => {
+        try {
+          const u = new URL(d.url.trim());
+          if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+          return escapeHtml(d.url.trim());
+        } catch {
+          return null;
+        }
+      })();
+      if (!href) {
+        return `<li class="dep-list-item"><div class="dep-list-head"><strong>${escapeHtml(d.label)}</strong></div></li>`;
+      }
       return `<li class="dep-list-item">
         <div class="dep-list-head">
-          <a href="${safeUrl}" target="_blank" rel="noreferrer noopener"><strong>${escapeHtml(d.label)}</strong></a>
+          <a href="${href}" target="_blank" rel="noreferrer noopener"><strong>${escapeHtml(d.label)}</strong></a>
         </div>
         ${
           labelMatchesUrl
             ? ""
-            : `<p class="dep-list-ref muted mono"><a href="${safeUrl}" target="_blank" rel="noreferrer noopener">${safeUrl}</a></p>`
+            : `<p class="dep-list-ref muted mono"><a href="${href}" target="_blank" rel="noreferrer noopener">${href}</a></p>`
         }
         ${d.note ? `<p class="dep-list-note">${linkifyText(d.note)}</p>` : ""}
       </li>`;

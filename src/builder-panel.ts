@@ -28,13 +28,22 @@ import {
   refreshClaimModeChips,
   refreshRelDeadlines,
 } from "./claim-mode-ui";
-import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
-import { CLAIM_BOND_SATS, CLAIM_FLOOR_SATS } from "./config";
+import {
+  CLAIM_BOND_SATS,
+  CLAIM_FLOOR_SATS,
+  WORKERS_API,
+  addressHrp,
+  escrowAddressMatchesNetwork,
+  lightningUiAllowed,
+  mempoolWeb,
+  networkLabel,
+} from "./config";
 import { authFetch, loginChoicesHtml, updateProfile } from "./auth";
 import type { AuthUser } from "./auth";
 import { confirmAction, promptText } from "./confirm-modal";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
+import { safeHrefAttr } from "./social-links";
 import {
   isLightningPayoutDestination,
   payoutLooksValid,
@@ -123,11 +132,7 @@ function claimBtnHtml(disabled = false): string {
 }
 
 function mempoolTxUrl(txid: string): string {
-  const base =
-    BITCOIN_NETWORK === "mainnet"
-      ? "https://mempool.space/tx/"
-      : "https://mempool.space/signet/tx/";
-  return `${base}${txid}`;
+  return `${mempoolWeb()}/tx/${txid}`;
 }
 
 function applicantTrackHtml(s: {
@@ -396,7 +401,7 @@ export function builderPanelHtml(
                 <input type="radio" name="claim_payout_rail" value="onchain" checked />
                 <span class="claim-refund-rail-kicker">Bitcoin</span>
                 <span class="claim-refund-rail-name">On-chain</span>
-                <span class="claim-refund-rail-meta mono">${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}</span>
+                <span class="claim-refund-rail-meta mono">${addressHrp()}…</span>
               </label>
               <label class="claim-refund-rail-card${!lightningUiAllowed() ? " is-disabled" : ""}" title="${
                 lightningUiAllowed()
@@ -427,11 +432,11 @@ export function builderPanelHtml(
               autocomplete="off"
               spellcheck="false"
               autocapitalize="off"
-              placeholder="${BITCOIN_NETWORK === "signet" ? "tb1…" : "bc1…"}"
+              placeholder="${addressHrp()}…"
               aria-describedby="claim-payout-desc"
             />
             <p class="claim-refund-dest-hint muted" id="claim-payout-desc">
-              Wallet you control on ${BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"}.
+              Wallet you control on ${networkLabel()}.
             </p>
           </div>
 
@@ -677,11 +682,12 @@ function renderStatusBody(
       break;
     }
     case "claim_pending":
-      body.innerHTML = `${track}${meta}<p class="builder-status">Claim pending${
-        status.pending?.pr_url
-          ? ` · <a href="${escapeHtml(status.pending.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
-          : ""
-      }. Exclusive after merge.</p>`;
+      body.innerHTML = `${track}${meta}<p class="builder-status">Claim pending${(() => {
+        const href = safeHrefAttr(status.pending?.pr_url);
+        return href
+          ? ` · <a href="${href}" target="_blank" rel="noreferrer">PR</a>`
+          : "";
+      })()}. Exclusive after merge.</p>`;
       break;
     case "claimed":
       if (isYou) {
@@ -925,10 +931,21 @@ export async function bindBuilderPanel(
   const mountClaimFeePay = async () => {
     if (!bondSlot) return;
     feePay?.stop();
+    const feeAddr = params.fee_address?.trim() || "";
+    const bondSats =
+      typeof params.claim_bond_sats === "number" &&
+      params.claim_bond_sats === CLAIM_BOND_SATS
+        ? params.claim_bond_sats
+        : CLAIM_BOND_SATS;
+    if (!feeAddr || !escrowAddressMatchesNetwork(feeAddr)) {
+      bondSlot.innerHTML =
+        `<p class="builder-status error">Bond fee address unavailable or wrong network — refresh and try again.</p>`;
+      return;
+    }
     bondSlot.innerHTML = feePayHtml({
       id: "claim-bond",
-      amountSats: params.claim_bond_sats,
-      address: params.fee_address,
+      amountSats: bondSats,
+      address: feeAddr,
       kind: "bond",
       note: "Pay on-chain to the published bond address (not your payout). Bond refunds to the destination from the previous step · forfeited on expiry or abandoned checkpoint",
     });
@@ -961,9 +978,7 @@ export async function bindBuilderPanel(
       payoutInput.placeholder =
         rail === "lightning"
           ? "you@wallet.com or lnurl1…"
-          : BITCOIN_NETWORK === "signet"
-            ? "tb1…"
-            : "bc1…";
+          : `${addressHrp()}…`;
       payoutInput.setAttribute(
         "aria-invalid",
         payoutInput.value.trim() &&
@@ -982,18 +997,14 @@ export async function bindBuilderPanel(
       destHint.textContent =
         rail === "lightning"
           ? "Keyholders pay this via a Boltz submarine lockup. Use a Lightning Address or lnurl1… you control."
-          : `Use a wallet you control on ${
-              BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"
-            }.`;
+          : `Use a wallet you control on ${networkLabel()}.`;
     }
     const ackLabel = panel.querySelector("#claim-payout-ack-label");
     if (ackLabel) {
       ackLabel.textContent =
         rail === "lightning"
           ? "I control this Lightning destination and can receive the refund or payout."
-          : `I control this on-chain address and can receive on ${
-              BITCOIN_NETWORK === "signet" ? "signet" : "mainnet"
-            }.`;
+          : `I control this on-chain address and can receive on ${networkLabel()}.`;
     }
   };
 
@@ -1205,14 +1216,14 @@ export async function bindBuilderPanel(
               defaultValue: opts.user?.payout_address || "",
               placeholder: lightningUiAllowed()
                 ? "bc1… / tb1… or you@host"
-                : `${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}…`,
+                : `${addressHrp()}…`,
               confirmLabel: "Save",
               validate: (v) =>
                 payoutLooksValid(v)
                   ? null
                   : lightningUiAllowed()
                     ? "Enter a network bech32 address or Lightning Address."
-                    : `Enter a valid ${BITCOIN_NETWORK === "mainnet" ? "bc1" : "tb1"}… address.`,
+                    : `Enter a valid ${addressHrp()}… address.`,
             });
             if (addr) {
               const put = await authFetch(
@@ -1573,7 +1584,7 @@ export async function bindBuilderPanel(
           modalMsg(),
           rail === "lightning"
             ? "Enter a Lightning Address (you@host) or lnurl1…"
-            : `Enter a valid ${BITCOIN_NETWORK === "signet" ? "tb1" : "bc1"}… address for this network.`,
+            : `Enter a valid ${addressHrp()}… address for this network.`,
           "error",
         );
         payoutInput?.focus();

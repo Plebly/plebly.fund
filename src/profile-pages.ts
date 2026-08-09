@@ -26,7 +26,7 @@ import {
   removeWatch,
   type ClaimLedgerView,
 } from "./builder";
-import { BITCOIN_NETWORK, CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API, mempoolWeb } from "./config";
 import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
@@ -66,13 +66,11 @@ import {
 import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
 import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
+import { isSafeHttpUrl, safeHrefAttr } from "./social-links";
 import { escapeHtml, formatSats } from "./util";
 import { bindWebPushPanel, webPushPanelHtml } from "./web-push";
 
-const MEMPOOL_WEB =
-  BITCOIN_NETWORK === "signet"
-    ? "https://mempool.space/signet"
-    : "https://mempool.space";
+const MEMPOOL_WEB = mempoolWeb();
 
 function txExplorerLink(txid: string, label?: string): string {
   const short = `${txid.slice(0, 12)}…`;
@@ -205,9 +203,12 @@ function claimsPaneHtml(
                   : ""
               }
               ${
-                c.pr_url
-                  ? `<a href="${escapeHtml(c.pr_url)}" target="_blank" rel="noreferrer">PR</a>`
-                  : ""
+                (() => {
+                  const href = safeHrefAttr(c.pr_url);
+                  return href
+                    ? `<a href="${href}" target="_blank" rel="noreferrer">PR</a>`
+                    : "";
+                })()
               }
             </li>`,
           )
@@ -1019,7 +1020,7 @@ export async function renderAccount(
       orgMsg.className = "form-msg";
       orgMsg.textContent = "Opening GitHub to grant this app access to another organization…";
       void fetchGithubOrgAccessUrl().then((url) => {
-        if (url) {
+        if (url && isSafeHttpUrl(url)) {
           window.location.href = url;
           return;
         }
@@ -1049,6 +1050,7 @@ export async function renderAccount(
     if (btn) btn.disabled = true;
     try {
       const url = await startGithubOrgLink("/account");
+      if (!isSafeHttpUrl(url)) throw new Error("Invalid OAuth authorize URL");
       window.location.href = url;
     } catch (e) {
       if (orgMsg) {
@@ -1065,11 +1067,12 @@ export async function renderAccount(
   ) as HTMLAnchorElement | null;
   if (grantLink && WORKERS_API) {
     void fetchGithubOrgAccessUrl().then((url) => {
-      if (!url) return;
+      if (!url || !isSafeHttpUrl(url)) return;
       grantLink.href = url;
       const hint = document.getElementById("org-access-hint");
-      if (hint) {
-        hint.innerHTML = `Add organization opens <a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">GitHub organization access</a> for this app. Grant another org you own, then Sync from GitHub.`;
+      const href = safeHrefAttr(url);
+      if (hint && href) {
+        hint.innerHTML = `Add organization opens <a href="${href}" target="_blank" rel="noreferrer noopener">GitHub organization access</a> for this app. Grant another org you own, then Sync from GitHub.`;
       }
     });
     grantLink.addEventListener("click", (e) => {
@@ -1078,7 +1081,7 @@ export async function renderAccount(
       }
       e.preventDefault();
       void fetchGithubOrgAccessUrl().then((url) => {
-        if (url) {
+        if (url && isSafeHttpUrl(url)) {
           grantLink.href = url;
           window.location.href = url;
           return;
@@ -1096,8 +1099,9 @@ export async function renderAccount(
   const orgAccessHint = document.getElementById("org-access-hint");
   if (orgAccessHint && WORKERS_API && !grantLink) {
     void fetchGithubOrgAccessUrl().then((url) => {
-      if (!url) return;
-      orgAccessHint.innerHTML = `Missing an org? <a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for each org, then add it here.`;
+      const href = safeHrefAttr(url);
+      if (!href) return;
+      orgAccessHint.innerHTML = `Missing an org? <a href="${href}" target="_blank" rel="noreferrer noopener">Grant organization access</a> on GitHub for each org, then add it here.`;
     });
   }
   void hydrateAvatarSlots(app);

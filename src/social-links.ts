@@ -75,7 +75,24 @@ const SOCIAL_BY_HOST = Object.fromEntries(
   PLATFORMS.flatMap((p) => p.hosts.map((host) => [host, { icon: p.icon, label: p.label }])),
 ) as Record<string, SocialPlatform>;
 
+/** Only http(s) profile URLs may become hrefs. */
+export function isSafeHttpUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Escape + allowlist http(s) for Worker-sourced hrefs (rejects javascript:). */
+export function safeHrefAttr(url: string | undefined | null): string | null {
+  if (!url || !isSafeHttpUrl(url)) return null;
+  return escapeHtml(url.trim());
+}
+
 function hostFromUrl(url: string): string | null {
+  if (!isSafeHttpUrl(url)) return null;
   try {
     return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
   } catch {
@@ -218,6 +235,10 @@ export function profileLinkHtml(
   link: ProfileLink,
   identity?: { github?: string; x?: string },
 ): string {
+  if (!isSafeHttpUrl(link.url)) {
+    const label = escapeHtml(link.label.trim() || link.url);
+    return `<span class="profile-link profile-link-text muted">${label}</span>`;
+  }
   const href = escapeHtml(link.url);
   const platform = detectSocialPlatform(link.url);
   const text = profileLinkVisibleText(link, identity);

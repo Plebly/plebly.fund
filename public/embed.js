@@ -42,7 +42,11 @@
       let url = fallbackUrl;
       try {
         const candidate = new URL(proposal.url || fallbackUrl);
-        if (candidate.protocol === "https:") url = candidate.href;
+        const host = candidate.hostname.replace(/^www\./i, "").toLowerCase();
+        const allowed =
+          host === "plebly.fund" ||
+          host === "plebly.github.io";
+        if (candidate.protocol === "https:" && allowed) url = candidate.href;
       } catch {
         // Keep the stable Plebly URL when an API response is malformed.
       }

@@ -37,6 +37,7 @@ import {
   type ReviewerRoster,
 } from "./reviewers";
 import { href, proposalHref } from "./router";
+import { safeHrefAttr } from "./social-links";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
 export type GovernanceShell = (inner: string) => string;
@@ -475,13 +476,20 @@ export function removalCardHtml(
     </div>
     <p class="gov-evidence">${escapeHtml(b.evidence)}</p>
     ${
-      b.evidence_pr_url
-        ? `<p class="muted gov-closes"><a href="${escapeHtml(b.evidence_pr_url)}" target="_blank" rel="noreferrer">Evidence PR</a>${
-            b.result_pr_url
-              ? ` · <a href="${escapeHtml(b.result_pr_url)}" target="_blank" rel="noreferrer">Result PR</a>`
-              : ""
-          }</p>`
-        : ""
+      (() => {
+        const ev = safeHrefAttr(b.evidence_pr_url);
+        const res = safeHrefAttr(b.result_pr_url);
+        if (!ev && !res) return "";
+        return `<p class="muted gov-closes">${
+          ev
+            ? `<a href="${ev}" target="_blank" rel="noreferrer">Evidence PR</a>`
+            : ""
+        }${
+          res
+            ? `${ev ? " · " : ""}<a href="${res}" target="_blank" rel="noreferrer">Result PR</a>`
+            : ""
+        }</p>`;
+      })()
     }
     <div class="gov-counts">
       <span class="review-count yes">Remove ${b.counts.yes}</span>
