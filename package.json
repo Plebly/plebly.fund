@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/build-about.mjs && vite",
-    "build": "node scripts/check-parameters-network.mjs && node scripts/build-about.mjs && node scripts/build-sitemap.mjs && node scripts/build-llms.mjs && tsc && vite build && node scripts/spa-fallback.mjs && node scripts/build-og-pages.mjs",
+    "generate": "node scripts/build-about.mjs",
+    "build": "npm run generate && node scripts/check-parameters-network.mjs && node scripts/build-sitemap.mjs && node scripts/build-llms.mjs && tsc && vite build && node scripts/spa-fallback.mjs && node scripts/build-og-pages.mjs",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "npm run generate && vitest run",
+    "test:watch": "npm run generate && vitest"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",

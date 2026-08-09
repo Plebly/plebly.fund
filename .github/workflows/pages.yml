@@ -24,7 +24,10 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      # generated/*.ts is gitignored — must generate before test/build.
       - run: npm test
+        env:
+          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
       - run: npm run build
         env:
           VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://plebly-api.securesovereigns.workers.dev' }}
