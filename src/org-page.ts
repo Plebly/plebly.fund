@@ -14,6 +14,7 @@ import {
   href,
   orgHref,
   profileHref,
+  projectsHref,
   proposalHref,
   seoForRoute,
 } from "./router";
@@ -227,7 +228,7 @@ export async function renderPublicOrgProfile(
       <section class="wrap detail">
         <h1>Org not found</h1>
         <p>No public org for <span class="mono">${escapeHtml(login)}</span>.</p>
-        <p><a href="${href("/")}">Back to projects</a></p>
+        <p><a href="${projectsHref()}">Back to projects</a></p>
       </section>
     `);
     return;
@@ -244,7 +245,7 @@ export async function renderPublicOrgProfile(
         <h1>@${escapeHtml(login.replace(/^@/, ""))}</h1>
         <p class="form-msg error">${escapeHtml(result.message)}</p>
         <p class="muted">Member list and project history will appear here when the profile is available again.</p>
-        <p><a href="${href("/")}">Back to projects</a></p>
+        <p><a href="${projectsHref()}">Back to projects</a></p>
       </section>
     `);
     return;

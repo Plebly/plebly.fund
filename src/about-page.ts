@@ -12,7 +12,7 @@ import {
 import { PLEBLY_GITHUB_URL, pleblySocialAccountsHtml } from "./icons";
 import { fetchPublicOrg, type PublicOrg } from "./org-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
-import { href, orgHref, profileHref } from "./router";
+import { href, orgHref, profileHref, projectsHref } from "./router";
 import { signetFaucetLinksHtml } from "./signet";
 import { escapeHtml } from "./util";
 
@@ -394,7 +394,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
         <h1>About Plebly</h1>
         <div class="about-lede prose-rich">${ABOUT_INTRO_HTML}</div>
         <div class="about-cta">
-          <a class="btn" href="${href("/")}">Browse projects</a>
+          <a class="btn" href="${projectsHref()}">Browse projects</a>
           <a class="btn ghost" href="${href("/propose")}">Start a project</a>
         </div>
         ${networkNoteHtml()}
@@ -412,7 +412,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
         <p class="about-section-lede">Four steps. No custody. Full history in the open.</p>
         ${flowHtml()}
         <p class="about-section-foot">
-          <a href="${href("/")}">Browse open projects</a>
+          <a href="${projectsHref()}">Browse open projects</a>
           or
           <a href="${href("/propose")}">start a project</a>.
         </p>
@@ -447,7 +447,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
         <p class="about-section-lede">Follow updates, fund open work, or start a project.</p>
         <div class="about-cta about-close-cta">
           <a class="btn" href="${href("/propose")}">Start a project</a>
-          <a class="btn ghost" href="${href("/")}">Browse projects</a>
+          <a class="btn ghost" href="${projectsHref()}">Browse projects</a>
         </div>
         <div class="about-close-links">${pleblySocialAccountsHtml()}</div>
       </section>

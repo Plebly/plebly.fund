@@ -2,7 +2,7 @@ import { claimFloorShortfall } from "./builder";
 import { CLAIM_FLOOR_SATS } from "./config";
 import { listListedProposals } from "./github";
 import { addressBalanceSats } from "./mempool";
-import { href } from "./router";
+import { href, projectsHref } from "./router";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -102,7 +102,7 @@ function gapSectionHtml(stats: PublicStats): string {
       <div class="stats-gap-visual">
         <p class="stats-gap-percent mono">100%</p>
         <div class="stats-gap-meter" role="progressbar" aria-label="Claim floor progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span style="width: 100%"></span></div>
-        <p class="stats-gap-note"><a href="${href("/", "", "#projects")}">Browse projects</a></p>
+        <p class="stats-gap-note"><a href="${projectsHref()}">Browse projects</a></p>
       </div>
     </section>`;
   }
@@ -134,7 +134,7 @@ function gapSectionHtml(stats: PublicStats): string {
         aria-valuemax="${capacity}"
         aria-valuenow="${stats.fundedTowardFloor}"
       ><span style="width: ${percent}%"></span></div>
-      <p class="stats-gap-note"><a href="${href("/", "?size=below-floor", "#projects")}">Fund below-floor projects</a></p>
+      <p class="stats-gap-note"><a href="${projectsHref("?size=below-floor")}">Fund below-floor projects</a></p>
     </div>
   </section>`;
 }
@@ -187,7 +187,7 @@ function statsBodyHtml(stats: PublicStats): string {
     <footer class="stats-foot">
       <p class="stats-source">Figures refresh when this page loads.</p>
       <div class="stats-actions">
-        <a class="btn" href="${href("/")}">Browse projects</a>
+        <a class="btn" href="${projectsHref()}">Browse projects</a>
         <a class="btn ghost" href="${href("/about")}#trust">Trust model</a>
       </div>
     </footer>
@@ -211,7 +211,7 @@ export async function renderStats(shell: StatsShell): Promise<void> {
         <h1>Funding stats</h1>
       </header>
       <div class="error">${escapeHtml((error as Error).message)}</div>
-      <p class="stats-source"><a href="${href("/")}">Browse projects</a></p>
+      <p class="stats-source"><a href="${projectsHref()}">Browse projects</a></p>
     </section>`);
   }
 }

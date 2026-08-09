@@ -27,7 +27,7 @@ import {
 import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
 import { projectCardProposerHtml } from "./github-orgs-client";
-import { href, orgHref, profileHref, proposalHref } from "./router";
+import { href, orgHref, profileHref, projectsHref, proposalHref } from "./router";
 import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViewsBatch } from "./views";
@@ -66,7 +66,7 @@ function landingHeroHtml(): string {
       <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
       ${signetHeroNoteHtml()}
       <div class="landing-cta-row">
-        <a class="btn landing-btn" href="${href("/", "", "#projects")}">Donate to a project</a>
+        <a class="btn landing-btn" href="${projectsHref()}">Donate to a project</a>
         <a class="btn ghost landing-btn" href="${href("/propose")}">Start a project</a>
       </div>
     </div>
@@ -86,14 +86,14 @@ function audiencePathsHtml(): string {
       kicker: "Donors",
       title: "Fund the escrow",
       body: "Pick a project and send Bitcoin to its public address. No account required. Balances update from the mempool.",
-      href: href("/", "", "#projects"),
+      href: projectsHref(),
       cta: "Browse projects",
     },
     {
       kicker: "Builders",
       title: "Apply and deliver",
       body: "When escrow clears the claim floor, apply with a bond, win the award, and ship the deliverable. Payment follows public review.",
-      href: href("/", "?for=builders", "#projects"),
+      href: projectsHref("?for=builders"),
       cta: "See open projects",
     },
   ];
@@ -174,7 +174,7 @@ function gapTickerHtml(
         <span class="gap-ticker-note">Open projects are at or above the claim floor</span>
         <strong>Ready to apply</strong>
       </div>
-      <a href="${href("/", "", "#projects")}">Browse projects →</a>
+      <a href="${projectsHref()}">Browse projects →</a>
     </section>`;
   }
   const capacity = fundedTowardFloor + shortfallSats;
@@ -191,14 +191,14 @@ function gapTickerHtml(
       <strong>${escapeHtml(formatSats(shortfallSats))} <span>to claim floor</span></strong>
     </div>
     <div class="gap-ticker-meter" role="progressbar" aria-label="Progress toward claim floor across underfunded projects" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
-    <a href="${href("/", "?size=below-floor", "#projects")}">Fund below-floor projects →</a>
+    <a href="${projectsHref("?size=below-floor")}">Fund below-floor projects →</a>
   </section>`;
 }
 
 function discoverToolbarHtml(count: number): string {
   return `<div class="discover-toolbar">
     <div class="discover-toolbar-left">
-      <h2 id="projects">Open projects</h2>
+      <h2 id="projects-heading">Open projects</h2>
       <p class="projects-sub"><span id="project-count">${count}</span> live</p>
     </div>
     <div class="discover-controls">
@@ -395,7 +395,7 @@ function railHtml(
   watchPaths: Set<string>,
   opts: { hideWhenEmpty?: boolean; browseHref?: string } = {},
 ): string {
-  const browse = opts.browseHref || href("/", "", "#projects");
+  const browse = opts.browseHref || projectsHref();
   if (!proposals.length) {
     if (opts.hideWhenEmpty) return "";
     const emptyBody =
@@ -771,7 +771,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <div id="wanted-rail"></div>
     <div id="featured-rail"></div>
     <div id="completed-rail"></div>
-    <section class="wrap-wide landing-discover">
+    <section class="wrap-wide landing-discover" id="projects" aria-labelledby="projects-heading">
       ${discoverToolbarHtml(0)}
       <div id="list" class="project-grid project-grid-skeleton" aria-busy="true" aria-label="Loading open projects">
         <div class="project-card skeleton-card"></div>

@@ -36,7 +36,7 @@ import {
   type ReviewerPublic,
   type ReviewerRoster,
 } from "./reviewers";
-import { href, proposalHref } from "./router";
+import { href, projectsHref, proposalHref } from "./router";
 import { safeHrefAttr } from "./social-links";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
@@ -638,7 +638,7 @@ export async function renderGovernance(
         Rules live in
         <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>.
         Project-level review UI stays on each project page.
-        <a href="${href("/")}">Browse projects</a>.
+        <a href="${projectsHref()}">Browse projects</a>.
       </p>
     </section>
   `);

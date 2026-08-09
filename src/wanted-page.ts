@@ -1,5 +1,5 @@
 import { fetchWanted } from "./builder";
-import { applySeo, href, proposalHref, seoForRoute } from "./router";
+import { applySeo, href, projectsHref, proposalHref, seoForRoute } from "./router";
 import { escapeHtml } from "./util";
 
 export type WantedShell = (inner: string) => string;
@@ -26,7 +26,7 @@ export async function renderWanted(shell: WantedShell): Promise<void> {
   const host = app.querySelector("#wanted-full")!;
   const rows = await fetchWanted(50).catch(() => []);
   if (!rows.length) {
-    host.innerHTML = `<p class="muted">No watched projects yet. <a href="${href("/")}">Browse projects</a> and watch ones you care about.</p>`;
+    host.innerHTML = `<p class="muted">No watched projects yet. <a href="${projectsHref()}">Browse projects</a> and watch ones you care about.</p>`;
     return;
   }
   host.innerHTML = rows

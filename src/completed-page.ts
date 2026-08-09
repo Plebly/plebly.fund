@@ -1,6 +1,6 @@
 import { listAllPublicProposals } from "./github";
 import { statusPillHtml } from "./proposal-ui";
-import { href, proposalHref } from "./router";
+import { projectsHref, proposalHref } from "./router";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -53,7 +53,7 @@ export async function renderCompleted(shell: CompletedShell): Promise<void> {
   app.innerHTML = shell(`
     <section class="wrap-wide declined-page">
       <header class="declined-head">
-        <p class="eyebrow"><a href="${href("/")}">Projects</a> · Archive</p>
+        <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Archive</p>
         <h1>Completed</h1>
         <p class="lede">Finished projects kept for public record (${count}). Discussion is read-only.</p>
       </header>

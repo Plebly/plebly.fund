@@ -65,7 +65,7 @@ import {
   validateScopeDraft,
   type ProposeWizardStepId,
 } from "./propose-wizard";
-import { href, orgHref, proposalHref } from "./router";
+import { href, orgHref, projectsHref, proposalHref } from "./router";
 import {
   hydrateAvatarSlots,
   orgAvatarSlotHtml,
@@ -230,7 +230,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         <section class="wrap detail propose-page">
           <h1>Cannot edit</h1>
           <p class="lede">This proposal is not on main yet, is past claim, or was not found. In-app edit works after the submission PR merges and before claim.</p>
-          <p><a class="btn" href="${href("/")}">Browse projects</a></p>
+          <p><a class="btn" href="${projectsHref()}">Browse projects</a></p>
         </section>
       `);
       return;
@@ -1498,7 +1498,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             ? "Your draft PR was updated with the fee and full fields. It becomes listed after merge + escrow allocate; the source issue then gets the funding comment."
             : "Your submission pull request is open. It becomes editable in-app after merge to main.",
           prUrl: result.pr_url,
-          backHref: href("/"),
+          backHref: projectsHref(),
           backLabel: "Browse projects",
         });
       } catch (err) {

@@ -499,6 +499,11 @@ html.pwa-standalone body {
 
 .landing-discover {
   padding: 2rem 0 3rem;
+  scroll-margin-top: 4.5rem;
+}
+
+#projects {
+  scroll-margin-top: 4.5rem;
 }
 
 .gap-ticker {

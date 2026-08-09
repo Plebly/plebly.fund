@@ -42,6 +42,8 @@ import {
   migrateHashRoute,
   navigate,
   parseLocation,
+  projectsHref,
+  scrollToHashId,
   seoForRoute,
 } from "./router";
 import type { Route } from "./types";
@@ -120,7 +122,7 @@ function siteFooterHtml(routeName: string): string {
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
           <h2 class="footer-col-title">Explore</h2>
-          <a href="${href("/")}"${fa("home")}>Projects</a>
+          <a href="${projectsHref()}"${fa("home")}>Projects</a>
           <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/about")}"${fa("about")}>About</a>
@@ -159,7 +161,7 @@ function shell(inner: string): string {
       </a>
       <div class="header-end">
         <nav class="nav" aria-label="Primary">
-          <a href="${href("/")}" class="${active("home")}"${current("home")}>Projects</a>
+          <a href="${projectsHref()}" class="${active("home")}"${current("home")}>Projects</a>
           <a href="${href("/propose")}" class="${active("propose")}"${current("propose")}>Start a project</a>
           <a href="${href("/about")}" class="${active("about")}"${current("about")}>About</a>
           ${authNavHtml()}
@@ -183,13 +185,7 @@ function bindAuthHandlers() {
 }
 
 function scrollToHashTarget(): void {
-  const raw = location.hash;
-  if (!raw || raw === "#" || raw.includes("plebly_auth=")) return;
-  const id = decodeURIComponent(raw.slice(1).split("&")[0] || "");
-  if (!id) return;
-  requestAnimationFrame(() => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  scrollToHashId(location.hash);
 }
 
 async function render() {

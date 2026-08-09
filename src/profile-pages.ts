@@ -55,6 +55,7 @@ import {
   href,
   navigate,
   orgHref,
+  projectsHref,
   proposalHref,
   seoForRoute,
 } from "./router";
@@ -185,7 +186,7 @@ function claimsPaneHtml(
     return `<div class="empty-state"><div class="empty-state-inner">
       <p class="empty-state-title">No claims yet</p>
       <p class="empty-state-body">When escrow hits the claim floor, apply with a bond from the project page.</p>
-      <a class="btn" href="${href("/")}">Browse projects</a>
+      <a class="btn" href="${projectsHref()}">Browse projects</a>
     </div></div>`;
   }
 
@@ -576,7 +577,7 @@ export async function renderAccount(
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No watched projects</p>
                 <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
-                <a class="btn" href="${href("/")}">Browse projects</a>
+                <a class="btn" href="${projectsHref()}">Browse projects</a>
               </div></div>`
             : `<ul class="work-list" id="watching-list">${watchRows
                 .map(({ w, p, bal }) => {
@@ -678,7 +679,7 @@ export async function renderAccount(
             watchingPane.innerHTML = `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No watched projects</p>
                 <p class="empty-state-body">Open a project and tap Watch to follow funding.</p>
-                <a class="btn" href="${href("/")}">Browse projects</a>
+                <a class="btn" href="${projectsHref()}">Browse projects</a>
               </div></div>`;
           }
         } catch (e) {

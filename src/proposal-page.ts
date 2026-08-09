@@ -67,6 +67,7 @@ import {
   applySeo,
   href,
   orgHref,
+  projectsHref,
   proposalHref,
   proposalJsonLd,
   seoForRoute,
@@ -547,7 +548,7 @@ export async function renderProposalPage(
       <article class="wrap-wide detail proposal-page">
         <nav class="proposal-breadcrumbs" aria-label="Breadcrumb">
           <ol>
-            <li><a href="${href("/")}">Projects</a></li>
+            <li><a href="${projectsHref()}">Projects</a></li>
             <li aria-current="page">${escapeHtml(match.title)}</li>
           </ol>
         </nav>
@@ -763,12 +764,12 @@ export async function renderProposalPage(
   } catch (e) {
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
-        <a class="back-link" href="${href("/")}">← Projects</a>
+        <a class="back-link" href="${projectsHref()}">← Projects</a>
         <div class="empty-state">
           <div class="empty-state-inner">
             <p class="empty-state-title">Could not load proposal</p>
             <p class="empty-state-body">${escapeHtml((e as Error).message)}</p>
-            <p><a class="btn ghost" href="${href("/")}">Browse projects</a></p>
+            <p><a class="btn ghost" href="${projectsHref()}">Browse projects</a></p>
           </div>
         </div>
       </section>

@@ -43,6 +43,22 @@ export function href(path: string, search = "", hash = ""): string {
   return `${prefixed}${q}${h}`;
 }
 
+/** Home page open-projects section (menu, breadcrumbs, browse CTAs). */
+export function projectsHref(search = ""): string {
+  return href("/", search, "#projects");
+}
+
+/** Smooth-scroll to a location.hash target (ignores auth hash fragments). */
+export function scrollToHashId(hash: string): void {
+  const raw = hash.startsWith("#") ? hash : `#${hash}`;
+  if (!raw || raw === "#" || raw.includes("plebly_auth=")) return;
+  const id = decodeURIComponent(raw.slice(1).split("&")[0] || "");
+  if (!id) return;
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 export function proposalHref(repoPath: string, id?: string | null): string {
   if (id?.trim()) return href(proposalStablePath(id));
   const segments = proposalSlug(repoPath)
@@ -167,7 +183,7 @@ export function bindSpaNavigation(root: ParentNode = document): void {
     const raw = a.getAttribute("href");
     if (!raw || raw.startsWith("mailto:") || raw.startsWith("tel:")) return;
 
-    // Pure in-page anchors on current path
+    // Pure in-page anchors on current path — let the browser scroll.
     if (raw.startsWith("#") && !raw.startsWith("#/")) return;
 
     let url: URL;
@@ -189,9 +205,16 @@ export function bindSpaNavigation(root: ParentNode = document): void {
 
     e.preventDefault();
     const next = `${url.pathname}${url.search}${url.hash}`;
-    if (next === `${location.pathname}${location.search}${location.hash}`) {
+    const current = `${location.pathname}${location.search}${location.hash}`;
+    const sameDoc =
+      url.pathname === location.pathname && url.search === location.search;
+    // Same page + fragment: update hash and scroll without a full re-render.
+    if (sameDoc && url.hash && !url.hash.startsWith("#/")) {
+      if (next !== current) history.pushState(null, "", next);
+      scrollToHashId(url.hash);
       return;
     }
+    if (next === current) return;
     history.pushState(null, "", next);
     window.dispatchEvent(new PopStateEvent("popstate"));
   });

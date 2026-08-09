@@ -1,7 +1,7 @@
 import { authFetch, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
-import { href } from "./router";
+import { href, projectsHref } from "./router";
 import { escapeHtml, formatSats } from "./util";
 
 export type KeyholdersShell = (inner: string) => string;
@@ -58,7 +58,7 @@ export async function renderKeyholders(
       <section class="wrap detail">
         <h1>Keyholders</h1>
         <p class="lede">This console is for active escrow keyholders only. Signing stays in Sparrow — the site never moves funds.</p>
-        <p><a href="${href("/")}">Back to projects</a></p>
+        <p><a href="${projectsHref()}">Back to projects</a></p>
       </section>
     `);
     return;
@@ -67,7 +67,7 @@ export async function renderKeyholders(
   app.innerHTML = shell(`
     <section class="wrap-wide detail keyholders-page">
       <header class="declined-head">
-        <p class="eyebrow"><a href="${href("/")}">Projects</a> · Ops</p>
+        <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ops</p>
         <h1>Keyholders</h1>
         <p class="lede">Coordinate Sparrow cosigns. Plebly never holds keys. Releases and contributor refunds need dual keyholder settle.</p>
         <p class="muted" id="kh-health"></p>
