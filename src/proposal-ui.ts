@@ -773,17 +773,16 @@ export function endowmentMeterHtml(
       </p>
     </div>`;
   }
-  const remaining = Math.max(0, goal - current);
   const met = current >= goal;
-  const label = met ? "Goal met" : `${formatSats(remaining)} to goal`;
-  const labelClass = met ? "claimable" : "";
+  const status =
+    size === "hero" && met
+      ? `<p class="endowment-meter-top"><span class="claimable">Goal met</span></p>`
+      : "";
   return `<div class="endowment-meter endowment-meter-${size}">
-    <div class="endowment-meter-top">
-      <span class="${labelClass}">${escapeHtml(label)}</span>
-    </div>
-    <p class="endowment-meter-figures">
-      <span class="endowment-meter-current mono">${escapeHtml(formatSats(current))}</span>
-      <span class="endowment-meter-goal mono">/ ${escapeHtml(formatSats(goal))}</span>
+    ${status}
+    <p class="endowment-meter-figures mono">
+      <span class="endowment-meter-current">${escapeHtml(current.toLocaleString("en-US"))}</span>
+      <span class="endowment-meter-goal">/ ${escapeHtml(formatSats(goal))}</span>
     </p>
     ${fundingBarTrackHtml(current, goal, "progress", goal)}
   </div>`;
