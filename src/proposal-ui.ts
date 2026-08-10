@@ -768,6 +768,19 @@ export function endowmentDonatePanelHtml(address: string): string {
   </div>`;
 }
 
+/** Endowment donate flow in the same modal shell as project donations. */
+export function endowmentDonateModalHtml(address: string): string {
+  const panel = endowmentDonatePanelHtml(address);
+  if (!panel) return "";
+  return `<div class="site-modal donate-modal" id="donate-modal" hidden>
+    <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
+    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-pay-title">
+      <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
+      ${panel}
+    </div>
+  </div>`;
+}
+
 async function bindOnchainDonate(
   panel: Element,
   address: string,

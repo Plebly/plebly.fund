@@ -4,8 +4,9 @@ import { listListedProposals } from "./github";
 import { bindCardWatches, proposalCardHtml } from "./home-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import {
+  bindDonateModal,
   bindDonatePanel,
-  endowmentDonatePanelHtml,
+  endowmentDonateModalHtml,
 } from "./proposal-ui";
 import { applySeo, href, projectsHref, seoForRoute } from "./router";
 import type { Proposal } from "./types";
@@ -53,7 +54,7 @@ function heroHtml(opts: {
     : "";
   const cta = opts.open
     ? `<div class="landing-cta-row">
-        <a class="btn landing-btn" href="#donate">Donate</a>
+        <button type="button" class="btn landing-btn donate-open-btn" data-open-donate>Donate</button>
         <a class="btn ghost landing-btn" href="#funded">Funded projects</a>
       </div>`
     : `<p class="endowment-hero-closed muted">Donations open once the endowment address is set.</p>`;
@@ -93,14 +94,21 @@ function bodyHtml(inner: string): string {
   </div>`;
 }
 
-function scrollToHashTarget(): void {
-  const hash = location.hash.replace(/^#/, "");
-  const fromQuery = new URLSearchParams(location.search).has("donate")
-    ? "donate"
-    : "";
-  const id = hash || fromQuery;
-  if (!id) return;
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+function scrollToFundedIfNeeded(): void {
+  if (location.hash.replace(/^#/, "") !== "funded") return;
+  document.getElementById("funded")?.scrollIntoView({ behavior: "smooth" });
+}
+
+function wantsDonateOpen(): boolean {
+  return (
+    location.hash.replace(/^#/, "") === "donate" ||
+    /(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
+    /(?:^|[?&])rail=lightning(?:&|$)/.test(location.search)
+  );
+}
+
+function wantsLnRail(): boolean {
+  return /(?:^|[?&])(?:rail=lightning|donate=ln)(?:&|$)/.test(location.search);
 }
 
 export async function renderEndowment(shell: EndowmentShell): Promise<void> {
@@ -137,17 +145,14 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       : "";
     const open = Boolean(view.configured && view.address);
 
-    const donateBlock =
-      open && view.address
-        ? `<section class="endowment-contribute" id="donate-section">
-            ${endowmentDonatePanelHtml(view.address)}
-          </section>`
-        : `<section class="endowment-contribute">
+    const closedBlock = !open
+      ? `<section class="endowment-contribute">
             <div class="endowment-closed-card">
               <p class="endowment-closed-title">Donations are not open yet</p>
               <p class="muted">An admin sets the endowment receive address in <a href="${href("/admin")}?tab=endowment">Admin → Endowment</a>.</p>
             </div>
-          </section>`;
+          </section>`
+      : "";
 
     app.innerHTML = shell(`
       ${heroHtml({
@@ -156,15 +161,20 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         updated,
       })}
       ${bodyHtml(`
-        ${donateBlock}
+        ${closedBlock}
         <section class="endowment-funded" id="funded">
           <h2>Funded projects</h2>
           ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
         </section>
       `)}
+      ${open && view.address ? endowmentDonateModalHtml(view.address) : ""}
     `);
 
-    if (view.address) {
+    if (view.address && open) {
+      bindDonateModal(app, {
+        open: wantsDonateOpen(),
+        rail: wantsLnRail() ? "lightning" : undefined,
+      });
       await bindDonatePanel(app, {
         address: view.address,
         proposalId: null,
@@ -177,7 +187,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       bindCardWatches(fundedRoot, new Set());
       void hydrateAvatarSlots(fundedRoot);
     }
-    scrollToHashTarget();
+    scrollToFundedIfNeeded();
   } catch (e) {
     const msg = (e as Error).message || "Could not load endowment";
     const looksLikeApiDown = /\b(404|502|503)\b/.test(msg);

@@ -1,5 +1,6 @@
 import { authFetch, currentReturnPath, loginMenuHtml } from "./auth";
 import { BITCOIN_NETWORK, WORKERS_API } from "./config";
+import { confirmAction } from "./confirm-modal";
 import { listListedProposals } from "./github";
 import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml, formatSats } from "./util";
@@ -335,15 +336,12 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
             if (msg) msg.textContent = "Enter a proposed value.";
             return;
           }
-          if (
-            !confirm(
-              signet
-                ? `Apply ${field} change on signet?\n\nWith a single linked admin this applies immediately.`
-                : `Propose changing ${field}?\n\nThis opens a quorum ballot (or applies immediately if you are the sole linked admin).`,
-            )
-          ) {
-            return;
-          }
+          const ok = await confirmAction({
+            title: "Propose config change",
+            body: `Propose changing ${field} to ${proposed.trim()}?`,
+            confirmLabel: "Propose",
+          });
+          if (!ok) return;
           const res = await authFetch(`${API()}/admin/ballots`, {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -415,11 +413,6 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               <p>Current: <span class="mono">${escapeHtml(data.address || "—")}</span>
                 ${!data.configured ? `<span class="pill">not configured</span>` : ""}
               </p>
-              <p class="hint">${
-                signet
-                  ? "On signet, a single linked org admin can set this immediately."
-                  : "Changing the receive address opens a quorum ballot among linked Plebly org members."
-              }</p>
               <div class="admin-row-edit admin-address-edit">
                 <input id="endowment-address-input" class="mono" placeholder="tb1… / bc1…" value="" autocomplete="off" spellcheck="false" />
                 <input id="endowment-address-rationale" placeholder="Rationale (optional)" />
@@ -474,15 +467,12 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           if (msg) msg.textContent = "Enter a receive address.";
           return;
         }
-        if (
-          !confirm(
-            signet
-              ? `Set endowment receive address to:\n\n${proposed}\n\nOn signet this applies immediately if you are the sole linked admin.`
-              : `Propose endowment receive address:\n\n${proposed}\n\nThis opens a quorum ballot among linked org members.`,
-          )
-        ) {
-          return;
-        }
+        const ok = await confirmAction({
+          title: data.configured ? "Change receive address" : "Set receive address",
+          body: `Use ${proposed} as the endowment receive address?`,
+          confirmLabel: data.configured ? "Propose" : "Set address",
+        });
+        if (!ok) return;
         const res = await authFetch(`${API()}/admin/ballots`, {
           method: "POST",
           headers: { "content-type": "application/json" },

@@ -4130,13 +4130,6 @@ a.proposal-meta-chip-endowment:hover {
   max-width: 100%;
 }
 
-.endowment-contribute .donate-panel {
-  width: 100%;
-  max-width: min(40rem, 100%);
-  min-width: 0;
-  overflow: hidden;
-}
-
 .endowment-closed-card {
   max-width: min(40rem, 100%);
   padding: 1.25rem 1.35rem;
