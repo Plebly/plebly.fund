@@ -184,6 +184,7 @@ function shell(inner: string): string {
       <div class="header-end">
         <nav class="nav" aria-label="Primary">
           <a href="${projectsHref()}" class="${active("home")}"${current("home")}>Projects</a>
+          <a href="${href("/endowment")}" class="${active("endowment")}"${current("endowment")}>Endowment</a>
           <a href="${href("/propose")}" class="${active("propose")}"${current("propose")}>Start a project</a>
           <a href="${href("/about")}" class="${active("about")}"${current("about")}>About</a>
           ${authNavHtml()}

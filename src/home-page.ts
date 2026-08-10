@@ -10,7 +10,7 @@ import {
   removeWatch,
   watchStorageId,
 } from "./builder";
-import { CLAIM_FLOOR_SATS, lightningUiAllowed } from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeHttpsImageUrl } from "./media";
@@ -111,6 +111,48 @@ function audiencePathsHtml(): string {
       </a>`,
       )
       .join("")}</div>
+  </section>`;
+}
+
+type EndowmentTeaser = {
+  configured: boolean;
+  display_balance_sats: number;
+};
+
+async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
+  if (!WORKERS_API) return null;
+  try {
+    const res = await fetch(`${WORKERS_API.replace(/\/$/, "")}/endowment`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as Partial<EndowmentTeaser>;
+    return {
+      configured: Boolean(body.configured),
+      display_balance_sats: Number(body.display_balance_sats) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
+  const balance =
+    teaser && teaser.configured
+      ? `<p class="endowment-strip-balance mono">${escapeHtml(formatSats(teaser.display_balance_sats))} <span>displayed</span></p>`
+      : "";
+  return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
+    <div class="endowment-strip">
+      <div class="endowment-strip-copy">
+        <p class="path-kicker">Endowment</p>
+        <h2 id="endowment-strip-heading">A shared pool for open Bitcoin work</h2>
+        <p>Separate from per-project escrow. Contributions are anonymous by default. Projects marked endowment-funded carry a public attribution label only.</p>
+        ${balance}
+      </div>
+      <div class="landing-cta-row endowment-strip-cta">
+        <a class="btn" href="${href("/endowment")}#donate">Contribute</a>
+        <a class="btn ghost" href="${href("/endowment")}#funded">See funded projects</a>
+        <a class="btn ghost" href="${projectsHref("?endowment=1")}">Filter projects</a>
+      </div>
+    </div>
   </section>`;
 }
 
@@ -260,6 +302,11 @@ function discoverToolbarHtml(count: number): string {
               <button type="button" class="builder-filter" data-type="bounty">Bounty</button>
               <button type="button" class="builder-filter" data-type="direct">Direct</button>
             </div>
+            <div class="builder-filter-group" role="group" aria-label="Endowment">
+              <span class="builder-filter-label">Endowment</span>
+              <button type="button" class="builder-filter active" data-endowment="all">Any</button>
+              <button type="button" class="builder-filter" data-endowment="funded">Funded</button>
+            </div>
           </div>
         </div>
       </details>
@@ -303,7 +350,8 @@ function progressHtml(p: Proposal, floor: number): string {
   </div>`;
 }
 
-function proposalCardHtml(
+/** Public card renderer — also used on `/endowment` funded grid. */
+export function proposalCardHtml(
   p: Proposal,
   floor: number,
   lightningEnabled: boolean,
@@ -322,7 +370,7 @@ function proposalCardHtml(
     ? `<span class="project-card-type" title="Proposer is the recipient">Direct</span>`
     : "";
   const endowmentBadge = p.endowment_funded
-    ? `<span class="project-card-endowment" title="Supported by the Plebly endowment">Endowment</span>`
+    ? `<a class="project-card-endowment" href="${href("/endowment")}" title="Supported by the Plebly endowment">Endowment</a>`
     : "";
   const claimModeBadge = claimModeChipHtml(p, floor);
   const secondaryBadge = claimModeBadge
@@ -364,15 +412,15 @@ function proposalCardHtml(
     : "";
   return `
     <article class="project-card${rescue ? " is-rescue" : ""}">
+      <div class="project-card-head">
+        ${statusPillHtml(status)}
+        ${typeBadge}
+        ${endowmentBadge}
+        ${secondaryBadge}
+      </div>
       <a class="project-card-main" href="${proposalHref(p.path, p.id)}">
         ${coverHtml}
         <div class="project-card-body">
-          <div class="project-card-head">
-            ${statusPillHtml(status)}
-            ${typeBadge}
-            ${endowmentBadge}
-            ${secondaryBadge}
-          </div>
           ${rescueHtml}
           <h3>${escapeHtml(p.title)}</h3>
           <p class="project-card-excerpt">${escapeHtml(excerptFromBody(p.body))}</p>
@@ -500,6 +548,11 @@ function bindDiscover(
     ? "open"
     : "all";
   let typeFilter: TypeFilter = "all";
+  let endowmentFilter: "all" | "funded" = /(?:^|[?&])endowment=1(?:&|$)/.test(
+    location.search,
+  )
+    ? "funded"
+    : "all";
 
   const sizeFromUrl = new URLSearchParams(location.search).get("size");
   if (
@@ -548,6 +601,9 @@ function bindDiscover(
     root.querySelectorAll<HTMLButtonElement>("[data-type]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.type === typeFilter);
     });
+    root.querySelectorAll<HTMLButtonElement>("[data-endowment]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.endowment === endowmentFilter);
+    });
   };
   root.querySelectorAll<HTMLButtonElement>("[data-claim]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -559,6 +615,13 @@ function bindDiscover(
   root.querySelectorAll<HTMLButtonElement>("[data-type]").forEach((btn) => {
     btn.addEventListener("click", () => {
       typeFilter = (btn.dataset.type || "all") as TypeFilter;
+      syncFilterButtons();
+      renderList();
+    });
+  });
+  root.querySelectorAll<HTMLButtonElement>("[data-endowment]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      endowmentFilter = (btn.dataset.endowment || "all") as "all" | "funded";
       syncFilterButtons();
       renderList();
     });
@@ -644,6 +707,9 @@ function bindDiscover(
         (p) => String(p.proposal_type || "bounty").toLowerCase() === "direct",
       );
     }
+    if (endowmentFilter === "funded") {
+      filtered = filtered.filter((p) => Boolean(p.endowment_funded));
+    }
     filtered = sortProposals(filtered, sort, floor);
     if (countEl) countEl.textContent = String(filtered.length);
     if (filtered.length === 0) {
@@ -702,7 +768,7 @@ function bindDiscover(
   scheduleAvatars();
 }
 
-function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void {
+export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void {
   root.querySelectorAll<HTMLButtonElement>("[data-card-watch]").forEach((btn) => {
     btn.addEventListener("click", async (ev) => {
       ev.preventDefault();
@@ -772,6 +838,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <div id="gap-ticker"></div>
     <section id="activity-strip" class="wrap-wide activity-strip" hidden aria-label="Recent activity"></section>
     ${audiencePathsHtml()}
+    <div id="endowment-strip">${endowmentStripHtml(null)}</div>
     <div id="wanted-rail"></div>
     <div id="featured-rail"></div>
     <div id="completed-rail"></div>
@@ -792,14 +859,17 @@ export async function renderHome(shell: HomeShell): Promise<void> {
   const listEl = app.querySelector("#list")!;
   try {
     let proposals = await listListedProposals();
-    const [withBalances, lnStatus, watches] = await Promise.all([
+    const [withBalances, lnStatus, watches, endowmentTeaser] = await Promise.all([
       enrichBalances(proposals),
       lightningUiAllowed()
         ? fetchLightningStatus()
         : Promise.resolve({ enabled: false }),
       fetchWatches().catch(() => []),
+      fetchEndowmentTeaser(),
     ]);
     proposals = withBalances;
+    const endowmentStrip = app.querySelector("#endowment-strip");
+    if (endowmentStrip) endowmentStrip.innerHTML = endowmentStripHtml(endowmentTeaser);
     const viewCounts = await fetchProposalViewsBatch(
       proposals.map((proposal) => proposal.id || "").filter(Boolean),
     ).catch(() => new Map<string, number>());

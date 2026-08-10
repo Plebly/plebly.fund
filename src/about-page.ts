@@ -2,6 +2,7 @@ import {
   ABOUT_BELIEFS,
   ABOUT_BITCOIN_NETWORK,
   ABOUT_BUILDERS_HTML,
+  ABOUT_ENDOWMENT_HTML,
   ABOUT_INTRO_HTML,
   ABOUT_KEYHOLDERS,
   ABOUT_LIGHTNING_HTML,
@@ -24,6 +25,7 @@ export const PLEBLY_ORG_LOGIN = "Plebly";
 const ABOUT_NAV = [
   { id: "beliefs", label: "Beliefs" },
   { id: "how-it-works", label: "How it works" },
+  { id: "endowment", label: "Endowment" },
   { id: "trust", label: "Trust" },
   { id: "team", label: "Team" },
   { id: "keyholders", label: "Keyholders" },
@@ -32,11 +34,16 @@ const ABOUT_NAV = [
 ] as const;
 
 function aboutNavHtml(): string {
+  const items = ABOUT_NAV.filter(
+    (item) => item.id !== "endowment" || Boolean(ABOUT_ENDOWMENT_HTML),
+  );
   return `<nav class="about-toc" aria-label="On this page">
-    ${ABOUT_NAV.map(
-      (item) =>
-        `<a class="about-toc-link" href="#${item.id}">${escapeHtml(item.label)}</a>`,
-    ).join("")}
+    ${items
+      .map(
+        (item) =>
+          `<a class="about-toc-link" href="#${item.id}">${escapeHtml(item.label)}</a>`,
+      )
+      .join("")}
   </nav>`;
 }
 
@@ -417,6 +424,18 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
           <a href="${href("/propose")}">start a project</a>.
         </p>
       </section>
+
+      ${
+        ABOUT_ENDOWMENT_HTML
+          ? `<section class="about-section" id="endowment">
+        <h2>Endowment</h2>
+        <div class="about-prose prose-rich">${ABOUT_ENDOWMENT_HTML}</div>
+        <p class="about-section-foot">
+          <a href="${href("/endowment")}">Visit the endowment →</a>
+        </p>
+      </section>`
+          : ""
+      }
 
       ${
         ABOUT_TRUST_HTML

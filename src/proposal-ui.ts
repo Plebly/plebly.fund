@@ -1694,7 +1694,7 @@ export function metaChipsHtml(p: Proposal): string {
   bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Direct" : "Bounty")}</span>`);
   if (p.endowment_funded) {
     bits.push(
-      `<span class="proposal-meta-chip proposal-meta-chip-endowment" title="Supported by the Plebly endowment">Endowment</span>`,
+      `<a class="proposal-meta-chip proposal-meta-chip-endowment" href="${href("/endowment")}" title="Supported by the Plebly endowment">Endowment</a>`,
     );
   }
   // Live-updated from applications API in bindBuilderPanel.

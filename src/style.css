@@ -1381,10 +1381,14 @@ body.modal-open {
 
 .project-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.625rem;
+  gap: 0.35rem 0.5rem;
+  padding: 0.85rem 1.25rem 0;
+}
+
+.project-card-head + .project-card-main .project-card-body {
+  padding-top: 0.75rem;
 }
 
 .project-card-by {
@@ -3942,7 +3946,6 @@ a.project-card-by:hover .project-card-by-text {
 .project-card-endowment,
 .proposal-meta-chip-endowment {
   display: inline-block;
-  margin-left: 0.35rem;
   font-size: 0.625rem;
   font-weight: 650;
   letter-spacing: 0.04em;
@@ -3953,6 +3956,72 @@ a.project-card-by:hover .project-card-by-text {
   border-radius: 999px;
   padding: 0.1rem 0.4rem;
   vertical-align: middle;
+  text-decoration: none;
+}
+
+a.project-card-endowment:hover,
+a.proposal-meta-chip-endowment:hover {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.16);
+}
+
+.landing-endowment {
+  margin: 2.5rem auto 0;
+}
+
+.endowment-strip {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+@media (min-width: 720px) {
+  .endowment-strip {
+    grid-template-columns: 1.4fr auto;
+    align-items: end;
+    gap: 2rem;
+  }
+}
+
+.endowment-strip-copy h2 {
+  margin: 0.25rem 0 0.5rem;
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  letter-spacing: -0.02em;
+}
+
+.endowment-strip-copy p {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--muted);
+}
+
+.endowment-strip-balance {
+  margin: 0.85rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.endowment-strip-balance span {
+  font-size: 0.75rem;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.endowment-strip-cta {
+  flex-wrap: wrap;
+}
+
+.endowment-page .endowment-head {
+  margin-bottom: 1.5rem;
+}
+
+.endowment-page .endowment-head .lede {
+  max-width: 38rem;
 }
 
 .endowment-page .endowment-balance {
@@ -3977,19 +4046,40 @@ a.project-card-by:hover .project-card-by-text {
   letter-spacing: -0.03em;
 }
 
-.endowment-funded-list {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0;
+.endowment-balance-trust {
+  margin: 0.75rem 0 0;
+  max-width: 40rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
-.endowment-funded-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  align-items: baseline;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--line-soft);
+.endowment-contribute,
+.endowment-funded,
+.endowment-differs {
+  margin: 2.5rem 0;
+}
+
+.endowment-funded-grid {
+  margin-top: 1.25rem;
+}
+
+.endowment-funded-empty {
+  margin-top: 1rem;
+}
+
+.endowment-differs-list {
+  margin: 1rem 0 0;
+  padding-left: 1.15rem;
+  max-width: 42rem;
+  color: var(--muted);
+}
+
+.endowment-differs-list li {
+  margin: 0.65rem 0;
+}
+
+.endowment-differs-list strong {
+  color: var(--ink);
 }
 
 .endowment-addr {

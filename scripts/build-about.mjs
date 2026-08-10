@@ -349,6 +349,12 @@ export const ABOUT_BUILDERS_HTML = ${JSON.stringify(
         : "",
     )};
 
+export const ABOUT_ENDOWMENT_HTML = ${JSON.stringify(
+      byId.endowment
+        ? marked.parse(byId.endowment.body, { async: false })
+        : "",
+    )};
+
 export const ABOUT_TRUST_HTML = ${JSON.stringify(
       byId.trust_model
         ? marked.parse(byId.trust_model.body, { async: false })

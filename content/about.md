@@ -21,6 +21,12 @@ We built it for people who want hard problems solved in the open.
 
 Browse [open projects](/), [start a project](/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
+## Endowment
+
+The [Plebly endowment](/endowment) is a shared receive address that supports open Bitcoin work. It is separate from per-project escrow: contributing to the endowment does not move sats into a project wallet inside the app, and marking a project “endowment-funded” is a public attribution label only.
+
+The balance shown on the endowment page is **admin-published** for donors — not a live chain proof. On-chain and Lightning contributions go to the endowment address; they do not auto-update the displayed total.
+
 ## For builders
 
 Watch a project to follow funding progress. Watching does **not** reserve the work. When confirmed escrow meets the claim floor, use **Apply with bond** on the project page. Your bond is verified at apply; exclusivity is awarded under the proposal’s claim mode (proposer pick or first bonded). The exclusive claim and 90-day window start when the award claim PR merges. Then submit your deliverable for public review.
