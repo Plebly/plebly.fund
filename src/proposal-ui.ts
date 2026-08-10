@@ -25,6 +25,7 @@ import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
 import { signetPayNoteHtml } from "./signet";
 import { openShareMenu, prefersNativeShare } from "./share-menu";
 import {
+  createEndowmentLightningInvoice,
   createLightningInvoice,
   fetchLightningStatus,
   fetchLightningSwap,
@@ -67,6 +68,8 @@ export type DonateBindOpts = {
   address: string;
   proposalId: string | null;
   proposalPath: string;
+  /** Project funder credit flow (default) vs endowment (anonymous, dedicated LN path). */
+  mode?: "project" | "endowment";
   signedIn?: boolean;
   onAuthed?: () => void;
   onCreditLinked?: () => void;
@@ -122,9 +125,15 @@ function donatePayStepHtml(
   onchainPresets: string,
   lnPresets: string,
   signedIn: boolean,
+  opts?: { endowment?: boolean },
 ): string {
-  return `<section class="donate-step" data-donate-step="pay" id="donate-step-pay" hidden>
-    <div class="donate-panel-head">
+  const endowment = Boolean(opts?.endowment);
+  const head = endowment
+    ? `<div class="donate-panel-head">
+        <h2 class="donate-title" id="donate-pay-title">Donate</h2>
+        <p class="donate-lede">Anonymous by default. Send any amount to the endowment address.</p>
+      </div>`
+    : `<div class="donate-panel-head">
       ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
       <h2 class="donate-title" id="donate-pay-title">Donate</h2>
       ${
@@ -135,7 +144,19 @@ function donatePayStepHtml(
                <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited. Save your txid:vout or Lightning swap id; refunds later require sign-in plus that proof.</p>
              </aside>`
       }
-    </div>
+    </div>`;
+  const lnIntro = endowment
+    ? "Reverse swap into the endowment address. Fees apply."
+    : "Reverse swap to escrow. Fees apply.";
+  const creditBlock = endowment
+    ? ""
+    : `<div class="donate-credit-link" id="donate-credit">
+      <div id="donate-credit-status" class="donate-credit-status" aria-live="polite" hidden></div>
+      <div id="donate-credit-claim" class="donate-credit-claim" hidden></div>
+    </div>`;
+
+  return `<section class="donate-step" data-donate-step="pay" id="donate-step-pay"${endowment ? "" : " hidden"}>
+    ${head}
     ${networkNote}
     <div class="donate-rails" role="tablist" aria-label="How to donate">
       <button type="button" class="donate-rail active" role="tab" aria-selected="true" data-tab="onchain" id="donate-rail-onchain">
@@ -173,7 +194,7 @@ function donatePayStepHtml(
 
     <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
       <div id="donate-ln-ready" hidden>
-        <p class="donate-pane-intro">Reverse swap to escrow. Fees apply.</p>
+        <p class="donate-pane-intro">${lnIntro}</p>
         <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
         <div class="donate-amount-row">
           <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
@@ -208,10 +229,7 @@ function donatePayStepHtml(
       </div>
     </div>
 
-    <div class="donate-credit-link" id="donate-credit">
-      <div id="donate-credit-status" class="donate-credit-status" aria-live="polite" hidden></div>
-      <div id="donate-credit-claim" class="donate-credit-claim" hidden></div>
-    </div>
+    ${creditBlock}
   </section>`;
 }
 
@@ -707,6 +725,19 @@ export function donateModalHtml(
   </div>`;
 }
 
+function donatePresetButtons(): { onchain: string; ln: string } {
+  return {
+    onchain: DONATE_PRESETS_SATS.map(
+      (sats) =>
+        `<button type="button" class="donate-preset" data-rail="onchain" data-sats="${sats}">${formatSats(sats)}</button>`,
+    ).join(""),
+    ln: LN_PRESETS_SATS.map(
+      (sats) =>
+        `<button type="button" class="donate-preset" data-rail="ln" data-sats="${sats}">${formatSats(sats)}</button>`,
+    ).join(""),
+  };
+}
+
 /** Multi-step donate wizard: credit preferences, then payment rails. */
 export function donatePanelHtml(
   p: Proposal,
@@ -716,18 +747,24 @@ export function donatePanelHtml(
   const addr = p.escrow_address;
   const signedIn = Boolean(opts?.signedIn);
   const networkNote = signetPayNoteHtml("donate");
-  const onchainPresets = DONATE_PRESETS_SATS.map(
-    (sats) =>
-      `<button type="button" class="donate-preset" data-rail="onchain" data-sats="${sats}">${formatSats(sats)}</button>`,
-  ).join("");
-  const lnPresets = LN_PRESETS_SATS.map(
-    (sats) =>
-      `<button type="button" class="donate-preset" data-rail="ln" data-sats="${sats}">${formatSats(sats)}</button>`,
-  ).join("");
+  const presets = donatePresetButtons();
 
   return `<div class="donate-panel" id="donate" data-donate-step="credit">
     ${donateCreditStepHtml(signedIn)}
-    ${donatePayStepHtml(addr, networkNote, onchainPresets, lnPresets, signedIn)}
+    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn)}
+  </div>`;
+}
+
+/** Endowment donate panel — same rails as project donate, no funder-credit step. */
+export function endowmentDonatePanelHtml(address: string): string {
+  const addr = address.trim();
+  if (!addr) return "";
+  const networkNote = signetPayNoteHtml("donate");
+  const presets = donatePresetButtons();
+  return `<div class="donate-panel" id="donate" data-donate-step="pay" data-donate-mode="endowment">
+    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, false, {
+      endowment: true,
+    })}
   </div>`;
 }
 
@@ -1352,7 +1389,8 @@ function bindLightningDonate(
       return;
     }
     feeEl.hidden = false;
-    feeEl.textContent = `Est. escrow credit ~${formatSats(est.expectedOnchain)} after ~${formatSats(est.feeSats)} fees`;
+    const dest = opts.mode === "endowment" ? "endowment" : "escrow";
+    feeEl.textContent = `Est. ${dest} credit ~${formatSats(est.expectedOnchain)} after ~${formatSats(est.feeSats)} fees`;
   };
 
   amountInput?.addEventListener("input", updateFeeHint);
@@ -1412,14 +1450,16 @@ function bindLightningDonate(
     }
     if (feeEl) {
       feeEl.hidden = false;
-      feeEl.textContent = `Invoice ${formatSats(swap.invoice_amount_sats)} → escrow ~${formatSats(swap.expected_onchain_sats)} (fees ~${formatSats(swap.fee_sats)})`;
+      const dest = opts.mode === "endowment" ? "endowment" : "escrow";
+      feeEl.textContent = `Invoice ${formatSats(swap.invoice_amount_sats)} → ${dest} ~${formatSats(swap.expected_onchain_sats)} (fees ~${formatSats(swap.fee_sats)})`;
     }
     if (swap.swap_id) showSwapReceipt(swap.swap_id);
     if (statusEl) {
+      const dest = opts.mode === "endowment" ? "endowment" : "escrow";
       const map: Record<string, string> = {
         pending: "Waiting for Lightning payment…",
-        invoice_paid: "Invoice paid. Claiming to escrow…",
-        claiming: "Broadcasting claim to escrow…",
+        invoice_paid: `Invoice paid. Claiming to ${dest}…`,
+        claiming: `Broadcasting claim to ${dest}…`,
         settled: swap.claim_txid
           ? `Settled on-chain · claim tx ${swap.claim_txid.slice(0, 12)}… · copy swap id below for refunds`
           : "Settled on-chain · copy swap id below for refunds",
@@ -1451,7 +1491,9 @@ function bindLightningDonate(
         if (swap.status === "settled" && !settledLinked) {
           settledLinked = true;
           stopPoll();
-          void linkLightningCredit(panel, opts, swapId);
+          if (opts.mode !== "endowment") {
+            void linkLightningCredit(panel, opts, swapId);
+          }
           return;
         }
         if (["failed", "expired"].includes(swap.status)) {
@@ -1480,12 +1522,18 @@ function bindLightningDonate(
       createBtn.textContent = "Creating…";
     }
     try {
-      const swap = await createLightningInvoice({
-        proposal_id: opts.proposalId,
-        proposal_path: opts.proposalPath,
-        escrow_address: opts.address,
-        amount_sats: amount,
-      });
+      const swap =
+        opts.mode === "endowment"
+          ? await createEndowmentLightningInvoice({
+              amount_sats: amount,
+              escrow_address: opts.address,
+            })
+          : await createLightningInvoice({
+              proposal_id: opts.proposalId,
+              proposal_path: opts.proposalPath,
+              escrow_address: opts.address,
+              amount_sats: amount,
+            });
       await renderSwap(swap);
       startPoll(swap.swap_id);
     } catch (e) {
@@ -1553,13 +1601,17 @@ export async function bindDonatePanel(
     typeof opts === "string"
       ? { address: opts, proposalId: null, proposalPath: "" }
       : opts;
+  const endowment = normalized.mode === "endowment";
 
   // Wire rails + wizard before any network so Donate opens immediately for guests.
   bindDonateRails(panel);
+  if (endowment) {
+    setDonateStep(panel, "pay");
+  }
   bindDonateWizard(panel, normalized);
   void bindOnchainDonate(panel, normalized.address);
 
-  if (!normalized.proposalPath) {
+  if (!endowment && !normalized.proposalPath) {
     setLightningUnavailable(
       panel,
       "Lightning needs a listed project path. Use on-chain for now.",

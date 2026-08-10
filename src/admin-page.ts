@@ -1,5 +1,5 @@
 import { authFetch, currentReturnPath, loginMenuHtml } from "./auth";
-import { WORKERS_API } from "./config";
+import { BITCOIN_NETWORK, WORKERS_API } from "./config";
 import { listListedProposals } from "./github";
 import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml, formatSats } from "./util";
@@ -175,9 +175,9 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
         return;
       }
 
-      // config tab
+      // config tab — default to editable so deploy-only/secrets don't dominate
       const filter =
-        new URLSearchParams(location.search).get("filter") || "all";
+        new URLSearchParams(location.search).get("filter") || "editable";
       const filtered =
         filter === "editable"
           ? rows.filter(
@@ -195,21 +195,36 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               const quorum = row.mutability === "quorum";
               let controls = "";
               if (soft && !["display_balance_sats", "funded_proposal_ids", "admin_note"].includes(row.key)) {
+                const isBool =
+                  row.key === "lightning_enabled" ||
+                  typeof row.value === "boolean";
+                const control = isBool
+                  ? `<select data-soft-key="${escapeHtml(row.key)}" data-soft-type="boolean">
+                      <option value="" ${row.value === null || row.value === undefined ? "selected" : ""}>Default (env)</option>
+                      <option value="true" ${row.value === true ? "selected" : ""}>On</option>
+                      <option value="false" ${row.value === false ? "selected" : ""}>Off</option>
+                    </select>`
+                  : `<input data-soft-key="${escapeHtml(row.key)}" value="${escapeHtml(
+                      row.value === null || row.value === undefined
+                        ? ""
+                        : String(row.value),
+                    )}" />`;
                 controls = `<div class="admin-row-edit">
-                  <input data-soft-key="${escapeHtml(row.key)}" value="${escapeHtml(
-                    row.value === null || row.value === undefined
-                      ? ""
-                      : String(row.value),
-                  )}" />
+                  ${control}
                   <button type="button" class="btn btn-compact" data-soft-save="${escapeHtml(row.key)}">Save</button>
                   <button type="button" class="btn ghost btn-compact" data-soft-clear="${escapeHtml(row.key)}">Clear</button>
                 </div>`;
               }
               if (quorum) {
+                const signet = BITCOIN_NETWORK.toLowerCase() === "signet";
                 controls = `<div class="admin-row-edit">
                   <input data-quorum-field="${escapeHtml(row.key)}" placeholder="New address" />
                   <input data-quorum-rationale="${escapeHtml(row.key)}" placeholder="Rationale" />
-                  <label class="admin-sole"><input type="checkbox" data-quorum-sole="${escapeHtml(row.key)}" /> Sole admin bootstrap</label>
+                  ${
+                    signet
+                      ? ""
+                      : `<label class="admin-sole"><input type="checkbox" data-quorum-sole="${escapeHtml(row.key)}" /> Sole admin bootstrap</label>`
+                  }
                   <button type="button" class="btn btn-compact" data-quorum-propose="${escapeHtml(row.key)}" ${
                     row.open_ballot_id ? "disabled" : ""
                   }>Propose change</button>
@@ -242,9 +257,9 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           <h1>Platform admin</h1>
           ${tabs}
           <p class="admin-filters">
-            <a href="${href("/admin")}?tab=config&filter=all">All</a>
-            <a href="${href("/admin")}?tab=config&filter=editable">Editable</a>
-            <a href="${href("/admin")}?tab=config&filter=attention">Needs attention</a>
+            <a href="${href("/admin")}?tab=config&filter=editable"${filter === "editable" ? ' aria-current="page"' : ""}>Editable</a>
+            <a href="${href("/admin")}?tab=config&filter=attention"${filter === "attention" ? ' aria-current="page"' : ""}>Needs attention</a>
+            <a href="${href("/admin")}?tab=config&filter=all"${filter === "all" ? ' aria-current="page"' : ""}>All inventory</a>
           </p>
           <p class="muted" id="admin-config-msg" aria-live="polite"></p>
           ${body}
@@ -255,13 +270,13 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
       app.querySelectorAll<HTMLButtonElement>("[data-soft-save]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const key = btn.dataset.softSave!;
-          const input = app.querySelector<HTMLInputElement>(
+          const input = app.querySelector<HTMLInputElement | HTMLSelectElement>(
             `[data-soft-key="${key}"]`,
           );
           let value: string | boolean | null = input?.value ?? "";
-          if (key === "lightning_enabled") {
+          if (input?.dataset.softType === "boolean") {
             const v = String(value).trim().toLowerCase();
-            value = v === "true" || v === "1" || v === "on";
+            value = v === "" ? null : v === "true";
           }
           const res = await authFetch(`${API()}/admin/config`, {
             method: "PUT",
@@ -274,6 +289,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               ? `Saved ${key}.`
               : data.error || `Save failed (${res.status})`;
           }
+          if (res.ok) void renderAdmin(shell);
         });
       });
       app.querySelectorAll<HTMLButtonElement>("[data-soft-clear]").forEach((btn) => {
@@ -302,17 +318,23 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           const rationale = app.querySelector<HTMLInputElement>(
             `[data-quorum-rationale="${field}"]`,
           )?.value;
-          const sole = Boolean(
-            app.querySelector<HTMLInputElement>(`[data-quorum-sole="${field}"]`)
-              ?.checked,
-          );
+          const signet = BITCOIN_NETWORK.toLowerCase() === "signet";
+          const sole = signet
+            ? true
+            : Boolean(
+                app.querySelector<HTMLInputElement>(
+                  `[data-quorum-sole="${field}"]`,
+                )?.checked,
+              );
           if (!proposed?.trim()) {
             if (msg) msg.textContent = "Enter a proposed value.";
             return;
           }
           if (
             !confirm(
-              `Propose changing ${field}?\n\nThis opens a quorum ballot (or applies immediately if you are the sole linked admin).`,
+              signet
+                ? `Apply ${field} change on signet?\n\nWith a single linked admin this applies immediately.`
+                : `Propose changing ${field}?\n\nThis opens a quorum ballot (or applies immediately if you are the sole linked admin).`,
             )
           ) {
             return;
