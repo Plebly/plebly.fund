@@ -981,7 +981,8 @@ html.pwa-standalone body {
   border: none;
 }
 
-.donate-open-btn {
+/* Full-width only in the proposal sidebar slot — not landing/endowment CTAs. */
+.proposal-donate-slot .donate-open-btn {
   width: 100%;
 }
 
@@ -4038,12 +4039,41 @@ a.proposal-meta-chip-endowment:hover {
   color: var(--ink);
 }
 
-.endowment-strip-balance span {
-  font-size: 0.75rem;
-  font-weight: 550;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
+.endowment-strip-progress {
+  margin: 0.95rem 0 0;
+  max-width: 22rem;
+}
+
+.endowment-strip-progress-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.65rem;
+  margin-bottom: 0.45rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.endowment-strip-progress-top .muted {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.endowment-strip-meter {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line-soft) 80%, transparent);
+  overflow: hidden;
+}
+
+.endowment-strip-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+  min-width: 0;
+  transition: width 400ms ease;
 }
 
 .endowment-strip-cta {
@@ -4052,7 +4082,7 @@ a.proposal-meta-chip-endowment:hover {
 
 .endowment-hero {
   position: relative;
-  padding: 3.25rem 0 3.25rem;
+  padding: clamp(2.75rem, 6vw, 4rem) 0 clamp(2.5rem, 5vw, 3.5rem);
   overflow: hidden;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -4072,29 +4102,46 @@ a.proposal-meta-chip-endowment:hover {
   position: relative;
   animation: landing-rise 0.7s ease both;
   min-width: 0;
+  max-width: 40rem;
 }
 
-.endowment-hero-size {
+.endowment-brand {
+  margin: 0 0 1.25rem;
+  font-family: var(--mono);
+  font-size: clamp(2.1rem, 5.5vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.endowment-hero-size,
+.endowment-hero-progress {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.35rem 0.75rem;
-  margin: 0 0 1.75rem;
+  margin: 0 0 1.1rem;
+  max-width: min(26rem, 100%);
 }
 
-.endowment-hero-size-label {
-  width: 100%;
-  font-size: 0.75rem;
-  font-weight: 550;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+.endowment-hero-progress {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+
+.endowment-hero-progress-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.75rem;
 }
 
 .endowment-hero-size-value {
-  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-size: clamp(2.25rem, 6vw, 3.25rem);
   font-weight: 650;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
   line-height: 1;
   color: var(--ink);
   max-width: 100%;
@@ -4102,12 +4149,64 @@ a.proposal-meta-chip-endowment:hover {
 }
 
 .endowment-hero-size-meta {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 
+.endowment-hero-meter {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line-soft) 80%, transparent);
+  overflow: hidden;
+}
+
+.endowment-hero-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+  min-width: 0;
+  transition: width 500ms ease;
+}
+
+.endowment-lede {
+  margin: 0 0 1.5rem;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+  max-width: 28rem;
+}
+
+.endowment-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.25rem;
+}
+
+.endowment-donate-btn {
+  width: auto;
+  min-width: 8.5rem;
+  padding-inline: 1.35rem;
+}
+
+.endowment-secondary-link {
+  color: var(--ink-secondary);
+  font-size: 0.95rem;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-color: var(--line);
+}
+
+.endowment-secondary-link:hover {
+  color: var(--ink);
+  text-decoration-color: var(--muted);
+}
+
 .endowment-hero-closed {
-  margin: 0;
+  margin: 0 0 1.1rem;
+  font-size: 1.05rem;
+  color: var(--muted);
 }
 
 /* Single content column under the full-bleed hero (matches header wrap-wide). */
@@ -4118,34 +4217,8 @@ a.proposal-meta-chip-endowment:hover {
 }
 
 .endowment-body-inner {
-  padding: 2rem 0 3.5rem;
+  padding: 2.25rem 0 3.75rem;
   min-width: 0;
-}
-
-.endowment-contribute {
-  margin: 0 0 2rem;
-  padding: 0 0 2rem;
-  border-bottom: 1px solid var(--line-soft);
-  min-width: 0;
-  max-width: 100%;
-}
-
-.endowment-closed-card {
-  max-width: min(40rem, 100%);
-  padding: 1.25rem 1.35rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-}
-
-.endowment-closed-title {
-  margin: 0 0 0.35rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.endowment-closed-card .muted {
-  margin: 0;
 }
 
 .endowment-funded {
@@ -4155,10 +4228,24 @@ a.proposal-meta-chip-endowment:hover {
   max-width: 100%;
 }
 
-.endowment-funded h2 {
-  margin: 0 0 1.25rem;
-  font-size: clamp(1.35rem, 2.5vw, 1.6rem);
+.endowment-funded-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  margin: 0 0 1.35rem;
+}
+
+.endowment-funded-head h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2.4vw, 1.5rem);
   letter-spacing: -0.02em;
+}
+
+.endowment-funded-head .muted {
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 .endowment-funded-grid {
@@ -4174,7 +4261,7 @@ a.proposal-meta-chip-endowment:hover {
 
 .endowment-funded-empty {
   margin: 0;
-  max-width: min(40rem, 100%);
+  max-width: min(36rem, 100%);
 }
 
 .admin-page .admin-tabs {
@@ -4221,11 +4308,24 @@ a.proposal-meta-chip-endowment:hover {
   align-items: center;
 }
 
+.admin-inline-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .admin-row-edit input,
 .admin-row-edit textarea,
-.admin-row-edit select {
+.admin-row-edit select,
+.admin-inline-label input {
   width: 100%;
   max-width: 22rem;
+}
+
+.admin-inline-label input {
+  max-width: 12rem;
 }
 
 .admin-filters a[aria-current="page"] {

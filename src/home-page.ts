@@ -117,6 +117,7 @@ function audiencePathsHtml(): string {
 type EndowmentTeaser = {
   configured: boolean;
   display_balance_sats: number;
+  goal_sats: number;
 };
 
 async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
@@ -128,27 +129,43 @@ async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
     return {
       configured: Boolean(body.configured),
       display_balance_sats: Number(body.display_balance_sats) || 0,
+      goal_sats: Math.max(0, Math.floor(Number(body.goal_sats) || 0)),
     };
   } catch {
     return null;
   }
 }
 
+function endowmentProgressHtml(current: number, goal: number): string {
+  if (goal <= 0) {
+    return `<p class="endowment-strip-balance mono">${escapeHtml(formatSats(current))}</p>`;
+  }
+  const pct = Math.min(100, Math.round((current / goal) * 1000) / 10);
+  return `<div class="endowment-strip-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${current}" aria-label="Endowment progress">
+    <div class="endowment-strip-progress-top">
+      <span class="mono">${escapeHtml(formatSats(current))}</span>
+      <span class="muted">of ${escapeHtml(formatSats(goal))}</span>
+    </div>
+    <div class="endowment-strip-meter" aria-hidden="true">
+      <span style="width:${pct}%"></span>
+    </div>
+  </div>`;
+}
+
 function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
-  const balance =
+  const progress =
     teaser && teaser.configured
-      ? `<p class="endowment-strip-balance mono">${escapeHtml(formatSats(teaser.display_balance_sats))} <span>displayed</span></p>`
+      ? endowmentProgressHtml(teaser.display_balance_sats, teaser.goal_sats)
       : "";
   return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
     <div class="endowment-strip">
       <div class="endowment-strip-copy">
         <p class="path-kicker">Endowment</p>
         <h2 id="endowment-strip-heading">A shared pool for open Bitcoin work</h2>
-        <p>Separate from per-project escrow. Contributions are anonymous by default. Projects marked endowment-funded carry a public attribution label only.</p>
-        ${balance}
+        ${progress}
       </div>
       <div class="landing-cta-row endowment-strip-cta">
-        <a class="btn" href="${href("/endowment")}#donate">Donate</a>
+        <a class="btn" href="${href("/endowment")}?donate">Donate</a>
         <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
       </div>
     </div>

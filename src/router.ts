@@ -461,7 +461,7 @@ export function seoForRoute(
       return {
         title: "Endowment",
         description:
-          "A shared Bitcoin pool that supports open work on Plebly. Anonymous contributions, published display balance, and endowment-funded projects — separate from per-project escrow.",
+          "A shared Bitcoin pool that supports open work on Plebly.",
         path: "/endowment",
       };
     case "admin":

@@ -200,7 +200,15 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               const soft = row.mutability === "soft";
               const quorum = row.mutability === "quorum";
               let controls = "";
-              if (soft && !["display_balance_sats", "funded_proposal_ids", "admin_note"].includes(row.key)) {
+              if (
+                soft &&
+                ![
+                  "display_balance_sats",
+                  "goal_sats",
+                  "funded_proposal_ids",
+                  "admin_note",
+                ].includes(row.key)
+              ) {
                 const isBool =
                   row.key === "lightning_enabled" ||
                   typeof row.value === "boolean";
@@ -369,34 +377,27 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
     }
 
     if (tab === "endowment") {
-      const [adminRes, listed] = await Promise.all([
-        authFetch(`${API()}/endowment/admin`),
-        listListedProposals().catch(() => []),
-      ]);
+      app.innerHTML = shell(`
+        <section class="wrap-wide admin-page">
+          <p class="eyebrow"><a href="${href("/")}">Plebly</a> · Admin</p>
+          <h1>Platform admin</h1>
+          ${tabs}
+          <p class="muted">Loading endowment…</p>
+        </section>
+      `);
+
+      const adminRes = await authFetch(`${API()}/endowment/admin`);
       const data = (await adminRes.json()) as {
         error?: string;
         address?: string | null;
         display_balance_sats?: number;
-        chain_balance_sats?: number | null;
+        goal_sats?: number;
         funded_proposal_ids?: string[];
         admin_note?: string;
         configured?: boolean;
       };
       if (!adminRes.ok) throw new Error(data.error || `HTTP ${adminRes.status}`);
       const funded = new Set(data.funded_proposal_ids || []);
-      const checks = listed
-        .filter((p) => p.id)
-        .map((p) => {
-          const id = p.id!;
-          return `<label class="admin-funded-row">
-            <input type="checkbox" data-funded-id="${escapeHtml(id)}" ${
-              funded.has(id) ? "checked" : ""
-            } />
-            <span>${escapeHtml(p.title || id)}</span>
-            <span class="mono muted">${escapeHtml(id)}</span>
-          </label>`;
-        })
-        .join("");
 
       const signet = BITCOIN_NETWORK.toLowerCase() === "signet";
       app.innerHTML = shell(`
@@ -423,22 +424,23 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
             </section>
 
             <section class="admin-endowment-block" aria-labelledby="endowment-balance-heading">
-              <h3 id="endowment-balance-heading">Published size</h3>
-              <p>Chain balance: <strong class="mono">${
-                data.chain_balance_sats == null
-                  ? "—"
-                  : escapeHtml(formatSats(data.chain_balance_sats))
-              }</strong></p>
-              <p>Displayed balance: <strong class="mono">${escapeHtml(
-                formatSats(data.display_balance_sats || 0),
-              )}</strong></p>
+              <h3 id="endowment-balance-heading">Size &amp; goal</h3>
+              <p>Chain balance: <strong class="mono" id="endowment-chain-balance">…</strong></p>
               <div class="admin-row-edit">
-                <input id="endowment-display-sats" type="number" min="0" step="1" value="${
-                  data.display_balance_sats || 0
-                }" />
-                <button type="button" class="btn" id="endowment-save-display">Save display</button>
-                <button type="button" class="btn ghost" id="endowment-copy-chain">Copy chain → display</button>
+                <label class="admin-inline-label">Balance (sats)
+                  <input id="endowment-display-sats" type="number" min="0" step="1" value="${
+                    data.display_balance_sats || 0
+                  }" />
+                </label>
+                <label class="admin-inline-label">Goal (sats)
+                  <input id="endowment-goal-sats" type="number" min="0" step="1" value="${
+                    data.goal_sats || 0
+                  }" />
+                </label>
+                <button type="button" class="btn" id="endowment-save-display">Save</button>
+                <button type="button" class="btn ghost" id="endowment-copy-chain">Copy chain → balance</button>
               </div>
+              <p class="hint">Set goal to 0 to hide the progress bar.</p>
               <label>Admin note
                 <textarea id="endowment-note">${escapeHtml(data.admin_note || "")}</textarea>
               </label>
@@ -446,8 +448,10 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
 
             <section class="admin-endowment-block" aria-labelledby="endowment-funded-heading">
               <h3 id="endowment-funded-heading">Funded projects</h3>
-              <div class="admin-funded-list">${checks || `<p class="muted">No catalog projects.</p>`}</div>
-              <button type="button" class="btn" id="endowment-save-funded">Save funded set</button>
+              <div class="admin-funded-list" id="endowment-funded-list">
+                <p class="muted">Loading catalog…</p>
+              </div>
+              <button type="button" class="btn" id="endowment-save-funded" disabled>Save funded set</button>
             </section>
 
             <p class="muted" id="endowment-admin-msg" aria-live="polite"></p>
@@ -456,6 +460,55 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
       `);
 
       const msg = app.querySelector("#endowment-admin-msg");
+      const chainEl = app.querySelector("#endowment-chain-balance");
+      const fundedList = app.querySelector("#endowment-funded-list");
+      const saveFundedBtn = app.querySelector<HTMLButtonElement>(
+        "#endowment-save-funded",
+      );
+
+      // Chain balance + catalog are slow; paint the form first, then hydrate.
+      void (async () => {
+        try {
+          const res = await authFetch(`${API()}/endowment/admin/chain-balance`);
+          const body = (await res.json()) as {
+            error?: string;
+            chain_balance_sats?: number | null;
+          };
+          if (!chainEl) return;
+          if (!res.ok) {
+            chainEl.textContent = "unavailable";
+            return;
+          }
+          chainEl.textContent =
+            body.chain_balance_sats == null
+              ? "—"
+              : formatSats(body.chain_balance_sats);
+        } catch {
+          if (chainEl) chainEl.textContent = "unavailable";
+        }
+      })();
+
+      void (async () => {
+        const listed = await listListedProposals().catch(() => []);
+        if (!fundedList) return;
+        const checks = listed
+          .filter((p) => p.id)
+          .map((p) => {
+            const id = p.id!;
+            return `<label class="admin-funded-row">
+              <input type="checkbox" data-funded-id="${escapeHtml(id)}" ${
+                funded.has(id) ? "checked" : ""
+              } />
+              <span>${escapeHtml(p.title || id)}</span>
+              <span class="mono muted">${escapeHtml(id)}</span>
+            </label>`;
+          })
+          .join("");
+        fundedList.innerHTML =
+          checks || `<p class="muted">No catalog projects.</p>`;
+        if (saveFundedBtn) saveFundedBtn.disabled = false;
+      })();
+
       app.querySelector("#endowment-set-address")?.addEventListener("click", async () => {
         const proposed = (
           app.querySelector("#endowment-address-input") as HTMLInputElement
@@ -510,6 +563,10 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           (app.querySelector("#endowment-display-sats") as HTMLInputElement)
             ?.value,
         );
+        const goal = Number(
+          (app.querySelector("#endowment-goal-sats") as HTMLInputElement)
+            ?.value,
+        );
         const note = (
           app.querySelector("#endowment-note") as HTMLTextAreaElement
         )?.value;
@@ -518,25 +575,46 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             display_balance_sats: Math.floor(sats),
+            goal_sats: Math.floor(goal),
             admin_note: note,
           }),
         });
         const body = (await res.json()) as { error?: string };
         if (msg) {
-          msg.textContent = res.ok ? "Display balance saved." : body.error || "Save failed";
+          msg.textContent = res.ok ? "Balance and goal saved." : body.error || "Save failed";
         }
       });
       app.querySelector("#endowment-copy-chain")?.addEventListener("click", async () => {
+        const goal = Number(
+          (app.querySelector("#endowment-goal-sats") as HTMLInputElement)
+            ?.value,
+        );
         const res = await authFetch(`${API()}/endowment/admin/display-balance`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ copy_from_chain: true }),
+          body: JSON.stringify({
+            copy_from_chain: true,
+            goal_sats: Number.isFinite(goal) ? Math.floor(goal) : undefined,
+          }),
         });
-        const body = (await res.json()) as { error?: string };
+        const body = (await res.json()) as {
+          error?: string;
+          meta?: { display_balance_sats?: number };
+        };
         if (msg) {
-          msg.textContent = res.ok ? "Copied chain balance to display." : body.error || "Copy failed";
+          msg.textContent = res.ok ? "Copied chain balance." : body.error || "Copy failed";
         }
-        if (res.ok) void renderAdmin(shell);
+        if (res.ok) {
+          const input = app.querySelector<HTMLInputElement>(
+            "#endowment-display-sats",
+          );
+          if (input && body.meta?.display_balance_sats != null) {
+            input.value = String(body.meta.display_balance_sats);
+          }
+          if (chainEl && body.meta?.display_balance_sats != null) {
+            chainEl.textContent = formatSats(body.meta.display_balance_sats);
+          }
+        }
       });
       app.querySelector("#endowment-save-funded")?.addEventListener("click", async () => {
         const ids = [

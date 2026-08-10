@@ -27,6 +27,7 @@ type EndowmentPublic = {
   address: string | null;
   configured: boolean;
   display_balance_sats: number;
+  goal_sats: number;
   display_updated_at: string;
   funded_proposal_ids: string[];
   lightning_available: boolean;
@@ -38,34 +39,50 @@ async function fetchEndowment(): Promise<EndowmentPublic> {
   return (await res.json()) as EndowmentPublic;
 }
 
+function heroSizeHtml(opts: {
+  sats: number;
+  goal: number;
+}): string {
+  const goal = opts.goal > 0 ? opts.goal : 0;
+  if (goal > 0) {
+    const pct = Math.min(100, Math.round((opts.sats / goal) * 1000) / 10);
+    return `<div class="endowment-hero-progress" aria-live="polite">
+      <div class="endowment-hero-progress-top">
+        <span class="endowment-hero-size-value mono">${escapeHtml(formatSats(opts.sats))}</span>
+        <span class="endowment-hero-size-meta">of ${escapeHtml(formatSats(goal))}</span>
+      </div>
+      <div class="endowment-hero-meter" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${opts.sats}" aria-label="Endowment progress">
+        <span style="width:${pct}%"></span>
+      </div>
+    </div>`;
+  }
+  return `<p class="endowment-hero-size" aria-live="polite">
+    <span class="endowment-hero-size-value mono">${escapeHtml(formatSats(opts.sats))}</span>
+  </p>`;
+}
+
 function heroHtml(opts: {
   open: boolean;
   sats: number;
-  updated: string;
+  goal: number;
 }): string {
-  const size = opts.open
-    ? `<p class="endowment-hero-size" aria-live="polite">
-        <span class="endowment-hero-size-label">Endowment size</span>
-        <span class="endowment-hero-size-value mono">${escapeHtml(formatSats(opts.sats))}</span>
-        <span class="endowment-hero-size-meta">published${
-          opts.updated ? ` · ${escapeHtml(opts.updated)}` : ""
-        }</span>
-      </p>`
-    : "";
+  const signal = opts.open
+    ? heroSizeHtml({ sats: opts.sats, goal: opts.goal })
+    : `<p class="endowment-hero-closed">Donations open once the receive address is set.</p>`;
+
   const cta = opts.open
-    ? `<div class="landing-cta-row">
-        <button type="button" class="btn landing-btn donate-open-btn" data-open-donate>Donate</button>
-        <a class="btn ghost landing-btn" href="#funded">Funded projects</a>
+    ? `<div class="endowment-cta-row">
+        <button type="button" class="btn endowment-donate-btn" data-open-donate>Donate</button>
+        <a class="endowment-secondary-link" href="#funded">Funded projects</a>
       </div>`
-    : `<p class="endowment-hero-closed muted">Donations open once the endowment address is set.</p>`;
+    : "";
 
   return `<section class="endowment-hero">
     <div class="endowment-hero-bg" aria-hidden="true"></div>
     <div class="wrap-wide endowment-hero-inner">
-      <h1 class="landing-brand">Endowment</h1>
-      <p class="landing-title">Support open Bitcoin work from one shared pool.</p>
-      <p class="landing-sub">Send Bitcoin on-chain or Lightning. Anonymous by default.</p>
-      ${size}
+      <h1 class="endowment-brand">Endowment</h1>
+      ${signal}
+      <p class="endowment-lede">A shared pool for open Bitcoin work. On-chain or Lightning.</p>
       ${cta}
     </div>
   </section>`;
@@ -77,7 +94,7 @@ function fundedCardsHtml(
 ): string {
   if (!proposals.length) {
     return `<div class="endowment-funded-empty">
-      <p class="muted">No endowment-funded projects listed yet.</p>
+      <p class="muted">No funded projects yet.</p>
       <p><a href="${projectsHref()}">Browse open projects →</a></p>
     </div>`;
   }
@@ -122,7 +139,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
   }
 
   app.innerHTML = shell(`
-    ${heroHtml({ open: false, sats: 0, updated: "" })}
+    ${heroHtml({ open: false, sats: 0, goal: 0 })}
     ${bodyHtml(`<p class="muted">Loading…</p>`)}
   `);
 
@@ -140,30 +157,26 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         fundedSet.has(p.id.trim().toLowerCase()) &&
         ACTIVE.has(String(p.status)),
     );
-    const updated = view.display_updated_at
-      ? view.display_updated_at.slice(0, 10)
-      : "";
     const open = Boolean(view.configured && view.address);
-
-    const closedBlock = !open
-      ? `<section class="endowment-contribute">
-            <div class="endowment-closed-card">
-              <p class="endowment-closed-title">Donations are not open yet</p>
-              <p class="muted">An admin sets the endowment receive address in <a href="${href("/admin")}?tab=endowment">Admin → Endowment</a>.</p>
-            </div>
-          </section>`
-      : "";
+    const countLabel =
+      funded.length === 1 ? "1 project" : `${funded.length} projects`;
 
     app.innerHTML = shell(`
       ${heroHtml({
         open,
         sats: view.display_balance_sats,
-        updated,
+        goal: Math.max(0, Math.floor(Number(view.goal_sats) || 0)),
       })}
       ${bodyHtml(`
-        ${closedBlock}
         <section class="endowment-funded" id="funded">
-          <h2>Funded projects</h2>
+          <div class="endowment-funded-head">
+            <h2>Funded projects</h2>
+            ${
+              open
+                ? `<p class="muted">${escapeHtml(countLabel)}</p>`
+                : `<p class="muted">Set the receive address in <a href="${href("/admin")}?tab=endowment">Admin</a> to open donations.</p>`
+            }
+          </div>
           ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
         </section>
       `)}
@@ -192,12 +205,12 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     const msg = (e as Error).message || "Could not load endowment";
     const looksLikeApiDown = /\b(404|502|503)\b/.test(msg);
     app.innerHTML = shell(`
-      ${heroHtml({ open: false, sats: 0, updated: "" })}
+      ${heroHtml({ open: false, sats: 0, goal: 0 })}
       ${bodyHtml(`
         <p class="error">${escapeHtml(msg)}</p>
         ${
           looksLikeApiDown
-            ? `<p class="muted">The Workers API has not published this route yet — try again after deploy. Login is not required to view the endowment.</p>`
+            ? `<p class="muted">The Workers API has not published this route yet — try again after deploy.</p>`
             : `<p>${loginMenuHtml(currentReturnPath())}</p>`
         }
       `)}
