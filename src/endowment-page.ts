@@ -41,17 +41,46 @@ async function fetchEndowment(): Promise<EndowmentPublic> {
   return (await res.json()) as EndowmentPublic;
 }
 
+function heroHtml(opts: {
+  configured: boolean;
+  displayBalance: number;
+  updated: string;
+}): string {
+  const balance =
+    opts.configured
+      ? `<p class="endowment-hero-balance mono">${escapeHtml(formatSats(opts.displayBalance))}${
+          opts.updated
+            ? ` <span class="endowment-hero-balance-meta">published · ${escapeHtml(opts.updated)}</span>`
+            : ` <span class="endowment-hero-balance-meta">published</span>`
+        }</p>`
+      : "";
+  const cta = opts.configured
+    ? `<div class="landing-cta-row">
+        <a class="btn landing-btn" href="#donate">Donate</a>
+        <a class="btn ghost landing-btn" href="#funded">Funded projects</a>
+      </div>`
+    : `<p class="endowment-hero-closed muted">Donations open once the endowment address is set.</p>`;
+
+  return `<section class="endowment-hero">
+    <div class="endowment-hero-bg" aria-hidden="true"></div>
+    <div class="wrap-wide endowment-hero-inner">
+      <h1 class="landing-brand">Endowment</h1>
+      <p class="landing-title">Support open Bitcoin work from one shared pool.</p>
+      <p class="landing-sub">Anonymous by default. Send Bitcoin to the endowment address below.</p>
+      ${balance}
+      ${cta}
+    </div>
+  </section>`;
+}
+
 function fundedCardsHtml(
   proposals: Proposal[],
   lightningEnabled: boolean,
 ): string {
   if (!proposals.length) {
     return `<div class="endowment-funded-empty">
-      <p class="muted">No active endowment-funded projects right now. Admins mark supported work from the platform console; direct donations to a project escrow still go to that project.</p>
-      <p class="landing-cta-row">
-        <a class="btn ghost" href="${projectsHref()}">Browse all projects</a>
-        <a class="btn ghost" href="#donate">Contribute anyway</a>
-      </p>
+      <p class="muted">No endowment-funded projects listed yet.</p>
+      <p><a href="${projectsHref()}">Browse open projects →</a></p>
     </div>`;
   }
   return `<div class="project-grid endowment-funded-grid">${proposals
@@ -60,41 +89,43 @@ function fundedCardsHtml(
 }
 
 function contributeHtml(address: string, lnOk: boolean): string {
-  return `<section class="endowment-contribute" id="donate">
-    <div class="landing-section-head">
-      <h2>Contribute</h2>
-      <p>Contributions are anonymous by default. Funds go to the endowment wallet — not a per-project escrow.</p>
-    </div>
-    <div class="donate-panel endowment-donate" data-endowment-donate>
-      <div class="donate-rails" role="tablist">
-        <button type="button" class="donate-rail active" data-rail="onchain">On-chain</button>
+  return `<section class="wrap-wide endowment-contribute" id="donate">
+    <div class="endowment-donate-layout">
+      <div class="endowment-donate-copy">
+        <h2>Donate</h2>
+        <p>Send Bitcoin on-chain${lnOk ? " or Lightning" : ""}. The displayed total updates when admins publish it — not automatically from your payment.</p>
+      </div>
+      <div class="donate-panel endowment-donate" data-endowment-donate>
+        <div class="donate-rails" role="tablist">
+          <button type="button" class="donate-rail active" data-rail="onchain">On-chain</button>
+          ${
+            lnOk
+              ? `<button type="button" class="donate-rail" data-rail="ln">Lightning</button>`
+              : ""
+          }
+        </div>
+        <div data-endowment-rail="onchain" class="endowment-onchain">
+          <img id="endowment-qr" alt="Bitcoin payment QR" width="200" height="200" />
+          <p class="mono endowment-addr">${escapeHtml(address)}</p>
+          <p class="donate-actions">
+            <a class="btn" id="endowment-wallet" href="${escapeHtml(bitcoinUri(address, null))}">Open wallet</a>
+            <button type="button" class="btn ghost" id="endowment-copy">Copy address</button>
+          </p>
+          <p class="muted" id="endowment-onchain-status" aria-live="polite"></p>
+        </div>
         ${
           lnOk
-            ? `<button type="button" class="donate-rail" data-rail="ln">Lightning</button>`
+            ? `<div data-endowment-rail="ln" hidden>
+          <label>Amount (sats)
+            <input type="number" id="endowment-ln-amount" min="1" step="1" inputmode="numeric" />
+          </label>
+          <button type="button" class="btn" id="endowment-ln-pay">Create invoice</button>
+          <p class="muted" id="endowment-ln-status" aria-live="polite"></p>
+          <p class="mono" id="endowment-ln-bolt11" hidden></p>
+        </div>`
             : ""
         }
       </div>
-      <div data-endowment-rail="onchain">
-        <p class="mono endowment-addr">${escapeHtml(address)}</p>
-        <img id="endowment-qr" alt="Bitcoin payment QR" width="168" height="168" />
-        <p class="donate-actions">
-          <a class="btn" id="endowment-wallet" href="${escapeHtml(bitcoinUri(address, null))}">Open wallet</a>
-          <button type="button" class="btn ghost" id="endowment-copy">Copy address</button>
-        </p>
-        <p class="muted" id="endowment-onchain-status" aria-live="polite"></p>
-      </div>
-      ${
-        lnOk
-          ? `<div data-endowment-rail="ln" hidden>
-        <label>Amount (sats)
-          <input type="number" id="endowment-ln-amount" min="1" step="1" inputmode="numeric" />
-        </label>
-        <button type="button" class="btn" id="endowment-ln-pay">Create invoice</button>
-        <p class="muted" id="endowment-ln-status" aria-live="polite"></p>
-        <p class="mono" id="endowment-ln-bolt11" hidden></p>
-      </div>`
-          : `<p class="muted">Lightning is unavailable on this network.</p>`
-      }
     </div>
   </section>`;
 }
@@ -112,8 +143,7 @@ function bindContribute(root: ParentNode, address: string): void {
   });
 
   const qr = root.querySelector<HTMLImageElement>("#endowment-qr");
-  const wallet = root.querySelector<HTMLAnchorElement>("#endowment-wallet");
-  void QRCode.toDataURL(bitcoinUri(address, null), { width: 168, margin: 1 }).then(
+  void QRCode.toDataURL(bitcoinUri(address, null), { width: 200, margin: 1 }).then(
     (url) => {
       if (qr) qr.src = url;
     },
@@ -125,7 +155,7 @@ function bindContribute(root: ParentNode, address: string): void {
       const st = root.querySelector("#endowment-onchain-status");
       if (st) {
         st.textContent =
-          "Confirmed balance increased. Displayed endowment total updates when admins publish it.";
+          "Payment seen on-chain. The published total updates when admins refresh it.";
       }
     },
     { intervalMs: 12_000 },
@@ -178,7 +208,7 @@ function bindContribute(root: ParentNode, address: string): void {
             window.clearInterval(poll);
             if (status) {
               status.textContent =
-                "Lightning settled into the endowment address. Displayed total is admin-authored.";
+                "Lightning settled. The published total updates when admins refresh it.";
             }
           }
         } catch {
@@ -189,8 +219,6 @@ function bindContribute(root: ParentNode, address: string): void {
       if (status) status.textContent = (e as Error).message;
     }
   });
-
-  void wallet;
 }
 
 function scrollToHashTarget(): void {
@@ -214,12 +242,8 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
   }
 
   app.innerHTML = shell(`
+    ${heroHtml({ configured: false, displayBalance: 0, updated: "" })}
     <section class="wrap-wide endowment-page">
-      <header class="endowment-head">
-        <p class="eyebrow"><a href="${href("/")}">Plebly</a> · Endowment</p>
-        <h1>Endowment</h1>
-        <p class="lede">A shared pool that supports open Bitcoin work. Contributions are anonymous by default.</p>
-      </header>
       <p class="muted">Loading…</p>
     </section>
   `);
@@ -245,55 +269,22 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     const updated = view.display_updated_at
       ? view.display_updated_at.slice(0, 10)
       : "";
+    const open = Boolean(view.configured && view.address);
 
     app.innerHTML = shell(`
-      <section class="wrap-wide endowment-page">
-        <header class="endowment-head">
-          <p class="eyebrow"><a href="${href("/")}">Plebly</a> · Endowment</p>
-          <h1>Endowment</h1>
-          <p class="lede">A shared pool that supports open Bitcoin work. Contributions are anonymous by default.</p>
-          ${
-            view.configured && view.address
-              ? `<p class="landing-cta-row"><a class="btn" href="#donate">Contribute</a><a class="btn ghost" href="#funded">Funded projects</a></p>`
-              : ""
-          }
-        </header>
-
-        <div class="endowment-balance" aria-live="polite">
-          <p class="endowment-balance-label">Displayed balance</p>
-          <p class="endowment-balance-value mono">${escapeHtml(formatSats(view.display_balance_sats))}</p>
-          <p class="endowment-balance-trust muted">
-            Admin-published display${updated ? ` · last updated ${escapeHtml(updated)}` : ""} · not a live chain proof.
-            On-chain sends go to the address below; they do not auto-update this number.
-          </p>
-        </div>
-
-        ${
-          view.configured && view.address
-            ? contributeHtml(view.address, lnOk)
-            : `<p class="muted endowment-closed">Contributions are not open yet — endowment address not configured.</p>`
-        }
-
-        <section class="endowment-funded" id="funded">
-          <div class="landing-section-head">
-            <h2>Projects currently funded</h2>
-            <p>Active work marked as endowment-supported. Direct donations to a project escrow still go to that project.</p>
-          </div>
-          ${fundedCardsHtml(funded, lnOk)}
-        </section>
-
-        <section class="endowment-differs">
-          <div class="landing-section-head">
-            <h2>How it differs</h2>
-            <p>The endowment is a shared receive address. Project escrow is per-proposal, public, and claimable by builders.</p>
-          </div>
-          <ul class="endowment-differs-list">
-            <li><strong>Pool vs escrow.</strong> Endowment contributions fund the shared wallet. Project donations fund that project’s on-chain address.</li>
-            <li><strong>Attribution only.</strong> “Endowment-funded” on a project is a public label — the app does not transfer endowment sats into project escrow.</li>
-            <li><strong>Published total.</strong> The number above is set by platform admins for donors; verify the receive address on-chain if you need chain proof.</li>
-          </ul>
-          <p class="landing-how-link"><a href="${href("/about")}#endowment">Read more in About →</a></p>
-        </section>
+      ${heroHtml({
+        configured: open,
+        displayBalance: view.display_balance_sats,
+        updated,
+      })}
+      ${
+        open && view.address
+          ? contributeHtml(view.address, lnOk)
+          : `<section class="wrap-wide endowment-contribute"><p class="muted">Donations are not open yet.</p></section>`
+      }
+      <section class="wrap-wide endowment-funded" id="funded">
+        <h2>Funded projects</h2>
+        ${fundedCardsHtml(funded, lnOk)}
       </section>
     `);
 
@@ -308,11 +299,8 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     const msg = (e as Error).message || "Could not load endowment";
     const looksLikeApiDown = /\b(404|502|503)\b/.test(msg);
     app.innerHTML = shell(`
+      ${heroHtml({ configured: false, displayBalance: 0, updated: "" })}
       <section class="wrap-wide endowment-page">
-        <header class="endowment-head">
-          <p class="eyebrow"><a href="${href("/")}">Plebly</a> · Endowment</p>
-          <h1>Endowment</h1>
-        </header>
         <p class="error">${escapeHtml(msg)}</p>
         ${
           looksLikeApiDown

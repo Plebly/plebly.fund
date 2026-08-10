@@ -148,9 +148,8 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
         ${balance}
       </div>
       <div class="landing-cta-row endowment-strip-cta">
-        <a class="btn" href="${href("/endowment")}#donate">Contribute</a>
-        <a class="btn ghost" href="${href("/endowment")}#funded">See funded projects</a>
-        <a class="btn ghost" href="${projectsHref("?endowment=1")}">Filter projects</a>
+        <a class="btn" href="${href("/endowment")}#donate">Donate</a>
+        <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
       </div>
     </div>
   </section>`;
