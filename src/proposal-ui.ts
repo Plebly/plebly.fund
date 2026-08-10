@@ -754,6 +754,38 @@ export function donatePanelHtml(
   </div>`;
 }
 
+/**
+ * Endowment size + progress toward goal — same track as project funding bars.
+ * When goal is unset (0), shows balance only.
+ */
+export function endowmentMeterHtml(
+  currentSats: number,
+  goalSats: number,
+  opts?: { size?: "card" | "hero" },
+): string {
+  const current = Math.max(0, Math.floor(Number(currentSats) || 0));
+  const goal = Math.max(0, Math.floor(Number(goalSats) || 0));
+  const size = opts?.size === "hero" ? "hero" : "card";
+  if (goal <= 0) {
+    return `<div class="endowment-meter endowment-meter-${size}">
+      <div class="endowment-meter-top">
+        <span class="endowment-meter-balance mono">${escapeHtml(formatSats(current))}</span>
+      </div>
+    </div>`;
+  }
+  const remaining = Math.max(0, goal - current);
+  const met = current >= goal;
+  const label = met ? "Goal met" : `${formatSats(remaining)} to goal`;
+  const labelClass = met ? "claimable" : "";
+  return `<div class="endowment-meter endowment-meter-${size}">
+    <div class="endowment-meter-top">
+      <span class="${labelClass}">${escapeHtml(label)}</span>
+      <span class="sats mono">${escapeHtml(formatSats(current))} / ${escapeHtml(formatSats(goal))}</span>
+    </div>
+    ${fundingBarTrackHtml(current, goal, "progress", goal)}
+  </div>`;
+}
+
 /** Endowment donate panel — same rails as project donate, no funder-credit step. */
 export function endowmentDonatePanelHtml(address: string): string {
   const addr = address.trim();

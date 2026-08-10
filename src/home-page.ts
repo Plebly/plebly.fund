@@ -17,6 +17,7 @@ import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import {
+  endowmentMeterHtml,
   fundingBarTrackHtml,
   fundingTargetSats,
   isPastFundingTarget,
@@ -136,26 +137,10 @@ async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
   }
 }
 
-function endowmentProgressHtml(current: number, goal: number): string {
-  if (goal <= 0) {
-    return `<p class="endowment-strip-balance mono">${escapeHtml(formatSats(current))}</p>`;
-  }
-  const pct = Math.min(100, Math.round((current / goal) * 1000) / 10);
-  return `<div class="endowment-strip-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${current}" aria-label="Endowment progress">
-    <div class="endowment-strip-progress-top">
-      <span class="mono">${escapeHtml(formatSats(current))}</span>
-      <span class="muted">of ${escapeHtml(formatSats(goal))}</span>
-    </div>
-    <div class="endowment-strip-meter" aria-hidden="true">
-      <span style="width:${pct}%"></span>
-    </div>
-  </div>`;
-}
-
 function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
   const progress =
     teaser && teaser.configured
-      ? endowmentProgressHtml(teaser.display_balance_sats, teaser.goal_sats)
+      ? endowmentMeterHtml(teaser.display_balance_sats, teaser.goal_sats)
       : "";
   return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
     <div class="endowment-strip">

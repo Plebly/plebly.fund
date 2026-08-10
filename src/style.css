@@ -4032,48 +4032,9 @@ a.proposal-meta-chip-endowment:hover {
   color: var(--muted);
 }
 
-.endowment-strip-balance {
-  margin: 0.85rem 0 0;
-  font-size: 1.15rem;
-  font-weight: 650;
-  color: var(--ink);
-}
-
-.endowment-strip-progress {
-  margin: 0.95rem 0 0;
+.endowment-strip-copy .endowment-meter {
+  margin-top: 0.85rem;
   max-width: 22rem;
-}
-
-.endowment-strip-progress-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 0.65rem;
-  margin-bottom: 0.45rem;
-  font-size: 1.05rem;
-  font-weight: 650;
-  color: var(--ink);
-}
-
-.endowment-strip-progress-top .muted {
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.endowment-strip-meter {
-  height: 0.55rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--line-soft) 80%, transparent);
-  overflow: hidden;
-}
-
-.endowment-strip-meter > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--ink);
-  min-width: 0;
-  transition: width 400ms ease;
 }
 
 .endowment-strip-cta {
@@ -4102,7 +4063,6 @@ a.proposal-meta-chip-endowment:hover {
   position: relative;
   animation: landing-rise 0.7s ease both;
   min-width: 0;
-  max-width: 40rem;
 }
 
 .endowment-brand {
@@ -4115,58 +4075,69 @@ a.proposal-meta-chip-endowment:hover {
   color: var(--accent);
 }
 
-.endowment-hero-size,
-.endowment-hero-progress {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.75rem;
-  margin: 0 0 1.1rem;
-  max-width: min(26rem, 100%);
+.endowment-meter {
+  margin: 0 0 1.25rem;
+  max-width: min(28rem, 100%);
 }
 
-.endowment-hero-progress {
+.endowment-meter-top {
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 0.6rem;
-}
-
-.endowment-hero-progress-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 0.75rem;
-}
-
-.endowment-hero-size-value {
-  font-size: clamp(2.25rem, 6vw, 3.25rem);
-  font-weight: 650;
-  letter-spacing: -0.045em;
-  line-height: 1;
-  color: var(--ink);
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.endowment-hero-size-meta {
-  font-size: 0.9rem;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
   color: var(--muted);
 }
 
-.endowment-hero-meter {
-  height: 0.5rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--line-soft) 80%, transparent);
-  overflow: hidden;
+.endowment-meter-top .claimable {
+  color: var(--good);
+  font-weight: 600;
 }
 
-.endowment-hero-meter > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--ink);
-  min-width: 0;
-  transition: width 500ms ease;
+.endowment-meter-top .sats {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-secondary);
+}
+
+.endowment-meter-balance {
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.endowment-meter .progress {
+  height: 4px;
+}
+
+.endowment-meter-hero {
+  max-width: min(32rem, 100%);
+}
+
+.endowment-meter-hero .endowment-meter-top {
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.endowment-meter-hero .endowment-meter-balance,
+.endowment-meter-hero .endowment-meter-top .sats {
+  font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.endowment-meter-hero .endowment-meter-top > span:first-child:not(.sats):not(.endowment-meter-balance) {
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  font-weight: 550;
+}
+
+.endowment-meter-hero .progress {
+  height: 6px;
 }
 
 .endowment-cta-row {
@@ -4174,7 +4145,6 @@ a.proposal-meta-chip-endowment:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.85rem 1.25rem;
-  margin-top: 0.35rem;
 }
 
 .endowment-donate-btn {

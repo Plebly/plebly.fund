@@ -7,10 +7,11 @@ import {
   bindDonateModal,
   bindDonatePanel,
   endowmentDonateModalHtml,
+  endowmentMeterHtml,
 } from "./proposal-ui";
 import { applySeo, href, projectsHref, seoForRoute } from "./router";
 import type { Proposal } from "./types";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml } from "./util";
 
 export type EndowmentShell = (inner: string) => string;
 
@@ -36,29 +37,21 @@ type EndowmentPublic = {
 async function fetchEndowment(): Promise<EndowmentPublic> {
   const res = await fetch(`${API()}/endowment`);
   if (!res.ok) throw new Error(`Could not load endowment (${res.status})`);
-  return (await res.json()) as EndowmentPublic;
-}
-
-function heroSizeHtml(opts: {
-  sats: number;
-  goal: number;
-}): string {
-  const goal = opts.goal > 0 ? opts.goal : 0;
-  if (goal > 0) {
-    const pct = Math.min(100, Math.round((opts.sats / goal) * 1000) / 10);
-    return `<div class="endowment-hero-progress" aria-live="polite">
-      <div class="endowment-hero-progress-top">
-        <span class="endowment-hero-size-value mono">${escapeHtml(formatSats(opts.sats))}</span>
-        <span class="endowment-hero-size-meta">of ${escapeHtml(formatSats(goal))}</span>
-      </div>
-      <div class="endowment-hero-meter" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${opts.sats}" aria-label="Endowment progress">
-        <span style="width:${pct}%"></span>
-      </div>
-    </div>`;
-  }
-  return `<p class="endowment-hero-size" aria-live="polite">
-    <span class="endowment-hero-size-value mono">${escapeHtml(formatSats(opts.sats))}</span>
-  </p>`;
+  const body = (await res.json()) as Partial<EndowmentPublic>;
+  return {
+    address: body.address ?? null,
+    configured: Boolean(body.configured),
+    display_balance_sats: Math.max(
+      0,
+      Math.floor(Number(body.display_balance_sats) || 0),
+    ),
+    goal_sats: Math.max(0, Math.floor(Number(body.goal_sats) || 0)),
+    display_updated_at: body.display_updated_at || "",
+    funded_proposal_ids: Array.isArray(body.funded_proposal_ids)
+      ? body.funded_proposal_ids
+      : [],
+    lightning_available: Boolean(body.lightning_available),
+  };
 }
 
 function heroHtml(opts: {
@@ -67,7 +60,7 @@ function heroHtml(opts: {
   goal: number;
 }): string {
   const signal = opts.open
-    ? heroSizeHtml({ sats: opts.sats, goal: opts.goal })
+    ? endowmentMeterHtml(opts.sats, opts.goal, { size: "hero" })
     : `<p class="endowment-hero-closed">Receive address not set.</p>`;
 
   const cta = opts.open
@@ -163,7 +156,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       ${heroHtml({
         open,
         sats: view.display_balance_sats,
-        goal: Math.max(0, Math.floor(Number(view.goal_sats) || 0)),
+        goal: view.goal_sats,
       })}
       ${bodyHtml(`
         <section class="endowment-funded" id="funded">
