@@ -141,27 +141,27 @@ function siteFooterHtml(routeName: string): string {
       </div>
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
-          <h2 class="footer-col-title">Explore</h2>
+          <h2 class="footer-col-title">Browse</h2>
           <a href="${projectsHref()}"${fa("home")}>Projects</a>
-          <a href="${href("/endowment")}"${fa("endowment")}>Endowment</a>
           <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
-          <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
-          <a href="${href("/about")}"${fa("about")}>About</a>
-          <a href="${href("/stats")}"${fa("stats")}>Stats</a>
+          <a href="${href("/endowment")}"${fa("endowment")}>Endowment</a>
           <a href="${href("/archive")}"${fa("archive")}>Archive</a>
+        </div>
+        <div class="footer-col">
+          <h2 class="footer-col-title">Contribute</h2>
+          <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
         </div>
         <div class="footer-col">
-          <h2 class="footer-col-title">Source</h2>
-          <a href="https://github.com/Plebly/proposals" target="_blank" rel="noreferrer">Proposals</a>
-          <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">Reviewer rules</a>
-          <a href="https://github.com/Plebly/proposals/blob/main/PARAMETERS.md" target="_blank" rel="noreferrer">Parameters</a>
+          <h2 class="footer-col-title">About</h2>
+          <a href="${href("/about")}"${fa("about")}>About</a>
+          <a href="${href("/stats")}"${fa("stats")}>Stats</a>
+        </div>
+        <div class="footer-col footer-col-follow">
+          <h2 class="footer-col-title">Follow</h2>
+          ${pleblySocialAccountsHtml()}
         </div>
       </nav>
-      <div class="footer-aside">
-        <p class="footer-aside-label">Follow</p>
-        ${pleblySocialAccountsHtml()}
-      </div>
     </div>
   </footer>`;
 }
