@@ -391,7 +391,7 @@ export async function renderAccount(
   const loginReturn = "/account";
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
-      <section class="wrap detail">
+      <section class="wrap-wide detail">
         <h1>Account</h1>
         <p class="lede">Sign in to watch projects, apply for funded work, and manage your profile.</p>
         ${loginChoicesHtml(undefined, loginReturn)}
@@ -1333,7 +1333,7 @@ export async function renderPublicProfile(
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = ctx.shell(`
-    <section class="wrap detail"><p class="loading">Loading profile…</p></section>
+    <section class="wrap-wide detail"><p class="loading">Loading profile…</p></section>
   `);
 
   const profile = await fetchPublicProfile(username);
@@ -1345,7 +1345,7 @@ export async function renderPublicProfile(
       noindex: true,
     });
     app.innerHTML = ctx.shell(`
-      <section class="wrap detail">
+      <section class="wrap-wide detail">
         <h1>Profile not found</h1>
         <p>No profile for <span class="mono">${escapeHtml(username)}</span>.</p>
       </section>
@@ -1431,7 +1431,7 @@ export async function renderPublicProfile(
     : "";
 
   app.innerHTML = ctx.shell(`
-    <section class="wrap detail profile-page">
+    <section class="wrap-wide detail profile-page">
       <header class="profile-hero profile-hero-user">
         ${
           profile.avatar_url

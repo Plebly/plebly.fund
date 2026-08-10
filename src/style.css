@@ -84,12 +84,8 @@ a:hover {
   width: 100%;
 }
 
-.wrap {
-  width: min(720px, calc(100% - 2rem));
-  margin: 0 auto;
-  max-width: 100%;
-}
-
+/* Shared page rail — matches header + footer. Prefer wrap-wide in markup. */
+.wrap,
 .wrap-wide {
   width: min(980px, calc(100% - 2rem));
   margin: 0 auto;

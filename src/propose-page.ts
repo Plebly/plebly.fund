@@ -207,7 +207,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
-      <section class="wrap detail propose-page">
+      <section class="wrap-wide detail propose-page">
         <h1>${editParam ? "Edit proposal" : "Start a project"}</h1>
         <p class="lede">Sign in to ${editParam ? "open an amend pull request" : "open a proposal"}.</p>
         ${loginChoicesHtml(undefined, returnPath)}
@@ -222,12 +222,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   let bridgeDraftPr: string | null = null;
   if (editParam) {
     app.innerHTML = ctx.shell(
-      `<section class="wrap detail propose-page"><p class="loading">Loading proposal…</p></section>`,
+      `<section class="wrap-wide detail propose-page"><p class="loading">Loading proposal…</p></section>`,
     );
     prefill = await loadPrefill(editParam);
     if (!prefill) {
       app.innerHTML = ctx.shell(`
-        <section class="wrap detail propose-page">
+        <section class="wrap-wide detail propose-page">
           <h1>Cannot edit</h1>
           <p class="lede">This proposal is not on main yet, is past claim, or was not found. In-app edit works after the submission PR merges and before claim.</p>
           <p><a class="btn" href="${projectsHref()}">Browse projects</a></p>
@@ -237,12 +237,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     }
   } else if (sourceParam && (bridgeParam === "1" || sourceParam.includes("github.com"))) {
     app.innerHTML = ctx.shell(
-      `<section class="wrap detail propose-page"><p class="loading">Loading GitHub issue…</p></section>`,
+      `<section class="wrap-wide detail propose-page"><p class="loading">Loading GitHub issue…</p></section>`,
     );
     const bridge = await loadBridgeSource(sourceParam);
     if (!bridge) {
       app.innerHTML = ctx.shell(`
-        <section class="wrap detail propose-page">
+        <section class="wrap-wide detail propose-page">
           <h1>Cannot load issue</h1>
           <p class="lede">Install the Plebly GitHub App on that repository (required for private issues), or check the URL.</p>
           <p><a class="btn" href="${href("/propose")}">Start without bridge</a></p>
@@ -329,7 +329,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     : `Confirm the draft, then pay the ${feeLabel} submission fee on ${networkLabel}.`;
 
   app.innerHTML = ctx.shell(`
-    <section class="wrap detail propose-page propose-wizard">
+    <section class="wrap-wide detail propose-page propose-wizard">
       <header class="propose-wizard-header">
         <h1>${isEdit ? "Edit proposal" : isBridge ? "Complete bridged proposal" : "Start a project"}</h1>
         ${

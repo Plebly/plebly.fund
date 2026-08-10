@@ -354,7 +354,7 @@ export function bindAboutPage(root: ParentNode = document): () => void {
 export async function renderAbout(shell: AboutShell): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(`
-    <section class="wrap detail about-page">
+    <section class="wrap-wide detail about-page">
       <p class="loading">Loading…</p>
     </section>
   `);
@@ -389,7 +389,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
     .join("");
 
   app.innerHTML = shell(`
-    <section class="wrap detail about-page">
+    <section class="wrap-wide detail about-page">
       <header class="about-hero">
         <h1>About Plebly</h1>
         <div class="about-lede prose-rich">${ABOUT_INTRO_HTML}</div>

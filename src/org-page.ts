@@ -213,7 +213,7 @@ export async function renderPublicOrgProfile(
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(`
-    <section class="wrap detail"><p class="loading">Loading org…</p></section>
+    <section class="wrap-wide detail"><p class="loading">Loading org…</p></section>
   `);
 
   const result = await fetchPublicOrg(login);
@@ -225,7 +225,7 @@ export async function renderPublicOrgProfile(
       noindex: true,
     });
     app.innerHTML = shell(`
-      <section class="wrap detail">
+      <section class="wrap-wide detail">
         <h1>Org not found</h1>
         <p>No public org for <span class="mono">${escapeHtml(login)}</span>.</p>
         <p><a href="${projectsHref()}">Back to projects</a></p>
@@ -241,7 +241,7 @@ export async function renderPublicOrgProfile(
       noindex: true,
     });
     app.innerHTML = shell(`
-      <section class="wrap detail org-page">
+      <section class="wrap-wide detail org-page">
         <h1>@${escapeHtml(login.replace(/^@/, ""))}</h1>
         <p class="form-msg error">${escapeHtml(result.message)}</p>
         <p class="muted">Member list and project history will appear here when the profile is available again.</p>
@@ -302,7 +302,7 @@ export async function renderPublicOrgProfile(
       section.innerHTML = orgPageInnerHtml(org, canResync, proposedHtml, workHtml);
     } else {
       app.innerHTML = shell(`
-        <section class="wrap detail profile-page org-page">
+        <section class="wrap-wide detail profile-page org-page">
           ${orgPageInnerHtml(org, canResync, proposedHtml, workHtml)}
         </section>
       `);

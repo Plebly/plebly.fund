@@ -556,7 +556,7 @@ export async function renderGovernance(
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(`
-    <section class="wrap detail gov-page">
+    <section class="wrap-wide detail gov-page">
       <p class="loading">Loading governance…</p>
     </section>
   `);
@@ -586,7 +586,7 @@ export async function renderGovernance(
   const opsBallotCount = opsNormalized?.ballots.length ?? 0;
 
   app.innerHTML = shell(`
-    <section class="wrap detail gov-page">
+    <section class="wrap-wide detail gov-page">
       <header class="gov-hero">
         <p class="about-eyebrow">Governance</p>
         <h1>Reviewers</h1>

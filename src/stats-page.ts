@@ -147,7 +147,7 @@ function statsBodyHtml(stats: PublicStats): string {
       ? `${stats.completed} completed of ${stats.claimedLifecycle} that entered claim or review`
       : "Shown once a project enters the claim lifecycle";
 
-  return `<section class="wrap detail stats-page">
+  return `<section class="wrap-wide detail stats-page">
     <header class="stats-hero">
       <p class="about-eyebrow">Public ledger</p>
       <h1>Funding stats</h1>
@@ -197,7 +197,7 @@ function statsBodyHtml(stats: PublicStats): string {
 export async function renderStats(shell: StatsShell): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(
-    `<section class="wrap detail stats-page"><p class="loading">Loading public totals…</p></section>`,
+    `<section class="wrap-wide detail stats-page"><p class="loading">Loading public totals…</p></section>`,
   );
 
   try {
@@ -205,7 +205,7 @@ export async function renderStats(shell: StatsShell): Promise<void> {
     const stats = computePublicStats(proposals);
     app.innerHTML = shell(statsBodyHtml(stats));
   } catch (error) {
-    app.innerHTML = shell(`<section class="wrap detail stats-page">
+    app.innerHTML = shell(`<section class="wrap-wide detail stats-page">
       <header class="stats-hero">
         <p class="about-eyebrow">Public ledger</p>
         <h1>Funding stats</h1>

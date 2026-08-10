@@ -17,7 +17,7 @@ export async function renderWanted(shell: WantedShell): Promise<void> {
     ),
   );
   app.innerHTML = shell(`
-    <section class="wrap detail wanted-page">
+    <section class="wrap-wide detail wanted-page">
       <h1>Most wanted</h1>
       <p class="lede">Watches from accounts with completed bounty history count double. Rescue-stalled projects are listed separately on the home grid.</p>
       <div id="wanted-full" class="wanted-list"><p class="loading">Loading…</p></div>

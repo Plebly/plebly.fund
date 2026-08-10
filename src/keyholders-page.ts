@@ -39,7 +39,7 @@ export async function renderKeyholders(
   const app = document.querySelector<HTMLDivElement>("#app")!;
   if (!user) {
     app.innerHTML = shell(`
-      <section class="wrap detail">
+      <section class="wrap-wide detail">
         <h1>Keyholders</h1>
         <p class="lede">Sign in with a keyholder GitHub account to coordinate Sparrow cosigns. Plebly never holds keys.</p>
         <p><a class="btn" href="${href("/account")}">Account</a></p>
@@ -55,7 +55,7 @@ export async function renderKeyholders(
   const kh = meBody.keyholder;
   if (!kh || (kh.status !== "active" && kh.status !== "invited" && kh.status !== "pending_attest")) {
     app.innerHTML = shell(`
-      <section class="wrap detail">
+      <section class="wrap-wide detail">
         <h1>Keyholders</h1>
         <p class="lede">This console is for active escrow keyholders only. Signing stays in Sparrow — the site never moves funds.</p>
         <p><a href="${projectsHref()}">Back to projects</a></p>
