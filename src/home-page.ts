@@ -161,7 +161,7 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
     <div class="endowment-strip">
       <div class="endowment-strip-copy">
         <p class="path-kicker">Endowment</p>
-        <h2 id="endowment-strip-heading">A shared pool for open Bitcoin work</h2>
+        <h2 id="endowment-strip-heading">Shared pool</h2>
         ${progress}
       </div>
       <div class="landing-cta-row endowment-strip-cta">
@@ -386,7 +386,7 @@ export function proposalCardHtml(
     ? `<span class="project-card-type" title="Proposer is the recipient">Direct</span>`
     : "";
   const endowmentBadge = p.endowment_funded
-    ? `<a class="project-card-endowment" href="${href("/endowment")}" title="Supported by the Plebly endowment">Endowment</a>`
+    ? `<a class="project-card-endowment" href="${href("/endowment")}" title="Endowment">Endowment</a>`
     : "";
   const claimModeBadge = claimModeChipHtml(p, floor);
   const secondaryBadge = claimModeBadge

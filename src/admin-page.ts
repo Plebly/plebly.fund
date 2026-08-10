@@ -440,7 +440,6 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
                 <button type="button" class="btn" id="endowment-save-display">Save</button>
                 <button type="button" class="btn ghost" id="endowment-copy-chain">Copy chain → balance</button>
               </div>
-              <p class="hint">Set goal to 0 to hide the progress bar.</p>
               <label>Admin note
                 <textarea id="endowment-note">${escapeHtml(data.admin_note || "")}</textarea>
               </label>

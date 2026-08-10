@@ -68,7 +68,7 @@ function heroHtml(opts: {
 }): string {
   const signal = opts.open
     ? heroSizeHtml({ sats: opts.sats, goal: opts.goal })
-    : `<p class="endowment-hero-closed">Donations open once the receive address is set.</p>`;
+    : `<p class="endowment-hero-closed">Receive address not set.</p>`;
 
   const cta = opts.open
     ? `<div class="endowment-cta-row">
@@ -82,7 +82,6 @@ function heroHtml(opts: {
     <div class="wrap-wide endowment-hero-inner">
       <h1 class="endowment-brand">Endowment</h1>
       ${signal}
-      <p class="endowment-lede">A shared pool for open Bitcoin work. On-chain or Lightning.</p>
       ${cta}
     </div>
   </section>`;
@@ -94,8 +93,7 @@ function fundedCardsHtml(
 ): string {
   if (!proposals.length) {
     return `<div class="endowment-funded-empty">
-      <p class="muted">No funded projects yet.</p>
-      <p><a href="${projectsHref()}">Browse open projects →</a></p>
+      <p class="muted">None yet. <a href="${projectsHref()}">Browse projects</a></p>
     </div>`;
   }
   return `<div class="project-grid endowment-funded-grid">${proposals
@@ -174,7 +172,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
             ${
               open
                 ? `<p class="muted">${escapeHtml(countLabel)}</p>`
-                : `<p class="muted">Set the receive address in <a href="${href("/admin")}?tab=endowment">Admin</a> to open donations.</p>`
+                : `<p class="muted"><a href="${href("/admin")}?tab=endowment">Admin</a></p>`
             }
           </div>
           ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
@@ -210,7 +208,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         <p class="error">${escapeHtml(msg)}</p>
         ${
           looksLikeApiDown
-            ? `<p class="muted">The Workers API has not published this route yet — try again after deploy.</p>`
+            ? `<p class="muted">API unavailable — try again after deploy.</p>`
             : `<p>${loginMenuHtml(currentReturnPath())}</p>`
         }
       `)}

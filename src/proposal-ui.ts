@@ -131,7 +131,6 @@ function donatePayStepHtml(
   const head = endowment
     ? `<div class="donate-panel-head">
         <h2 class="donate-title" id="donate-pay-title">Donate</h2>
-        <p class="donate-lede">Anonymous by default. Send any amount to the endowment address.</p>
       </div>`
     : `<div class="donate-panel-head">
       ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
@@ -146,7 +145,7 @@ function donatePayStepHtml(
       }
     </div>`;
   const lnIntro = endowment
-    ? "Reverse swap into the endowment address. Fees apply."
+    ? "Fees apply."
     : "Reverse swap to escrow. Fees apply.";
   const creditBlock = endowment
     ? ""
@@ -1759,7 +1758,7 @@ export function metaChipsHtml(p: Proposal): string {
   bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Direct" : "Bounty")}</span>`);
   if (p.endowment_funded) {
     bits.push(
-      `<a class="proposal-meta-chip proposal-meta-chip-endowment" href="${href("/endowment")}" title="Supported by the Plebly endowment">Endowment</a>`,
+      `<a class="proposal-meta-chip proposal-meta-chip-endowment" href="${href("/endowment")}" title="Endowment">Endowment</a>`,
     );
   }
   // Live-updated from applications API in bindBuilderPanel.

@@ -4169,19 +4169,12 @@ a.proposal-meta-chip-endowment:hover {
   transition: width 500ms ease;
 }
 
-.endowment-lede {
-  margin: 0 0 1.5rem;
-  font-size: 1.05rem;
-  line-height: 1.55;
-  color: var(--ink-secondary);
-  max-width: 28rem;
-}
-
 .endowment-cta-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.85rem 1.25rem;
+  margin-top: 0.35rem;
 }
 
 .endowment-donate-btn {
