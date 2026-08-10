@@ -16,6 +16,7 @@ import { fetchLightningStatus } from "./lightning";
 import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
+import { ENDOWMENT_BLURB } from "./endowment-copy";
 import {
   endowmentMeterHtml,
   fundingBarTrackHtml,
@@ -148,6 +149,7 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
         <div class="endowment-strip-copy">
           <p class="path-kicker">Endowment</p>
           <h2 id="endowment-strip-heading">Shared pool</h2>
+          <p class="endowment-blurb">${escapeHtml(ENDOWMENT_BLURB)}</p>
         </div>
         <div class="landing-cta-row endowment-strip-cta">
           <a class="btn" href="${href("/endowment")}?donate">Donate</a>

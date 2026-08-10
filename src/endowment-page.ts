@@ -1,4 +1,5 @@
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
+import { ENDOWMENT_BLURB } from "./endowment-copy";
 import { listListedProposals } from "./github";
 import { bindCardWatches, proposalCardHtml } from "./home-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
@@ -73,7 +74,7 @@ function heroHtml(opts: {
     <div class="endowment-hero-bg" aria-hidden="true"></div>
     <div class="wrap-wide endowment-hero-inner">
       <h1 class="endowment-brand">Endowment</h1>
-      <p class="endowment-lede">A shared Bitcoin pool for open work that moves the ecosystem forward.</p>
+      <p class="endowment-lede">${escapeHtml(ENDOWMENT_BLURB)}</p>
       ${signal}
       ${cta}
     </div>

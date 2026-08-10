@@ -4014,31 +4014,44 @@ a.proposal-meta-chip-endowment:hover {
 
 .endowment-strip-head {
   display: grid;
-  gap: 1rem;
-  align-items: end;
+  gap: 1rem 2rem;
+  align-items: start;
 }
 
 @media (min-width: 720px) {
   .endowment-strip-head {
-    grid-template-columns: 1fr auto;
-    gap: 2rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .endowment-strip-cta {
+    padding-top: 1.55rem;
   }
 }
 
 .endowment-strip-copy h2 {
-  margin: 0.25rem 0 0;
+  margin: 0.25rem 0 0.5rem;
   font-size: clamp(1.35rem, 2.5vw, 1.75rem);
   letter-spacing: -0.02em;
 }
 
-.endowment-strip .endowment-meter {
+.endowment-blurb,
+.endowment-lede {
   margin: 0;
+  max-width: 38rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.endowment-strip .endowment-meter {
+  margin: 0.25rem 0 0;
   max-width: none;
   width: 100%;
 }
 
 .endowment-strip-cta {
   flex-wrap: wrap;
+  align-self: start;
 }
 
 .endowment-hero {
@@ -4075,12 +4088,9 @@ a.proposal-meta-chip-endowment:hover {
   color: var(--accent);
 }
 
-.endowment-lede {
+.endowment-hero .endowment-lede {
   margin: 0 0 1.35rem;
-  max-width: 34rem;
   font-size: 1.05rem;
-  line-height: 1.5;
-  color: var(--ink-secondary);
 }
 
 .endowment-meter {
