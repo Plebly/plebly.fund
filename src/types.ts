@@ -167,6 +167,8 @@ export type Proposal = {
   rescue?: boolean;
   rescue_gap_sats?: number | null;
   watch_count?: number;
+  /** Catalog enrich: marked endowment-funded by platform admins. */
+  endowment_funded?: boolean;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */
@@ -192,6 +194,8 @@ export type Route =
   | { name: "propose" }
   | { name: "reviewers" }
   | { name: "wanted" }
+  | { name: "endowment" }
+  | { name: "admin" }
   | { name: "proposal"; id: string; stable?: boolean }
   | { name: "profile"; username: string }
   | { name: "org"; login: string };

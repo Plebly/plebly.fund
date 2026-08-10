@@ -3,8 +3,10 @@ import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
 import "@fortawesome/fontawesome-free/css/brands.min.css";
 import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
+import { fetchAdminMe, renderAdmin } from "./admin-page";
 import { renderCompleted } from "./completed-page";
 import { renderDeclined } from "./declined-page";
+import { renderEndowment } from "./endowment-page";
 import { renderKeyholders } from "./keyholders-page";
 import { WORKERS_API, assertParametersNetwork } from "./config";
 
@@ -63,6 +65,8 @@ let currentUser: AuthUser | null = null;
 let unreadNotifications = 0;
 /** Set when GET /keyholders/me returns invited | pending_attest | active. */
 let keyholderNavStatus: string | null = null;
+/** Platform config admin (Plebly org member). */
+let platformAdminNav = false;
 
 function route(): Route {
   return parseLocation();
@@ -88,6 +92,17 @@ async function refreshKeyholderNav(): Promise<void> {
   }
 }
 
+async function refreshPlatformAdminNav(): Promise<void> {
+  platformAdminNav = false;
+  if (!currentUser || !WORKERS_API) return;
+  try {
+    const me = await fetchAdminMe();
+    platformAdminNav = Boolean(me.admin);
+  } catch {
+    platformAdminNav = false;
+  }
+}
+
 function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
@@ -99,8 +114,14 @@ function authNavHtml(): string {
             route().name === "keyholders" ? ' aria-current="page"' : ""
           }>Keyholders</a>`
         : "";
+    const adm = platformAdminNav
+      ? `<a href="${href("/admin")}" class="${route().name === "admin" ? "active" : ""}"${
+          route().name === "admin" ? ' aria-current="page"' : ""
+        }>Admin</a>`
+      : "";
     return `<span class="nav-divider" aria-hidden="true"></span>
       ${kh}
+      ${adm}
       <span class="nav-account-wrap" data-nav-account-wrap>
         <a href="${href("/account")}" data-nav-account class="nav-account ${route().name === "account" ? "active" : ""}">${escapeHtml(label)}</a>
         ${badge}
@@ -123,6 +144,7 @@ function siteFooterHtml(routeName: string): string {
         <div class="footer-col">
           <h2 class="footer-col-title">Explore</h2>
           <a href="${projectsHref()}"${fa("home")}>Projects</a>
+          <a href="${href("/endowment")}"${fa("endowment")}>Endowment</a>
           <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/about")}"${fa("about")}>About</a>
@@ -197,7 +219,7 @@ async function render() {
     ? await fetchUnreadNotificationCount().catch(() => 0)
     : 0;
   if (currentUser) void syncWebPushIfEnabled();
-  await refreshKeyholderNav();
+  await Promise.all([refreshKeyholderNav(), refreshPlatformAdminNav()]);
   const r = route();
   const ctx = {
     user: currentUser,
@@ -276,6 +298,20 @@ async function render() {
   if (r.name === "wanted") {
     applySeo(seoForRoute(r));
     await renderWanted(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "endowment") {
+    applySeo(seoForRoute(r));
+    await renderEndowment(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "admin") {
+    applySeo(seoForRoute(r));
+    await renderAdmin(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

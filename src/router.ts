@@ -94,6 +94,8 @@ export function parseLocation(
   if (path === "propose" || path === "submit") return { name: "propose" };
   if (path === "reviewers" || path === "governance") return { name: "reviewers" };
   if (path === "wanted") return { name: "wanted" };
+  if (path === "endowment") return { name: "endowment" };
+  if (path === "admin" || path.startsWith("admin/")) return { name: "admin" };
   if (path.startsWith("u/")) {
     return { name: "profile", username: decodeURIComponent(path.slice(2)) };
   }
@@ -454,6 +456,20 @@ export function seoForRoute(
         description:
           "Projects with high watch interest relative to funding progress.",
         path: "/wanted",
+      };
+    case "endowment":
+      return {
+        title: "Endowment",
+        description:
+          "Contribute to the Plebly endowment that supports open Bitcoin work.",
+        path: "/endowment",
+      };
+    case "admin":
+      return {
+        title: "Platform admin",
+        description: "Plebly platform configuration for organization members.",
+        path: "/admin",
+        noindex: true,
       };
     case "declined":
       return {

@@ -321,6 +321,9 @@ function proposalCardHtml(
   const typeBadge = isDirect
     ? `<span class="project-card-type" title="Proposer is the recipient">Direct</span>`
     : "";
+  const endowmentBadge = p.endowment_funded
+    ? `<span class="project-card-endowment" title="Supported by the Plebly endowment">Endowment</span>`
+    : "";
   const claimModeBadge = claimModeChipHtml(p, floor);
   const secondaryBadge = claimModeBadge
     ? claimModeBadge
@@ -367,6 +370,7 @@ function proposalCardHtml(
           <div class="project-card-head">
             ${statusPillHtml(status)}
             ${typeBadge}
+            ${endowmentBadge}
             ${secondaryBadge}
           </div>
           ${rescueHtml}

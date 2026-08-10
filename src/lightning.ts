@@ -47,12 +47,35 @@ export async function createLightningInvoice(input: {
   const res = await fetch(`${API()}/lightning/invoice`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({
       proposal_id: input.proposal_id || undefined,
       proposal_path: input.proposal_path,
       escrow_address: input.escrow_address,
       amount_sats: input.amount_sats,
     }),
+  });
+  const data = (await res.json()) as LightningSwapView & { error?: string };
+  if (!res.ok || !data.bolt11) {
+    throw new Error(data.error || `Invoice failed (${res.status})`);
+  }
+  assertLightningSwapMatches(data, {
+    amount_sats: input.amount_sats,
+    escrow_address: input.escrow_address,
+  });
+  return data;
+}
+
+/** Endowment LN — dedicated Worker path (no proposal escrow verify). */
+export async function createEndowmentLightningInvoice(input: {
+  amount_sats: number;
+  escrow_address: string;
+}): Promise<LightningSwapView> {
+  const res = await fetch(`${API()}/endowment/lightning/invoice`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ amount_sats: input.amount_sats }),
   });
   const data = (await res.json()) as LightningSwapView & { error?: string };
   if (!res.ok || !data.bolt11) {

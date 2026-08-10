@@ -34,6 +34,12 @@ export function notificationTypeLabel(
     release_broadcast: "Escrow release broadcast",
     disburse_chat: "Keyholder coordination message",
     redirect_pending: "Redirect pending (ops)",
+    platform_config_ballot_opened: "Config change vote opened",
+    platform_config_ballot_vote: "Config ballot vote updated",
+    platform_config_ballot_passed: "Config change approved",
+    platform_config_ballot_rejected: "Config change rejected",
+    platform_config_ballot_expired: "Config ballot expired",
+    platform_config_ballot_withdrawn: "Config ballot withdrawn",
   };
   return (
     labels[type] ||
@@ -49,6 +55,11 @@ export function notificationTargetHref(n: {
 }): string {
   if (n.type === "bond_refundable" || n.type === "bond_refunded") {
     return href("/account", "?tab=funds");
+  }
+  if (String(n.type || "").startsWith("platform_config_ballot_")) {
+    const path = (n.proposal_path || "").trim();
+    if (path.startsWith("/admin")) return href(path.split("?")[0] || "/admin", path.includes("?") ? `?${path.split("?")[1]}` : "");
+    return href("/admin", "?tab=votes");
   }
   if (n.proposal_path || n.proposal_id) {
     return proposalHref(n.proposal_path || "", n.proposal_id || "");

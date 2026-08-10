@@ -187,6 +187,7 @@ type CatalogProposal = {
   proposer?: (ProposalProposer & { agent?: string | null }) | null;
   rescue?: boolean;
   rescue_gap_sats?: number | null;
+  endowment_funded?: boolean;
 };
 
 function proposalFromCatalog(entry: CatalogProposal): Proposal {
@@ -245,6 +246,7 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     rescue: Boolean(entry.rescue),
     rescue_gap_sats:
       typeof entry.rescue_gap_sats === "number" ? entry.rescue_gap_sats : null,
+    endowment_funded: Boolean(entry.endowment_funded),
   };
 }
 

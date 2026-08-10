@@ -1692,6 +1692,11 @@ export function metaChipsHtml(p: Proposal): string {
   }
   const type = String(p.proposal_type || "bounty").toLowerCase();
   bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Direct" : "Bounty")}</span>`);
+  if (p.endowment_funded) {
+    bits.push(
+      `<span class="proposal-meta-chip proposal-meta-chip-endowment" title="Supported by the Plebly endowment">Endowment</span>`,
+    );
+  }
   // Live-updated from applications API in bindBuilderPanel.
   const claimChip = claimModeHeroChipHtml(p);
   if (claimChip) bits.push(claimChip);

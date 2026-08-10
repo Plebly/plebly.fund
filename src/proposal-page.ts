@@ -434,6 +434,27 @@ export async function renderProposalPage(
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       match = proposalFromMarkdown(await res.text(), path);
     }
+    if (match.id && WORKERS_API && match.endowment_funded == null) {
+      try {
+        const er = await fetch(
+          `${WORKERS_API.replace(/\/$/, "")}/endowment`,
+        );
+        if (er.ok) {
+          const ev = (await er.json()) as { funded_proposal_ids?: string[] };
+          const set = new Set(
+            (ev.funded_proposal_ids || []).map((id) =>
+              id.trim().toLowerCase(),
+            ),
+          );
+          match = {
+            ...match,
+            endowment_funded: set.has(match.id.trim().toLowerCase()),
+          };
+        }
+      } catch {
+        /* ignore */
+      }
+    }
     const coverUrl = safeHttpsImageUrl(match.cover_image);
     if (match.id) {
       const canonical = new URL(proposalHref(match.path, match.id), location.origin);
