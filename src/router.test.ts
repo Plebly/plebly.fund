@@ -40,7 +40,7 @@ describe("router governance paths", () => {
     );
   });
 
-  it("keeps legacy folder URLs and adds /stats + /declined + /completed", () => {
+  it("keeps legacy folder URLs and maps archive aliases", () => {
     expect(parseLocation("/proposal/listed/example", "")).toEqual({
       name: "proposal",
       id: "proposals/listed/example.md",
@@ -49,10 +49,28 @@ describe("router governance paths", () => {
       "/proposal/listed/example",
     );
     expect(parseLocation("/stats", "")).toEqual({ name: "stats" });
-    expect(parseLocation("/declined", "")).toEqual({ name: "declined" });
-    expect(seoForRoute({ name: "declined" }).path).toBe("/declined");
-    expect(parseLocation("/completed", "")).toEqual({ name: "completed" });
-    expect(seoForRoute({ name: "completed" }).path).toBe("/completed");
+    expect(parseLocation("/archive", "")).toEqual({
+      name: "archive",
+      tab: "completed",
+    });
+    expect(parseLocation("/archive", "?tab=declined")).toEqual({
+      name: "archive",
+      tab: "declined",
+    });
+    expect(parseLocation("/declined", "")).toEqual({
+      name: "archive",
+      tab: "declined",
+    });
+    expect(parseLocation("/completed", "")).toEqual({
+      name: "archive",
+      tab: "completed",
+    });
+    expect(seoForRoute({ name: "archive", tab: "declined" }).path).toBe(
+      "/archive?tab=declined",
+    );
+    expect(seoForRoute({ name: "archive", tab: "completed" }).path).toBe(
+      "/archive",
+    );
   });
 
   it("builds FundingCampaign JSON-LD for stable proposal URLs", () => {

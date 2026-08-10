@@ -959,7 +959,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
         CLAIM_FLOOR_SATS,
         lightningEnabled,
         watchPaths,
-        { hideWhenEmpty: true, browseHref: href("/completed") },
+        { hideWhenEmpty: true, browseHref: href("/archive") },
       );
       bindCardWatches(completedRail, watchPaths);
     }

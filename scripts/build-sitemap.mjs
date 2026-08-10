@@ -21,7 +21,7 @@ const STATIC = [
   "/about",
   "/propose",
   "/stats",
-  "/declined",
+  "/archive",
   "/reviewers",
   "/llms.txt",
   "/llms-full.txt",

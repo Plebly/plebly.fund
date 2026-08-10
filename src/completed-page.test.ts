@@ -4,9 +4,14 @@ import { parseLocation, seoForRoute } from "./router";
 import type { Proposal } from "./types";
 
 describe("completed archive", () => {
-  it("routes /completed", () => {
-    expect(parseLocation("/completed", "")).toEqual({ name: "completed" });
-    expect(seoForRoute({ name: "completed" }).path).toBe("/completed");
+  it("routes /completed into archive", () => {
+    expect(parseLocation("/completed", "")).toEqual({
+      name: "archive",
+      tab: "completed",
+    });
+    expect(seoForRoute({ name: "archive", tab: "completed" }).path).toBe(
+      "/archive",
+    );
   });
 
   it("filters completed proposals", () => {

@@ -4,8 +4,7 @@ import "@fortawesome/fontawesome-free/css/brands.min.css";
 import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
 import { fetchAdminMe, renderAdmin } from "./admin-page";
-import { renderCompleted } from "./completed-page";
-import { renderDeclined } from "./declined-page";
+import { renderArchive } from "./archive-page";
 import { renderEndowment } from "./endowment-page";
 import { renderKeyholders } from "./keyholders-page";
 import { WORKERS_API, assertParametersNetwork } from "./config";
@@ -149,8 +148,7 @@ function siteFooterHtml(routeName: string): string {
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/about")}"${fa("about")}>About</a>
           <a href="${href("/stats")}"${fa("stats")}>Stats</a>
-          <a href="${href("/completed")}"${fa("completed")}>Completed</a>
-          <a href="${href("/declined")}"${fa("declined")}>Declined</a>
+          <a href="${href("/archive")}"${fa("archive")}>Archive</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
         </div>
         <div class="footer-col">
@@ -317,16 +315,9 @@ async function render() {
     scrollToHashTarget();
     return;
   }
-  if (r.name === "declined") {
+  if (r.name === "archive") {
     applySeo(seoForRoute(r));
-    await renderDeclined(shell);
-    bindAuthHandlers();
-    scrollToHashTarget();
-    return;
-  }
-  if (r.name === "completed") {
-    applySeo(seoForRoute(r));
-    await renderCompleted(shell);
+    await renderArchive(shell, r.tab);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

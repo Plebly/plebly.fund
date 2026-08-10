@@ -8030,6 +8030,14 @@ a.claim-app-bond:hover {
   margin-bottom: 1.5rem;
 }
 
+.archive-tabs {
+  margin: 0 0 1.5rem;
+}
+
+.archive-tabs .account-tab {
+  text-decoration: none;
+}
+
 .declined-head .eyebrow {
   margin: 0 0 0.5rem;
   color: var(--ink-secondary);

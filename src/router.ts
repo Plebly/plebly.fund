@@ -85,8 +85,14 @@ export function parseLocation(
   if (!path || path === "home") return { name: "home" };
   if (path === "about") return { name: "about" };
   if (path === "stats") return { name: "stats" };
-  if (path === "declined") return { name: "declined" };
-  if (path === "completed") return { name: "completed" };
+  if (path === "archive" || path === "completed" || path === "declined") {
+    const tabParam = new URLSearchParams(search).get("tab");
+    const tab =
+      path === "declined" || tabParam === "declined"
+        ? ("declined" as const)
+        : ("completed" as const);
+    return { name: "archive", tab };
+  }
   if (path === "keyholders") return { name: "keyholders" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
@@ -471,20 +477,20 @@ export function seoForRoute(
         path: "/admin",
         noindex: true,
       };
-    case "declined":
-      return {
-        title: "Declined proposals",
-        description:
-          "Archive of declined or closed Plebly listings kept for public record.",
-        path: "/declined",
-      };
-    case "completed":
-      return {
-        title: "Completed projects",
-        description:
-          "Archive of finished Plebly bounties kept for public record.",
-        path: "/completed",
-      };
+    case "archive":
+      return route.tab === "declined"
+        ? {
+            title: "Declined proposals",
+            description:
+              "Archive of declined or closed Plebly listings kept for public record.",
+            path: "/archive?tab=declined",
+          }
+        : {
+            title: "Completed projects",
+            description:
+              "Archive of finished Plebly bounties kept for public record.",
+            path: "/archive",
+          };
     case "keyholders":
       return {
         title: "Keyholders",
