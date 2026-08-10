@@ -4110,11 +4110,24 @@ a.proposal-meta-chip-endowment:hover {
   margin: 0;
 }
 
+/* Single content column under the full-bleed hero (matches header wrap-wide). */
+.endowment-body {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.endowment-body-inner {
+  padding: 2rem 0 3.5rem;
+  min-width: 0;
+}
+
 .endowment-contribute {
-  margin: 0;
-  padding: 2.5rem 0;
+  margin: 0 0 2rem;
+  padding: 0 0 2rem;
   border-bottom: 1px solid var(--line-soft);
   min-width: 0;
+  max-width: 100%;
 }
 
 .endowment-contribute .donate-panel {
@@ -4124,10 +4137,29 @@ a.proposal-meta-chip-endowment:hover {
   overflow: hidden;
 }
 
+.endowment-closed-card {
+  max-width: min(40rem, 100%);
+  padding: 1.25rem 1.35rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.endowment-closed-title {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.endowment-closed-card .muted {
+  margin: 0;
+}
+
 .endowment-funded {
   margin: 0;
-  padding: 2.5rem 0 3rem;
+  padding: 0;
   min-width: 0;
+  max-width: 100%;
 }
 
 .endowment-funded h2 {
@@ -4139,6 +4171,7 @@ a.proposal-meta-chip-endowment:hover {
 .endowment-funded-grid {
   margin-top: 0;
   min-width: 0;
+  width: 100%;
 }
 
 .endowment-funded-grid .project-card {
@@ -4148,6 +4181,7 @@ a.proposal-meta-chip-endowment:hover {
 
 .endowment-funded-empty {
   margin: 0;
+  max-width: min(40rem, 100%);
 }
 
 .admin-page .admin-tabs {

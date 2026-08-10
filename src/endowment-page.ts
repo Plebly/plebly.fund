@@ -85,6 +85,14 @@ function fundedCardsHtml(
     .join("")}</div>`;
 }
 
+function bodyHtml(inner: string): string {
+  return `<div class="endowment-body">
+    <div class="wrap-wide endowment-body-inner">
+      ${inner}
+    </div>
+  </div>`;
+}
+
 function scrollToHashTarget(): void {
   const hash = location.hash.replace(/^#/, "");
   const fromQuery = new URLSearchParams(location.search).has("donate")
@@ -100,16 +108,14 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
   const app = document.querySelector("#app")!;
   if (!WORKERS_API) {
     app.innerHTML = shell(
-      `<section class="wrap-wide"><p class="muted">Workers API not configured.</p></section>`,
+      bodyHtml(`<p class="muted">Workers API not configured.</p>`),
     );
     return;
   }
 
   app.innerHTML = shell(`
     ${heroHtml({ open: false, sats: 0, updated: "" })}
-    <section class="wrap-wide endowment-page">
-      <p class="muted">Loading…</p>
-    </section>
+    ${bodyHtml(`<p class="muted">Loading…</p>`)}
   `);
 
   try {
@@ -131,23 +137,31 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       : "";
     const open = Boolean(view.configured && view.address);
 
+    const donateBlock =
+      open && view.address
+        ? `<section class="endowment-contribute" id="donate-section">
+            ${endowmentDonatePanelHtml(view.address)}
+          </section>`
+        : `<section class="endowment-contribute">
+            <div class="endowment-closed-card">
+              <p class="endowment-closed-title">Donations are not open yet</p>
+              <p class="muted">An admin sets the endowment receive address in <a href="${href("/admin")}?tab=endowment">Admin → Endowment</a>.</p>
+            </div>
+          </section>`;
+
     app.innerHTML = shell(`
       ${heroHtml({
         open,
         sats: view.display_balance_sats,
         updated,
       })}
-      ${
-        open && view.address
-          ? `<section class="wrap-wide endowment-contribute" id="donate-section">
-              ${endowmentDonatePanelHtml(view.address)}
-            </section>`
-          : `<section class="wrap-wide endowment-contribute"><p class="muted">Donations are not open yet.</p></section>`
-      }
-      <section class="wrap-wide endowment-funded" id="funded">
-        <h2>Funded projects</h2>
-        ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
-      </section>
+      ${bodyHtml(`
+        ${donateBlock}
+        <section class="endowment-funded" id="funded">
+          <h2>Funded projects</h2>
+          ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
+        </section>
+      `)}
     `);
 
     if (view.address) {
@@ -169,14 +183,14 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     const looksLikeApiDown = /\b(404|502|503)\b/.test(msg);
     app.innerHTML = shell(`
       ${heroHtml({ open: false, sats: 0, updated: "" })}
-      <section class="wrap-wide endowment-page">
+      ${bodyHtml(`
         <p class="error">${escapeHtml(msg)}</p>
         ${
           looksLikeApiDown
             ? `<p class="muted">The Workers API has not published this route yet — try again after deploy. Login is not required to view the endowment.</p>`
             : `<p>${loginMenuHtml(currentReturnPath())}</p>`
         }
-      </section>
+      `)}
     `);
   }
 }
