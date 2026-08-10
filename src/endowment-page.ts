@@ -1,5 +1,5 @@
-import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
-import { ENDOWMENT_BLURB } from "./endowment-copy";
+import { CLAIM_FLOOR_SATS, mempoolWeb, WORKERS_API } from "./config";
+import { ENDOWMENT_BLURB, ENDOWMENT_HOW_STEPS } from "./endowment-copy";
 import { listListedProposals } from "./github";
 import { bindCardWatches, proposalCardHtml } from "./home-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
@@ -9,9 +9,9 @@ import {
   endowmentDonateModalHtml,
   endowmentMeterHtml,
 } from "./proposal-ui";
-import { applySeo, projectsHref, seoForRoute } from "./router";
+import { applySeo, href, proposalHref, projectsHref, seoForRoute } from "./router";
 import type { Proposal } from "./types";
-import { escapeHtml } from "./util";
+import { escapeHtml, formatSats } from "./util";
 
 export type EndowmentShell = (inner: string) => string;
 
@@ -24,6 +24,15 @@ const ACTIVE = new Set([
   "in_review",
 ]);
 
+type EndowmentContribution = {
+  id: string;
+  proposal_id: string;
+  amount_sats: number;
+  granted_at: string;
+  note?: string;
+  txid?: string;
+};
+
 type EndowmentPublic = {
   address: string | null;
   configured: boolean;
@@ -31,6 +40,7 @@ type EndowmentPublic = {
   goal_sats: number;
   display_updated_at: string;
   funded_proposal_ids: string[];
+  contributions: EndowmentContribution[];
   lightning_available: boolean;
 };
 
@@ -50,6 +60,7 @@ async function fetchEndowment(): Promise<EndowmentPublic> {
     funded_proposal_ids: Array.isArray(body.funded_proposal_ids)
       ? body.funded_proposal_ids
       : [],
+    contributions: Array.isArray(body.contributions) ? body.contributions : [],
     lightning_available: Boolean(body.lightning_available),
   };
 }
@@ -66,7 +77,7 @@ function heroHtml(opts: {
   const cta = opts.open
     ? `<div class="endowment-cta-row">
         <button type="button" class="btn endowment-donate-btn" data-open-donate>Donate</button>
-        <a class="endowment-secondary-link" href="#funded">Funded projects</a>
+        <a class="endowment-secondary-link" href="#contributions">Contributions</a>
       </div>`
     : `<p class="endowment-hero-closed">Donations open soon.</p>`;
 
@@ -78,6 +89,83 @@ function heroHtml(opts: {
       ${signal}
       ${cta}
     </div>
+  </section>`;
+}
+
+function howItWorksHtml(): string {
+  const wanted = href("/wanted");
+  const steps = ENDOWMENT_HOW_STEPS.map((step, i) => {
+    let body = escapeHtml(step.body);
+    if (i === 1) {
+      body = body.replace(
+        /most-wanted work/,
+        `<a href="${wanted}">most-wanted</a> work`,
+      );
+    }
+    return `<li class="endowment-how-step">
+      <strong>${escapeHtml(step.title)}</strong>
+      <p>${body}</p>
+    </li>`;
+  }).join("");
+  return `<section class="endowment-how" aria-labelledby="endowment-how-heading">
+    <h2 id="endowment-how-heading">How it works</h2>
+    <ol class="endowment-how-list">${steps}</ol>
+  </section>`;
+}
+
+function contributionsHtml(
+  contributions: EndowmentContribution[],
+  titleById: Map<string, string>,
+  pathById: Map<string, string>,
+): string {
+  if (!contributions.length) {
+    return `<section class="endowment-contributions" id="contributions">
+      <div class="endowment-funded-head">
+        <h2>Contributions</h2>
+      </div>
+      <p class="muted">No monthly contributions listed yet.</p>
+    </section>`;
+  }
+
+  const rows = contributions
+    .map((g) => {
+      const key = g.proposal_id.trim().toLowerCase();
+      const title = titleById.get(key) || g.proposal_id;
+      const path = pathById.get(key);
+      const project = path
+        ? `<a href="${proposalHref(path, g.proposal_id)}">${escapeHtml(title)}</a>`
+        : escapeHtml(title);
+      const when = g.granted_at
+        ? new Date(g.granted_at).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })
+        : "—";
+      const tx = g.txid
+        ? `<a class="mono endowment-tx-link" href="${mempoolWeb()}/tx/${encodeURIComponent(
+            g.txid,
+          )}" target="_blank" rel="noreferrer noopener">${escapeHtml(
+            `${g.txid.slice(0, 8)}…`,
+          )}</a>`
+        : "";
+      return `<li class="endowment-contrib-row">
+        <time datetime="${escapeHtml(g.granted_at)}">${escapeHtml(when)}</time>
+        <span class="endowment-contrib-project">${project}</span>
+        <span class="mono endowment-contrib-amount">${escapeHtml(
+          formatSats(g.amount_sats),
+        )}</span>
+        ${tx ? `<span class="endowment-contrib-tx">${tx}</span>` : ""}
+      </li>`;
+    })
+    .join("");
+
+  return `<section class="endowment-contributions" id="contributions">
+    <div class="endowment-funded-head">
+      <h2>Contributions</h2>
+      <p class="muted">${contributions.length === 1 ? "1 entry" : `${contributions.length} entries`}</p>
+    </div>
+    <ul class="endowment-contrib-list">${rows}</ul>
   </section>`;
 }
 
@@ -103,9 +191,10 @@ function bodyHtml(inner: string): string {
   </div>`;
 }
 
-function scrollToFundedIfNeeded(): void {
-  if (location.hash.replace(/^#/, "") !== "funded") return;
-  document.getElementById("funded")?.scrollIntoView({ behavior: "smooth" });
+function scrollToHashIfNeeded(): void {
+  const hash = location.hash.replace(/^#/, "");
+  if (hash !== "funded" && hash !== "contributions") return;
+  document.getElementById(hash)?.scrollIntoView({ behavior: "smooth" });
 }
 
 function wantsDonateOpen(): boolean {
@@ -141,6 +230,14 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     const fundedSet = new Set(
       view.funded_proposal_ids.map((id) => id.trim().toLowerCase()),
     );
+    const titleById = new Map<string, string>();
+    const pathById = new Map<string, string>();
+    for (const p of listed) {
+      if (!p.id) continue;
+      const key = p.id.trim().toLowerCase();
+      titleById.set(key, p.title || p.id);
+      if (p.path) pathById.set(key, p.path);
+    }
     const funded = listed.filter(
       (p) =>
         p.id &&
@@ -158,6 +255,8 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         goal: view.goal_sats,
       })}
       ${bodyHtml(`
+        ${howItWorksHtml()}
+        ${contributionsHtml(view.contributions, titleById, pathById)}
         <section class="endowment-funded" id="funded">
           <div class="endowment-funded-head">
             <h2>Funded projects</h2>
@@ -186,7 +285,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       bindCardWatches(fundedRoot, new Set());
       void hydrateAvatarSlots(fundedRoot);
     }
-    scrollToFundedIfNeeded();
+    scrollToHashIfNeeded();
   } catch {
     app.innerHTML = shell(`
       ${heroHtml({ open: false, sats: 0, goal: 0 })}

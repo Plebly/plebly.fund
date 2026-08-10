@@ -4206,11 +4206,134 @@ a.proposal-meta-chip-endowment:hover {
   min-width: 0;
 }
 
+.endowment-how {
+  margin: 0 0 2.5rem;
+}
+
+.endowment-how h2,
+.endowment-contributions h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.25rem, 2.4vw, 1.5rem);
+  letter-spacing: -0.02em;
+}
+
+.endowment-how-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 720px) {
+  .endowment-how-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem 1.5rem;
+  }
+}
+
+.endowment-how-step {
+  margin: 0;
+}
+
+.endowment-how-step strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
+}
+
+.endowment-how-step p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.endowment-contributions {
+  margin: 0 0 2.75rem;
+}
+
+.endowment-contrib-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.endowment-contrib-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 0.95rem;
+}
+
+.endowment-contrib-row time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.endowment-contrib-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.endowment-contrib-tx {
+  grid-column: 2 / -1;
+}
+
+.endowment-tx-link {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.endowment-tx-link:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .endowment-contrib-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .endowment-contrib-row time {
+    grid-column: 1 / -1;
+  }
+
+  .endowment-contrib-tx {
+    grid-column: 1 / -1;
+  }
+}
+
 .endowment-funded {
   margin: 0;
   padding: 0;
   min-width: 0;
   max-width: 100%;
+}
+
+.admin-grant-list {
+  margin-top: 0.85rem;
+}
+
+.admin-grant-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.admin-grant-items li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+  font-size: 0.9rem;
 }
 
 .endowment-funded-head {

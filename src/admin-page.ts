@@ -5,6 +5,15 @@ import { listListedProposals } from "./github";
 import { applySeo, href, seoForRoute } from "./router";
 import { escapeHtml, formatSats } from "./util";
 
+type EndowmentContribution = {
+  id: string;
+  proposal_id: string;
+  amount_sats: number;
+  granted_at: string;
+  note?: string;
+  txid?: string;
+};
+
 export type AdminShell = (inner: string) => string;
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -395,9 +404,13 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
         funded_proposal_ids?: string[];
         admin_note?: string;
         configured?: boolean;
+        contributions?: EndowmentContribution[];
       };
       if (!adminRes.ok) throw new Error(data.error || `HTTP ${adminRes.status}`);
       const funded = new Set(data.funded_proposal_ids || []);
+      let contributions = Array.isArray(data.contributions)
+        ? data.contributions
+        : [];
 
       const signet = BITCOIN_NETWORK.toLowerCase() === "signet";
       app.innerHTML = shell(`
@@ -425,9 +438,9 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
 
             <section class="admin-endowment-block" aria-labelledby="endowment-balance-heading">
               <h3 id="endowment-balance-heading">Size &amp; goal</h3>
-              <p>Chain balance: <strong class="mono" id="endowment-chain-balance">…</strong></p>
+              <p>BTC address balance: <strong class="mono" id="endowment-chain-balance">…</strong></p>
               <div class="admin-row-edit">
-                <label class="admin-inline-label">Balance (sats)
+                <label class="admin-inline-label">Size (sats)
                   <input id="endowment-display-sats" type="number" min="0" step="1" value="${
                     data.display_balance_sats || 0
                   }" />
@@ -438,11 +451,25 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
                   }" />
                 </label>
                 <button type="button" class="btn" id="endowment-save-display">Save</button>
-                <button type="button" class="btn ghost" id="endowment-copy-chain">Copy chain → balance</button>
+                <button type="button" class="btn ghost" id="endowment-copy-chain">Copy BTC → size</button>
               </div>
               <label>Admin note
                 <textarea id="endowment-note">${escapeHtml(data.admin_note || "")}</textarea>
               </label>
+            </section>
+
+            <section class="admin-endowment-block" aria-labelledby="endowment-grant-heading">
+              <h3 id="endowment-grant-heading">Record contribution</h3>
+              <div class="admin-row-edit admin-address-edit">
+                <select id="endowment-grant-proposal" disabled>
+                  <option value="">Loading projects…</option>
+                </select>
+                <input id="endowment-grant-amount" type="number" min="1" step="1" placeholder="Amount (sats)" />
+                <input id="endowment-grant-txid" class="mono" placeholder="txid (optional)" autocomplete="off" spellcheck="false" />
+                <input id="endowment-grant-note" placeholder="Note (optional)" />
+                <button type="button" class="btn" id="endowment-grant-save" disabled>Add contribution</button>
+              </div>
+              <div id="endowment-grant-list" class="admin-grant-list muted">Loading…</div>
             </section>
 
             <section class="admin-endowment-block" aria-labelledby="endowment-funded-heading">
@@ -461,9 +488,48 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
       const msg = app.querySelector("#endowment-admin-msg");
       const chainEl = app.querySelector("#endowment-chain-balance");
       const fundedList = app.querySelector("#endowment-funded-list");
+      const grantList = app.querySelector("#endowment-grant-list");
+      const grantSelect = app.querySelector<HTMLSelectElement>(
+        "#endowment-grant-proposal",
+      );
+      const grantSaveBtn = app.querySelector<HTMLButtonElement>(
+        "#endowment-grant-save",
+      );
       const saveFundedBtn = app.querySelector<HTMLButtonElement>(
         "#endowment-save-funded",
       );
+      const titleById = new Map<string, string>();
+
+      const renderGrantList = () => {
+        if (!grantList) return;
+        if (!contributions.length) {
+          grantList.innerHTML = `<p class="muted">No contributions recorded yet.</p>`;
+          return;
+        }
+        grantList.innerHTML = `<ul class="admin-grant-items">${contributions
+          .slice(0, 30)
+          .map((g) => {
+            const title =
+              titleById.get(g.proposal_id) ||
+              titleById.get(g.proposal_id.toLowerCase()) ||
+              g.proposal_id;
+            const when = g.granted_at
+              ? new Date(g.granted_at).toLocaleDateString()
+              : "—";
+            return `<li>
+              <span class="muted">${escapeHtml(when)}</span>
+              <span>${escapeHtml(title)}</span>
+              <span class="mono">${escapeHtml(formatSats(g.amount_sats))}</span>
+              ${
+                g.txid
+                  ? `<span class="mono muted">${escapeHtml(g.txid.slice(0, 10))}…</span>`
+                  : ""
+              }
+            </li>`;
+          })
+          .join("")}</ul>`;
+      };
+      renderGrantList();
 
       // Chain balance + catalog are slow; paint the form first, then hydrate.
       void (async () => {
@@ -489,23 +555,45 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
 
       void (async () => {
         const listed = await listListedProposals().catch(() => []);
-        if (!fundedList) return;
-        const checks = listed
-          .filter((p) => p.id)
-          .map((p) => {
-            const id = p.id!;
-            return `<label class="admin-funded-row">
+        for (const p of listed) {
+          if (p.id) titleById.set(p.id, p.title || p.id);
+          if (p.id) titleById.set(p.id.toLowerCase(), p.title || p.id);
+        }
+        if (grantSelect) {
+          const opts = listed
+            .filter((p) => p.id)
+            .map(
+              (p) =>
+                `<option value="${escapeHtml(p.id!)}">${escapeHtml(
+                  p.title || p.id!,
+                )}</option>`,
+            )
+            .join("");
+          grantSelect.innerHTML =
+            `<option value="">Select project…</option>${opts}` ||
+            `<option value="">No catalog projects</option>`;
+          grantSelect.disabled = !opts;
+          if (grantSaveBtn) grantSaveBtn.disabled = !opts;
+        }
+        if (fundedList) {
+          const checks = listed
+            .filter((p) => p.id)
+            .map((p) => {
+              const id = p.id!;
+              return `<label class="admin-funded-row">
               <input type="checkbox" data-funded-id="${escapeHtml(id)}" ${
                 funded.has(id) ? "checked" : ""
               } />
               <span>${escapeHtml(p.title || id)}</span>
               <span class="mono muted">${escapeHtml(id)}</span>
             </label>`;
-          })
-          .join("");
-        fundedList.innerHTML =
-          checks || `<p class="muted">No catalog projects.</p>`;
+            })
+            .join("");
+          fundedList.innerHTML =
+            checks || `<p class="muted">No catalog projects.</p>`;
+        }
         if (saveFundedBtn) saveFundedBtn.disabled = false;
+        renderGrantList();
       })();
 
       app.querySelector("#endowment-set-address")?.addEventListener("click", async () => {
@@ -580,7 +668,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
         });
         const body = (await res.json()) as { error?: string };
         if (msg) {
-          msg.textContent = res.ok ? "Balance and goal saved." : body.error || "Save failed";
+          msg.textContent = res.ok ? "Size and goal saved." : body.error || "Save failed";
         }
       });
       app.querySelector("#endowment-copy-chain")?.addEventListener("click", async () => {
@@ -601,7 +689,9 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           meta?: { display_balance_sats?: number };
         };
         if (msg) {
-          msg.textContent = res.ok ? "Copied chain balance." : body.error || "Copy failed";
+          msg.textContent = res.ok
+            ? "Copied BTC balance to size."
+            : body.error || "Copy failed";
         }
         if (res.ok) {
           const input = app.querySelector<HTMLInputElement>(
@@ -614,6 +704,67 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
             chainEl.textContent = formatSats(body.meta.display_balance_sats);
           }
         }
+      });
+      grantSaveBtn?.addEventListener("click", async () => {
+        const proposal_id = grantSelect?.value?.trim() || "";
+        const amount_sats = Number(
+          (app.querySelector("#endowment-grant-amount") as HTMLInputElement)
+            ?.value,
+        );
+        const txid = (
+          app.querySelector("#endowment-grant-txid") as HTMLInputElement
+        )?.value?.trim();
+        const note = (
+          app.querySelector("#endowment-grant-note") as HTMLInputElement
+        )?.value?.trim();
+        if (!proposal_id) {
+          if (msg) msg.textContent = "Select a project.";
+          return;
+        }
+        if (!Number.isFinite(amount_sats) || amount_sats < 1) {
+          if (msg) msg.textContent = "Enter a positive amount in sats.";
+          return;
+        }
+        const res = await authFetch(`${API()}/endowment/admin/grants`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            proposal_id,
+            amount_sats: Math.floor(amount_sats),
+            ...(txid ? { txid } : {}),
+            ...(note ? { note } : {}),
+          }),
+        });
+        const body = (await res.json()) as {
+          error?: string;
+          grant?: EndowmentContribution;
+        };
+        if (!res.ok) {
+          if (msg) msg.textContent = body.error || "Could not add contribution";
+          return;
+        }
+        if (body.grant) {
+          contributions = [body.grant, ...contributions];
+          funded.add(proposal_id);
+          const box = app.querySelector<HTMLInputElement>(
+            `[data-funded-id="${CSS.escape(proposal_id)}"]`,
+          );
+          if (box) box.checked = true;
+          renderGrantList();
+        }
+        const amountInput = app.querySelector<HTMLInputElement>(
+          "#endowment-grant-amount",
+        );
+        const txidInput = app.querySelector<HTMLInputElement>(
+          "#endowment-grant-txid",
+        );
+        const noteInput = app.querySelector<HTMLInputElement>(
+          "#endowment-grant-note",
+        );
+        if (amountInput) amountInput.value = "";
+        if (txidInput) txidInput.value = "";
+        if (noteInput) noteInput.value = "";
+        if (msg) msg.textContent = "Contribution recorded.";
       });
       app.querySelector("#endowment-save-funded")?.addEventListener("click", async () => {
         const ids = [
