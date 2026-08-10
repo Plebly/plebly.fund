@@ -158,6 +158,11 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
                 </li>
                 <li>Open config ballots: <strong>${(data.open_ballots || []).length}</strong></li>
                 <li>Needs attention: <strong>${needs.length}</strong></li>
+                ${
+                  needs.some((r) => r.key === "endowment_address")
+                    ? `<li><a href="${href("/admin")}?tab=endowment">Set endowment receive address →</a></li>`
+                    : ""
+                }
               </ul>
               <h2>Recent audit</h2>
               ${(data.audit || []).length
@@ -395,6 +400,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
         })
         .join("");
 
+      const signet = BITCOIN_NETWORK.toLowerCase() === "signet";
       app.innerHTML = shell(`
         <section class="wrap-wide admin-page">
           <p class="eyebrow"><a href="${href("/")}">Plebly</a> · Admin</p>
@@ -402,37 +408,113 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           ${tabs}
           <div class="admin-panel">
             <h2>Endowment</h2>
-            <p>Address: <span class="mono">${escapeHtml(data.address || "—")}</span>
-              ${!data.configured ? `<span class="pill">not configured</span>` : ""}
-            </p>
-            <p>Chain balance: <strong class="mono">${
-              data.chain_balance_sats == null
-                ? "—"
-                : escapeHtml(formatSats(data.chain_balance_sats))
-            }</strong></p>
-            <p>Displayed balance: <strong class="mono">${escapeHtml(
-              formatSats(data.display_balance_sats || 0),
-            )}</strong></p>
-            <div class="admin-row-edit">
-              <input id="endowment-display-sats" type="number" min="0" step="1" value="${
-                data.display_balance_sats || 0
-              }" />
-              <button type="button" class="btn" id="endowment-save-display">Save display</button>
-              <button type="button" class="btn ghost" id="endowment-copy-chain">Copy chain → display</button>
-            </div>
-            <label>Admin note
-              <textarea id="endowment-note">${escapeHtml(data.admin_note || "")}</textarea>
-            </label>
-            <h3>Funded projects</h3>
-            <div class="admin-funded-list">${checks || `<p class="muted">No catalog projects.</p>`}</div>
-            <button type="button" class="btn" id="endowment-save-funded">Save funded set</button>
+            <p class="muted"><a href="${href("/endowment")}">View public page</a></p>
+
+            <section class="admin-endowment-block" aria-labelledby="endowment-address-heading">
+              <h3 id="endowment-address-heading">Receive address</h3>
+              <p>Current: <span class="mono">${escapeHtml(data.address || "—")}</span>
+                ${!data.configured ? `<span class="pill">not configured</span>` : ""}
+              </p>
+              <p class="hint">${
+                signet
+                  ? "On signet, a single linked org admin can set this immediately."
+                  : "Changing the receive address opens a quorum ballot among linked Plebly org members."
+              }</p>
+              <div class="admin-row-edit admin-address-edit">
+                <input id="endowment-address-input" class="mono" placeholder="tb1… / bc1…" value="" autocomplete="off" spellcheck="false" />
+                <input id="endowment-address-rationale" placeholder="Rationale (optional)" />
+                <button type="button" class="btn" id="endowment-set-address">${
+                  data.configured ? "Propose new address" : "Set address"
+                }</button>
+              </div>
+            </section>
+
+            <section class="admin-endowment-block" aria-labelledby="endowment-balance-heading">
+              <h3 id="endowment-balance-heading">Published size</h3>
+              <p>Chain balance: <strong class="mono">${
+                data.chain_balance_sats == null
+                  ? "—"
+                  : escapeHtml(formatSats(data.chain_balance_sats))
+              }</strong></p>
+              <p>Displayed balance: <strong class="mono">${escapeHtml(
+                formatSats(data.display_balance_sats || 0),
+              )}</strong></p>
+              <div class="admin-row-edit">
+                <input id="endowment-display-sats" type="number" min="0" step="1" value="${
+                  data.display_balance_sats || 0
+                }" />
+                <button type="button" class="btn" id="endowment-save-display">Save display</button>
+                <button type="button" class="btn ghost" id="endowment-copy-chain">Copy chain → display</button>
+              </div>
+              <label>Admin note
+                <textarea id="endowment-note">${escapeHtml(data.admin_note || "")}</textarea>
+              </label>
+            </section>
+
+            <section class="admin-endowment-block" aria-labelledby="endowment-funded-heading">
+              <h3 id="endowment-funded-heading">Funded projects</h3>
+              <div class="admin-funded-list">${checks || `<p class="muted">No catalog projects.</p>`}</div>
+              <button type="button" class="btn" id="endowment-save-funded">Save funded set</button>
+            </section>
+
             <p class="muted" id="endowment-admin-msg" aria-live="polite"></p>
-            <p><a href="${href("/endowment")}">View public endowment page</a></p>
           </div>
         </section>
       `);
 
       const msg = app.querySelector("#endowment-admin-msg");
+      app.querySelector("#endowment-set-address")?.addEventListener("click", async () => {
+        const proposed = (
+          app.querySelector("#endowment-address-input") as HTMLInputElement
+        )?.value?.trim();
+        const rationale = (
+          app.querySelector("#endowment-address-rationale") as HTMLInputElement
+        )?.value?.trim();
+        if (!proposed) {
+          if (msg) msg.textContent = "Enter a receive address.";
+          return;
+        }
+        if (
+          !confirm(
+            signet
+              ? `Set endowment receive address to:\n\n${proposed}\n\nOn signet this applies immediately if you are the sole linked admin.`
+              : `Propose endowment receive address:\n\n${proposed}\n\nThis opens a quorum ballot among linked org members.`,
+          )
+        ) {
+          return;
+        }
+        const res = await authFetch(`${API()}/admin/ballots`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            field: "endowment_address",
+            proposed_value: proposed,
+            rationale: rationale || (data.configured ? "Update endowment address" : "Set endowment address"),
+            sole_admin_bootstrap: signet,
+          }),
+        });
+        const body = (await res.json()) as {
+          error?: string;
+          ballot?: { id?: string; status?: string };
+        };
+        if (!res.ok) {
+          if (msg) msg.textContent = body.error || `Failed (${res.status})`;
+          return;
+        }
+        if (body.ballot?.status === "passed" || body.ballot?.status === "open") {
+          if (msg) {
+            msg.textContent =
+              body.ballot.status === "passed"
+                ? "Endowment address applied."
+                : "Ballot opened — vote on the Votes tab.";
+          }
+          if (body.ballot.status === "passed") {
+            void renderAdmin(shell);
+          } else if (body.ballot.id) {
+            location.href = `${href("/admin")}?tab=votes&ballot=${encodeURIComponent(body.ballot.id)}`;
+          }
+        }
+      });
       app.querySelector("#endowment-save-display")?.addEventListener("click", async () => {
         const sats = Number(
           (app.querySelector("#endowment-display-sats") as HTMLInputElement)

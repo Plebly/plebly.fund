@@ -4207,6 +4207,31 @@ a.proposal-meta-chip-endowment:hover {
   text-decoration: none;
 }
 
+.admin-endowment-block {
+  margin: 1.75rem 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.admin-endowment-block:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.admin-endowment-block h3 {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+}
+
+.admin-address-edit {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.admin-address-edit input {
+  max-width: none;
+}
+
 .admin-funded-list {
   display: grid;
   gap: 0.35rem;
