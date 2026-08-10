@@ -4006,35 +4006,35 @@ a.proposal-meta-chip-endowment:hover {
 
 .endowment-strip {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   padding: 1.5rem 0;
   border-top: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
 }
 
+.endowment-strip-head {
+  display: grid;
+  gap: 1rem;
+  align-items: end;
+}
+
 @media (min-width: 720px) {
-  .endowment-strip {
-    grid-template-columns: 1.4fr auto;
-    align-items: end;
+  .endowment-strip-head {
+    grid-template-columns: 1fr auto;
     gap: 2rem;
   }
 }
 
 .endowment-strip-copy h2 {
-  margin: 0.25rem 0 0.5rem;
+  margin: 0.25rem 0 0;
   font-size: clamp(1.35rem, 2.5vw, 1.75rem);
   letter-spacing: -0.02em;
 }
 
-.endowment-strip-copy p {
+.endowment-strip .endowment-meter {
   margin: 0;
-  max-width: 36rem;
-  color: var(--muted);
-}
-
-.endowment-strip-copy .endowment-meter {
-  margin-top: 0.85rem;
-  max-width: 22rem;
+  max-width: none;
+  width: 100%;
 }
 
 .endowment-strip-cta {
@@ -4068,7 +4068,7 @@ a.proposal-meta-chip-endowment:hover {
 .endowment-brand {
   margin: 0 0 1.25rem;
   font-family: var(--mono);
-  font-size: clamp(2.1rem, 5.5vw, 3rem);
+  font-size: clamp(1.85rem, 4vw, 2.35rem);
   font-weight: 600;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -4076,18 +4076,20 @@ a.proposal-meta-chip-endowment:hover {
 }
 
 .endowment-meter {
-  margin: 0 0 1.25rem;
-  max-width: min(28rem, 100%);
+  margin: 0 0 1.35rem;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
 }
 
 .endowment-meter-top {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.25rem;
-  margin-bottom: 0.55rem;
-  font-size: 0.75rem;
-  line-height: 1.4;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
   color: var(--muted);
 }
 
@@ -4096,48 +4098,50 @@ a.proposal-meta-chip-endowment:hover {
   font-weight: 600;
 }
 
-.endowment-meter-top .sats {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  color: var(--ink-secondary);
+.endowment-meter-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.45rem;
+  margin: 0 0 0.65rem;
+  min-width: 0;
 }
 
-.endowment-meter-balance {
+.endowment-meter-current {
   font-size: 1.15rem;
   font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: var(--ink);
+}
+
+.endowment-meter-goal {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .endowment-meter .progress {
-  height: 4px;
-}
-
-.endowment-meter-hero {
-  max-width: min(32rem, 100%);
+  width: 100%;
+  height: 6px;
 }
 
 .endowment-meter-hero .endowment-meter-top {
-  gap: 0.35rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.45rem;
 }
 
-.endowment-meter-hero .endowment-meter-balance,
-.endowment-meter-hero .endowment-meter-top .sats {
-  font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+.endowment-meter-hero .endowment-meter-current {
+  font-size: clamp(1.35rem, 2.8vw, 1.75rem);
   font-weight: 650;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  color: var(--ink);
+  letter-spacing: -0.03em;
 }
 
-.endowment-meter-hero .endowment-meter-top > span:first-child:not(.sats):not(.endowment-meter-balance) {
-  font-size: 0.8rem;
-  letter-spacing: 0;
-  font-weight: 550;
+.endowment-meter-hero .endowment-meter-goal {
+  font-size: clamp(0.95rem, 2vw, 1.1rem);
 }
 
 .endowment-meter-hero .progress {
-  height: 6px;
+  height: 8px;
 }
 
 .endowment-cta-row {

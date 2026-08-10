@@ -144,15 +144,17 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
       : "";
   return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
     <div class="endowment-strip">
-      <div class="endowment-strip-copy">
-        <p class="path-kicker">Endowment</p>
-        <h2 id="endowment-strip-heading">Shared pool</h2>
-        ${progress}
+      <div class="endowment-strip-head">
+        <div class="endowment-strip-copy">
+          <p class="path-kicker">Endowment</p>
+          <h2 id="endowment-strip-heading">Shared pool</h2>
+        </div>
+        <div class="landing-cta-row endowment-strip-cta">
+          <a class="btn" href="${href("/endowment")}?donate">Donate</a>
+          <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
+        </div>
       </div>
-      <div class="landing-cta-row endowment-strip-cta">
-        <a class="btn" href="${href("/endowment")}?donate">Donate</a>
-        <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
-      </div>
+      ${progress}
     </div>
   </section>`;
 }

@@ -768,9 +768,9 @@ export function endowmentMeterHtml(
   const size = opts?.size === "hero" ? "hero" : "card";
   if (goal <= 0) {
     return `<div class="endowment-meter endowment-meter-${size}">
-      <div class="endowment-meter-top">
-        <span class="endowment-meter-balance mono">${escapeHtml(formatSats(current))}</span>
-      </div>
+      <p class="endowment-meter-figures">
+        <span class="endowment-meter-current mono">${escapeHtml(formatSats(current))}</span>
+      </p>
     </div>`;
   }
   const remaining = Math.max(0, goal - current);
@@ -780,8 +780,11 @@ export function endowmentMeterHtml(
   return `<div class="endowment-meter endowment-meter-${size}">
     <div class="endowment-meter-top">
       <span class="${labelClass}">${escapeHtml(label)}</span>
-      <span class="sats mono">${escapeHtml(formatSats(current))} / ${escapeHtml(formatSats(goal))}</span>
     </div>
+    <p class="endowment-meter-figures">
+      <span class="endowment-meter-current mono">${escapeHtml(formatSats(current))}</span>
+      <span class="endowment-meter-goal mono">/ ${escapeHtml(formatSats(goal))}</span>
+    </p>
     ${fundingBarTrackHtml(current, goal, "progress", goal)}
   </div>`;
 }
