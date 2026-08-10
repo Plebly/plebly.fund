@@ -305,11 +305,20 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     }
     scrollToHashTarget();
   } catch (e) {
+    const msg = (e as Error).message || "Could not load endowment";
+    const looksLikeApiDown = /\b(404|502|503)\b/.test(msg);
     app.innerHTML = shell(`
       <section class="wrap-wide endowment-page">
-        <h1>Endowment</h1>
-        <p class="error">${escapeHtml((e as Error).message)}</p>
-        <p>${loginMenuHtml(currentReturnPath())}</p>
+        <header class="endowment-head">
+          <p class="eyebrow"><a href="${href("/")}">Plebly</a> · Endowment</p>
+          <h1>Endowment</h1>
+        </header>
+        <p class="error">${escapeHtml(msg)}</p>
+        ${
+          looksLikeApiDown
+            ? `<p class="muted">The Workers API has not published this route yet — try again after deploy. Login is not required to view the endowment.</p>`
+            : `<p>${loginMenuHtml(currentReturnPath())}</p>`
+        }
       </section>
     `);
   }
