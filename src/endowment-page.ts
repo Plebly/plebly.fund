@@ -1,4 +1,3 @@
-import { currentReturnPath, loginMenuHtml } from "./auth";
 import { CLAIM_FLOOR_SATS, WORKERS_API } from "./config";
 import { listListedProposals } from "./github";
 import { bindCardWatches, proposalCardHtml } from "./home-page";
@@ -9,7 +8,7 @@ import {
   endowmentDonateModalHtml,
   endowmentMeterHtml,
 } from "./proposal-ui";
-import { applySeo, href, projectsHref, seoForRoute } from "./router";
+import { applySeo, projectsHref, seoForRoute } from "./router";
 import type { Proposal } from "./types";
 import { escapeHtml } from "./util";
 
@@ -61,19 +60,20 @@ function heroHtml(opts: {
 }): string {
   const signal = opts.open
     ? endowmentMeterHtml(opts.sats, opts.goal, { size: "hero" })
-    : `<p class="endowment-hero-closed">Receive address not set.</p>`;
+    : "";
 
   const cta = opts.open
     ? `<div class="endowment-cta-row">
         <button type="button" class="btn endowment-donate-btn" data-open-donate>Donate</button>
         <a class="endowment-secondary-link" href="#funded">Funded projects</a>
       </div>`
-    : "";
+    : `<p class="endowment-hero-closed">Donations open soon.</p>`;
 
   return `<section class="endowment-hero">
     <div class="endowment-hero-bg" aria-hidden="true"></div>
     <div class="wrap-wide endowment-hero-inner">
       <h1 class="endowment-brand">Endowment</h1>
+      <p class="endowment-lede">A shared Bitcoin pool for open work that moves the ecosystem forward.</p>
       ${signal}
       ${cta}
     </div>
@@ -123,9 +123,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
   applySeo(seoForRoute({ name: "endowment" }));
   const app = document.querySelector("#app")!;
   if (!WORKERS_API) {
-    app.innerHTML = shell(
-      bodyHtml(`<p class="muted">Workers API not configured.</p>`),
-    );
+    app.innerHTML = shell(bodyHtml(`<p class="muted">Coming soon.</p>`));
     return;
   }
 
@@ -162,11 +160,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         <section class="endowment-funded" id="funded">
           <div class="endowment-funded-head">
             <h2>Funded projects</h2>
-            ${
-              open
-                ? `<p class="muted">${escapeHtml(countLabel)}</p>`
-                : `<p class="muted"><a href="${href("/admin")}?tab=endowment">Admin</a></p>`
-            }
+            <p class="muted">${escapeHtml(countLabel)}</p>
           </div>
           ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
         </section>
@@ -192,19 +186,10 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       void hydrateAvatarSlots(fundedRoot);
     }
     scrollToFundedIfNeeded();
-  } catch (e) {
-    const msg = (e as Error).message || "Could not load endowment";
-    const looksLikeApiDown = /\b(404|502|503)\b/.test(msg);
+  } catch {
     app.innerHTML = shell(`
       ${heroHtml({ open: false, sats: 0, goal: 0 })}
-      ${bodyHtml(`
-        <p class="error">${escapeHtml(msg)}</p>
-        ${
-          looksLikeApiDown
-            ? `<p class="muted">API unavailable — try again after deploy.</p>`
-            : `<p>${loginMenuHtml(currentReturnPath())}</p>`
-        }
-      `)}
+      ${bodyHtml(`<p class="muted">Could not load endowment right now.</p>`)}
     `);
   }
 }

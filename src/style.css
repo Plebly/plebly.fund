@@ -4066,13 +4066,21 @@ a.proposal-meta-chip-endowment:hover {
 }
 
 .endowment-brand {
-  margin: 0 0 1.25rem;
+  margin: 0 0 0.75rem;
   font-family: var(--mono);
   font-size: clamp(1.85rem, 4vw, 2.35rem);
   font-weight: 600;
   letter-spacing: -0.04em;
   line-height: 1;
   color: var(--accent);
+}
+
+.endowment-lede {
+  margin: 0 0 1.35rem;
+  max-width: 34rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--ink-secondary);
 }
 
 .endowment-meter {
