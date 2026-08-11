@@ -70,12 +70,16 @@ export async function createLightningInvoice(input: {
 export async function createEndowmentLightningInvoice(input: {
   amount_sats: number;
   escrow_address: string;
+  anonymous?: boolean;
 }): Promise<LightningSwapView> {
   const res = await fetch(`${API()}/endowment/lightning/invoice`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ amount_sats: input.amount_sats }),
+    body: JSON.stringify({
+      amount_sats: input.amount_sats,
+      anonymous: Boolean(input.anonymous),
+    }),
   });
   const data = (await res.json()) as LightningSwapView & { error?: string };
   if (!res.ok || !data.bolt11) {

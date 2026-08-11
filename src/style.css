@@ -1310,6 +1310,176 @@ body.modal-open {
   color: var(--muted);
 }
 
+.donations-live {
+  margin: 0.5rem auto 1.75rem;
+  padding: 0;
+}
+
+.donations-live-head {
+  margin-bottom: 0.85rem;
+}
+
+.donations-live-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.donations-live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: donations-live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes donations-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+.donations-live-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.donations-live-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.donations-live-row.is-new {
+  animation: donations-live-enter 0.55s ease both;
+}
+
+@keyframes donations-live-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.donations-live-copy {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+.donations-live-donor {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.donations-live-amount {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.donations-live-target {
+  color: var(--ink);
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.donations-live-target:hover {
+  color: var(--accent-text);
+}
+
+.donations-live-when {
+  margin: 0;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.donations-live-empty {
+  padding: 1rem 0 0.25rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.donations-live-empty p {
+  margin: 0 0 0.4rem;
+}
+
+.donations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.donations-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  align-items: baseline;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 0.9375rem;
+}
+
+.donations-donor {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.donations-verb {
+  color: var(--muted);
+}
+
+.donations-amount {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.donations-target {
+  color: var(--ink);
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.donations-target:hover {
+  color: var(--accent-text);
+}
+
+.donations-when {
+  margin-left: auto;
+  font-size: 0.8125rem;
+}
+
+.donations-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+}
+
 .project-card-views {
   display: block;
   margin-top: 0.5rem;

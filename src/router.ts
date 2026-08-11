@@ -93,6 +93,7 @@ export function parseLocation(
         : ("completed" as const);
     return { name: "archive", tab };
   }
+  if (path === "donations") return { name: "donations" };
   if (path === "keyholders") return { name: "keyholders" };
   if (path === "parameters") return { name: "params" };
   if (path === "account") return { name: "account" };
@@ -491,6 +492,13 @@ export function seoForRoute(
               "Archive of finished Plebly bounties kept for public record.",
             path: "/archive",
           };
+    case "donations":
+      return {
+        title: "Donations",
+        description:
+          "Public ledger of confirmed gifts to Plebly projects and the endowment.",
+        path: "/donations",
+      };
     case "keyholders":
       return {
         title: "Keyholders",

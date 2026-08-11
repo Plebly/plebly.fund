@@ -16,6 +16,7 @@ import { fetchLightningStatus } from "./lightning";
 import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
+import { bindDonationsLive } from "./donations-live";
 import { ENDOWMENT_BLURB } from "./endowment-copy";
 import {
   endowmentMeterHtml,
@@ -841,6 +842,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
   app.innerHTML = shell(`
     ${landingHeroHtml()}
     <div id="gap-ticker"></div>
+    <div id="donations-live-mount"></div>
     <section id="activity-strip" class="wrap-wide activity-strip" hidden aria-label="Recent activity"></section>
     ${audiencePathsHtml()}
     <div id="endowment-strip">${endowmentStripHtml(null)}</div>
@@ -935,6 +937,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     const gapTicker = app.querySelector("#gap-ticker");
     if (gapTicker) gapTicker.innerHTML = gapTickerHtml(proposals, CLAIM_FLOOR_SATS);
     void bindActivityStrip(app);
+    void bindDonationsLive(app);
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
       featuredRail.innerHTML = railHtml(

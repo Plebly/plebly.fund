@@ -128,19 +128,21 @@ function donatePayStepHtml(
   opts?: { endowment?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
-  const head = endowment
-    ? `<div class="donate-panel-head">
-        <h2 class="donate-title" id="donate-pay-title">Donate</h2>
-      </div>`
-    : `<div class="donate-panel-head">
+  const head = `<div class="donate-panel-head">
       ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
-      <h2 class="donate-title" id="donate-pay-title">Donate</h2>
+      <h2 class="donate-title" id="donate-pay-title">${
+        endowment ? "Donate to the endowment" : "Donate"
+      }</h2>
       ${
         signedIn
           ? `<p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
              <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>`
           : `<aside class="donate-credit-advisory" role="note">
-               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited. Save your txid:vout or Lightning swap id; refunds later require sign-in plus that proof.</p>
+               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited.${
+                 endowment
+                   ? ""
+                   : " Save your txid:vout or Lightning swap id; refunds later require sign-in plus that proof."
+               }</p>
              </aside>`
       }
     </div>`;
@@ -154,7 +156,7 @@ function donatePayStepHtml(
       <div id="donate-credit-claim" class="donate-credit-claim" hidden></div>
     </div>`;
 
-  return `<section class="donate-step" data-donate-step="pay" id="donate-step-pay"${endowment ? "" : " hidden"}>
+  return `<section class="donate-step" data-donate-step="pay" id="donate-step-pay" hidden>
     ${head}
     ${networkNote}
     <div class="donate-rails" role="tablist" aria-label="How to donate">
@@ -788,26 +790,34 @@ export function endowmentMeterHtml(
   </div>`;
 }
 
-/** Endowment donate panel — same rails as project donate, no funder-credit step. */
-export function endowmentDonatePanelHtml(address: string): string {
+/** Endowment donate panel — credit step + payment rails (same shell as projects). */
+export function endowmentDonatePanelHtml(
+  address: string,
+  opts?: { signedIn?: boolean },
+): string {
   const addr = address.trim();
   if (!addr) return "";
+  const signedIn = Boolean(opts?.signedIn);
   const networkNote = signetPayNoteHtml("donate");
   const presets = donatePresetButtons();
-  return `<div class="donate-panel" id="donate" data-donate-step="pay" data-donate-mode="endowment">
-    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, false, {
+  return `<div class="donate-panel" id="donate" data-donate-step="credit" data-donate-mode="endowment">
+    ${donateCreditStepHtml(signedIn)}
+    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn, {
       endowment: true,
     })}
   </div>`;
 }
 
 /** Endowment donate flow in the same modal shell as project donations. */
-export function endowmentDonateModalHtml(address: string): string {
-  const panel = endowmentDonatePanelHtml(address);
+export function endowmentDonateModalHtml(
+  address: string,
+  opts?: { signedIn?: boolean },
+): string {
+  const panel = endowmentDonatePanelHtml(address, opts);
   if (!panel) return "";
   return `<div class="site-modal donate-modal" id="donate-modal" hidden>
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
-    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-pay-title">
+    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
       <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
       ${panel}
     </div>
@@ -1085,18 +1095,23 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     setDonateConfirmStatus(panel, "Linking funder credit…", "live");
     setDonateCreditStatus(panel, null);
     try {
+      const prefs = activeCreditPreferences(panel);
       await recordContribution({
         proposal_id: opts.proposalId,
         txid: utxo.txid,
         vout: utxo.vout,
         address: opts.address,
+        anonymous: prefs.anonymous || !prefs.public_credit,
+        public_credit: prefs.public_credit && !prefs.anonymous,
       });
-      await claimContributionWithRetry({
-        proposal_id: opts.proposalId,
-        txid: utxo.txid,
-        vout: utxo.vout,
-        ...activeCreditPreferences(panel),
-      });
+      if (opts.mode !== "endowment") {
+        await claimContributionWithRetry({
+          proposal_id: opts.proposalId,
+          txid: utxo.txid,
+          vout: utxo.vout,
+          ...prefs,
+        });
+      }
       setDonateConfirmStatus(
         panel,
         `Credit linked for ${formatSats(utxo.value)}.`,
@@ -1117,6 +1132,16 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     vout: number;
     value: number;
   }) => {
+    if (opts.proposalId) {
+      void recordContribution({
+        proposal_id: opts.proposalId,
+        txid: utxo.txid,
+        vout: utxo.vout,
+        address: opts.address,
+        anonymous: true,
+        public_credit: false,
+      }).catch(() => undefined);
+    }
     if (!claimWrap) return;
     const outpoint = `${utxo.txid}:${utxo.vout}`;
     try {
@@ -1573,6 +1598,7 @@ function bindLightningDonate(
           ? await createEndowmentLightningInvoice({
               amount_sats: amount,
               escrow_address: opts.address,
+              anonymous: activeCreditPreferences(panel).anonymous,
             })
           : await createLightningInvoice({
               proposal_id: opts.proposalId,
@@ -1651,9 +1677,6 @@ export async function bindDonatePanel(
 
   // Wire rails + wizard before any network so Donate opens immediately for guests.
   bindDonateRails(panel);
-  if (endowment) {
-    setDonateStep(panel, "pay");
-  }
   bindDonateWizard(panel, normalized);
   void bindOnchainDonate(panel, normalized.address);
 

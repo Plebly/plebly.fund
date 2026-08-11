@@ -1,3 +1,4 @@
+import { fetchCurrentUser } from "./auth";
 import { CLAIM_FLOOR_SATS, mempoolWeb, WORKERS_API } from "./config";
 import { ENDOWMENT_BLURB, ENDOWMENT_HOW_STEPS } from "./endowment-copy";
 import { listListedProposals } from "./github";
@@ -223,10 +224,12 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
   `);
 
   try {
-    const [view, listed] = await Promise.all([
+    const [view, listed, user] = await Promise.all([
       fetchEndowment(),
       listListedProposals().catch(() => [] as Proposal[]),
+      fetchCurrentUser().catch(() => null),
     ]);
+    const signedIn = Boolean(user);
     const fundedSet = new Set(
       view.funded_proposal_ids.map((id) => id.trim().toLowerCase()),
     );
@@ -265,7 +268,11 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
           ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
         </section>
       `)}
-      ${open && view.address ? endowmentDonateModalHtml(view.address) : ""}
+      ${
+        open && view.address
+          ? endowmentDonateModalHtml(view.address, { signedIn })
+          : ""
+      }
     `);
 
     if (view.address && open) {
@@ -275,9 +282,17 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
       });
       await bindDonatePanel(app, {
         address: view.address,
-        proposalId: null,
+        proposalId: "endowment",
         proposalPath: "/endowment",
         mode: "endowment",
+        signedIn,
+        creditPrefs: user?.funder_credit
+          ? {
+              public_credit: Boolean(user.funder_credit.public_credit),
+              anonymous: user.funder_credit.public_credit === false,
+              show_amount: Boolean(user.funder_credit.show_amount),
+            }
+          : null,
       });
     }
     const fundedRoot = app.querySelector("#funded");

@@ -440,18 +440,15 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               <h3 id="endowment-balance-heading">Size &amp; goal</h3>
               <p>BTC address balance: <strong class="mono" id="endowment-chain-balance">…</strong></p>
               <div class="admin-row-edit">
-                <label class="admin-inline-label">Size (sats)
-                  <input id="endowment-display-sats" type="number" min="0" step="1" value="${
-                    data.display_balance_sats || 0
-                  }" />
-                </label>
+                <p>Live size (confirmed gifts): <strong class="mono" id="endowment-display-sats">${escapeHtml(
+                  formatSats(data.display_balance_sats || 0),
+                )}</strong></p>
                 <label class="admin-inline-label">Goal (sats)
                   <input id="endowment-goal-sats" type="number" min="0" step="1" value="${
                     data.goal_sats || 0
                   }" />
                 </label>
-                <button type="button" class="btn" id="endowment-save-display">Save</button>
-                <button type="button" class="btn ghost" id="endowment-copy-chain">Copy BTC → size</button>
+                <button type="button" class="btn" id="endowment-save-display">Save goal</button>
               </div>
               <label>Admin note
                 <textarea id="endowment-note">${escapeHtml(data.admin_note || "")}</textarea>
@@ -646,63 +643,20 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
         }
       });
       app.querySelector("#endowment-save-display")?.addEventListener("click", async () => {
-        const sats = Number(
-          (app.querySelector("#endowment-display-sats") as HTMLInputElement)
-            ?.value,
-        );
         const goal = Number(
           (app.querySelector("#endowment-goal-sats") as HTMLInputElement)
             ?.value,
         );
-        const note = (
-          app.querySelector("#endowment-note") as HTMLTextAreaElement
-        )?.value;
-        const res = await authFetch(`${API()}/endowment/admin/display-balance`, {
+        const res = await authFetch(`${API()}/endowment/admin/goal`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            display_balance_sats: Math.floor(sats),
             goal_sats: Math.floor(goal),
-            admin_note: note,
           }),
         });
         const body = (await res.json()) as { error?: string };
         if (msg) {
-          msg.textContent = res.ok ? "Size and goal saved." : body.error || "Save failed";
-        }
-      });
-      app.querySelector("#endowment-copy-chain")?.addEventListener("click", async () => {
-        const goal = Number(
-          (app.querySelector("#endowment-goal-sats") as HTMLInputElement)
-            ?.value,
-        );
-        const res = await authFetch(`${API()}/endowment/admin/display-balance`, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            copy_from_chain: true,
-            goal_sats: Number.isFinite(goal) ? Math.floor(goal) : undefined,
-          }),
-        });
-        const body = (await res.json()) as {
-          error?: string;
-          meta?: { display_balance_sats?: number };
-        };
-        if (msg) {
-          msg.textContent = res.ok
-            ? "Copied BTC balance to size."
-            : body.error || "Copy failed";
-        }
-        if (res.ok) {
-          const input = app.querySelector<HTMLInputElement>(
-            "#endowment-display-sats",
-          );
-          if (input && body.meta?.display_balance_sats != null) {
-            input.value = String(body.meta.display_balance_sats);
-          }
-          if (chainEl && body.meta?.display_balance_sats != null) {
-            chainEl.textContent = formatSats(body.meta.display_balance_sats);
-          }
+          msg.textContent = res.ok ? "Goal saved." : body.error || "Save failed";
         }
       });
       grantSaveBtn?.addEventListener("click", async () => {
