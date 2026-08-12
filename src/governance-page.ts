@@ -1,8 +1,10 @@
 import {
   currentReturnPath,
   loginChoicesHtml,
+  authFetch,
   type AuthUser,
 } from "./auth";
+import { WORKERS_API } from "./config";
 import { btnWithIcon } from "./icons";
 import {
   fetchOpsRoles,
@@ -47,7 +49,8 @@ type GovTab =
   | "decisions"
   | "removals"
   | "roles"
-  | "reports";
+  | "reports"
+  | "keyholders";
 
 const GOV_TABS: GovTab[] = [
   "roster",
@@ -55,6 +58,7 @@ const GOV_TABS: GovTab[] = [
   "removals",
   "roles",
   "reports",
+  "keyholders",
 ];
 
 function initialGovTab(): GovTab {
@@ -63,7 +67,7 @@ function initialGovTab(): GovTab {
   if (q && GOV_TABS.includes(q)) return q;
   const hash = location.hash.replace(/^#/, "");
   if (hash === "ops-roles") return "roles";
-  if (hash === "roster" || hash === "decisions" || hash === "removals" || hash === "reports") {
+  if (hash === "roster" || hash === "decisions" || hash === "removals" || hash === "reports" || hash === "keyholders") {
     return hash;
   }
   return "decisions";
@@ -550,6 +554,91 @@ function statusStripHtml(me: ReviewerMe | null, user: AuthUser | null): string {
   return `<div class="gov-status">${bits.join("")}</div>`;
 }
 
+type KhElectionView = {
+  id: string;
+  applicant_id: string;
+  created_at: string;
+  closes_at: string;
+  status: string;
+  yes: number;
+  no: number;
+};
+
+type KhApplicationView = {
+  user_id: string;
+  github: string;
+  handle: string;
+  hw_type: string;
+  statement: string;
+  election_id?: string;
+};
+
+const govApi = () => WORKERS_API.replace(/\/$/, "");
+
+export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
+  if (!loggedIn) {
+    return `<div class="gov-form-panel">
+      <p class="lede">Sign in as an earned reviewer (at least one completed bounty) to apply as a keyholder.</p>
+      ${loginChoicesHtml(undefined, currentReturnPath())}
+    </div>`;
+  }
+  if (!canApply) {
+    return `<div class="gov-form-panel">
+      <p class="lede">Keyholder seats are elected by earned reviewers with at least one completed bounty. Finish a review cycle first.</p>
+    </div>`;
+  }
+  return `<form class="gov-form-panel form-panel" id="kh-apply-form">
+    <p class="lede">7-day majority election among earned reviewers. Pass yields pending attestation — election does not add your key to the descriptor. You cannot vote on your own application.</p>
+    <label class="donate-amount-label" for="kh-apply-pubkey">xpub / tpub</label>
+    <textarea id="kh-apply-pubkey" class="comment-input mono" rows="2" required maxlength="256"></textarea>
+    <label class="donate-amount-label" for="kh-apply-hw">Hardware</label>
+    <input id="kh-apply-hw" class="donate-amount" required maxlength="64" placeholder="coldcard / jade / seedsigner…" />
+    <label class="donate-amount-label" for="kh-apply-handle">Handle</label>
+    <input id="kh-apply-handle" class="donate-amount" maxlength="64" />
+    <label class="donate-amount-label" for="kh-apply-statement">Statement</label>
+    <textarea id="kh-apply-statement" class="comment-input" rows="4" required maxlength="2000" placeholder="Why you can stay reachable and sign monthly releases…"></textarea>
+    <label class="muted"><input type="checkbox" id="kh-apply-ack" required /> I have read the keyholder responsibilities, including that the operator can spend the keyholder pool on the fee address until cash-out.</label>
+    <div class="form-actions"><button type="submit" class="btn">Apply</button></div>
+    <p class="builder-msg" id="kh-apply-msg" hidden></p>
+  </form>`;
+}
+
+export function khElectionCardHtml(
+  election: KhElectionView,
+  application: KhApplicationView | undefined,
+  canVote: boolean,
+): string {
+  const handle = application?.handle || application?.github || election.applicant_id;
+  return `<li class="gov-card" data-kh-election="${escapeHtml(election.id)}">
+    <p class="gov-card-title">${escapeHtml(handle)}</p>
+    <p class="muted">${escapeHtml(application?.hw_type || "")} · yes ${election.yes} / no ${election.no} · closes ${escapeHtml(election.closes_at.slice(0, 10))}</p>
+    ${application?.statement ? `<p>${escapeHtml(application.statement)}</p>` : ""}
+    ${
+      canVote
+        ? `<div class="gov-vote-row">
+            <button type="button" class="btn" data-kh-vote="yes" data-election-id="${escapeHtml(election.id)}">Yes</button>
+            <button type="button" class="btn ghost" data-kh-vote="no" data-election-id="${escapeHtml(election.id)}">No</button>
+          </div>`
+        : ""
+    }
+    <p class="builder-msg gov-msg" hidden></p>
+  </li>`;
+}
+
+export function khElectionsHtml(
+  elections: KhElectionView[],
+  applications: KhApplicationView[],
+  canVote: boolean,
+): string {
+  if (!elections.length) {
+    return `<p class="muted">No open keyholder elections.</p>`;
+  }
+  const byUser = new Map(applications.map((a) => [a.user_id, a]));
+  return `<ul class="gov-list" id="gov-kh-elections">${elections
+    .map((e) => khElectionCardHtml(e, byUser.get(e.applicant_id), canVote))
+    .join("")}</ul>`;
+}
+
 export async function renderGovernance(
   shell: GovernanceShell,
   user: AuthUser | null,
@@ -562,7 +651,7 @@ export async function renderGovernance(
   `);
 
   const tab = initialGovTab();
-  const [roster, decisions, removals, me, opsRoles, reports] = await Promise.all([
+  const [roster, decisions, removals, me, opsRoles, reports, khPack] = await Promise.all([
     fetchReviewerRoster().catch(() => null),
     fetchOpenReviewDecisions().catch(() => [] as ReviewDecisionView[]),
     fetchOpenRemovalBallots().catch(() => [] as RemovalBallotView[]),
@@ -570,14 +659,34 @@ export async function renderGovernance(
     tab === "roles"
       ? fetchOpsRoles().catch(() => null)
       : Promise.resolve(null),
-    // Reports are signed-in-only and often unused — load when that tab is active.
     user && tab === "reports"
       ? fetchOpenReports().catch(() => [] as ModerationReportView[])
       : Promise.resolve([] as ModerationReportView[]),
+    user && tab === "keyholders"
+      ? authFetch(`${govApi()}/keyholders/applications`)
+          .then(async (r) =>
+            r.ok
+              ? ((await r.json()) as {
+                  applications: KhApplicationView[];
+                  elections: KhElectionView[];
+                })
+              : { applications: [] as KhApplicationView[], elections: [] as KhElectionView[] },
+          )
+          .catch(() => ({
+            applications: [] as KhApplicationView[],
+            elections: [] as KhElectionView[],
+          }))
+      : Promise.resolve({
+          applications: [] as KhApplicationView[],
+          elections: [] as KhElectionView[],
+        }),
   ]);
 
   const isReviewer = Boolean(me?.active);
   const funderEligible = Boolean(me?.funder_eligible);
+  const canElect = Boolean(
+    me?.active && (me.reviewer?.completed_proposal_ids?.length || 0) >= 1,
+  );
 
   const decisionCount = decisions.length;
   const removalCount = removals.length;
@@ -598,6 +707,7 @@ export async function renderGovernance(
           <button type="button" class="account-tab ${tab === "removals" ? "active" : ""}" data-gov-tab="removals" role="tab" aria-selected="${tab === "removals"}">Removals${removalCount ? ` (${removalCount})` : ""}</button>
           <button type="button" class="account-tab ${tab === "roles" ? "active" : ""}" data-gov-tab="roles" role="tab" aria-selected="${tab === "roles"}">Roles${opsBallotCount ? ` (${opsBallotCount})` : ""}</button>
           <button type="button" class="account-tab ${tab === "reports" ? "active" : ""}" data-gov-tab="reports" role="tab" aria-selected="${tab === "reports"}">Reports${reportCount ? ` (${reportCount})` : ""}</button>
+          <button type="button" class="account-tab ${tab === "keyholders" ? "active" : ""}" data-gov-tab="keyholders" role="tab" aria-selected="${tab === "keyholders"}">Keyholders${khPack.elections.length ? ` (${khPack.elections.length})` : ""}</button>
         </div>
       </header>
 
@@ -634,6 +744,16 @@ export async function renderGovernance(
         ${reportsInboxHtml(reports, isReviewer)}
       </section>
 
+      <section class="gov-block account-pane" data-gov-pane="keyholders" id="keyholders" ${tab === "keyholders" ? "" : "hidden"}>
+        <h2 class="gov-block-title">Keyholder elections</h2>
+        <p class="muted gov-block-lede">Earned reviewers with a completed bounty elect new keyholders. Pass → pending attestation. Fulfillers are paid in the monthly batch, not the instant a bounty completes.</p>
+        ${khElectionsHtml(khPack.elections, khPack.applications, canElect)}
+        <div class="gov-inline-panel">
+          <h3 class="gov-subhead">Apply</h3>
+          ${khApplyFormHtml(Boolean(user), canElect)}
+        </div>
+      </section>
+
       <p class="gov-foot muted">
         Rules live in
         <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>.
@@ -648,7 +768,8 @@ export async function renderGovernance(
     onLazyTab: (next) => {
       if (
         (next === "reports" && user && reports.length === 0) ||
-        (next === "roles" && !opsRoles)
+        (next === "roles" && !opsRoles) ||
+        (next === "keyholders" && user && khPack.elections.length === 0 && khPack.applications.length === 0)
       ) {
         const url = new URL(location.href);
         url.searchParams.set("tab", next);
@@ -922,5 +1043,55 @@ function bindGovernanceHandlers(
           text === "login_required" ? "Sign in to open a ballot." : text;
         msg.className = "builder-msg error";
       }
+    });
+
+  page.addEventListener("click", async (ev) => {
+    const btn = (ev.target as Element | null)?.closest?.<HTMLButtonElement>(
+      "[data-kh-vote]",
+    );
+    if (!btn || !page.contains(btn)) return;
+    const id = btn.dataset.electionId;
+    const vote = btn.dataset.khVote as "yes" | "no" | undefined;
+    if (!id || !vote) return;
+    const card = btn.closest(".gov-card");
+    setCardMsg(card, "Submitting…");
+    const res = await authFetch(`${govApi()}/keyholders/election/${encodeURIComponent(id)}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vote }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      election?: KhElectionView;
+    };
+    if (!res.ok) {
+      setCardMsg(card, body.error || "Vote failed", "error");
+      return;
+    }
+    setCardMsg(card, `Recorded (${body.election?.yes ?? "?"} yes / ${body.election?.no ?? "?"} no).`);
+  });
+
+  page
+    .querySelector<HTMLFormElement>("#kh-apply-form")
+    ?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = page.querySelector<HTMLElement>("#kh-apply-msg");
+      if (!msg) return;
+      msg.hidden = false;
+      msg.textContent = "Submitting…";
+      const res = await authFetch(`${govApi()}/keyholders/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pubkey: page.querySelector<HTMLTextAreaElement>("#kh-apply-pubkey")?.value || "",
+          hw_type: page.querySelector<HTMLInputElement>("#kh-apply-hw")?.value || "",
+          handle: page.querySelector<HTMLInputElement>("#kh-apply-handle")?.value || "",
+          statement: page.querySelector<HTMLTextAreaElement>("#kh-apply-statement")?.value || "",
+          ack: page.querySelector<HTMLInputElement>("#kh-apply-ack")?.checked,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      msg.textContent = res.ok ? "Application opened." : body.error || "Apply failed";
+      msg.className = `builder-msg ${res.ok ? "success" : "error"}`;
     });
 }

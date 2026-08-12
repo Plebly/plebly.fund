@@ -10,6 +10,7 @@ import {
   ABOUT_TRUST_HTML,
 } from "./generated/about-data";
 import { PLEBLY_GITHUB_URL, pleblySocialAccountsHtml } from "./icons";
+import { WORKERS_API } from "./config";
 import { fetchPublicOrg, type PublicOrg } from "./org-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import { href, orgHref, profileHref, projectsHref } from "./router";
@@ -95,126 +96,87 @@ export function publicKeyholderStatus(
   return null;
 }
 
-function keyholdersHtml(): string {
+function keyholdersHtml(live: {
+  escrow_mode: string;
+  keyholders: {
+    github: string;
+    xpub: string | null;
+    fingerprint: string | null;
+    signing_count?: number;
+  }[];
+}): string {
   const kh = ABOUT_KEYHOLDERS;
-  const onSignet = ABOUT_BITCOIN_NETWORK === "signet";
-  const rosterPublished = kh.roster.some(
-    (s) => s.name && s.name.toUpperCase() !== "TBD",
-  );
-  const anyXpub = kh.roster.some((s) => Boolean(s.xpub?.trim()));
-
-  const statusText = publicKeyholderStatus(kh.status, rosterPublished, anyXpub);
-  const status = statusText
-    ? `<p class="about-keyholders-status" role="status">
-        <span class="about-keyholders-status-label">Status</span>
-        <span>${escapeHtml(statusText)}</span>
-      </p>`
-    : "";
-
-  const signetBlock =
-    onSignet && (kh.signetLead || kh.signetCaveats.length)
-      ? `<div class="about-keyholders-signet">
-          <h3>Currently on signet</h3>
-          ${
-            kh.signetLead
-              ? `<p>${escapeHtml(kh.signetLead)}</p>`
-              : ""
-          }
-          ${
-            kh.signetCaveats.length
-              ? `<ul>${kh.signetCaveats
-                  .map((c) => `<li>${escapeHtml(c)}</li>`)
-                  .join("")}</ul>`
-              : ""
-          }
-        </div>`
+  const n = live.keyholders.length;
+  const mode = live.escrow_mode || "unknown";
+  const mOfN =
+    mode === "single-key-test"
+      ? "1-of-1 (signet test)"
+      : n
+        ? `${Math.min(3, n)}-of-${n}`
+        : kh.threshold;
+  const transitional =
+    mode === "single-key-test" || n < 3
+      ? `<p class="about-keyholders-status" role="status">Plebly is currently operating with ${escapeHtml(String(n || "few"))} keyholders (${escapeHtml(mode)}) as a transitional state while the keyholder application program is open. <a href="${href("/reviewers")}?tab=keyholders">See how to apply</a>.</p>`
       : "";
-
-  const leadHtml = kh.productionLead
-    ? `<p class="about-section-lede">${escapeHtml(
-        kh.productionLead
-          .replace(/\bhere\b/gi, "on this page")
-          .replace(/\s+/g, " ")
-          .trim(),
-      )}</p>`
-    : `<p class="about-section-lede">Escrow is <strong>${escapeHtml(kh.threshold)}</strong> multisig. Plebly never holds a spending key. Public keys are published on this page before mainnet launch.</p>`;
-
+  const liveBody = n
+    ? `<div class="about-keyholders-table-wrap">
+        <table class="about-keyholders-table">
+          <thead><tr><th>Handle</th><th>Fingerprint</th><th>xpub</th></tr></thead>
+          <tbody>${live.keyholders
+            .map(
+              (k) => `<tr>
+            <td>${escapeHtml(k.github)}</td>
+            <td class="mono">${escapeHtml(k.fingerprint || "—")}</td>
+            <td class="mono about-kh-xpub">${escapeHtml(k.xpub || "—")}</td>
+          </tr>`,
+            )
+            .join("")}</tbody>
+        </table>
+      </div>`
+    : `<p class="muted">Live roster empty — git KEYHOLDERS.md still applies until seats are active.</p>`;
   const rules = kh.rules.length
     ? `<div class="about-keyholders-rules">
         <h3>Rules</h3>
         <ul>${kh.rules.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
       </div>`
     : "";
-
-  const rosterBody = !kh.roster.length
-    ? `<p class="muted">Roster not published yet.</p>`
-    : anyXpub || rosterPublished
-      ? `<div class="about-keyholders-table-wrap">
-          <table class="about-keyholders-table">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Name</th>
-                <th scope="col">Role</th>
-                ${anyXpub ? `<th scope="col">xpub / origin</th>` : ""}
-              </tr>
-            </thead>
-            <tbody>${kh.roster
-              .map(
-                (seat) => `<tr>
-              <td class="about-kh-seat">${escapeHtml(seat.seat)}</td>
-              <td>${escapeHtml(seat.name || "—")}</td>
-              <td>${escapeHtml(seat.role || "—")}</td>
-              ${
-                anyXpub
-                  ? `<td class="mono about-kh-xpub">${escapeHtml(seat.xpub || "—")}</td>`
-                  : ""
-              }
-            </tr>`,
-              )
-              .join("")}</tbody>
-          </table>
+  const signetBlock =
+    ABOUT_BITCOIN_NETWORK === "signet" && (kh.signetLead || kh.signetCaveats.length)
+      ? `<div class="about-keyholders-signet">
+          <h3>Currently on signet</h3>
+          ${kh.signetLead ? `<p>${escapeHtml(kh.signetLead)}</p>` : ""}
+          ${
+            kh.signetCaveats.length
+              ? `<ul>${kh.signetCaveats.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`
+              : ""
+          }
         </div>`
-      : `<ul class="about-keyholders-seats">${kh.roster
-          .map(
-            (seat) => `<li class="about-keyholders-seat">
-            <span class="about-kh-seat-n">${escapeHtml(seat.seat)}</span>
-            <span class="about-kh-seat-name">${escapeHtml(
-              seat.name && seat.name.toUpperCase() !== "TBD"
-                ? seat.name
-                : "Open seat",
-            )}</span>
-            <span class="about-kh-seat-role">${escapeHtml(
-              seat.role || "To be named before mainnet",
-            )}</span>
-          </li>`,
-          )
-          .join("")}</ul>
-        <p class="about-keyholders-roster-note">Names and public keys will appear here when the mainnet roster is published.</p>`;
+      : "";
 
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
-    ${leadHtml}
-    ${status}
+    <p class="about-section-lede">Escrow is live <strong>${escapeHtml(mOfN)}</strong> (${escapeHtml(mode)}). Plebly never holds a spending key. Completed bounties pay in a <strong>monthly batch PSBT</strong>. The 2% keyholder pool sits on the platform fee address until cash-out — the operator can spend it until then.</p>
+    ${transitional}
     ${signetBlock}
     <div class="about-keyholders-meta">
       <div class="about-keyholders-pill">
         <span class="about-keyholders-pill-label">Threshold</span>
-        <span class="about-keyholders-pill-value">${escapeHtml(kh.threshold)}</span>
+        <span class="about-keyholders-pill-value">${escapeHtml(mOfN)}</span>
       </div>
       <div class="about-keyholders-pill">
         <span class="about-keyholders-pill-label">Network</span>
         <span class="about-keyholders-pill-value">${escapeHtml(ABOUT_BITCOIN_NETWORK)}</span>
       </div>
       <div class="about-keyholders-pill">
-        <span class="about-keyholders-pill-label">Seats</span>
-        <span class="about-keyholders-pill-value">${kh.roster.length || 5}</span>
+        <span class="about-keyholders-pill-label">Live seats</span>
+        <span class="about-keyholders-pill-value">${n}</span>
       </div>
     </div>
     ${rules}
     <div class="about-keyholders-roster">
-      <h3>Roster</h3>
-      ${rosterBody}
+      <h3>Live roster</h3>
+      ${liveBody}
+      <p class="muted"><a href="${href("/parameters")}">Fee parameters</a> · <a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
     </div>
   </section>`;
 }
@@ -359,11 +321,38 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
     </section>
   `);
 
-  const orgResult = await fetchPublicOrg(PLEBLY_ORG_LOGIN).catch(
-    () =>
-      ({ status: "unavailable", message: "network error" }) as const,
-  );
+  const api = WORKERS_API.replace(/\/$/, "");
+  const [orgResult, khLive, health] = await Promise.all([
+    fetchPublicOrg(PLEBLY_ORG_LOGIN).catch(
+      () =>
+        ({ status: "unavailable", message: "network error" }) as const,
+    ),
+    fetch(`${api}/keyholders/public`)
+      .then(async (r) =>
+        r.ok
+          ? ((await r.json()) as {
+              escrow_mode?: string;
+              keyholders: {
+                github: string;
+                xpub: string | null;
+                fingerprint: string | null;
+                signing_count?: number;
+              }[];
+            })
+          : null,
+      )
+      .catch(() => null),
+    fetch(`${api}/health`)
+      .then(async (r) =>
+        r.ok ? ((await r.json()) as { escrow_mode?: string }) : null,
+      )
+      .catch(() => null),
+  ]);
   const org = orgResult.status === "ok" ? orgResult.org : null;
+  const liveKh = {
+    escrow_mode: health?.escrow_mode || khLive?.escrow_mode || "unknown",
+    keyholders: khLive?.keyholders || [],
+  };
 
   const details = [
     ABOUT_BUILDERS_HTML
@@ -429,11 +418,11 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       ${teamSectionHtml(org)}
 
-      ${keyholdersHtml()}
+      ${keyholdersHtml(liveKh)}
 
       <section class="about-section" id="parameters">
         <h2>Key parameters</h2>
-        <p class="about-section-lede">Fixed at launch. Values come from the public parameters in git.</p>
+        <p class="about-section-lede">Fixed at launch. Values come from the public parameters in git. <a href="${href("/parameters")}">Live parameters</a>.</p>
         ${paramsHtml()}
       </section>
 

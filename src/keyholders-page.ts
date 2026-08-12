@@ -14,10 +14,16 @@ type DisburseItem = {
   outputs: { address: string; amount_sats: number; label?: string }[];
   settle_txid?: string;
   settle_proposed_by?: string;
-  psbts?: { sha256: string; uploader: string; created_at: string }[];
+  psbts?: { sha256: string; uploader: string; created_at: string; kind?: string }[];
   addresses_frozen?: boolean;
   ln_destination?: string;
   ln_amount_sats?: number;
+  period?: string;
+  monthly_accruing?: boolean;
+  line_items?: { proposal_id: string; payout_sats: number; escrow_address?: string }[];
+  partials?: { keyholder_id: string; fingerprint: string }[];
+  psbt_status?: string;
+  required_threshold?: number;
 };
 
 type KeyholderMe = {
@@ -69,7 +75,7 @@ export async function renderKeyholders(
       <header class="declined-head">
         <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ops</p>
         <h1>Keyholders</h1>
-        <p class="lede">Coordinate Sparrow cosigns. Plebly never holds keys. Releases and contributor refunds need dual keyholder settle.</p>
+        <p class="lede">Coordinate Sparrow cosigns. The Worker may broadcast a fully signed monthly release; keys stay on hardware. Bond and contributor refunds still use dual keyholder settle.</p>
         <p class="muted" id="kh-health"></p>
         ${
           kh.keys_stale
@@ -77,6 +83,22 @@ export async function renderKeyholders(
             : ""
         }
       </header>
+      ${
+        kh.status === "active"
+          ? `<div class="form-panel">
+              <h2 class="proposal-block-title">Signing session</h2>
+              <p class="muted">GitHub opens this console. A Bitcoin-key challenge is required to upload partials or broadcast.</p>
+              <label class="donate-amount-label" for="kh-auth-addr">Auth address (from your xpub)</label>
+              <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" />
+              <button type="button" class="btn" id="kh-challenge">Request challenge</button>
+              <p class="mono" id="kh-challenge-msg" hidden></p>
+              <label class="donate-amount-label" for="kh-challenge-sig">Signature (base64)</label>
+              <textarea id="kh-challenge-sig" class="comment-input mono" rows="2" placeholder="Paste compact signed message"></textarea>
+              <button type="button" class="btn ghost" id="kh-challenge-verify">Verify</button>
+              <p class="builder-msg" id="kh-challenge-status" hidden></p>
+            </div>`
+          : ""
+      }
       ${
         kh.status === "active" && kh.keys_stale
           ? `<div class="form-panel">
@@ -86,6 +108,8 @@ export async function renderKeyholders(
               <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(kh.fingerprint || "")}" />
               <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
               <textarea id="kh-xpub" class="comment-input mono" rows="3">${escapeHtml(kh.xpub || "")}</textarea>
+              <label class="donate-amount-label" for="kh-auth-addr-keys">Auth address (P2WPKH from this xpub)</label>
+              <input id="kh-auth-addr-keys" class="donate-amount mono" placeholder="tb1… / bc1…" />
               <button type="button" class="btn" id="kh-keys-submit">Save keys</button>
               <p class="builder-msg" id="kh-keys-msg" hidden></p>
             </div>`
@@ -100,6 +124,8 @@ export async function renderKeyholders(
               <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(kh.fingerprint || "")}" />
               <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
               <textarea id="kh-xpub" class="comment-input mono" rows="3">${escapeHtml(kh.xpub || "")}</textarea>
+              <label class="donate-amount-label" for="kh-auth-addr-keys">Auth address (P2WPKH from this xpub)</label>
+              <input id="kh-auth-addr-keys" class="donate-amount mono" placeholder="tb1… / bc1…" />
               <button type="button" class="btn" id="kh-keys-submit">Save keys</button>
               <p class="builder-msg" id="kh-keys-msg" hidden></p>
             </div>`
@@ -151,9 +177,27 @@ export async function renderKeyholders(
       .map((item) => {
         const sum = item.outputs.reduce((a, o) => a + o.amount_sats, 0);
         const waiting = item.outputs.length === 0;
+        const lines = item.line_items?.length || 0;
+        const signed = item.partials?.length || 0;
+        const need = item.required_threshold || 0;
         return `<li class="declined-row">
-          <button type="button" class="declined-title btn ghost" data-disburse="${escapeHtml(item.id)}">${escapeHtml(item.proposal_id)}</button>
+          <button type="button" class="declined-title btn ghost" data-disburse="${escapeHtml(item.id)}">${escapeHtml(item.period || item.proposal_id)}</button>
           <span class="declined-meta"><span class="pill">${escapeHtml(item.state)}</span>
+          ${
+            item.monthly_accruing
+              ? `<span class="pill">accruing</span>`
+              : ""
+          }
+          ${
+            lines
+              ? `<span class="muted">${lines} bount${lines === 1 ? "y" : "ies"}</span>`
+              : ""
+          }
+          ${
+            need
+              ? `<span class="muted">${signed}/${need} signed</span>`
+              : ""
+          }
           ${
             waiting
               ? `<span class="pill">waiting on address</span>`
@@ -184,7 +228,32 @@ export async function renderKeyholders(
     detailEl.innerHTML = `
       <div class="form-panel form-panel-wide">
         <h2 class="proposal-block-title">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
-        <p class="muted">State: ${escapeHtml(item.state)}${item.addresses_frozen ? " · addresses frozen" : ""}</p>
+        <p class="muted">State: ${escapeHtml(item.state)}${item.addresses_frozen ? " · addresses frozen" : ""}${item.period ? ` · ${escapeHtml(item.period)}` : ""}${item.monthly_accruing ? " · accruing (not yet signable)" : ""}${item.required_threshold ? ` · ${item.partials?.length || 0}/${item.required_threshold} signatures` : ""}</p>
+        ${
+          item.line_items?.length
+            ? `<h3 class="proposal-block-title">Line items</h3>
+               <table class="kh-outputs">
+                 <thead><tr><th>Proposal</th><th>Escrow</th><th>Payout</th></tr></thead>
+                 <tbody>${item.line_items
+                   .map(
+                     (l) =>
+                       `<tr><td class="mono">${escapeHtml(l.proposal_id)}</td><td class="mono">${escapeHtml(l.escrow_address || "—")}</td><td>${formatSats(l.payout_sats)}</td></tr>`,
+                   )
+                   .join("")}</tbody>
+               </table>
+               <h3 class="proposal-block-title">Signers</h3>
+               <ul>${
+                 item.partials?.length
+                   ? item.partials
+                       .map(
+                         (p) =>
+                           `<li class="mono">${escapeHtml(p.keyholder_id)} · ${escapeHtml(p.fingerprint)}</li>`,
+                       )
+                       .join("")
+                   : `<li class="muted">No partials yet</li>`
+               }</ul>`
+            : ""
+        }
         ${
           item.ln_destination
             ? `<p class="lifecycle-banner"><span class="lifecycle-k">Lightning payout</span>
@@ -244,7 +313,7 @@ export async function renderKeyholders(
         } />
         <div id="kh-verify-panel" class="lifecycle-banner" hidden>
           <span class="lifecycle-k">Verify before settle</span>
-          <p>Worker will match this txid to the exact outputs above (address + amount). Plebly never broadcasts.</p>
+          <p>Worker will match this txid to the exact outputs above (address + amount). Dual-ack is the fallback if combine/broadcast fails.</p>
           <ul class="kh-verify-outputs">${item.outputs
             .map(
               (o) =>
@@ -255,6 +324,12 @@ export async function renderKeyholders(
             .join("")}</ul>
         </div>
         <div class="comment-compose-actions">
+          <button type="button" class="btn" id="kh-sign" ${
+            canPsbt ? "" : "disabled"
+          }>Upload partial</button>
+          <button type="button" class="btn ghost" id="kh-broadcast" ${
+            canPsbt ? "" : "disabled"
+          }>Broadcast if ready</button>
           <button type="button" class="btn" id="kh-propose" ${
             canPsbt ? "" : "disabled"
           }>Propose settle</button>
@@ -297,6 +372,45 @@ export async function renderKeyholders(
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       setMsg(res.ok ? "Lockup attached." : body.error || "Could not attach lockup");
+      if (res.ok) void openDetail(id);
+    });
+
+    detailEl.querySelector("#kh-sign")?.addEventListener("click", async () => {
+      const b64 = detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt")?.value || "";
+      const res = await authFetch(`${api()}/disburse/${id}/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ psbt_base64: b64 }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        threshold_met?: boolean;
+        broadcast?: boolean;
+        txid?: string;
+      };
+      setMsg(
+        res.ok
+          ? body.broadcast
+            ? `Broadcast ${body.txid}`
+            : body.threshold_met
+              ? "Threshold met — broadcast if ready"
+              : "Partial stored"
+          : body.error || "Sign failed",
+      );
+      if (res.ok) void openDetail(id);
+    });
+
+    detailEl.querySelector("#kh-broadcast")?.addEventListener("click", async () => {
+      const res = await authFetch(`${api()}/disburse/${id}/broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        txid?: string;
+      };
+      setMsg(res.ok ? `Broadcast ${body.txid}` : body.error || "Broadcast failed");
       if (res.ok) void openDetail(id);
     });
 
@@ -440,6 +554,39 @@ export async function renderKeyholders(
     });
   };
 
+  app.querySelector("#kh-challenge")?.addEventListener("click", async () => {
+    const res = await authFetch(`${api()}/keyholders/challenge`);
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+    };
+    const el = app.querySelector<HTMLElement>("#kh-challenge-msg");
+    if (el) {
+      el.hidden = false;
+      el.textContent = res.ok
+        ? `Sign this with your auth key:\n${body.message || ""}`
+        : body.error || "Challenge failed";
+    }
+  });
+  app.querySelector("#kh-challenge-verify")?.addEventListener("click", async () => {
+    const address =
+      app.querySelector<HTMLInputElement>("#kh-auth-addr")?.value.trim() || "";
+    const signature =
+      app.querySelector<HTMLTextAreaElement>("#kh-challenge-sig")?.value.trim() ||
+      "";
+    const res = await authFetch(`${api()}/keyholders/challenge/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, signature }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    const el = app.querySelector<HTMLElement>("#kh-challenge-status");
+    if (el) {
+      el.hidden = false;
+      el.textContent = res.ok ? "Signing session active." : body.error || "Verify failed";
+    }
+  });
+
   app.querySelector("#kh-keys-submit")?.addEventListener("click", async () => {
     const fingerprint = (
       app.querySelector<HTMLInputElement>("#kh-fp")?.value || ""
@@ -450,7 +597,11 @@ export async function renderKeyholders(
     const res = await authFetch(`${api()}/keyholders/me/keys`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fingerprint, xpub }),
+      body: JSON.stringify({ fingerprint, xpub, auth_address: (
+        app.querySelector<HTMLInputElement>("#kh-auth-addr-keys")?.value ||
+        app.querySelector<HTMLInputElement>("#kh-auth-addr")?.value ||
+        ""
+      ).trim() }),
     });
     const msg = app.querySelector<HTMLElement>("#kh-keys-msg");
     const body = (await res.json().catch(() => ({}))) as { error?: string };

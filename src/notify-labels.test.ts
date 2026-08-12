@@ -36,4 +36,15 @@ describe("notificationTargetHref", () => {
       }),
     ).toMatch(/\/account\?tab=funds$/);
   });
+
+  it("routes keyholder money notices to console / election tab", () => {
+    expect(notificationTypeLabel("disburse_ready")).toMatch(/Monthly release/);
+    expect(notificationTargetHref({ type: "disburse_ready" })).toMatch(
+      /\/keyholders$/,
+    );
+    expect(notificationTypeLabel("keyholder_application")).toMatch(/Keyholder/);
+    expect(
+      notificationTargetHref({ type: "keyholder_application" }),
+    ).toMatch(/tab=keyholders/);
+  });
 });

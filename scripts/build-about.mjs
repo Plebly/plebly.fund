@@ -76,9 +76,11 @@ function resolveNetworkParams(doc, bitcoinNetwork) {
 
 /** Template placeholders for content/about.md */
 function aboutPlaceholders(p) {
+  const khPct = p.keyholder_fee_percent ?? 2;
+  const cap = p.keyholder_cap_sats ?? 500000;
   return {
     submission_fee: `${formatSats(p.submission_fee_sats)} (exact, non-refundable)`,
-    platform_fee: `${p.platform_fee_percent}% of escrow to Plebly at successful disbursement`,
+    platform_fee: `${p.platform_fee_percent}% platform + ${khPct}% keyholders (${p.platform_fee_percent + khPct}% of the monthly disbursed set; ${formatSats(cap)} cap per signing keyholder)`,
     minimum_funding_claim_floor: formatSats(p.claim_floor_sats),
     claim_window: `${p.claim_window_days} days`,
     claim_extension: `One ${p.claim_extension_days}-day extension via reviewer supermajority.`,
@@ -431,6 +433,8 @@ export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
 export const CLAIM_FLOOR_SATS = ${resolved.claim_floor_sats};
 export const MILESTONE_THRESHOLD_SATS = ${resolved.milestone_threshold_sats};
 export const PLATFORM_FEE_PERCENT = ${resolved.platform_fee_percent};
+export const KEYHOLDER_FEE_PERCENT = ${resolved.keyholder_fee_percent ?? 2};
+export const KEYHOLDER_CAP_SATS = ${resolved.keyholder_cap_sats ?? 500000};
 export const CLAIM_BOND_SATS = ${resolved.claim_bond_sats};
 export const MAX_ACTIVE_CLAIMS = ${resolved.max_active_claims};
 export const CLAIM_PENDING_TTL_HOURS = ${resolved.claim_pending_ttl_hours};

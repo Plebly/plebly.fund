@@ -10,6 +10,7 @@ import {
   reportsInboxHtml,
   reviewerRowHtml,
   rosterSectionHtml,
+  khApplyFormHtml,
 } from "./governance-page";
 import {
   decisionKindLabel,
@@ -272,5 +273,15 @@ describe("governance UI helpers", () => {
     expect(html).toContain("data-report-resolve");
     expect(html).toContain("Open challenge ballot");
     expect(html).toContain("Looks spammy");
+  });
+
+  it("renders keyholder apply form for earned reviewers", () => {
+    const guest = khApplyFormHtml(false, false);
+    expect(guest).toContain("Sign in");
+    const blocked = khApplyFormHtml(true, false);
+    expect(blocked).toContain("completed bounty");
+    const form = khApplyFormHtml(true, true);
+    expect(form).toContain("kh-apply-form");
+    expect(form).toContain("operator can spend");
   });
 });

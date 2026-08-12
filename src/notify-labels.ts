@@ -32,6 +32,8 @@ export function notificationTypeLabel(
     contrib_refunded: "Contribution refunded",
     release_queued: "Escrow release queued",
     release_broadcast: "Escrow release broadcast",
+    disburse_ready: "Monthly release ready to sign",
+    keyholder_application: "Keyholder application opened",
     disburse_chat: "Keyholder coordination message",
     redirect_pending: "Redirect pending (ops)",
     platform_config_ballot_opened: "Config change vote opened",
@@ -55,6 +57,10 @@ export function notificationTargetHref(n: {
 }): string {
   if (n.type === "bond_refundable" || n.type === "bond_refunded") {
     return href("/account", "?tab=funds");
+  }
+  if (n.type === "disburse_ready") return href("/keyholders");
+  if (n.type === "keyholder_application") {
+    return href("/reviewers", "?tab=keyholders");
   }
   if (String(n.type || "").startsWith("platform_config_ballot_")) {
     const path = (n.proposal_path || "").trim();

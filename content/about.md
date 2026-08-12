@@ -38,7 +38,7 @@ Lightning is a way to fund the same on-chain escrow address. After payment settl
 These numbers come from [`parameters.json`](https://github.com/Plebly/proposals/blob/main/parameters.json) (see also [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md)). The site build selects the **{{bitcoin_network}}** network overlay:
 
 - **Submission fee:** {{submission_fee}} (paid when you open a proposal; exact and non-refundable).
-- **Platform fee:** {{platform_fee}} (paid to Plebly from escrow only when a project completes successfully).
+- **Platform fee:** {{platform_fee}} (monthly batch; keyholder share sits on the fee address until cash-out).
 - **Claim floor:** {{minimum_funding_claim_floor}} ({{bitcoin_network}} minimum escrow before a builder can claim).
 - **Claim window:** {{claim_window}} after a claim is accepted. {{claim_extension}}.
 

@@ -450,6 +450,13 @@ export function seoForRoute(
           "Non-custodial escrow, uncensorable proposals, and protocol-over-platform rules for Bitcoin public goods funding.",
         path: "/about",
       };
+    case "params":
+      return {
+        title: "Parameters",
+        description:
+          "Live Plebly fee percents, keyholder cap, and published keyholder xpubs.",
+        path: "/parameters",
+      };
     case "stats":
       return {
         title: "Funding stats",
