@@ -167,7 +167,7 @@ function howItWorksHtml(): string {
     { n: "01", title: "Propose", body: "Describe the problem, deliverable, and how success is verified." },
     { n: "02", title: "Donate", body: "Anyone sends sats to the project’s public escrow address." },
     { n: "03", title: "Apply", body: "Builders apply with a bond once funding clears the claim floor." },
-    { n: "04", title: "Complete", body: "Reviewers verify the work. Keyholders release escrow in wallet — Plebly never moves funds." },
+    { n: "04", title: "Complete", body: "Reviewers verify the work. Payout is in that UTC month’s release." },
   ];
   return `<section class="landing-how">
     <div class="wrap-wide">
@@ -193,7 +193,7 @@ function trustStripHtml(): string {
   const items = [
     { title: "Non-custodial", body: "Multisig escrow you can verify on-chain" },
     { title: "Uncensorable", body: "Canonical proposals live in a public git repo" },
-    { title: "Transparent fees", body: "Parameters published and fixed at launch" },
+    { title: "Transparent fees", body: "5% of the monthly disbursed set, published in git" },
   ];
   return `<section class="wrap-wide landing-trust">
     <div class="trust-grid">${items

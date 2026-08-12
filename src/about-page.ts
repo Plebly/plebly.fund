@@ -155,7 +155,7 @@ function keyholdersHtml(live: {
 
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
-    <p class="about-section-lede">Escrow is live <strong>${escapeHtml(mOfN)}</strong> (${escapeHtml(mode)}). Plebly never holds a spending key. Completed bounties pay in a <strong>monthly batch PSBT</strong>. The 2% keyholder pool sits on the platform fee address until cash-out — the operator can spend it until then.</p>
+    <p class="about-section-lede">Escrow is live <strong>${escapeHtml(mOfN)}</strong> (${escapeHtml(mode)}). Monthly batch; 2% pool sits on the fee address until cash-out.</p>
     ${transitional}
     ${signetBlock}
     <div class="about-keyholders-meta">

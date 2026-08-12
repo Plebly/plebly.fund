@@ -377,7 +377,7 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Platform fee",
           value: params.platform_fee,
-          hint: "Paid to Plebly from escrow only when a project completes successfully.",
+          hint: "Charged on the monthly release PSBT, not the instant a bounty completes.",
         },
         {
           label: "Claim floor",

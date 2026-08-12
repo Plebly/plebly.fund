@@ -7936,6 +7936,34 @@ a.claim-app-bond:hover {
   vertical-align: top;
 }
 
+.kh-steps {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.kh-steps li {
+  margin: 0.35rem 0;
+}
+
+.kh-recipe {
+  margin: 1rem 0;
+}
+
+.kh-earnings {
+  margin: 0.65rem 0 0;
+}
+
+.kh-challenge-msg {
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0.65rem 0 0.35rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+}
+
 .kh-verify-outputs {
   margin: 0.5rem 0 0;
   padding-left: 1.1rem;

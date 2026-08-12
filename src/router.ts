@@ -179,6 +179,14 @@ export function migrateHashRoute(): boolean {
   return true;
 }
 
+/** Markdown, llms, sitemap, and /docs/ must load as real files — not SPA routes. */
+export function isStaticDocumentPath(pathname: string): boolean {
+  return (
+    /\.(md|txt|xml|json|webmanifest)$/i.test(pathname) ||
+    /\/docs\//.test(pathname)
+  );
+}
+
 /** Intercept same-app link clicks for SPA navigation (no full reload). */
 export function bindSpaNavigation(root: ParentNode = document): void {
   root.addEventListener("click", (event) => {
@@ -202,6 +210,7 @@ export function bindSpaNavigation(root: ParentNode = document): void {
       return;
     }
     if (url.origin !== location.origin) return;
+    if (isStaticDocumentPath(url.pathname)) return;
 
     const base = basePath().replace(/\/$/, "");
     const path = url.pathname;
@@ -510,7 +519,7 @@ export function seoForRoute(
       return {
         title: "Keyholders",
         description:
-          "Escrow keyholder console for Sparrow cosign coordination. Plebly never holds keys.",
+          "Sparrow cosign console for escrow releases.",
         path: "/keyholders",
       };
     case "propose":

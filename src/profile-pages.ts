@@ -469,7 +469,11 @@ export async function renderAccount(
           <h1>${escapeHtml(accountNavLabel(user))}</h1>
           ${
             reviewerMe?.active
-              ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} seat</span> <a href="${href("/reviewers")}">Open governance</a></p>`
+              ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} seat</span> <a href="${href("/reviewers")}">Open governance</a>${
+                  (reviewerMe.reviewer?.completed_proposal_ids?.length || 0) >= 1
+                    ? ` · <a href="${href("/reviewers")}?tab=keyholders">Apply as keyholder</a>`
+                    : ""
+                }</p>`
               : reviewerMe?.funder_eligible
                 ? `<p class="reviewer-badge"><span class="pill status-good">Eligible funder</span> <a href="${href("/reviewers")}#removals">Removal ballots</a></p>`
                 : `<p class="reviewer-badge muted"><a href="${href("/reviewers")}">Reviewer governance</a></p>`

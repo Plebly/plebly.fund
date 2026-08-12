@@ -21,7 +21,7 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 1. Submit: Open a proposal; pay the exact on-chain submission fee.
 2. Donate: Anyone sends Bitcoin to the project escrow address (on-chain, or Lightning that settles into that address).
 3. Claim: A builder claims once confirmed escrow meets the claim floor (opens a claim PR; exclusivity starts on merge).
-4. Complete: Reviewers verify the deliverable; keyholders release escrow on success.
+4. Complete: Reviewers verify the deliverable. Payout waits for that UTC month’s release PSBT — not the instant a bounty completes. Keyholders sign in Sparrow; the Worker may broadcast a fully signed transaction and never holds keys.
 
 ### Lightning
 
@@ -30,7 +30,7 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. Revers
 ### Platform economics (see PARAMETERS.md for authoritative values)
 
 - Submission fee: paid when opening a proposal; exact and non-refundable.
-- Platform fee: a percentage of escrow paid to Plebly only at successful disbursement (not "the project gets 2.5%").
+- Platform fee: 3% platform + 2% keyholder pool of the monthly disbursed set (500,000 sat cap per signing keyholder). Charged on the monthly release PSBT, not the instant a bounty completes.
 - Claim floor: network-specific minimum confirmed escrow (see parameters.json; signet is lowered for testing).
 - Claim window: exclusive period after claim acceptance, with a possible reviewer-approved extension.
 - Claim bonds and abuse mitigations (active-claim caps, cooldowns, checkpoints) are documented in PARAMETERS.md and site docs.
@@ -52,4 +52,4 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. Revers
 
 ## Trust notes
 
-Escrow is 3-of-5 multisig at launch. Plebly does not hold spending keys. There is no on-chain timelock in v1. Keyholder stall process is documented in the proposals repo. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.
+Escrow is 3-of-5 multisig at launch. Plebly does not hold spending keys. Completed bounties pay in a monthly batch. The Worker may broadcast a fully signed release; keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address. There is no on-chain timelock in v1. Keyholder stall process is documented in the proposals repo. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.

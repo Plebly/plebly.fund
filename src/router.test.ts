@@ -5,6 +5,7 @@ import {
   proposalHref,
   proposalJsonLd,
   seoForRoute,
+  isStaticDocumentPath,
 } from "./router";
 
 describe("router governance paths", () => {
@@ -93,6 +94,16 @@ describe("router governance paths", () => {
     expect(campaign.url).toBe("https://plebly.fund/p/plebly-42");
     expect(campaign.fundingGoal).toMatchObject({ currency: "XBT" });
     expect(campaign.amount).toMatchObject({ currency: "XBT" });
+  });
+
+  it("does not treat /docs and static files as SPA routes", () => {
+    expect(isStaticDocumentPath("/docs/keyholder-responsibilities.md")).toBe(
+      true,
+    );
+    expect(isStaticDocumentPath("/llms-full.txt")).toBe(true);
+    expect(isStaticDocumentPath("/sitemap.xml")).toBe(true);
+    expect(isStaticDocumentPath("/reviewers")).toBe(false);
+    expect(isStaticDocumentPath("/keyholders")).toBe(false);
   });
 });
 

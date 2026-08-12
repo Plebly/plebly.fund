@@ -17,7 +17,7 @@ We built it for people who want hard problems solved in the open.
 1. **Submit**: Open a pull request with your proposal and pay the submission fee on-chain.
 2. **Donate**: Anyone sends Bitcoin to the project's escrow address (on-chain, or Lightning that settles into that same address).
 3. **Apply**: Builders apply with a bond once funding hits the claim floor.
-4. **Complete**: Reviewers verify the deliverable; keyholders release escrow manually on success. Plebly never moves funds.
+4. **Complete**: Reviewers verify the deliverable. Payout is in that UTC month’s batch PSBT.
 
 Browse [open projects](/), [start a project](/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
 
@@ -47,6 +47,8 @@ Milestone splits apply above **{{milestone_threshold}}**. Badge tiers, funding w
 ## Trust model
 
 Escrow is **3-of-5 multisig**. Plebly never holds a spending key. Launch uses human keyholders.
+
+Completed bounties pay in a **monthly batch**. The Worker may broadcast a fully signed release; keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address.
 
 If keyholders stall after a reviewer-approved release, the public process applies: a 7-day log followed by a 14-day incident process.
 

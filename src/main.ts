@@ -154,6 +154,8 @@ function siteFooterHtml(routeName: string): string {
           <h2 class="footer-col-title">Contribute</h2>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
+          <a href="${href("/reviewers")}?tab=keyholders">Apply as keyholder</a>
+          <a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder duties</a>
         </div>
         <div class="footer-col">
           <h2 class="footer-col-title">About</h2>

@@ -397,7 +397,7 @@ export function proposalLifecycleBannersHtml(
     parts.push(
       `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">${label}</span><p>Contributor ballot chose redirect${
         target ? ` to <code class="mono">${escapeHtml(target)}</code>` : ""
-      }. Ops/keyholders move escrow manually — Plebly never broadcasts.</p></div>`,
+      }. Redirected escrow is moved in Sparrow.</p></div>`,
     );
   }
   return parts.join("");

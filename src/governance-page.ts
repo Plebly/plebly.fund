@@ -597,7 +597,7 @@ export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
     <input id="kh-apply-handle" class="donate-amount" maxlength="64" />
     <label class="donate-amount-label" for="kh-apply-statement">Statement</label>
     <textarea id="kh-apply-statement" class="comment-input" rows="4" required maxlength="2000" placeholder="Why you can stay reachable and sign monthly releases…"></textarea>
-    <label class="muted"><input type="checkbox" id="kh-apply-ack" required /> I have read the keyholder responsibilities, including that the operator can spend the keyholder pool on the fee address until cash-out.</label>
+    <label class="muted"><input type="checkbox" id="kh-apply-ack" required /> I have read the <a href="${href("/docs/keyholder-responsibilities.md")}">keyholder responsibilities</a>, including that the operator can spend the keyholder pool on the fee address until cash-out.</label>
     <div class="form-actions"><button type="submit" class="btn">Apply</button></div>
     <p class="builder-msg" id="kh-apply-msg" hidden></p>
   </form>`;
@@ -699,7 +699,7 @@ export async function renderGovernance(
       <header class="gov-hero">
         <p class="about-eyebrow">Governance</p>
         <h1>Reviewers</h1>
-        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers. After volume gates, reviewers elect coordination roles — never custody.</p>
+        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers. Earned reviewers with a completed bounty may apply as keyholders. After volume gates, reviewers elect coordination roles — never custody.</p>
         ${statusStripHtml(me, user)}
         <div class="account-tabs gov-tabs" role="tablist" aria-label="Governance sections">
           <button type="button" class="account-tab ${tab === "roster" ? "active" : ""}" data-gov-tab="roster" role="tab" aria-selected="${tab === "roster"}">Roster${roster ? ` (${roster.count})` : ""}</button>
@@ -746,7 +746,7 @@ export async function renderGovernance(
 
       <section class="gov-block account-pane" data-gov-pane="keyholders" id="keyholders" ${tab === "keyholders" ? "" : "hidden"}>
         <h2 class="gov-block-title">Keyholder elections</h2>
-        <p class="muted gov-block-lede">Earned reviewers with a completed bounty elect new keyholders. Pass → pending attestation. Fulfillers are paid in the monthly batch, not the instant a bounty completes.</p>
+        <p class="muted gov-block-lede">Earned reviewers with a completed bounty elect new keyholders. Pass → pending attestation.</p>
         ${khElectionsHtml(khPack.elections, khPack.applications, canElect)}
         <div class="gov-inline-panel">
           <h3 class="gov-subhead">Apply</h3>
@@ -757,6 +757,7 @@ export async function renderGovernance(
       <p class="gov-foot muted">
         Rules live in
         <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>.
+        <a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder responsibilities</a>.
         Project-level review UI stays on each project page.
         <a href="${projectsHref()}">Browse projects</a>.
       </p>

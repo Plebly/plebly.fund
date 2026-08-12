@@ -760,7 +760,7 @@ function renderStatusBody(
         status.claimer_type === "org" && status.claim_agent
           ? `Agent @${escapeHtml(status.claim_agent)} earns a reviewer seat.`
           : "Fulfiller earns a reviewer seat."
-      } Escrow release is by keyholders — Plebly never moves funds.</p>
+      } Paid in that UTC month’s release.</p>
       ${wbSlot}`;
       break;
     default:
@@ -1075,8 +1075,8 @@ export async function bindBuilderPanel(
           ) as HTMLInputElement | null
         )?.value === "org";
       payoutHint.textContent = orgApply
-        ? "Saved on this org application (not your personal Account payout). Same refund and forfeit rules. Keyholders batch returns — Plebly never moves funds."
-        : "One destination for your claim bond refund and, if you win and finish, the escrow payout. Not the fee/bond pay address. Keyholders batch returns — Plebly never moves funds.";
+        ? "Saved on this org application (not your personal Account payout)."
+        : "Claim bond refund and, if you finish, the monthly escrow payout. Not the fee/bond pay address.";
       syncPayoutRailUi();
     }
     if (step === "bond" || step === "submit") {
