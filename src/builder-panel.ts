@@ -7,6 +7,7 @@ import {
   fetchClaimParams,
   fetchClaimStatus,
   fetchGithubFollowing,
+  fetchPayoutStatus,
   inviteClaimCollaborator,
   isOpenToClaim,
   rejectClaimApplication,
@@ -21,6 +22,7 @@ import {
   type ClaimApplicationsResponse,
   type ClaimParams,
   type ClaimStatus,
+  type PayoutStatus,
 } from "./builder";
 import {
   claimModeHeroChipHtml,
@@ -123,6 +125,50 @@ function watchBtnHtml(watching: boolean): string {
   return watching
     ? btnWithIcon("eye-slash", "Unwatch")
     : btnWithIcon("eye", "Watch");
+}
+
+function formatUtcDay(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export function payoutStatusCardHtml(s: PayoutStatus): string {
+  const amount =
+    typeof s.payout_sats === "number" ? formatSats(s.payout_sats) : "";
+  const freeze = s.freeze_at ? formatUtcDay(s.freeze_at) : "";
+  let body = "";
+  if (s.state === "need_destination") {
+    body = `Set a payout address in Account so confirmed escrow can join this month’s batch.`;
+  } else if (s.state === "accruing") {
+    body = `This month: <strong>${escapeHtml(amount)}</strong> after fees. Keyholders sign after ${escapeHtml(freeze)} 00:00 UTC.`;
+  } else if (s.state === "frozen") {
+    const sig =
+      typeof s.required_threshold === "number"
+        ? ` ${s.partials || 0}/${s.required_threshold} signatures.`
+        : "";
+    body = `This month’s batch is frozen.${sig} Keyholders sign in Sparrow.`;
+  } else if (s.state === "settled") {
+    const tx = s.settle_txid
+      ? ` <a href="${escapeHtml(mempoolTxUrl(s.settle_txid))}" target="_blank" rel="noreferrer">txid</a>`
+      : "";
+    body = `Paid.${tx}`;
+  } else if (s.state === "blocked") {
+    body = `Payout paused while a contributor ballot is open.`;
+  } else if (s.proposal_type === "bounty") {
+    body = `Pays in the UTC month after reviewers confirm.`;
+  } else {
+    body = `No confirmed escrow above dust yet.`;
+  }
+  return `<section class="payout-status-card" aria-label="Next payout">
+    <h3 class="payout-status-title">Next payout</h3>
+    <p class="builder-status">${body}</p>
+  </section>`;
 }
 
 function claimBtnHtml(disabled = false): string {
@@ -335,12 +381,13 @@ export function builderPanelHtml(
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
+    <div id="payout-status-slot" class="payout-status-slot" hidden></div>
     <div id="builder-body" class="builder-body">
-      <p class="builder-status">This is a <strong>direct</strong> proposal: the proposer is the recipient. No claim bond. The proposer submits the deliverable when ready.</p>
+      <p class="builder-status">This is a <strong>direct</strong> proposal: the proposer is the recipient. Confirmed inflows join that UTC month’s keyholder batch. No claim bond.</p>
       ${
         need > 0
-          ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the floor.</p>`
-          : `<p class="builder-status">Floor met. Proposer may submit a deliverable.</p>`
+          ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the floor (optional deliverable).</p>`
+          : `<p class="builder-status muted">Floor met. Deliverable submit is optional — payout does not wait on review.</p>`
       }
       <div id="direct-deliverable-slot"></div>
     </div>
@@ -352,6 +399,7 @@ export function builderPanelHtml(
     <div class="builder-actions">
       <button type="button" class="btn ghost" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
+    <div id="payout-status-slot" class="payout-status-slot" hidden></div>
     <div id="builder-body" class="builder-body">
       ${
         open
@@ -863,6 +911,30 @@ export async function bindBuilderPanel(
     });
   };
 
+  const bindPayoutCard = async (asFulfiller = false) => {
+    const slot = panel.querySelector<HTMLElement>("#payout-status-slot");
+    if (!slot || !opts.proposal.id || !opts.user) return;
+    const proposerMatch = userMatchesProposer(
+      opts.user,
+      opts.proposal.proposer,
+      opts.proposal.proposer_type,
+    );
+    if (!proposerMatch && !asFulfiller) return;
+    try {
+      const payout = await fetchPayoutStatus(opts.proposal.id);
+      if (!payout) {
+        slot.hidden = true;
+        slot.innerHTML = "";
+        return;
+      }
+      slot.innerHTML = payoutStatusCardHtml(payout);
+      slot.hidden = false;
+    } catch (e) {
+      if ((e as Error).message === "login_required") return;
+      slot.hidden = true;
+    }
+  };
+
   const isDirect =
     String(opts.proposal.proposal_type || "bounty").toLowerCase() === "direct";
   if (isDirect) {
@@ -902,6 +974,7 @@ export async function bindBuilderPanel(
         bindDeliverable();
       }
     }
+    void bindPayoutCard();
     return;
   }
 
@@ -1409,6 +1482,13 @@ export async function bindBuilderPanel(
         opts.proposal.proposer,
         opts.proposal.proposer_type,
       );
+      const asFulfiller = sessionIsClaimer(
+        opts.user,
+        status.claimer,
+        status.claimer_type,
+        status.claim_agent,
+      );
+      void bindPayoutCard(asFulfiller);
       renderStatusBody(
         body,
         status,

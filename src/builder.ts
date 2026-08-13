@@ -307,6 +307,40 @@ export async function fetchClaimStatus(
   return (await res.json()) as ClaimStatus;
 }
 
+export type PayoutStatusState =
+  | "need_destination"
+  | "accruing"
+  | "frozen"
+  | "settled"
+  | "not_queued"
+  | "blocked";
+
+export type PayoutStatus = {
+  proposal_id: string;
+  proposal_type: "direct" | "bounty";
+  state: PayoutStatusState;
+  period?: string;
+  payout_sats?: number;
+  freeze_at?: string;
+  partials?: number;
+  required_threshold?: number;
+  settle_txid?: string;
+  confirmed_sats?: number;
+};
+
+export async function fetchPayoutStatus(
+  proposalId: string,
+): Promise<PayoutStatus | null> {
+  if (!WORKERS_API || !proposalId) return null;
+  const res = await authFetch(
+    `${API()}/proposals/${encodeURIComponent(proposalId)}/payout-status`,
+  );
+  if (res.status === 401) throw new Error("login_required");
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  return (await res.json()) as PayoutStatus;
+}
+
 export async function fetchClaimParams(): Promise<ClaimParams> {
   if (!WORKERS_API) {
     return {

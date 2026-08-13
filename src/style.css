@@ -748,6 +748,25 @@ html.pwa-standalone body {
   color: var(--ink-secondary);
 }
 
+.payout-status-slot {
+  margin: 0 0 0.75rem;
+}
+
+.payout-status-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem 0.875rem;
+}
+
+.payout-status-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
 .builder-msg {
   margin: 0.625rem 0 0;
   font-size: 0.75rem;

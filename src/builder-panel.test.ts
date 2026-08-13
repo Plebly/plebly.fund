@@ -4,6 +4,7 @@ import {
   builderPanelHtml,
   claimerIdentityHtml,
   claimerTrackHtml,
+  payoutStatusCardHtml,
 } from "./builder-panel";
 import type { ClaimApplicationsResponse, ClaimStatus } from "./builder";
 import type { Proposal } from "./types";
@@ -34,6 +35,8 @@ describe("builderPanelHtml proposal types", () => {
       false,
     );
     expect(html).toContain("direct-deliverable-slot");
+    expect(html).toContain("payout-status-slot");
+    expect(html).toContain("keyholder batch");
     expect(html).not.toContain("builder-title");
     expect(html).not.toContain("Direct funding");
     expect(html).not.toContain("builder-claim-modal");
@@ -44,6 +47,7 @@ describe("builderPanelHtml proposal types", () => {
   it("keeps claim modal for bounty proposals", () => {
     const html = builderPanelHtml(proposal({ proposal_type: "bounty" }), 200_000, false);
     expect(html).toContain("builder-claim-modal");
+    expect(html).toContain("payout-status-slot");
     expect(html).toContain("Apply with bond");
     expect(html).not.toContain("builder-title");
     expect(html).not.toContain(">Build<");
@@ -74,6 +78,22 @@ describe("builderPanelHtml proposal types", () => {
     const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false);
     expect(html).toContain("Needs");
     expect(html).not.toContain('id="builder-claim" disabled');
+  });
+});
+
+describe("payoutStatusCardHtml", () => {
+  it("shows drip schedule without other proposal ids", () => {
+    const html = payoutStatusCardHtml({
+      proposal_id: "PLEBLY-direct-1",
+      proposal_type: "direct",
+      state: "accruing",
+      payout_sats: 95_000,
+      freeze_at: "2026-09-01T00:00:00.000Z",
+      confirmed_sats: 100_000,
+    });
+    expect(html).toContain("Next payout");
+    expect(html).toContain("00:00 UTC");
+    expect(html).not.toContain("psbt");
   });
 });
 
