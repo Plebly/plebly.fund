@@ -37,6 +37,16 @@ describe("notificationTargetHref", () => {
     ).toMatch(/\/account\?tab=funds$/);
   });
 
+  it("sends donation receipts to Account receipts", () => {
+    expect(notificationTypeLabel("donation_receipt")).toBe("Donation receipt");
+    expect(
+      notificationTargetHref({
+        type: "donation_receipt",
+        proposal_id: "abc",
+      }),
+    ).toMatch(/\/account\?tab=receipts$/);
+  });
+
   it("routes keyholder money notices to console / election tab", () => {
     expect(notificationTypeLabel("disburse_ready")).toMatch(/Monthly release/);
     expect(notificationTargetHref({ type: "disburse_ready" })).toMatch(

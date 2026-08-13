@@ -249,6 +249,7 @@ async function render() {
       tabParam === "funds" ||
       tabParam === "proposals" ||
       tabParam === "notifications" ||
+      tabParam === "receipts" ||
       tabParam === "profile"
         ? tabParam
         : undefined
@@ -259,6 +260,7 @@ async function render() {
       | "funds"
       | "proposals"
       | "notifications"
+      | "receipts"
       | undefined;
     await renderAccount(ctx, initialTab);
     bindAuthHandlers();

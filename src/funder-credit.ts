@@ -141,11 +141,13 @@ export async function recordContribution(input: {
   address: string;
   anonymous?: boolean;
   public_credit?: boolean;
+  legal_name?: string;
+  proposal_path?: string;
+  proposal_title?: string;
 }): Promise<void> {
-  const res = await fetch(`${api()}/contributions/record`, {
+  const res = await authFetch(`${api()}/contributions/record`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    credentials: "include",
     body: JSON.stringify(input),
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string };

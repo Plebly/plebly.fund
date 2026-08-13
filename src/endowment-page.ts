@@ -284,6 +284,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         address: view.address,
         proposalId: "endowment",
         proposalPath: "/endowment",
+        proposalTitle: "Endowment",
         mode: "endowment",
         signedIn,
         creditPrefs: user?.funder_credit

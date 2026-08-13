@@ -69,6 +69,7 @@ import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
 import { isSafeHttpUrl, safeHrefAttr } from "./social-links";
 import { escapeHtml, formatSats } from "./util";
+import { downloadReceiptPdf, fetchMyReceipts, type DonationReceipt } from "./receipts";
 import { bindWebPushPanel, webPushPanelHtml } from "./web-push";
 
 const MEMPOOL_WEB = mempoolWeb();
@@ -93,7 +94,8 @@ type AccountTab =
   | "claims"
   | "funds"
   | "proposals"
-  | "notifications";
+  | "notifications"
+  | "receipts";
 
 function notificationLabel(
   type: string,
@@ -504,6 +506,7 @@ export async function renderAccount(
               }</span>`
             : ""
         }</button>
+        <button type="button" class="account-tab ${tab === "receipts" ? "active" : ""}" data-tab="receipts">Receipts</button>
       </div>
 
       <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
@@ -649,19 +652,36 @@ export async function renderAccount(
                     notification.payload,
                   );
                   const when = formatNotifyWhen(notification.created_at);
+                  const receiptId =
+                    notification.type === "donation_receipt" &&
+                    typeof notification.payload?.receipt_id === "string"
+                      ? notification.payload.receipt_id
+                      : "";
                   return `<li class="notify-row ${notification.read_at ? "is-read" : "is-new"}">
                     <a class="notify-main" href="${notificationTargetHref(notification)}">
                       <span class="notify-title">${escapeHtml(label)}</span>
-                      <span class="notify-id mono">${escapeHtml(notification.proposal_id)}</span>
+                      <span class="notify-id mono">${escapeHtml(
+                        String(notification.payload?.proposal_title || notification.proposal_id),
+                      )}</span>
                     </a>
                     <span class="notify-meta">
                       ${notification.read_at ? "" : `<span class="notify-new">New</span>`}
+                      ${
+                        receiptId
+                          ? `<button type="button" class="btn ghost" data-receipt-dl="${escapeHtml(receiptId)}">PDF</button>`
+                          : ""
+                      }
                       <time class="muted" datetime="${escapeHtml(notification.created_at)}">${escapeHtml(when)}</time>
                     </span>
                   </li>`;
                 })
                 .join("")}</ul>`
         }
+      </div>
+
+      <div class="account-pane" data-pane="receipts" ${tab === "receipts" ? "" : "hidden"}>
+        <p class="muted">Private payment acknowledgments. Download stays available here.</p>
+        <div id="receipts-list"><p class="muted">Loading…</p></div>
       </div>
     </section>
   `);
@@ -710,6 +730,17 @@ export async function renderAccount(
         void renderAccount(ctx, name);
         return;
       }
+      if (name === "receipts") {
+        app.querySelectorAll(".account-tab").forEach((t) => {
+          t.classList.toggle("active", t === btn);
+        });
+        app.querySelectorAll<HTMLElement>(".account-pane").forEach((pane) => {
+          pane.hidden = pane.dataset.pane !== name;
+        });
+        history.replaceState(null, "", href("/account", "?tab=receipts"));
+        void loadReceiptsPane();
+        return;
+      }
       app.querySelectorAll(".account-tab").forEach((t) => {
         t.classList.toggle("active", t === btn);
       });
@@ -724,6 +755,53 @@ export async function renderAccount(
       if (name === "funds") void loadFundsPane();
     });
   });
+
+  const loadReceiptsPane = async () => {
+    const el = app.querySelector("#receipts-list");
+    if (!el) return;
+    const items = await fetchMyReceipts().catch(() => [] as DonationReceipt[]);
+    if (!items.length) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-state-inner">
+        <p class="empty-state-title">No receipts yet</p>
+        <p class="empty-state-body">Signed-in donations get a private acknowledgment after on-chain confirmation.</p>
+      </div></div>`;
+      return;
+    }
+    el.innerHTML = `<ul class="work-list">${items
+      .map((r) => {
+        const usd = r.amount_usd.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+        });
+        const day = r.donated_at.slice(0, 10);
+        return `<li class="declined-row">
+          <span><strong>${escapeHtml(r.proposal_title)}</strong>
+            <span class="muted"> · ${escapeHtml(day)} · ${escapeHtml(r.amount_btc)} BTC (${escapeHtml(usd)})</span>
+          </span>
+          <button type="button" class="btn ghost" data-receipt-dl="${escapeHtml(r.id)}">Download PDF</button>
+        </li>`;
+      })
+      .join("")}</ul>`;
+    bindReceiptDownloads(el);
+  };
+
+  const bindReceiptDownloads = (root: ParentNode) => {
+    root.querySelectorAll<HTMLButtonElement>("[data-receipt-dl]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.receiptDl || "";
+        if (!id) return;
+        btn.disabled = true;
+        try {
+          await downloadReceiptPdf(id);
+        } catch (e) {
+          window.alert((e as Error).message || "Could not download receipt.");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  };
 
   const loadFundsPane = async () => {
     if (!WORKERS_API) return;
@@ -906,6 +984,8 @@ export async function renderAccount(
   };
 
   if (tab === "funds") void loadFundsPane();
+  if (tab === "receipts") void loadReceiptsPane();
+  bindReceiptDownloads(app);
 
   const form = document.getElementById("account-form") as HTMLFormElement | null;
   const msg = document.getElementById("account-msg");

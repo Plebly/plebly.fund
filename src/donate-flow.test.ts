@@ -485,7 +485,15 @@ describe("donate markup contract", () => {
     expect(html).toContain("Continue to payment");
     expect(html).toContain("Change credit preferences");
     expect(html).toContain('id="donate-credit-public"');
+    expect(html).toContain("Legal name for tax receipt (optional)");
+    expect(html).toContain('id="donate-legal-name"');
     expect(html).toContain('data-tab="onchain"');
     expect(html).toContain('data-tab="lightning"');
+  });
+
+  it("omits the legal-name field when signed out", () => {
+    const html = donateModalHtml(proposal, { signedIn: false });
+    expect(html).not.toContain("donate-legal-name");
+    expect(html).not.toContain("Legal name for tax receipt");
   });
 });

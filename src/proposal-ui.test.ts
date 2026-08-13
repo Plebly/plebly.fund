@@ -140,7 +140,7 @@ describe("proposal UI critical render helpers", () => {
       milestones: [],
     } as Proposal);
     expect(review).toContain("In review");
-    expect(review).toContain("AI first-pass");
+    expect(review).not.toContain("AI first-pass");
 
     const rejected = proposalLifecycleBannersHtml({
       status: "rejected",
@@ -223,6 +223,9 @@ describe("proposal UI critical render helpers", () => {
     expect(signedIn).toContain("donate-credit-amount");
     expect(signedIn).toContain("Continue to payment");
     expect(signedIn).toContain("Change credit preferences");
+    expect(signedIn).toContain("Legal name for tax receipt (optional)");
+    expect(signedIn).toContain('id="donate-legal-name"');
+    expect(signedOut).not.toContain("donate-legal-name");
   });
 
   it("meta chips show type and tags", () => {

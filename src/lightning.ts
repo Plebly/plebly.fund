@@ -1,3 +1,4 @@
+import { authFetch } from "./auth";
 import { assertLightningSwapMatches } from "./bolt11-amount";
 import { WORKERS_API } from "./config";
 
@@ -43,16 +44,19 @@ export async function createLightningInvoice(input: {
   proposal_path: string;
   escrow_address: string;
   amount_sats: number;
+  legal_name?: string;
+  proposal_title?: string;
 }): Promise<LightningSwapView> {
-  const res = await fetch(`${API()}/lightning/invoice`, {
+  const res = await authFetch(`${API()}/lightning/invoice`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    credentials: "include",
     body: JSON.stringify({
       proposal_id: input.proposal_id || undefined,
       proposal_path: input.proposal_path,
       escrow_address: input.escrow_address,
       amount_sats: input.amount_sats,
+      legal_name: input.legal_name,
+      proposal_title: input.proposal_title,
     }),
   });
   const data = (await res.json()) as LightningSwapView & { error?: string };
@@ -71,14 +75,16 @@ export async function createEndowmentLightningInvoice(input: {
   amount_sats: number;
   escrow_address: string;
   anonymous?: boolean;
+  legal_name?: string;
 }): Promise<LightningSwapView> {
-  const res = await fetch(`${API()}/endowment/lightning/invoice`, {
+  const res = await authFetch(`${API()}/endowment/lightning/invoice`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    credentials: "include",
     body: JSON.stringify({
       amount_sats: input.amount_sats,
-      anonymous: Boolean(input.anonymous),
+      escrow_address: input.escrow_address,
+      anonymous: input.anonymous,
+      legal_name: input.legal_name,
     }),
   });
   const data = (await res.json()) as LightningSwapView & { error?: string };

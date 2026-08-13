@@ -671,6 +671,7 @@ export async function renderProposalPage(
           address: String(match.escrow_address),
           proposalId: match.id,
           proposalPath: match.path,
+          proposalTitle: match.title,
           signedIn: Boolean(user),
           initialBalance: balance ?? 0,
           claimFloorSats: CLAIM_FLOOR_SATS,

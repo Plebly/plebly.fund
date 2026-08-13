@@ -68,6 +68,7 @@ export type DonateBindOpts = {
   address: string;
   proposalId: string | null;
   proposalPath: string;
+  proposalTitle?: string;
   /** Project funder credit flow (default) vs endowment (anonymous, dedicated LN path). */
   mode?: "project" | "endowment";
   signedIn?: boolean;
@@ -136,7 +137,10 @@ function donatePayStepHtml(
       ${
         signedIn
           ? `<p class="donate-credit-summary muted" id="donate-credit-summary" hidden></p>
-             <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>`
+             <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>
+             <label class="donate-amount-label" for="donate-legal-name">Legal name for tax receipt (optional)</label>
+             <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
+             <p class="muted donate-legal-hint">Private. Not shown on the funder list. An npub is not a legal name. A receipt appears in Account after on-chain confirmation.</p>`
           : `<aside class="donate-credit-advisory" role="note">
                <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited.${
                  endowment
@@ -232,6 +236,12 @@ function donatePayStepHtml(
 
     ${creditBlock}
   </section>`;
+}
+
+function readLegalName(panel: ParentNode): string | undefined {
+  const raw = panel.querySelector<HTMLInputElement>("#donate-legal-name")?.value || "";
+  const cleaned = raw.trim();
+  return cleaned ? cleaned.slice(0, 120) : undefined;
 }
 
 function creditSummaryText(prefs: CreditPreferences): string {
@@ -372,7 +382,7 @@ export function proposalLifecycleBannersHtml(
   }
   if (String(p.status) === "in_review") {
     parts.push(
-      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>AI first-pass is complete. Active reviewers vote to approve or reject: ⌈⅔⌉ yes with at least five non-abstaining votes.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>Active reviewers vote to approve or reject: ⌈⅔⌉ yes with at least five non-abstaining votes.</p></div>`,
     );
   }
   if (String(p.status) === "rejected") {
@@ -1103,6 +1113,9 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         address: opts.address,
         anonymous: prefs.anonymous || !prefs.public_credit,
         public_credit: prefs.public_credit && !prefs.anonymous,
+        legal_name: readLegalName(panel),
+        proposal_path: opts.proposalPath,
+        proposal_title: opts.proposalTitle,
       });
       if (opts.mode !== "endowment") {
         await claimContributionWithRetry({
@@ -1114,7 +1127,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       }
       setDonateConfirmStatus(
         panel,
-        `Credit linked for ${formatSats(utxo.value)}.`,
+        `Credit linked for ${formatSats(utxo.value)}. Receipt appears in Account after confirmation.`,
         "ok",
       );
       if (claimWrap) claimWrap.hidden = true;
@@ -1599,12 +1612,15 @@ function bindLightningDonate(
               amount_sats: amount,
               escrow_address: opts.address,
               anonymous: activeCreditPreferences(panel).anonymous,
+              legal_name: readLegalName(panel),
             })
           : await createLightningInvoice({
               proposal_id: opts.proposalId,
               proposal_path: opts.proposalPath,
               escrow_address: opts.address,
               amount_sats: amount,
+              legal_name: readLegalName(panel),
+              proposal_title: opts.proposalTitle,
             });
       await renderSwap(swap);
       startPoll(swap.swap_id);
