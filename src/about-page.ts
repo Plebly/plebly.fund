@@ -83,7 +83,7 @@ function networkNoteHtml(): string {
   return `<div class="about-network-badge" role="status">
     <span class="about-network-badge-dot" aria-hidden="true"></span>
     <span>
-      <strong>Signet</strong> (test coins only) · Mainnet uses live m-of-n (min ${KEYHOLDER_MIN_SEATS}, target ${KEYHOLDER_TARGET_SEATS})
+      <strong>Signet</strong> (test coins only) · Mainnet uses independent keyholders
       · <a href="#keyholders">Keyholders</a>
       · Faucets: ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
     </span>
@@ -396,7 +396,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
       ${
         ABOUT_TRUST_HTML
           ? `<section class="about-section" id="trust">
-        <h2>Trust model</h2>
+        <h2>Trust</h2>
         <div class="about-prose prose-rich">${ABOUT_TRUST_HTML}</div>
       </section>`
           : ""

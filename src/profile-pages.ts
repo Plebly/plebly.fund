@@ -108,7 +108,7 @@ function fundsPaneHtml(): string {
   return `<div class="account-funds">
     <section>
       <h2 class="proposal-block-title">Claim bonds</h2>
-      <p class="muted">Refundable bonds are batched by keyholders (Sparrow). Set an on-chain address or Lightning Address while status is refundable.</p>
+      <p class="muted">Refundable bonds go out monthly. Set an address while the bond is refundable.</p>
       <div id="funds-bonds"><p class="muted">Loading…</p></div>
     </section>
     <section>
@@ -187,7 +187,7 @@ function claimsPaneHtml(
   if (!hasAny) {
     return `<div class="empty-state"><div class="empty-state-inner">
       <p class="empty-state-title">No claims yet</p>
-      <p class="empty-state-body">When escrow hits the claim floor, apply with a bond from the project page.</p>
+      <p class="empty-state-body">When a project has enough funding, apply with a bond from the project page.</p>
       <a class="btn" href="${projectsHref()}">Browse projects</a>
     </div></div>`;
   }
@@ -867,7 +867,7 @@ export async function renderAccount(
                          } value="${escapeHtml(b.refund_address || "")}" placeholder="bc1… / tb1… or you@host" />
                          ${
                            b.address_frozen
-                             ? `<p class="muted">Destination frozen for keyholder batch.</p>`
+                             ? `<p class="muted">Address locked for this month’s payout.</p>`
                              : `<button type="button" class="btn ghost" data-bond-addr="${escapeHtml(b.proposal_id)}">${
                                  b.needs_refund_address
                                    ? "Set refund destination"
@@ -917,7 +917,7 @@ export async function renderAccount(
                   res.ok || body.package_error
                     ? body.package_error
                       ? body.note ||
-                        "Address saved, but the keyholder package failed — try again."
+                        "Address saved, but payout setup failed — try again."
                       : "Refund address saved."
                     : body.error || "Could not save.";
               }

@@ -56,12 +56,12 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
         <div class="about-param">
           <dt>Keyholder fee</dt>
           <dd><span class="about-param-value">${escapeHtml(String(kh))}%</span>
-          <span class="about-param-hint">Split among signers of that month’s PSBT. Cap ${escapeHtml(formatSats(cap))} per keyholder. Overflow to platform. The fee address holds the pool until cash-out.</span></dd>
+          <span class="about-param-hint">Split among the keyholders who signed that month. Cap ${escapeHtml(formatSats(cap))} per keyholder.</span></dd>
         </div>
         <div class="about-param">
           <dt>Total take</dt>
           <dd><span class="about-param-value">${escapeHtml(String(platform + kh))}%</span>
-          <span class="about-param-hint">One fee-address output in the monthly release. Bond and contributor refunds are 0%.</span></dd>
+          <span class="about-param-hint">Taken from the monthly payout. Bond and donor refunds are 0%.</span></dd>
         </div>
       </dl>
       <h2>Active keyholders</h2>

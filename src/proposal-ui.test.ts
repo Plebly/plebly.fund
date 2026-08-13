@@ -156,8 +156,8 @@ describe("proposal UI critical render helpers", () => {
       milestones: [],
     } as Proposal);
     expect(html).toContain("Refunding");
-    expect(html).toContain("Account → Funds");
-    expect(html).toContain("Sparrow");
+    expect(html).toContain("Account");
+    expect(html).not.toContain("Sparrow");
   });
 
   it("lifecycle banners open contributor ballot for underfunded with escrow", () => {
@@ -165,16 +165,16 @@ describe("proposal UI critical render helpers", () => {
       { status: "underfunded", milestones: [] } as Proposal,
       50_000,
     );
-    expect(withBal).toContain("Ballot open");
-    expect(withBal).toContain("underfunded");
+    expect(withBal).toContain("Vote open");
+    expect(withBal).toContain("Donors are voting");
 
     const empty = proposalLifecycleBannersHtml(
       { status: "underfunded", milestones: [] } as Proposal,
       0,
     );
     expect(empty).toContain("Underfunded");
-    expect(empty).toContain("empty escrow");
-    expect(empty).not.toContain("Ballot open");
+    expect(empty).toContain("could open");
+    expect(empty).not.toContain("Vote open");
   });
 
   it("refundRegisterHtml includes status host for signed-in funder", () => {
@@ -185,7 +185,7 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain("refund-swap-id");
   });
 
-  it("lifecycle banners cover direct delivery window expiry", () => {
+  it("lifecycle banners do not mention delivery-window refunds", () => {
     const expired = new Date(Date.now() - 86400_000).toISOString();
     const html = proposalLifecycleBannersHtml({
       status: "listed",
@@ -193,8 +193,8 @@ describe("proposal UI critical render helpers", () => {
       delivery_window_ends_at: expired,
       milestones: [],
     } as Proposal);
-    expect(html).toContain("Delivery window");
-    expect(html).toContain("Window ended");
+    expect(html).not.toContain("Delivery window");
+    expect(html).not.toContain("refund path");
   });
 
   it("donate panel is a credit-then-pay wizard", () => {
@@ -358,20 +358,20 @@ describe("proposal UI critical render helpers", () => {
   it("funding bar stays slim without duplicate stats", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
-    expect(html).toContain("50,000 sats to claim floor");
+    expect(html).toContain("50,000 sats to open");
     expect(html).toContain(
-      "50,000 sats / 100,000 sats floor (50%) · target 500,000 sats (10%)",
+      "50,000 sats / 100,000 sats to open (50%) · goal 500,000 sats (10%)",
     );
     expect(html).toContain("funding-marker-floor");
     expect(html).not.toContain("funding-marker-lock");
     expect(html).not.toContain("proposal-stats");
   });
 
-  it("funding bar always labels claim floor separately from target", () => {
+  it("funding bar always labels the open threshold separately from target", () => {
     const html = proposalFundingBarHtml(5_000, 10_000, 100_000);
-    expect(html).toContain("5,000 sats to claim floor");
-    expect(html).toContain("10,000 sats floor");
-    expect(html).toContain("target 100,000 sats");
+    expect(html).toContain("5,000 sats to open");
+    expect(html).toContain("10,000 sats to open");
+    expect(html).toContain("goal 100,000 sats");
     expect(html).not.toMatch(/\/ 100,000 sats · /);
   });
 

@@ -1,63 +1,51 @@
 ## About Plebly
 
-Plebly is a public funding platform for **Bitcoin ecosystem work** that needs a non-custodial surface. Protocol work, tooling, research, legal analysis, documentation, and related open problems all belong here. This site lists open projects, shows on-chain escrow balances, and connects builders with funded work without a central gatekeeper holding the keys.
+Plebly funds open Bitcoin work without a custodian. Every project has a public address you can verify. Donations sit there until the work is done.
 
 We built it for people who want hard problems solved in the open.
 
 ## What we believe
 
-**Non-custodial escrow.** Escrow addresses are publicly verifiable multisig. No organization, including Plebly, can freeze, redirect, or confiscate funds. Payment follows the rules, not an admin button.
+**Nobody holds the keys.** Project funds sit in public Bitcoin escrow. Plebly cannot freeze, redirect, or take them.
 
-**Uncensorable proposals.** The canonical record lives in [Plebly/proposals](https://github.com/Plebly/proposals). Anyone can fork it. We may decline to list a proposal, but we cannot erase it or its funding history.
+**The record is public.** Proposals live in [Plebly/proposals](https://github.com/Plebly/proposals). Anyone can fork it.
 
-**Protocol over platform.** Parameters, keyholders, and escrow rules are published in git. Changes require a public process and notice, not a silent config change.
+**Rules over discretion.** Fees and payout rules are published in git. Changes happen in the open.
 
 ## How it works
 
-1. **Submit**: Open a pull request with your proposal and pay the submission fee on-chain.
-2. **Donate**: Anyone sends Bitcoin to the project's escrow address (on-chain, or Lightning that settles into that same address).
-3. **Apply**: Builders apply with a bond once funding hits the claim floor.
-4. **Complete**: Reviewers verify the deliverable. Payout is in that UTC month’s batch PSBT.
+1. **Propose:** Describe the problem and what done looks like.
+2. **Donate:** Anyone sends Bitcoin to the project’s public address.
+3. **Build:** When funding is high enough, a builder takes the work.
+4. **Pay:** Reviewers check the result. Payment goes out monthly.
 
-Browse [open projects](/), [start a project](/propose), or read the full rules in the [proposals repo](https://github.com/Plebly/proposals).
+Browse [open projects](/) or [start a project](/propose).
 
 ## For builders
 
-Watch a project to follow funding progress. Watching does **not** reserve the work. When confirmed escrow meets the claim floor, use **Apply with bond** on the project page. Your bond is verified at apply; exclusivity is awarded under the proposal’s claim mode (proposer pick or first bonded). The exclusive claim and 90-day window start when the award claim PR merges. Then submit your deliverable for public review.
+Watch a project to follow it — watching does not reserve the work. When funding is high enough, apply from the project page. A small bond holds your place. Ship the work; reviewers confirm it; you get paid.
 
-## Lightning donations
+## Lightning
 
-Lightning is a way to fund the same on-chain escrow address. After payment settles, the project's balance and claim floor update as usual.
+Lightning lands in the same public address as on-chain donations. Unpaid invoices do not count. Available on mainnet.
 
-- Unpaid invoices do **not** count toward funding.
-- Network and routing fees may reduce the amount that lands in escrow.
-- Lightning is available on **mainnet**. Signet stays on-chain only.
+## Key numbers
 
-## Key parameters
+These come from [`parameters.json`](https://github.com/Plebly/proposals/blob/main/parameters.json) on **{{bitcoin_network}}**:
 
-These numbers come from [`parameters.json`](https://github.com/Plebly/proposals/blob/main/parameters.json) (see also [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md)). The site build selects the **{{bitcoin_network}}** network overlay:
+- **Submission fee:** {{submission_fee}}
+- **Platform fee:** {{platform_fee}}
+- **Opens for builders at:** {{minimum_funding_claim_floor}}
+- **Time to deliver:** {{claim_window}}. {{claim_extension}}.
 
-- **Submission fee:** {{submission_fee}} (paid when you open a proposal; exact and non-refundable).
-- **Platform fee:** {{platform_fee}} (monthly batch; keyholder share sits on the fee address until cash-out).
-- **Claim floor:** {{minimum_funding_claim_floor}} ({{bitcoin_network}} minimum escrow before a builder can claim).
-- **Claim window:** {{claim_window}} after a claim is accepted. {{claim_extension}}.
+## Trust
 
-Milestone splits apply above **{{milestone_threshold}}**. Badge tiers, funding windows, and confirmation counts are in parameters.json.
-
-## Trust model
-
-Escrow is **multisig**. Plebly never holds a spending key. Live threshold follows the roster (at least 2 seats; 5 is the target). See [Keyholders](#keyholders).
-
-Completed bounties pay in a **monthly batch**. The Worker may broadcast a fully signed release; keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address.
-
-If keyholders stall after a reviewer-approved release, the public process applies: a 7-day log followed by a 14-day incident process.
-
-See [Keyholders](#keyholders) for the live roster and [Key parameters](#parameters) for fees and floors.
+Independent keyholders sign payouts. Plebly never holds a spending key. See [Keyholders](#keyholders).
 
 ## Testing vs launch
 
-The site is currently on **{{bitcoin_network}}** for end-to-end testing. Launch will use **mainnet only** with live m-of-n escrow (target 5 seats). See [Keyholders](#keyholders).
+The site is currently on **{{bitcoin_network}}**. Launch is mainnet only.
 
 ## Get involved
 
-Follow updates on [X @joinplebly](https://x.com/joinplebly) and [GitHub @Plebly](https://github.com/Plebly). Questions, proposals, and corrections belong in the open repo.
+[X @joinplebly](https://x.com/joinplebly) · [GitHub @Plebly](https://github.com/Plebly)

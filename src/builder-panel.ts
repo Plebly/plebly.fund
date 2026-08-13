@@ -144,26 +144,22 @@ export function payoutStatusCardHtml(s: PayoutStatus): string {
   const freeze = s.freeze_at ? formatUtcDay(s.freeze_at) : "";
   let body = "";
   if (s.state === "need_destination") {
-    body = `Set a payout address in Account so confirmed escrow can join this month’s batch.`;
+    body = `Add a payout address in Account.`;
   } else if (s.state === "accruing") {
-    body = `This month: <strong>${escapeHtml(amount)}</strong> after fees. Keyholders sign after ${escapeHtml(freeze)} 00:00 UTC.`;
+    body = `<strong>${escapeHtml(amount)}</strong> this month. Paid after ${escapeHtml(freeze)}.`;
   } else if (s.state === "frozen") {
-    const sig =
-      typeof s.required_threshold === "number"
-        ? ` ${s.partials || 0}/${s.required_threshold} signatures.`
-        : "";
-    body = `This month’s batch is frozen.${sig} Keyholders sign in Sparrow.`;
+    body = `This month’s payout is being signed.`;
   } else if (s.state === "settled") {
     const tx = s.settle_txid
-      ? ` <a href="${escapeHtml(mempoolTxUrl(s.settle_txid))}" target="_blank" rel="noreferrer">txid</a>`
+      ? ` <a href="${escapeHtml(mempoolTxUrl(s.settle_txid))}" target="_blank" rel="noreferrer">View payment</a>`
       : "";
     body = `Paid.${tx}`;
   } else if (s.state === "blocked") {
-    body = `Payout paused while a contributor ballot is open.`;
+    body = `Payout paused while donors vote.`;
   } else if (s.proposal_type === "bounty") {
-    body = `Pays in the UTC month after reviewers confirm.`;
+    body = `Paid after the work is approved.`;
   } else {
-    body = `No confirmed escrow above dust yet.`;
+    body = `Waiting on donations.`;
   }
   return `<section class="payout-status-card" aria-label="Next payout">
     <h3 class="payout-status-title">Next payout</h3>
@@ -383,12 +379,7 @@ export function builderPanelHtml(
     </div>
     <div id="payout-status-slot" class="payout-status-slot" hidden></div>
     <div id="builder-body" class="builder-body">
-      <p class="builder-status">This is a <strong>direct</strong> proposal: the proposer is the recipient. Confirmed inflows join that UTC month’s keyholder batch. No claim bond.</p>
-      ${
-        need > 0
-          ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the floor (optional deliverable).</p>`
-          : `<p class="builder-status muted">Floor met. Deliverable submit is optional — payout does not wait on review.</p>`
-      }
+      <p class="builder-status">Donations go to the proposer. Paid monthly.</p>
       <div id="direct-deliverable-slot"></div>
     </div>
     <p class="builder-msg" id="builder-msg" hidden></p>
@@ -405,7 +396,7 @@ export function builderPanelHtml(
         open
           ? claimBtnHtml()
           : need > 0
-            ? `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>`
+            ? `<p class="builder-status muted">Needs ${formatSats(need)} more to open for builders.</p>`
             : `<p class="builder-status muted">Loading claim status…</p>`
       }
     </div>
@@ -746,7 +737,7 @@ function renderStatusBody(
         0,
         status.claim_floor_sats - (status.confirmed_balance_sats ?? 0),
       );
-      body.innerHTML = `<p class="builder-status muted">Needs ${formatSats(need)} more confirmed sats to reach the claim floor.</p>`;
+      body.innerHTML = `<p class="builder-status muted">Needs ${formatSats(need)} more to open for builders.</p>`;
       break;
     }
     case "claim_pending":
@@ -805,8 +796,8 @@ function renderStatusBody(
       }. ${
         status.claimer_type === "org" && status.claim_agent
           ? `Agent @${escapeHtml(status.claim_agent)} earns a reviewer seat.`
-          : "Fulfiller earns a reviewer seat."
-      } Paid in that UTC month’s release.</p>
+          : "Builder earns a reviewer seat."
+      } Paid monthly.</p>
       ${wbSlot}`;
       break;
     default:
@@ -1078,7 +1069,7 @@ export async function bindBuilderPanel(
     if (destHint) {
       destHint.textContent =
         rail === "lightning"
-          ? "Keyholders pay this via a Boltz submarine lockup. Use a Lightning Address or lnurl1… you control."
+          ? "Use a Lightning Address or lnurl1… you control."
           : `Use a wallet you control on ${networkLabel()}.`;
     }
     const ackLabel = panel.querySelector("#claim-payout-ack-label");
@@ -1115,7 +1106,7 @@ export async function bindBuilderPanel(
     const awareness = panel.querySelector("#claim-modal-awareness");
     if (awareness && step === "refund") {
       awareness.textContent =
-        "Set where keyholders return your bond — and where escrow goes if you complete.";
+        "Set where your bond comes back — and where you get paid if you finish.";
     } else if (awareness && step === "who") {
       awareness.textContent =
         "Review current applicants before paying the bond.";
@@ -1263,7 +1254,7 @@ export async function bindBuilderPanel(
         if (!id) return;
         const ok = await confirmAction({
           title: "Withdraw application?",
-          body: "Your bond becomes refundable to the payout destination you set at apply. Keyholders batch returns (on-chain or Lightning via Boltz lockup).",
+          body: "Your bond becomes refundable to the address you set at apply.",
           confirmLabel: "Withdraw",
           danger: true,
         });
@@ -1294,7 +1285,7 @@ export async function bindBuilderPanel(
           if (needsAddr && proposalId) {
             const addr = await promptText({
               title: "Bond refund destination",
-              body: "Required before keyholders can return your bond (on-chain bc1…/tb1… or Lightning Address). Cancel leaves it under Account → Funds.",
+              body: "Needed before your bond can be returned. Cancel leaves it under Account → Funds.",
               defaultValue: opts.user?.payout_address || "",
               placeholder: lightningUiAllowed()
                 ? "bc1… / tb1… or you@host"
@@ -1336,7 +1327,7 @@ export async function bindBuilderPanel(
                 setMsg(
                   msg,
                   putBody.note ||
-                    `Withdrawn and address saved, but the keyholder package failed — retry under ${fundsAccountLinkHtml()}.`,
+                    `Withdrawn and address saved, but payout setup failed — retry under ${fundsAccountLinkHtml()}.`,
                   "error",
                   { html: true },
                 );
@@ -1346,7 +1337,7 @@ export async function bindBuilderPanel(
             } else {
               setMsg(
                 msg,
-                `Withdrawn — set your refund address under ${fundsAccountLinkHtml()} before keyholders can pay.`,
+                `Withdrawn — set your refund address under ${fundsAccountLinkHtml()} before it can be returned.`,
                 "success",
                 { html: true },
               );

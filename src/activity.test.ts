@@ -11,7 +11,7 @@ describe("activity event labels", () => {
       "listed",
       "target_reached",
     ]);
-    expect(eventLabel("floor_reached")).toBe("Floor reached");
+    expect(eventLabel("floor_reached")).toBe("Open to apply");
     expect(eventLabel("deliverable_submitted")).toBe("Deliverable submitted");
     expect(eventLabel("custom_thing")).toBe("Custom thing");
   });

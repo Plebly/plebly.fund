@@ -81,21 +81,21 @@ function audiencePathsHtml(): string {
     {
       kicker: "Creators",
       title: "Name the problem",
-      body: "Describe what needs building and what counts as done. Pay the submission fee on-chain, then let the escrow fill in public.",
+      body: "Describe what needs building and what done looks like. Pay a small on-chain fee, then let donations fill in public.",
       href: href("/propose"),
       cta: "Start a project",
     },
     {
       kicker: "Donors",
-      title: "Fund the escrow",
-      body: "Pick a project and send Bitcoin to its public address. No account required. Balances update from the mempool.",
+      title: "Fund a project",
+      body: "Pick a project and send Bitcoin. No account required.",
       href: projectsHref(),
       cta: "Browse projects",
     },
     {
       kicker: "Builders",
       title: "Apply and deliver",
-      body: "When escrow clears the claim floor, apply with a bond, win the award, and ship the deliverable. Payment follows public review.",
+      body: "When a project is funded enough, apply, do the work, and get paid after review.",
       href: projectsHref("?for=builders"),
       cta: "See open projects",
     },
@@ -164,16 +164,16 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
 
 function howItWorksHtml(): string {
   const steps = [
-    { n: "01", title: "Propose", body: "Describe the problem, deliverable, and how success is verified." },
-    { n: "02", title: "Donate", body: "Anyone sends sats to the project’s public escrow address." },
-    { n: "03", title: "Apply", body: "Builders apply with a bond once funding clears the claim floor." },
-    { n: "04", title: "Complete", body: "Reviewers verify the work. Payout is in that UTC month’s release." },
+    { n: "01", title: "Propose", body: "Name the problem and what done looks like." },
+    { n: "02", title: "Donate", body: "Anyone sends Bitcoin to the project’s public address." },
+    { n: "03", title: "Build", body: "When funding is high enough, a builder takes the work." },
+    { n: "04", title: "Pay", body: "Reviewers check the result. Payment goes out monthly." },
   ];
   return `<section class="landing-how">
     <div class="wrap-wide">
       <div class="landing-section-head">
         <h2>How it works</h2>
-        <p>Four steps. No custody. Full history in the open.</p>
+        <p>Four steps. Funds stay on Bitcoin. History stays public.</p>
       </div>
       <ol class="how-grid">${steps
         .map(
@@ -184,16 +184,16 @@ function howItWorksHtml(): string {
         </li>`,
         )
         .join("")}</ol>
-      <p class="landing-how-link"><a href="${href("/about")}">Read the full protocol →</a></p>
+      <p class="landing-how-link"><a href="${href("/about")}">How Plebly works →</a></p>
     </div>
   </section>`;
 }
 
 function trustStripHtml(): string {
   const items = [
-    { title: "Non-custodial", body: "Multisig escrow you can verify on-chain" },
-    { title: "Uncensorable", body: "Canonical proposals live in a public git repo" },
-    { title: "Transparent fees", body: "5% of the monthly disbursed set, published in git" },
+    { title: "Non-custodial", body: "Funds sit on Bitcoin. Plebly cannot take them." },
+    { title: "Uncensorable", body: "Every proposal lives in a public git repo." },
+    { title: "Transparent fees", body: "5% when a project is paid. Published in git." },
   ];
   return `<section class="wrap-wide landing-trust">
     <div class="trust-grid">${items
@@ -218,9 +218,9 @@ function gapTickerHtml(
   if (projectCount === 0) {
     return `<section class="wrap-wide gap-ticker gap-ticker-met">
       <div>
-        <span class="gap-ticker-label">Claim floor met</span>
-        <span class="gap-ticker-note">Open projects are at or above the claim floor</span>
-        <strong>Ready to apply</strong>
+        <span class="gap-ticker-label">Ready for builders</span>
+        <span class="gap-ticker-note">Open projects have enough funding to apply</span>
+        <strong>Browse and apply</strong>
       </div>
       <a href="${projectsHref()}">Browse projects →</a>
     </section>`;
@@ -234,12 +234,12 @@ function gapTickerHtml(
     projectCount === 1 ? "1 project" : `${projectCount} projects`;
   return `<section class="wrap-wide gap-ticker">
     <div>
-      <span class="gap-ticker-label">Unlock claimable work</span>
-      <span class="gap-ticker-note">${escapeHtml(projectLabel)} still below the claim floor</span>
-      <strong>${escapeHtml(formatSats(shortfallSats))} <span>to claim floor</span></strong>
+      <span class="gap-ticker-label">Help these open</span>
+      <span class="gap-ticker-note">${escapeHtml(projectLabel)} still need funding before builders can apply</span>
+      <strong>${escapeHtml(formatSats(shortfallSats))} <span>to open</span></strong>
     </div>
-    <div class="gap-ticker-meter" role="progressbar" aria-label="Progress toward claim floor across underfunded projects" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
-    <a href="${projectsHref("?size=below-floor")}">Fund below-floor projects →</a>
+    <div class="gap-ticker-meter" role="progressbar" aria-label="Funding progress toward opening for builders" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
+    <a href="${projectsHref("?size=below-floor")}">Fund these projects →</a>
   </section>`;
 }
 
@@ -259,7 +259,7 @@ function discoverToolbarHtml(count: number): string {
         <select id="project-sort">
           <option value="funded">Most funded</option>
           <option value="newest">Newest</option>
-          <option value="floor">Closest to floor</option>
+          <option value="floor">Closest to opening</option>
         </select>
       </label>
       <details class="discover-more">
@@ -281,8 +281,8 @@ function discoverToolbarHtml(count: number): string {
             <span class="sr-only">Filter by funding size</span>
             <select id="project-size-filter">
               <option value="all">Any funding</option>
-              <option value="below-floor">Below floor</option>
-              <option value="at-floor">Floor met</option>
+              <option value="below-floor">Not yet open</option>
+              <option value="at-floor">Open for builders</option>
               <option value="overfunded">Overfunded</option>
             </select>
           </label>
@@ -334,19 +334,19 @@ function progressHtml(p: Proposal, floor: number): string {
     ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
     : isDirect
       ? bal >= floor
-        ? "Floor met · direct"
-        : `${formatSats(remaining)} to floor`
+        ? "Receiving"
+        : `${formatSats(remaining)} to open`
       : open
         ? "Open to apply"
         : near
-          ? "Near floor"
+          ? "Almost open"
           : isTakenStatus(String(p.status)) || p.claimer
             ? "Taken"
-            : `${formatSats(remaining)} to claim floor`;
+            : `${formatSats(remaining)} to open`;
   const labelClass = over ? "overfunded" : open || (isDirect && bal >= floor) ? "claimable" : "";
   const satsLine = target
-    ? `${formatSats(bal)} · floor ${formatSats(floor)} · target ${formatSats(target)}`
-    : `${formatSats(bal)} / ${formatSats(floor)} floor`;
+    ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
+    : `${formatSats(bal)} / ${formatSats(floor)} to open`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>
@@ -943,7 +943,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       featuredRail.innerHTML = railHtml(
         "featured-projects",
         "Featured work",
-        "Near the claim floor and drawing attention.",
+        "Close to opening, and drawing attention.",
         featured,
         CLAIM_FLOOR_SATS,
         lightningEnabled,

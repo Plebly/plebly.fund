@@ -77,13 +77,12 @@ function resolveNetworkParams(doc, bitcoinNetwork) {
 /** Template placeholders for content/about.md */
 function aboutPlaceholders(p) {
   const khPct = p.keyholder_fee_percent ?? 2;
-  const cap = p.keyholder_cap_sats ?? 500000;
   return {
     submission_fee: `${formatSats(p.submission_fee_sats)} (exact, non-refundable)`,
-    platform_fee: `${p.platform_fee_percent}% platform + ${khPct}% keyholders (${p.platform_fee_percent + khPct}% of the monthly disbursed set; ${formatSats(cap)} cap per signing keyholder)`,
+    platform_fee: `${p.platform_fee_percent + khPct}% (${p.platform_fee_percent}% platform, ${khPct}% keyholders)`,
     minimum_funding_claim_floor: formatSats(p.claim_floor_sats),
     claim_window: `${p.claim_window_days} days`,
-    claim_extension: `One ${p.claim_extension_days}-day extension via reviewer supermajority.`,
+    claim_extension: `One ${p.claim_extension_days}-day extension if reviewers agree.`,
     milestone_threshold: formatSats(p.milestone_threshold_sats),
   };
 }
@@ -298,8 +297,8 @@ function parseSteps(body) {
   for (const line of body.split("\n")) {
     const m = line
       .trim()
-      .match(/^\d+\.\s+\*\*([^*]+)\*\*\s*(?:[—–-]|:)\s*(.+)$/);
-    if (m) steps.push({ title: m[1], body: m[2].trim() });
+      .match(/^\d+\.\s+\*\*([^*:]+?)(?::)?\*\*:?\s*(?:[—–-]\s*)?(.+)$/);
+    if (m) steps.push({ title: m[1].trim(), body: m[2].trim() });
   }
   return steps;
 }
@@ -340,8 +339,8 @@ export const ABOUT_INTRO_HTML = ${JSON.stringify(
     )};
 
 export const ABOUT_LIGHTNING_HTML = ${JSON.stringify(
-      byId.lightning_donations
-        ? marked.parse(byId.lightning_donations.body, { async: false })
+      (byId.lightning || byId.lightning_donations)
+        ? marked.parse((byId.lightning || byId.lightning_donations).body, { async: false })
         : "",
     )};
 
@@ -358,8 +357,8 @@ export const ABOUT_ENDOWMENT_HTML = ${JSON.stringify(
     )};
 
 export const ABOUT_TRUST_HTML = ${JSON.stringify(
-      byId.trust_model
-        ? marked.parse(byId.trust_model.body, { async: false })
+      (byId.trust || byId.trust_model)
+        ? marked.parse((byId.trust || byId.trust_model).body, { async: false })
         : "",
     )};
 
@@ -377,17 +376,15 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Platform fee",
           value: params.platform_fee,
-          hint: "Charged on the monthly release PSBT, not the instant a bounty completes.",
+          hint: "Taken when the project is paid, not when you donate.",
         },
         {
-          label: "Claim floor",
+          label: "Opens for builders",
           value: params.minimum_funding_claim_floor,
-          hint:
-            resolved.claim_floor_note ||
-            `Minimum escrow on ${bitcoinNetwork} before a builder can claim.`,
+          hint: "Builders can apply once this amount is in.",
         },
         {
-          label: "Claim window",
+          label: "Time to deliver",
           value: params.claim_window,
           hint: params.claim_extension || "Extension via reviewer vote.",
         },

@@ -11,7 +11,7 @@ type ActivityEvent = {
 
 export const ACTIVITY_EVENT_LABELS: Record<string, string> = {
   listed: "Listed",
-  floor_reached: "Floor reached",
+  floor_reached: "Open to apply",
   target_reached: "Target reached",
   claimed: "Claimed",
   deliverable_submitted: "Deliverable submitted",

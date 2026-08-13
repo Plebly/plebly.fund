@@ -95,13 +95,13 @@ function gapSectionHtml(stats: PublicStats): string {
   if (stats.belowFloorCount === 0) {
     return `<section class="stats-gap" aria-labelledby="stats-gap-title">
       <div class="stats-gap-copy">
-        <p class="stats-gap-eyebrow" id="stats-gap-title">Claim floor</p>
-        <p class="stats-gap-lede">Open projects are at or above the claim floor — builders can claim when rules allow.</p>
-        <p class="stats-gap-figures"><strong>Floor met</strong></p>
+        <p class="stats-gap-eyebrow" id="stats-gap-title">Ready for builders</p>
+        <p class="stats-gap-lede">Open projects have enough funding for builders to apply.</p>
+        <p class="stats-gap-figures"><strong>Open</strong></p>
       </div>
       <div class="stats-gap-visual">
         <p class="stats-gap-percent mono">100%</p>
-        <div class="stats-gap-meter" role="progressbar" aria-label="Claim floor progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span style="width: 100%"></span></div>
+        <div class="stats-gap-meter" role="progressbar" aria-label="Funding progress toward opening for builders" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span style="width: 100%"></span></div>
         <p class="stats-gap-note"><a href="${projectsHref()}">Browse projects</a></p>
       </div>
     </section>`;
@@ -117,19 +117,19 @@ function gapSectionHtml(stats: PublicStats): string {
       : `${stats.belowFloorCount} open projects`;
   return `<section class="stats-gap" aria-labelledby="stats-gap-title">
     <div class="stats-gap-copy">
-      <p class="stats-gap-eyebrow" id="stats-gap-title">Claim-floor shortfall</p>
-      <p class="stats-gap-lede">${escapeHtml(projectLabel)} still need confirmed sats to become claimable.</p>
-      <p class="stats-gap-figures">
-        <strong>${escapeHtml(formatSats(stats.shortfallSats))}</strong>
-        <span>to claim floor</span>
-      </p>
-    </div>
-    <div class="stats-gap-visual">
-      <p class="stats-gap-percent mono">${percent}%</p>
-      <div
-        class="stats-gap-meter"
-        role="progressbar"
-        aria-label="Progress toward claim floor across underfunded projects"
+        <p class="stats-gap-eyebrow" id="stats-gap-title">Help these open</p>
+        <p class="stats-gap-lede">${escapeHtml(projectLabel)} still need funding before builders can apply.</p>
+        <p class="stats-gap-figures">
+          <strong>${escapeHtml(formatSats(stats.shortfallSats))}</strong>
+          <span>to open</span>
+        </p>
+      </div>
+      <div class="stats-gap-visual">
+        <p class="stats-gap-percent mono">${percent}%</p>
+        <div
+          class="stats-gap-meter"
+          role="progressbar"
+          aria-label="Funding progress toward opening for builders"
         aria-valuemin="0"
         aria-valuemax="${capacity}"
         aria-valuenow="${stats.fundedTowardFloor}"
@@ -177,7 +177,7 @@ function statsBodyHtml(stats: PublicStats): string {
         String(stats.completed),
         stats.completed
           ? `Targets sum to ${formatSats(stats.paidEstimate)} · payouts stay on-chain verifiable`
-          : "Completed work appears here after public review and keyholder release",
+          : "Completed work appears here after review",
       )}
       ${supportMetricHtml("Claim completion", rateValue, rateDetail)}
     </dl>
@@ -188,7 +188,7 @@ function statsBodyHtml(stats: PublicStats): string {
       <p class="stats-source">Figures refresh when this page loads.</p>
       <div class="stats-actions">
         <a class="btn" href="${projectsHref()}">Browse projects</a>
-        <a class="btn ghost" href="${href("/about")}#trust">Trust model</a>
+        <a class="btn ghost" href="${href("/about")}#trust">Trust</a>
       </div>
     </footer>
   </section>`;

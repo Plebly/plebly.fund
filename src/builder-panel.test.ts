@@ -36,7 +36,8 @@ describe("builderPanelHtml proposal types", () => {
     );
     expect(html).toContain("direct-deliverable-slot");
     expect(html).toContain("payout-status-slot");
-    expect(html).toContain("keyholder batch");
+    expect(html).toContain("Donations go to the proposer");
+    expect(html).toContain("Paid monthly");
     expect(html).not.toContain("builder-title");
     expect(html).not.toContain("Direct funding");
     expect(html).not.toContain("builder-claim-modal");
@@ -92,7 +93,9 @@ describe("payoutStatusCardHtml", () => {
       confirmed_sats: 100_000,
     });
     expect(html).toContain("Next payout");
-    expect(html).toContain("00:00 UTC");
+    expect(html).toContain("this month");
+    expect(html).toContain("Paid after");
+    expect(html).not.toContain("00:00 UTC");
     expect(html).not.toContain("psbt");
   });
 });

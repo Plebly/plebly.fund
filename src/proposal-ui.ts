@@ -96,7 +96,7 @@ function donateCreditStepHtml(signedIn: boolean): string {
         <p class="donate-lede">Sign in before you pay so we can link this donation to your profile on the funder list. Amounts stay private unless you opt in later.</p>
       </div>
       <aside class="donate-credit-advisory" role="note">
-        <p><strong>Suggested:</strong> Log in first if you want public funder credit. Anonymous gifts still fund the project — they just can’t be attributed to you afterward. If a refund path opens later, you’ll need this receipt (txid:vout or Lightning swap id) plus a signed-in account to register a refund address.</p>
+        <p><strong>Suggested:</strong> Log in first if you want this donation on your profile. Anonymous gifts still fund the project. Keep your receipt if you might need a refund later.</p>
       </aside>
       <div class="donate-credit-login">
         ${loginChoicesHtml(undefined, currentReturnPath())}
@@ -145,14 +145,14 @@ function donatePayStepHtml(
                <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited.${
                  endowment
                    ? ""
-                   : " Save your txid:vout or Lightning swap id; refunds later require sign-in plus that proof."
+                   : " Keep your receipt if you might need a refund later."
                }</p>
              </aside>`
       }
     </div>`;
   const lnIntro = endowment
     ? "Fees apply."
-    : "Reverse swap to escrow. Fees apply.";
+    : "Lightning. Fees apply.";
   const creditBlock = endowment
     ? ""
     : `<div class="donate-credit-link" id="donate-credit">
@@ -315,28 +315,7 @@ export function proposalLifecycleBannersHtml(
         );
       } else if (days < 0 && ["listed", "funding", "declined_fundable"].includes(String(p.status))) {
         parts.push(
-          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended; underfunded / refund path may open</p></div>`,
-        );
-      }
-    }
-  }
-  if (
-    String(p.proposal_type || "bounty").toLowerCase() === "direct" &&
-    p.delivery_window_ends_at
-  ) {
-    const end = new Date(p.delivery_window_ends_at);
-    if (!Number.isNaN(end.getTime())) {
-      const days = Math.ceil((end.getTime() - Date.now()) / 86400_000);
-      if (days >= 0 && days <= 30) {
-        parts.push(
-          `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Delivery window</span><p>${days} day${days === 1 ? "" : "s"} remaining for proposer deliverable</p></div>`,
-        );
-      } else if (
-        days < 0 &&
-        ["listed", "funding", "claimable"].includes(String(p.status))
-      ) {
-        parts.push(
-          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Delivery window</span><p>Window ended; refund path may open</p></div>`,
+          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended</p></div>`,
         );
       }
     }
@@ -348,8 +327,8 @@ export function proposalLifecycleBannersHtml(
       parts.push(
         `<div class="lifecycle-banner ${overdue ? "lifecycle-warn" : ""}" role="status"><span class="lifecycle-k">Milestones</span><p>${
           overdue
-            ? "Grace ended; claims and outcomes blocked until milestones are published (Q12)"
-            : `Milestones due by ${due.toLocaleDateString()} (escrow crossed 1M sats)`
+            ? "This project needs a milestone list before it can pay out."
+            : `Milestones due by ${due.toLocaleDateString()}`
         }</p></div>`,
       );
     }
@@ -359,30 +338,28 @@ export function proposalLifecycleBannersHtml(
     balance >= 1_000_000
   ) {
     parts.push(
-      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Milestones</span><p>Escrow ≥ 1M sats; milestones required (Q12)</p></div>`,
+      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Milestones</span><p>This project needs a milestone list.</p></div>`,
     );
   }
   if (String(p.status) === "abandoned_vote") {
     parts.push(
-      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Ballot open</span><p>Contributor vote: extend, refund, or redirect (1 person = 1 vote)</p></div>`,
+      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Vote open</span><p>Donors are voting: extend, refund, or move remaining funds.</p></div>`,
     );
   } else if (String(p.status) === "underfunded") {
     // Workers open a Q18 ballot only when escrow balance > 0.
     if (balance != null && balance > 0) {
       parts.push(
-        `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Ballot open</span><p>Funding window ended underfunded — contributor vote: extend, refund, or redirect (1 person = 1 vote)</p></div>`,
+        `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Vote open</span><p>Funding ended short. Donors are voting: extend, refund, or move remaining funds.</p></div>`,
       );
     } else {
       parts.push(
-        `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Underfunded</span><p>Funding window ended below the claim floor${
-          balance === 0 ? " with empty escrow — no contributor ballot." : "."
-        }</p></div>`,
+        `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Underfunded</span><p>Funding ended before this project could open.</p></div>`,
       );
     }
   }
   if (String(p.status) === "in_review") {
     parts.push(
-      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>Active reviewers vote to approve or reject: ⌈⅔⌉ yes with at least five non-abstaining votes.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>Reviewers are checking the work.</p></div>`,
     );
   }
   if (String(p.status) === "rejected") {
@@ -392,7 +369,7 @@ export function proposalLifecycleBannersHtml(
   }
   if (String(p.status) === "refunding") {
     parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Refunding</span><p>Register a refund address for your contribution below. Keyholders batch returns in Sparrow — track status under <a href="${href("/account", "?tab=funds")}">Account → Funds</a>. No platform fee.</p></div>`,
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Refunding</span><p>Add a refund address below. Track it in <a href="${href("/account", "?tab=funds")}">Account</a>.</p></div>`,
     );
   }
   if (
@@ -405,9 +382,9 @@ export function proposalLifecycleBannersHtml(
     const label =
       String(p.status) === "redirected" ? "Redirected" : "Redirect pending";
     parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">${label}</span><p>Contributor ballot chose redirect${
+      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">${label}</span><p>Donors voted to move remaining funds${
         target ? ` to <code class="mono">${escapeHtml(target)}</code>` : ""
-      }. Redirected escrow is moved in Sparrow.</p></div>`,
+      }.</p></div>`,
     );
   }
   return parts.join("");
@@ -482,7 +459,7 @@ export function fundingBarScale(
       : 0;
   const scale = Math.max(safeFloor, targetSats || safeFloor, highest);
   const markers: FundingBarMarker[] = [
-    { sats: safeFloor, kind: "floor", label: "Claim floor" },
+    { sats: safeFloor, kind: "floor", label: "Opens" },
   ];
   for (const t of thresholds) {
     markers.push({
@@ -520,7 +497,7 @@ function fundingDetailTrackHtml(
       const kind = m.kind === "floor" ? "floor" : "threshold";
       const label =
         m.kind === "floor"
-          ? `Claim floor ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "locked"}`
+          ? `Opens for builders at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
           : `Milestone ${m.label || m.id || ""} ${m.sats.toLocaleString()} sats, ${unlocked ? "unlocked" : "locked"}`;
       return `<span class="funding-marker funding-marker-${kind} ${state}" style="left:${left}%" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${lock}<span class="funding-marker-tick"></span></span>`;
     })
@@ -603,7 +580,7 @@ export function fundingProgressHtml(
     ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
     : claimable
       ? "Open to apply"
-      : `${formatSats(remaining)} to claim floor`;
+      : `${formatSats(remaining)} to open`;
   const labelClass = over
     ? " overfunded"
     : claimable
@@ -611,8 +588,8 @@ export function fundingProgressHtml(
       : "";
   // Always name the claim floor — never let target_sats look like the floor.
   const goalLine = hasTarget
-    ? `${formatSats(funded)} / ${formatSats(floor)} floor (${floorPct}%) · target ${formatSats(target!)} (${targetPct}%)`
-    : `${formatSats(funded)} / ${formatSats(floor)} floor · ${floorPct}%`;
+    ? `${formatSats(funded)} / ${formatSats(floor)} to open (${floorPct}%) · goal ${formatSats(target!)} (${targetPct}%)`
+    : `${formatSats(funded)} / ${formatSats(floor)} to open · ${floorPct}%`;
   return `<div class="funding-meter" data-funding-scale="${scale}">
       <div class="funding-meter-top">
         <span class="funding-meter-label${labelClass}">${label}</span>
@@ -1176,7 +1153,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       <ul class="donate-credit-utxos"><li>
         <span class="mono" title="${escapeHtml(outpoint)}">${escapeHtml(utxo.txid.slice(0, 12))}…:${utxo.vout}</span>
         <span>${escapeHtml(formatSats(utxo.value))}</span>
-        <button type="button" class="btn" data-copy-receipt="${escapeHtml(outpoint)}">Copy txid:vout</button>
+        <button type="button" class="btn" data-copy-receipt="${escapeHtml(outpoint)}">Copy receipt</button>
       </li></ul>`;
     claimWrap
       .querySelector<HTMLButtonElement>("[data-copy-receipt]")
@@ -1534,24 +1511,20 @@ function bindLightningDonate(
     }
     if (feeEl) {
       feeEl.hidden = false;
-      const dest = opts.mode === "endowment" ? "endowment" : "escrow";
-      feeEl.textContent = `Invoice ${formatSats(swap.invoice_amount_sats)} → ${dest} ~${formatSats(swap.expected_onchain_sats)} (fees ~${formatSats(swap.fee_sats)})`;
+      const dest = opts.mode === "endowment" ? "the endowment" : "the project";
+      feeEl.textContent = `About ${formatSats(swap.expected_onchain_sats)} lands in ${dest} after fees.`;
     }
     if (swap.swap_id) showSwapReceipt(swap.swap_id);
     if (statusEl) {
-      const dest = opts.mode === "endowment" ? "endowment" : "escrow";
       const map: Record<string, string> = {
         pending: "Waiting for Lightning payment…",
-        invoice_paid: `Invoice paid. Claiming to ${dest}…`,
-        claiming: `Broadcasting claim to ${dest}…`,
-        settled: swap.claim_txid
-          ? `Settled on-chain · claim tx ${swap.claim_txid.slice(0, 12)}… · copy swap id below for refunds`
-          : "Settled on-chain · copy swap id below for refunds",
+        invoice_paid: "Invoice paid. Landing in the project…",
+        claiming: "Sending to the project…",
+        settled: "Paid.",
         failed:
           swap.error ||
-          "Swap failed. On mainnet the claimer waits for lockup confirmation; try again or use on-chain.",
-        expired:
-          "Invoice or swap expired. Create a new Lightning invoice. Lockup timeout is set by Boltz.",
+          "Payment didn’t go through. Try again or use on-chain.",
+        expired: "Invoice expired. Create a new Lightning invoice.",
       };
       statusEl.textContent = map[swap.status] || swap.status;
       const live = ["pending", "invoice_paid", "claiming"].includes(swap.status);
@@ -1848,7 +1821,7 @@ export function refundRegisterHtml(proposalId: string | null): string {
   if (!proposalId) return "";
   return `<div class="refund-panel" id="refund-panel">
     <h3 class="milestones-title">Register refund</h3>
-    <p class="muted">Link your contribution (Account sign-in), then set a refund address. On-chain uses txid:vout; Lightning uses swap id from your donate receipt. Keyholders batch returns — no platform fee.</p>
+    <p class="muted">Sign in, then set a refund address. Use your donation receipt.</p>
     <div id="refund-status" class="lifecycle-banner" hidden>
       <span class="lifecycle-k">Your contributions</span>
       <p id="refund-status-body" class="muted"></p>
@@ -1881,14 +1854,14 @@ export function refundRegisterHtml(proposalId: string | null): string {
 export function ballotPanelHtml(proposalId: string | null): string {
   if (!proposalId) return "";
   return `<div class="ballot-panel" id="ballot-panel" data-proposal-id="${escapeHtml(proposalId)}">
-    <h3 class="review-panel-title">Contributor ballot</h3>
+    <h3 class="review-panel-title">Donor vote</h3>
     <p class="muted" id="ballot-status">Loading…</p>
     <div id="ballot-actions" class="review-actions" hidden>
       <button type="button" class="btn" data-ballot-opt="extend">Extend</button>
       <button type="button" class="btn ghost" data-ballot-opt="refund">Refund</button>
-      <button type="button" class="btn ghost" data-ballot-opt="redirect">Redirect…</button>
+      <button type="button" class="btn ghost" data-ballot-opt="redirect">Move funds…</button>
     </div>
-    <p class="muted" id="ballot-redirect-note">Redirect is ops-assisted — keyholders move escrow manually; it is not instant.</p>
+    <p class="muted" id="ballot-redirect-note">Moving remaining funds can take a few days.</p>
     <p class="builder-msg" id="ballot-msg" hidden></p>
   </div>`;
 }

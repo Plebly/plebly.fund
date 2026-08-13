@@ -118,7 +118,7 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       statusEl.hidden = false;
       if (!data.linked) {
         bodyEl.textContent =
-          "No contribution linked to this account yet. Register with your funding txid and vout below.";
+          "No contribution linked to this account yet. Register with your donation receipt below.";
         listEl.innerHTML = "";
         if (formEl) formEl.hidden = false;
         return;
@@ -129,7 +129,7 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
         data.paid ? `${data.paid} paid` : "",
       ].filter(Boolean);
       bodyEl.textContent = data.addresses_frozen
-        ? `${parts.join(" · ")}. Addresses frozen for keyholder batch.`
+        ? `${parts.join(" · ")}. Address locked for this month’s payout.`
         : `${parts.join(" · ")}.`;
       listEl.innerHTML = data.contributions
         .map((r) => {
@@ -273,7 +273,7 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
         showRefundMsg(
           body.package_error
             ? body.note ||
-                "Address saved, but the keyholder package failed — try Register again."
+                "Address saved, but payout setup failed — try Register again."
             : "Refund address registered — track under Account → Funds.",
           body.package_error ? "error" : "",
         );
@@ -698,15 +698,15 @@ export async function renderProposalPage(
             const needEl = app.querySelector(".builder-status.muted");
             if (
               needEl &&
-              /more confirmed sats to reach the claim floor/i.test(
+              /more to open for builders/i.test(
                 needEl.textContent || "",
               )
             ) {
               const need = Math.max(0, CLAIM_FLOOR_SATS - next);
               needEl.textContent =
                 need > 0
-                  ? `Needs ${formatSats(need)} more confirmed sats to reach the claim floor.`
-                  : "Claim floor met. Refresh if the claim button does not appear.";
+                  ? `Needs ${formatSats(need)} more to open for builders.`
+                  : "Open for builders. Refresh if Apply does not appear.";
             }
           },
         })

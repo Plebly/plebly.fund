@@ -12,7 +12,7 @@ export function notificationTypeLabel(
   }
   const labels: Record<string, string> = {
     listed: "Project listed",
-    floor_reached: "Claim floor reached",
+    floor_reached: "Open to apply",
     target_reached: "Funding target reached",
     claimed: "Project claimed",
     claim_application: "Bonded applicant",
@@ -30,8 +30,8 @@ export function notificationTypeLabel(
     bond_forfeited: "Bond forfeited",
     refund_registered: "Refund address registered",
     contrib_refunded: "Contribution refunded",
-    release_queued: "Escrow release queued",
-    release_broadcast: "Escrow release broadcast",
+    release_queued: "Payout queued",
+    release_broadcast: "Paid",
     disburse_ready: "Monthly release ready to sign",
     keyholder_application: "Keyholder application opened",
     donation_receipt: "Donation receipt",

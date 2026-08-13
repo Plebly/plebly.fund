@@ -454,7 +454,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                 claimModeDefault === "first_bonded" ? " checked" : ""
               } /><span><strong>First bonded</strong>: first builder who pays the claim bond gets the exclusive claim.</span></label>
               <div class="claim-window-presets" data-claim-window-presets>
-                <span class="field-hint">Application window (starts when claim floor is met)</span>
+                <span class="field-hint">Application window (starts when the project opens for builders)</span>
                 <div class="chip-row">
                   ${windowChips}
                 </div>
