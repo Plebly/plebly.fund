@@ -54,7 +54,6 @@ export function reviewPanelHtml(proposalId: string): string {
   return `<div class="review-panel" id="review-panel" data-proposal-id="${escapeHtml(proposalId)}">
     <h3 class="review-panel-title">Reviewer decision</h3>
     <p class="muted" id="review-status">Loading…</p>
-    <div id="review-ai-slot"></div>
     <div id="review-counts" class="review-counts" hidden></div>
     <div id="review-actions" class="review-actions" hidden>
       <button type="button" class="btn" data-rev-vote="yes">${btnWithIcon("check", "Approve")}</button>
@@ -103,7 +102,6 @@ function renderDecision(
   const counts = root.querySelector<HTMLElement>("#review-counts");
   const actions = root.querySelector<HTMLElement>("#review-actions");
   const dissent = root.querySelector<HTMLElement>("#review-dissent");
-  const aiSlot = root.querySelector<HTMLElement>("#review-ai-slot");
 
   if (statusEl) {
     const closes = new Date(d.closes_at).toLocaleDateString();
@@ -111,9 +109,6 @@ function renderDecision(
       d.status === "open"
         ? `Round ${d.round} · ${d.vote_count} vote(s) · closes ${closes} · need ⌈⅔⌉ yes + 5 non-abstain`
         : `Closed · ${d.result || d.status}${d.passed ? " (passed)" : ""}`;
-  }
-  if (aiSlot) {
-    aiSlot.innerHTML = d.ai_review ? aiReviewCardHtml(d.ai_review, { compact: true }) : "";
   }
   if (counts) {
     counts.hidden = false;

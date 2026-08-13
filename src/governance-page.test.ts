@@ -279,7 +279,7 @@ describe("governance UI helpers", () => {
     const guest = khApplyFormHtml(false, false);
     expect(guest).toContain("Sign in");
     const blocked = khApplyFormHtml(true, false);
-    expect(blocked).toContain("completed bounty");
+    expect(blocked).toContain("completed review");
     const form = khApplyFormHtml(true, true);
     expect(form).toContain("kh-apply-form");
     expect(form).toContain("operator can spend");

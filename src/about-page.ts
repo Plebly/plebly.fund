@@ -3,7 +3,6 @@ import {
   ABOUT_BITCOIN_NETWORK,
   ABOUT_BUILDERS_HTML,
   ABOUT_INTRO_HTML,
-  ABOUT_KEYHOLDERS,
   ABOUT_LIGHTNING_HTML,
   ABOUT_PARAM_LABELS,
   ABOUT_STEPS,
@@ -115,7 +114,6 @@ function keyholdersHtml(live: {
   min_seats?: number;
   target_seats?: number;
 }): string {
-  const kh = ABOUT_KEYHOLDERS;
   const n = live.seats ?? live.keyholders.length;
   const mode = live.escrow_mode || "unknown";
   const min = live.min_seats ?? KEYHOLDER_MIN_SEATS;
@@ -128,12 +126,9 @@ function keyholdersHtml(live: {
         ? keyholderQuorumLabel(n)
         : keyholderQuorumLabel(min));
   const needMore = mode !== "single-key-test" && n < min;
-  const towardTarget = n < target;
   const status = needMore
-    ? `<p class="about-keyholders-status" role="status">Need at least ${min} keyholders (${n} live). Target ${target}. <a href="${href("/reviewers")}?tab=keyholders">Apply</a>.</p>`
-    : towardTarget
-      ? `<p class="about-keyholders-status" role="status">${n} of ${target} target seats (${escapeHtml(mode)}). <a href="${href("/reviewers")}?tab=keyholders">Apply</a>.</p>`
-      : "";
+    ? `<p class="about-keyholders-status" role="status">Need ${min} seats (${n} live). <a href="${href("/reviewers")}?tab=keyholders">Apply</a>.</p>`
+    : "";
   const liveBody = n
     ? `<div class="about-keyholders-table-wrap">
         <table class="about-keyholders-table">
@@ -149,54 +144,15 @@ function keyholdersHtml(live: {
             .join("")}</tbody>
         </table>
       </div>`
-    : `<p class="muted">Live roster empty — git KEYHOLDERS.md still applies until seats are active.</p>`;
-  const rules = kh.rules.length
-    ? `<div class="about-keyholders-rules">
-        <h3>Rules</h3>
-        <ul>${kh.rules.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
-      </div>`
-    : "";
-  const signetBlock =
-    ABOUT_BITCOIN_NETWORK === "signet" && (kh.signetLead || kh.signetCaveats.length)
-      ? `<div class="about-keyholders-signet">
-          <h3>Currently on signet</h3>
-          ${kh.signetLead ? `<p>${escapeHtml(kh.signetLead)}</p>` : ""}
-          ${
-            kh.signetCaveats.length
-              ? `<ul>${kh.signetCaveats.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`
-              : ""
-          }
-        </div>`
-      : "";
+    : `<p class="muted">No live seats yet.</p>`;
 
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
-    <p class="about-section-lede">Live <strong>${escapeHtml(mOfN)}</strong>. Min ${min} seats, target ${target}.</p>
+    <p class="about-section-lede">Live <strong>${escapeHtml(mOfN)}</strong>. Min ${min}, target ${target}.</p>
     ${status}
-    ${signetBlock}
-    <div class="about-keyholders-meta">
-      <div class="about-keyholders-pill">
-        <span class="about-keyholders-pill-label">Threshold</span>
-        <span class="about-keyholders-pill-value">${escapeHtml(mOfN)}</span>
-      </div>
-      <div class="about-keyholders-pill">
-        <span class="about-keyholders-pill-label">Network</span>
-        <span class="about-keyholders-pill-value">${escapeHtml(ABOUT_BITCOIN_NETWORK)}</span>
-      </div>
-      <div class="about-keyholders-pill">
-        <span class="about-keyholders-pill-label">Live seats</span>
-        <span class="about-keyholders-pill-value">${n}</span>
-      </div>
-      <div class="about-keyholders-pill">
-        <span class="about-keyholders-pill-label">Target</span>
-        <span class="about-keyholders-pill-value">${target}</span>
-      </div>
-    </div>
-    ${rules}
     <div class="about-keyholders-roster">
-      <h3>Live roster</h3>
       ${liveBody}
-      <p class="muted"><a href="${href("/parameters")}">Fee parameters</a> · <a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+      <p class="muted"><a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
     </div>
   </section>`;
 }
@@ -399,7 +355,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
       : "",
     `<div class="about-detail">
       <h3>Reviewers</h3>
-      <p>After AI triage, active reviewers confirm deliverables.
+      <p>Active reviewers confirm deliverables.
         Eligible funders may open removal ballots for documented bad faith. Bootstrap seats stay permanent.</p>
       <p class="about-detail-link"><a href="${href("/reviewers")}">Reviewer governance →</a></p>
     </div>`,

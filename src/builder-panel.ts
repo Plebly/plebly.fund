@@ -57,7 +57,6 @@ import {
 import { freshLinkedOrgs } from "./github-orgs-client";
 import { href, orgHref, profileHref } from "./router";
 import { userMatchesProposer } from "./proposal-ui";
-import { aiReviewCardHtml } from "./review-panel";
 import type { Proposal } from "./types";
 import { sanitizePublicError } from "./public-errors";
 import { escapeHtml, formatSats } from "./util";
@@ -117,7 +116,6 @@ function deliverableFormHtml(): string {
     <label class="donate-amount-label" for="deliv-hash">Artifact hash (optional)</label>
     <input id="deliv-hash" class="donate-amount mono" type="text" />
     <button type="button" class="btn" id="deliv-submit">Submit for review</button>
-    <div id="deliverable-ai-result" class="deliverable-ai-result" hidden></div>
   </div>`;
 }
 
@@ -748,7 +746,7 @@ function renderStatusBody(
     case "in_review":
       body.innerHTML = `${track}${meta}<p class="builder-status">In review${
         status.claimer ? ` · fulfiller ${claimerLabel}` : ""
-      }${windowLabel}. AI triage finished.</p>
+      }${windowLabel}.</p>
       <p class="builder-status muted">Next: reviewers confirm the deliverable in the <a href="#review-panel">review panel</a>.</p>
       ${wbSlot}
       ${isYou ? `${deliverableResubmit}${extensionTools}` : ""}`;
@@ -841,7 +839,7 @@ export async function bindBuilderPanel(
         setMsg(msg, "URL and description required.", "error");
         return;
       }
-      setMsg(msg, "Running AI first-pass and opening PR…");
+      setMsg(msg, "Opening PR…");
       try {
         const result = await submitDeliverable({
           proposal_path: opts.proposal.path,
@@ -849,20 +847,9 @@ export async function bindBuilderPanel(
           description,
           artifact_hash: hash || undefined,
         });
-        const aiSlot = panel.querySelector<HTMLElement>("#deliverable-ai-result");
-        if (result.ai_review && aiSlot) {
-          aiSlot.hidden = false;
-          aiSlot.innerHTML = aiReviewCardHtml(result.ai_review);
-        } else if (result.ai_review && body) {
-          const wrap = document.createElement("div");
-          wrap.id = "deliverable-ai-result";
-          wrap.className = "deliverable-ai-result";
-          wrap.innerHTML = aiReviewCardHtml(result.ai_review);
-          body.appendChild(wrap);
-        }
         const next =
           result.ai_review?.outcome === "fail"
-            ? "Clear fail. Revise and resubmit."
+            ? "Revise and resubmit."
             : result.decision_id
               ? "Reviewer ballot opened."
               : "Submitted.";

@@ -96,11 +96,9 @@ export async function renderKeyholders(
             ? `<p class="kh-earnings">Accrued: <strong>${formatSats(earnings)}</strong></p>`
             : ""
         }
-        <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
-        <p class="muted" id="kh-health"></p>
         ${
           kh.keys_stale
-            ? `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Keys older than 1 year</span><p>Re-confirm fingerprint + xpub below (or re-submit) and ask peers to co-attest if material changed. Signing still happens only in Sparrow.</p></div>`
+            ? `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Keys older than 1 year</span><p>Re-confirm fingerprint + xpub below.</p></div>`
             : ""
         }
       </header>
@@ -108,11 +106,6 @@ export async function renderKeyholders(
         kh.status === "active"
           ? `<div class="form-panel">
               <h2 class="proposal-block-title">Signing session</h2>
-              <ol class="kh-steps">
-                <li>Request a challenge and copy it.</li>
-                <li>Sparrow → Tools → Sign/Verify Message, on your auth address.</li>
-                <li>Paste the base64 signature and Verify.</li>
-              </ol>
               <label class="donate-amount-label" for="kh-auth-addr">Auth address</label>
               <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" value="${escapeHtml(kh.auth_address || "")}" autocomplete="off" />
               <button type="button" class="btn" id="kh-challenge">Request challenge</button>
@@ -129,7 +122,7 @@ export async function renderKeyholders(
         kh.status === "active" && kh.keys_stale
           ? `<div class="form-panel">
               <h2 class="proposal-block-title">Re-confirm keys</h2>
-              <p class="muted">Attestation older than 365 days. Update public material if needed.</p>
+              <p class="muted">Attestation older than 365 days.</p>
               <label class="donate-amount-label" for="kh-fp">Fingerprint (8 hex)</label>
               <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(kh.fingerprint || "")}" />
               <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
@@ -145,7 +138,7 @@ export async function renderKeyholders(
         kh.status !== "active"
           ? `<div class="form-panel">
               <h2 class="proposal-block-title">Your keys</h2>
-              <p class="muted">Status: ${escapeHtml(kh.status)}. Submit fingerprint + xpub, then wait for two active keyholders to co-attest.</p>
+              <p class="muted">Status: ${escapeHtml(kh.status)}. Submit fingerprint + xpub for two co-attestations.</p>
               <label class="donate-amount-label" for="kh-fp">Fingerprint (8 hex)</label>
               <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(kh.fingerprint || "")}" />
               <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
@@ -167,16 +160,6 @@ export async function renderKeyholders(
       <div id="kh-detail" hidden></div>
     </section>
   `);
-
-  void fetch(`${api()}/health`)
-    .then((r) => r.json())
-    .then((h: { escrow_map_remaining?: number }) => {
-      const el = app.querySelector("#kh-health");
-      if (el && h.escrow_map_remaining != null) {
-        el.textContent = `Escrow map remaining: ${h.escrow_map_remaining}`;
-      }
-    })
-    .catch(() => undefined);
 
   const queueEl = app.querySelector<HTMLElement>("#kh-queue")!;
   const detailEl = app.querySelector<HTMLElement>("#kh-detail")!;
@@ -313,7 +296,7 @@ export async function renderKeyholders(
           needsLn
             ? `<div class="lifecycle-banner lifecycle-warn">
                 <span class="lifecycle-k">Boltz lockup required</span>
-                <p>Create a Boltz submarine swap to that Lightning destination for the amount above, then paste the lockup address. Signing stays in Sparrow — Plebly never holds swap keys.</p>
+                <p>Paste the lockup address, then sign in Sparrow.</p>
                 <label class="donate-amount-label" for="kh-lockup">Boltz lockup address</label>
                 <input id="kh-lockup" class="donate-amount mono" placeholder="bc1… / tb1…" />
                 <button type="button" class="btn" id="kh-lockup-save">Attach lockup</button>
@@ -326,17 +309,9 @@ export async function renderKeyholders(
             : ""
         }
         ${
-          isRelease
-            ? `<div class="kh-recipe">
-                <h3 class="proposal-block-title" id="kh-recipe-title">Sparrow</h3>
-                <ol class="kh-steps">
-                  <li>Inputs: escrow UTXOs in the line items only.</li>
-                  <li>Outputs: the table below, exact amounts. No change, no extras.</li>
-                  <li>Upload the unsigned PSBT, then sign that frozen file on hardware.</li>
-                  <li>Upload your partial. Broadcast when ${need || "threshold"} signatures are in.</li>
-                </ol>
-              </div>`
-            : `<p class="muted">Sign in Sparrow, then Propose / Confirm.</p>`
+          !isRelease
+            ? `<p class="muted">Sign in Sparrow, then Propose / Confirm.</p>`
+            : ""
         }
         ${
           !canPsbt && !needsLn && !item.monthly_accruing

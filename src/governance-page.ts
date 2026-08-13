@@ -410,7 +410,7 @@ export function openDecisionsHtml(
   if (!decisions.length) {
     return `<div class="empty-state gov-empty"><div class="empty-state-inner">
       <p class="empty-state-title">No open decisions</p>
-      <p class="empty-state-body">When AI triage passes or escalates, reviewer ballots appear here and on the project page.</p>
+      <p class="empty-state-body">Open reviewer ballots appear here and on the project page.</p>
     </div></div>`;
   }
   return `<ul class="gov-list" id="gov-decisions">${decisions
@@ -578,17 +578,17 @@ const govApi = () => WORKERS_API.replace(/\/$/, "");
 export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
   if (!loggedIn) {
     return `<div class="gov-form-panel">
-      <p class="lede">Sign in as an earned reviewer (at least one completed bounty) to apply as a keyholder.</p>
+      <p class="lede">Sign in as an earned reviewer to apply.</p>
       ${loginChoicesHtml(undefined, currentReturnPath())}
     </div>`;
   }
   if (!canApply) {
     return `<div class="gov-form-panel">
-      <p class="lede">Keyholder seats are elected by earned reviewers with at least one completed bounty. Finish a review cycle first.</p>
+      <p class="lede">Finish a completed review first.</p>
     </div>`;
   }
   return `<form class="gov-form-panel form-panel" id="kh-apply-form">
-    <p class="lede">7-day majority election among earned reviewers. Pass yields pending attestation — election does not add your key to the descriptor. You cannot vote on your own application.</p>
+    <p class="lede">7-day election. Pass → pending attestation.</p>
     <label class="donate-amount-label" for="kh-apply-pubkey">xpub / tpub</label>
     <textarea id="kh-apply-pubkey" class="comment-input mono" rows="2" required maxlength="256"></textarea>
     <label class="donate-amount-label" for="kh-apply-hw">Hardware</label>
@@ -699,7 +699,7 @@ export async function renderGovernance(
       <header class="gov-hero">
         <p class="about-eyebrow">Governance</p>
         <h1>Reviewers</h1>
-        <p class="lede">Human quorum confirms deliverables after AI triage. Eligible funders may remove earned reviewers. Earned reviewers with a completed bounty may apply as keyholders. After volume gates, reviewers elect coordination roles — never custody.</p>
+        <p class="lede">Reviewers confirm deliverables. Eligible funders may remove earned reviewers. Earned reviewers may apply as keyholders.</p>
         ${statusStripHtml(me, user)}
         <div class="account-tabs gov-tabs" role="tablist" aria-label="Governance sections">
           <button type="button" class="account-tab ${tab === "roster" ? "active" : ""}" data-gov-tab="roster" role="tab" aria-selected="${tab === "roster"}">Roster${roster ? ` (${roster.count})` : ""}</button>
