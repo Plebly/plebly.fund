@@ -46,7 +46,7 @@ Milestone splits apply above **{{milestone_threshold}}**. Badge tiers, funding w
 
 ## Trust model
 
-Escrow is **3-of-5 multisig**. Plebly never holds a spending key. Launch uses human keyholders.
+Escrow is **multisig**. Plebly never holds a spending key. Live threshold follows the roster (at least 2 seats; 5 is the target). See [Keyholders](#keyholders).
 
 Completed bounties pay in a **monthly batch**. The Worker may broadcast a fully signed release; keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address.
 
@@ -56,7 +56,7 @@ See [Keyholders](#keyholders) for the live roster and [Key parameters](#paramete
 
 ## Testing vs launch
 
-The site is currently on **{{bitcoin_network}}** for end-to-end testing. Launch will use **mainnet only** with 3-of-5 multisig escrow. See [Keyholders](#keyholders).
+The site is currently on **{{bitcoin_network}}** for end-to-end testing. Launch will use **mainnet only** with live m-of-n escrow (target 5 seats). See [Keyholders](#keyholders).
 
 ## Get involved
 

@@ -16,6 +16,11 @@ import { hydrateAvatarSlots } from "./profile-avatars";
 import { href, orgHref, profileHref, projectsHref } from "./router";
 import { signetFaucetLinksHtml } from "./signet";
 import { escapeHtml } from "./util";
+import {
+  KEYHOLDER_MIN_SEATS,
+  KEYHOLDER_TARGET_SEATS,
+  keyholderQuorumLabel,
+} from "./keyholder-quorum";
 
 export type AboutShell = (inner: string) => string;
 
@@ -79,7 +84,7 @@ function networkNoteHtml(): string {
   return `<div class="about-network-badge" role="status">
     <span class="about-network-badge-dot" aria-hidden="true"></span>
     <span>
-      <strong>Signet</strong> (test coins only) · Mainnet launch uses ${escapeHtml(ABOUT_KEYHOLDERS.threshold)}
+      <strong>Signet</strong> (test coins only) · Mainnet uses live m-of-n (min ${KEYHOLDER_MIN_SEATS}, target ${KEYHOLDER_TARGET_SEATS})
       · <a href="#keyholders">Keyholders</a>
       · Faucets: ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
     </span>
@@ -104,19 +109,30 @@ function keyholdersHtml(live: {
     fingerprint: string | null;
     signing_count?: number;
   }[];
+  seats?: number;
+  threshold?: number;
+  quorum?: string;
+  min_seats?: number;
+  target_seats?: number;
 }): string {
   const kh = ABOUT_KEYHOLDERS;
-  const n = live.keyholders.length;
+  const n = live.seats ?? live.keyholders.length;
   const mode = live.escrow_mode || "unknown";
+  const min = live.min_seats ?? KEYHOLDER_MIN_SEATS;
+  const target = live.target_seats ?? KEYHOLDER_TARGET_SEATS;
   const mOfN =
-    mode === "single-key-test"
-      ? "1-of-1 (signet test)"
-      : n
-        ? `${Math.min(3, n)}-of-${n}`
-        : kh.threshold;
-  const transitional =
-    mode === "single-key-test" || n < 3
-      ? `<p class="about-keyholders-status" role="status">Plebly is currently operating with ${escapeHtml(String(n || "few"))} keyholders (${escapeHtml(mode)}) as a transitional state while the keyholder application program is open. <a href="${href("/reviewers")}?tab=keyholders">See how to apply</a>.</p>`
+    live.quorum ||
+    (mode === "single-key-test"
+      ? "1-of-1"
+      : n >= min
+        ? keyholderQuorumLabel(n)
+        : keyholderQuorumLabel(min));
+  const needMore = mode !== "single-key-test" && n < min;
+  const towardTarget = n < target;
+  const status = needMore
+    ? `<p class="about-keyholders-status" role="status">Need at least ${min} keyholders (${n} live). Target ${target}. <a href="${href("/reviewers")}?tab=keyholders">Apply</a>.</p>`
+    : towardTarget
+      ? `<p class="about-keyholders-status" role="status">${n} of ${target} target seats (${escapeHtml(mode)}). <a href="${href("/reviewers")}?tab=keyholders">Apply</a>.</p>`
       : "";
   const liveBody = n
     ? `<div class="about-keyholders-table-wrap">
@@ -155,8 +171,8 @@ function keyholdersHtml(live: {
 
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
-    <p class="about-section-lede">Escrow is live <strong>${escapeHtml(mOfN)}</strong> (${escapeHtml(mode)}). Monthly batch; 2% pool sits on the fee address until cash-out.</p>
-    ${transitional}
+    <p class="about-section-lede">Live <strong>${escapeHtml(mOfN)}</strong>. Min ${min} seats, target ${target}.</p>
+    ${status}
     ${signetBlock}
     <div class="about-keyholders-meta">
       <div class="about-keyholders-pill">
@@ -170,6 +186,10 @@ function keyholdersHtml(live: {
       <div class="about-keyholders-pill">
         <span class="about-keyholders-pill-label">Live seats</span>
         <span class="about-keyholders-pill-value">${n}</span>
+      </div>
+      <div class="about-keyholders-pill">
+        <span class="about-keyholders-pill-label">Target</span>
+        <span class="about-keyholders-pill-value">${target}</span>
       </div>
     </div>
     ${rules}
@@ -332,6 +352,11 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
         r.ok
           ? ((await r.json()) as {
               escrow_mode?: string;
+              seats?: number;
+              threshold?: number;
+              quorum?: string;
+              min_seats?: number;
+              target_seats?: number;
               keyholders: {
                 github: string;
                 xpub: string | null;
@@ -352,6 +377,11 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
   const liveKh = {
     escrow_mode: health?.escrow_mode || khLive?.escrow_mode || "unknown",
     keyholders: khLive?.keyholders || [],
+    seats: khLive?.seats,
+    threshold: khLive?.threshold,
+    quorum: khLive?.quorum,
+    min_seats: khLive?.min_seats,
+    target_seats: khLive?.target_seats,
   };
 
   const details = [
