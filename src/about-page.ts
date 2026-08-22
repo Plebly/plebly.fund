@@ -14,6 +14,7 @@ import { fetchPublicOrg, type PublicOrg } from "./org-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import { href, orgHref, profileHref, projectsHref } from "./router";
 import { signetFaucetLinksHtml } from "./signet";
+import { avatarImgHtml } from "./media";
 import { escapeHtml } from "./util";
 import {
   KEYHOLDER_MIN_SEATS,
@@ -100,7 +101,7 @@ export function publicKeyholderStatus(
   return null;
 }
 
-function keyholdersHtml(live: {
+export function keyholdersHtml(live: {
   escrow_mode: string;
   keyholders: {
     github: string;
@@ -149,10 +150,15 @@ function keyholdersHtml(live: {
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
     <p class="about-section-lede">Live <strong>${escapeHtml(mOfN)}</strong>. Min ${min}, target ${target}.</p>
+    ${
+      mode === "single-key-test" || n < min
+        ? `<p class="muted">This is a temporary ${escapeHtml(mOfN)} setup. Launch is 3-of-5. After approval, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
+        : `<p class="muted">After reviewers approve, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
+    }
     ${status}
     <div class="about-keyholders-roster">
       ${liveBody}
-      <p class="muted"><a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+      <p class="muted"><a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a> · <a href="${href("/terms")}">Terms</a> · <a href="${href("/parameters")}">Parameters</a></p>
     </div>
   </section>`;
 }
@@ -171,7 +177,7 @@ export function aboutTeamMembersHtml(
         <a href="${profileHref(login)}">
           ${
             m.avatar_url
-              ? `<img class="avatar org-member-avatar" src="${escapeHtml(m.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+              ? avatarImgHtml(m.avatar_url, "avatar org-member-avatar", 36)
               : `<span class="org-member-avatar-fallback" aria-hidden="true"></span>`
           }
           <span>${escapeHtml(login)}</span>
@@ -355,9 +361,8 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
       : "",
     `<div class="about-detail">
       <h3>Reviewers</h3>
-      <p>Active reviewers confirm deliverables.
-        Eligible funders may open removal ballots for documented bad faith. Bootstrap seats stay permanent.</p>
-      <p class="about-detail-link"><a href="${href("/reviewers")}">Reviewer governance →</a></p>
+      <p>Reviewers check finished work. Ordinary completion votes are unpaid — you earn a seat by finishing a bounty. Some dispute votes pay 10,000 sats each; that payment is not enabled yet. Funders can vote to remove a reviewer for bad faith.</p>
+      <p class="about-detail-link"><a href="${href("/reviewers")}">Reviewer governance →</a> · <a href="${href("/terms")}">Terms</a></p>
     </div>`,
   ]
     .filter(Boolean)

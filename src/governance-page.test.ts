@@ -24,9 +24,9 @@ describe("governance UI helpers", () => {
   });
 
   it("labels decision kinds", () => {
-    expect(decisionKindLabel("deliverable_confirm")).toBe("Deliverable confirm");
+    expect(decisionKindLabel("deliverable_confirm")).toBe("Completion review");
     expect(decisionKindLabel("second_review")).toBe("Second review");
-    expect(decisionKindLabel("claim_extension")).toBe("Claim extension");
+    expect(decisionKindLabel("claim_extension")).toBe("Time extension");
     expect(decisionKindLabel("listing_challenge")).toBe("Listing challenge");
   });
 
@@ -207,8 +207,32 @@ describe("governance UI helpers", () => {
     };
     const html = decisionCardHtml(d, true);
     expect(html).toContain('data-dec-vote="yes"');
-    expect(html).toContain("demo");
+    expect(html).toContain('data-dec-vote="no"');
+    expect(html).toContain('data-dec-vote="abstain"');
+    expect(html).toContain("Vote whether this meets the project.");
+    expect(html).toContain("Yes 1");
+    expect(html).toContain("No 0");
+    expect(html).toContain('href="/p/demo"');
+    expect(html).not.toContain("two-thirds");
+    expect(html).not.toContain("quorum");
+    expect(html).not.toContain("Need ");
+    expect(html).not.toContain("<details");
     expect(openDecisionsHtml([], false)).toContain("No open decisions");
+
+    const second = decisionCardHtml(
+      {
+        ...d,
+        kind: "second_review",
+        round: 2,
+        rebuttal: {
+          reasoning: "The tests are in the linked repo.",
+          at: "2026-01-02T00:00:00.000Z",
+        },
+      },
+      true,
+    );
+    expect(second).toContain("Vote on the builder's reply.");
+    expect(second).toContain("tests are in the linked repo");
   });
 
   it("removal cards and open form gate on funder eligibility", () => {
@@ -283,5 +307,6 @@ describe("governance UI helpers", () => {
     const form = khApplyFormHtml(true, true);
     expect(form).toContain("kh-apply-form");
     expect(form).toContain("operator can spend");
+    expect(form).toContain("Terms");
   });
 });

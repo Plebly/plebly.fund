@@ -1,4 +1,6 @@
 import { WORKERS_API } from "./config";
+import { authFetchWithTos } from "./tos-modal";
+import { reviewKindPayLabel } from "./tos";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
 
@@ -36,6 +38,7 @@ export type ReviewDecisionView = {
   need_yes?: number;
   ai_review?: AiReviewView;
   dissent?: { user_id: string; at: string; reasoning: string; pr_url?: string }[];
+  rebuttal?: { reasoning: string; at: string };
 };
 
 export type ReviewerPublic = {
@@ -116,7 +119,7 @@ export async function voteReviewDecision(
   decisionId: string,
   vote: "yes" | "no" | "abstain",
 ): Promise<ReviewDecisionView> {
-  const res = await fetch(
+  const res = await authFetchWithTos(
     `${API()}/reviewers/decisions/${encodeURIComponent(decisionId)}/vote`,
     {
       method: "POST",
@@ -139,8 +142,8 @@ export async function voteReviewDecision(
 export async function publishDissent(
   decisionId: string,
   reasoning: string,
-): Promise<{ pr_url: string }> {
-  const res = await fetch(
+): Promise<ReviewDecisionView> {
+  const res = await authFetchWithTos(
     `${API()}/reviewers/decisions/${encodeURIComponent(decisionId)}/dissent`,
     {
       method: "POST",
@@ -149,19 +152,22 @@ export async function publishDissent(
       body: JSON.stringify({ reasoning }),
     },
   );
-  const data = (await res.json()) as { pr_url?: string; error?: string };
+  const data = (await res.json()) as {
+    decision?: ReviewDecisionView;
+    error?: string;
+  };
   if (res.status === 401) throw new Error("login_required");
-  if (!res.ok || !data.pr_url) {
+  if (!res.ok || !data.decision) {
     throw new Error(data.error || `Dissent failed (${res.status})`);
   }
-  return { pr_url: data.pr_url };
+  return data.decision;
 }
 
 export async function submitRebuttal(input: {
   proposal_id: string;
   proposal_path: string;
   reasoning: string;
-}): Promise<{ pr_url: string; decision_id: string }> {
+}): Promise<{ decision_id: string; reasoning?: string }> {
   const res = await fetch(`${API()}/claims/rebuttal`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
@@ -169,15 +175,15 @@ export async function submitRebuttal(input: {
     body: JSON.stringify(input),
   });
   const data = (await res.json()) as {
-    pr_url?: string;
     decision_id?: string;
+    state?: { reasoning?: string };
     error?: string;
   };
   if (res.status === 401) throw new Error("login_required");
-  if (!res.ok || !data.pr_url) {
-    throw new Error(data.error || `Rebuttal failed (${res.status})`);
+  if (!res.ok || !data.decision_id) {
+    throw new Error(data.error || `Reply failed (${res.status})`);
   }
-  return { pr_url: data.pr_url, decision_id: data.decision_id || "" };
+  return { decision_id: data.decision_id, reasoning: data.state?.reasoning };
 }
 
 export async function fetchReviewerMe(): Promise<ReviewerMe | null> {
@@ -258,11 +264,15 @@ export async function voteRemovalBallot(
 }
 
 export function decisionKindLabel(kind: string): string {
-  if (kind === "deliverable_confirm") return "Deliverable confirm";
+  if (kind === "deliverable_confirm") return "Completion review";
   if (kind === "second_review") return "Second review";
-  if (kind === "claim_extension") return "Claim extension";
+  if (kind === "claim_extension") return "Time extension";
   if (kind === "listing_challenge") return "Listing challenge";
   return kind;
+}
+
+export function decisionKindPayLine(kind: string): string {
+  return reviewKindPayLabel(kind);
 }
 
 export function shortUserId(userId: string): string {

@@ -24,6 +24,8 @@ export function notificationTypeLabel(
     claim_auto_awarded: "Auto-awarded earliest bond",
     checkpoint_submitted: "Checkpoint submitted",
     deliverable_submitted: "Deliverable submitted",
+    donor_review_opened: "Proposer marked this done — 7 days to flag",
+    donor_review_flagged: "A donor flagged this close",
     completed: "Project completed",
     bond_refundable: "Bond refundable — check Funds",
     bond_refunded: "Bond refunded",

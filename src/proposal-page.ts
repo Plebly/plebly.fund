@@ -1,4 +1,9 @@
-import { fetchWatches } from "./builder";
+import {
+  applyClaimStatusToProposal,
+  fetchClaimStatus,
+  fetchWatches,
+  type ClaimStatus,
+} from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import {
   authFetch,
@@ -37,12 +42,14 @@ import {
   proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
+  proposalStepperHtml,
   proposerBylineHtml,
   refundRegisterHtml,
   sectionBodyHtml,
   statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
+import { resolveNextAction } from "./next-action";
 import {
   bindListingReportControl,
   listingReportControlHtml,
@@ -465,8 +472,20 @@ export async function renderProposalPage(
     const bodyMd = match.body;
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
-    let balance: number | undefined;
-    if (match.escrow_address) {
+    const proposalId = match.id;
+    let claimStatus: ClaimStatus | null = null;
+    if (proposalId && WORKERS_API) {
+      try {
+        claimStatus = await fetchClaimStatus(match.path);
+        if (claimStatus) match = applyClaimStatusToProposal(match, claimStatus);
+      } catch {
+        /* git catalog stays until Worker overlay loads */
+      }
+    }
+
+    let balance: number | undefined =
+      claimStatus?.confirmed_balance_sats ?? match.balance_sats;
+    if (balance == null && match.escrow_address) {
       try {
         balance = await addressBalanceSats(match.escrow_address);
       } catch {
@@ -536,25 +555,6 @@ export async function renderProposalPage(
       ? `<div class="proposal-cover"><img src="${escapeHtml(coverUrl)}" alt="" decoding="async" /></div>`
       : "";
 
-    if (match.id && WORKERS_API) {
-      try {
-        const stallRes = await fetch(
-          `${WORKERS_API.replace(/\/$/, "")}/escrow/stall/${encodeURIComponent(match.id)}`,
-        );
-        if (stallRes.ok) {
-          const stall = (await stallRes.json()) as {
-            blocked?: boolean;
-            reason?: string;
-          };
-          if (stall.blocked && stall.reason) {
-            match.release_blocked_reason = stall.reason;
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
     const banners = proposalLifecycleBannersHtml(match, balance);
 
     const canEdit = canEditProposal(
@@ -598,6 +598,7 @@ export async function renderProposalPage(
             : ""
         }
 
+        ${proposalStepperHtml(match)}
         ${banners ? `<div class="proposal-banners">${banners}</div>` : ""}
 
         <div class="proposal-layout">
@@ -622,20 +623,37 @@ export async function renderProposalPage(
 
           <aside class="proposal-sidebar">
             <div class="proposal-actions">
-              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching)}
-              ${escrowOk ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>` : ""}
+              <div id="next-card" class="next-card">
+              ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching, user)}
+              ${
+                status === "in_review" &&
+                match.id &&
+                match.donor_review_status !== "window_open"
+                  ? reviewPanelHtml(match.id)
+                  : ""
+              }
+              ${status === "rejected" && match.id ? rebuttalPanelHtml(match.rebuttal_expires_at, match.rebuttal_reasoning) : ""}
+              ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
+              ${
+                status === "abandoned_vote" ||
+                (status === "underfunded" && (balance ?? 0) > 0)
+                  ? ballotPanelHtml(match.id)
+                  : ""
+              }
+              </div>
+              ${
+                escrowOk
+                  ? resolveNextAction({
+                        proposal: { ...match, balance_sats: balance },
+                        user,
+                      }).button === "donate"
+                    ? `<div class="proposal-donate-slot" hidden></div>`
+                    : `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>`
+                  : ""
+              }
               ${shareSlotHtml(match.title, match.path, match.id)}
             </div>
             ${deliverableChipHtml(match.deliverable_url)}
-            ${status === "in_review" && match.id ? reviewPanelHtml(match.id) : ""}
-            ${status === "rejected" && match.id ? rebuttalPanelHtml() : ""}
-            ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
-            ${
-              status === "abandoned_vote" ||
-              (status === "underfunded" && (balance ?? 0) > 0)
-                ? ballotPanelHtml(match.id)
-                : ""
-            }
             ${
               canEdit || listingReportHtml
                 ? `<div class="proposal-sidebar-actions">
@@ -717,6 +735,7 @@ export async function renderProposalPage(
         balance,
         user,
         watching,
+        initialStatus: claimStatus,
       }),
       donateReady,
     ]);
@@ -781,6 +800,7 @@ export async function renderProposalPage(
         proposalPath: match.path,
         user,
         isFulfiller,
+        expiresAt: match.rebuttal_expires_at,
       });
     }
   } catch (e) {

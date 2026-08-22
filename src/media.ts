@@ -1,6 +1,7 @@
 import { authFetch } from "./auth";
 import { WORKERS_API } from "./config";
 import { sanitizePublicError } from "./public-errors";
+import { escapeHtml } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -25,6 +26,16 @@ export function safeHttpsImageUrl(url: string | null | undefined): string | null
   } catch {
     return null;
   }
+}
+
+export function avatarImgHtml(
+  url: string | null | undefined,
+  className: string,
+  size: number,
+): string {
+  const src = safeHttpsImageUrl(url);
+  if (!src) return "";
+  return `<img class="${className}" src="${escapeHtml(src)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" />`;
 }
 
 export function clientCoverPrecheck(file: File): string | null {

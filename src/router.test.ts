@@ -50,6 +50,8 @@ describe("router governance paths", () => {
       "/proposal/listed/example",
     );
     expect(parseLocation("/stats", "")).toEqual({ name: "stats" });
+    expect(parseLocation("/terms", "")).toEqual({ name: "terms" });
+    expect(seoForRoute({ name: "terms" }).path).toBe("/terms");
     expect(parseLocation("/archive", "")).toEqual({
       name: "archive",
       tab: "completed",
@@ -100,6 +102,8 @@ describe("router governance paths", () => {
     expect(isStaticDocumentPath("/docs/keyholder-responsibilities.md")).toBe(
       true,
     );
+    expect(isStaticDocumentPath("/docs/TOS.md")).toBe(true);
+    expect(isStaticDocumentPath("/docs/dispute-resolution.md")).toBe(true);
     expect(isStaticDocumentPath("/llms-full.txt")).toBe(true);
     expect(isStaticDocumentPath("/sitemap.xml")).toBe(true);
     expect(isStaticDocumentPath("/reviewers")).toBe(false);

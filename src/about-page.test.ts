@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aboutTeamMembersHtml, bindAboutPage, publicKeyholderStatus } from "./about-page";
+import {
+  aboutTeamMembersHtml,
+  bindAboutPage,
+  keyholdersHtml,
+  publicKeyholderStatus,
+} from "./about-page";
 
 describe("aboutTeamMembersHtml", () => {
   it("links members to Plebly /u profiles", () => {
@@ -15,6 +20,25 @@ describe("aboutTeamMembersHtml", () => {
 
   it("shows empty copy when there are no members", () => {
     expect(aboutTeamMembersHtml([])).toContain("No public members");
+  });
+});
+
+describe("keyholdersHtml", () => {
+  it("names stall seats and links Terms plus the dispute catalog", () => {
+    const html = keyholdersHtml({
+      escrow_mode: "3-of-5",
+      keyholders: [],
+      seats: 5,
+      threshold: 3,
+      min_seats: 3,
+      target_seats: 5,
+    });
+    expect(html).toContain("which seats have not signed");
+    expect(html).toContain("Plebly cannot move the coins");
+    expect(html).toContain("/terms");
+    expect(html).not.toContain("PSBT");
+    expect(html).not.toContain("Dispute catalog");
+    expect(html).not.toContain("on-chain");
   });
 });
 

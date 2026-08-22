@@ -96,6 +96,7 @@ export function parseLocation(
   if (path === "donations") return { name: "donations" };
   if (path === "keyholders") return { name: "keyholders" };
   if (path === "parameters") return { name: "params" };
+  if (path === "terms") return { name: "terms" };
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
   if (path === "propose" || path === "submit") return { name: "propose" };
@@ -465,6 +466,13 @@ export function seoForRoute(
         description:
           "Live Plebly fee percents, keyholder cap, and published keyholder xpubs.",
         path: "/parameters",
+      };
+    case "terms":
+      return {
+        title: "Terms",
+        description:
+          "Coordinator terms for proposing and claiming on Plebly. Not legal advice.",
+        path: "/terms",
       };
     case "stats":
       return {

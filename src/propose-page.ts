@@ -65,7 +65,9 @@ import {
   validateScopeDraft,
   type ProposeWizardStepId,
 } from "./propose-wizard";
+import { avatarImgHtml } from "./media";
 import { href, orgHref, projectsHref, proposalHref } from "./router";
+import { tosCheckboxHtml } from "./tos-modal";
 import {
   hydrateAvatarSlots,
   orgAvatarSlotHtml,
@@ -556,6 +558,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             })}
           </fieldset>`
           }
+          <fieldset class="form-block">
+            <legend>Terms</legend>
+            ${tosCheckboxHtml("propose-tos-ack")}
+          </fieldset>
         </section>
 
         <p class="form-msg" id="propose-msg" hidden></p>
@@ -643,7 +649,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                 (o) =>
                   `<a class="claim-org-preview-item" href="${orgHref(o.login)}">${
                     o.avatar_url
-                      ? `<img class="avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="22" height="22" />`
+                      ? avatarImgHtml(o.avatar_url, "avatar", 22)
                       : orgAvatarSlotHtml(o.login)
                   }@${escapeHtml(o.login)}</a>`,
               )
@@ -1485,10 +1491,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         }
         return;
       }
+      const tosAck = (
+        document.getElementById("propose-tos-ack") as HTMLInputElement | null
+      )?.checked;
+      if (!tosAck) {
+        showWizardMsg("Accept the Terms to submit.", "error");
+        return;
+      }
       showWizardMsg("Opening pull request…");
       try {
         const result = await submitProposal({
           ...author,
+          tos_ack: true,
           submission_fee_txid: feeTxid,
           source_issue: bridgeSource,
         });
@@ -1507,10 +1521,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       return;
     }
 
+    const tosAck = (
+      document.getElementById("propose-tos-ack") as HTMLInputElement | null
+    )?.checked;
+    if (!tosAck) {
+      showWizardMsg("Accept the Terms to amend.", "error");
+      return;
+    }
     showWizardMsg("Opening amend pull request…");
     try {
       const result = await updateProposal({
         ...author,
+        tos_ack: true,
         proposal_path: prefill!.path,
       });
       showProposeSuccess({

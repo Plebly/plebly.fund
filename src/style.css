@@ -2812,6 +2812,36 @@ a.project-card-by:hover .project-card-by-text {
   margin: 0 0 1.25rem;
 }
 
+.proposal-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.proposal-step {
+  color: var(--muted);
+}
+.proposal-step:not(:last-child)::after {
+  content: "→";
+  margin: 0 0.55rem;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.45;
+}
+.proposal-step-done {
+  color: inherit;
+}
+.proposal-step-current {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
 .lifecycle-banner {
   display: flex;
   flex-wrap: wrap;
@@ -5963,6 +5993,64 @@ a.claim-app-bond:hover {
   border-radius: 0;
 }
 
+.next-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.next-card-sentence {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+.next-card-primary .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.next-card-more {
+  margin-top: 0.25rem;
+}
+
+.next-card-more summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.next-card-more[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+.next-card-more .btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 0.4rem;
+}
+
+.next-card .builder-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.next-card .builder-actions .btn,
+.next-card .next-card-watch {
+  width: auto;
+}
+
+.next-card .review-panel,
+.next-card .rebuttal-panel,
+.next-card .ballot-panel,
+.next-card .refund-panel {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line-soft);
+}
+
 .proposal-donate-slot {
   padding-top: 0.75rem;
   border-top: 1px solid var(--line-soft);
@@ -7973,6 +8061,14 @@ a.claim-app-bond:hover {
   margin: 0.35rem 0;
 }
 
+.kh-steps li.is-current {
+  font-weight: 600;
+}
+
+.kh-steps li.is-done {
+  color: var(--ink-secondary);
+}
+
 .kh-recipe {
   margin: 1rem 0;
 }
@@ -8817,6 +8913,22 @@ a.proposal-comment-author:hover {
   border-top: 1px solid var(--line-soft);
 }
 
+.review-dissent-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.review-dissent-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .lifecycle-banner.lifecycle-review {
   border-color: rgba(var(--accent-rgb), 0.35);
   background: var(--accent-soft);
@@ -9276,10 +9388,14 @@ a.proposal-comment-author:hover {
 }
 
 .gov-card {
-  padding: 1rem 1.125rem;
+  padding: 1.25rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-elevated);
+}
+
+.gov-card .next-card-sentence {
+  margin: 0 0 0.5rem;
 }
 
 .gov-card-head {

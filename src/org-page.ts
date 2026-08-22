@@ -20,6 +20,7 @@ import {
 } from "./router";
 import type { ClaimSummary } from "./types";
 import { sanitizePublicError } from "./public-errors";
+import { avatarImgHtml } from "./media";
 import { escapeHtml } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -141,7 +142,7 @@ function orgPageInnerHtml(
                 <a href="${profileHref(login)}">
                   ${
                     m.avatar_url
-                      ? `<img class="avatar org-member-avatar" src="${escapeHtml(m.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+                      ? avatarImgHtml(m.avatar_url, "avatar org-member-avatar", 36)
                       : `<span class="org-member-avatar-fallback" aria-hidden="true"></span>`
                   }
                   <span>${escapeHtml(login)}</span>
@@ -156,9 +157,7 @@ function orgPageInnerHtml(
       <header class="profile-hero profile-hero-org">
         ${
           org.avatar_url
-            ? `<div class="profile-hero-avatar">
-                <img class="avatar profile-hero-avatar-img" src="${escapeHtml(org.avatar_url)}" alt="" width="72" height="72" loading="lazy" />
-              </div>`
+            ? `<div class="profile-hero-avatar">${avatarImgHtml(org.avatar_url, "avatar profile-hero-avatar-img", 72)}</div>`
             : ""
         }
         <div class="profile-hero-content">

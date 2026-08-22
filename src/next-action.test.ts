@@ -1,0 +1,501 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import {
+  nextActionCardHtml,
+  nextActionPrimaryHtml,
+  resolveNextAction,
+  type NextActionInput,
+} from "./next-action";
+import type { ClaimStatus } from "./builder";
+import type { Proposal } from "./types";
+
+function proposal(partial: Partial<Proposal> = {}): Proposal {
+  return {
+    id: "demo",
+    path: "proposals/listed/demo.md",
+    title: "Demo",
+    status: "listed",
+    target_sats: null,
+    escrow_address: "tb1qtest",
+    submission_fee_txid: null,
+    created_at: null,
+    escrow_index: null,
+    milestones: [],
+    body: "",
+    proposer: { id: "github:1", github: "alice", username: "alice" },
+    ...partial,
+  };
+}
+
+function claim(partial: Partial<ClaimStatus> = {}): ClaimStatus {
+  return {
+    proposal_id: "demo",
+    proposal_path: "proposals/claimed/demo.md",
+    state: "open",
+    confirmed_balance_sats: 200_000,
+    claim_floor_sats: 10_000,
+    ...partial,
+  };
+}
+
+const proposer = { id: "github:1", username: "alice", github: "alice" };
+const builder = { id: "github:2", username: "bob", github: "bob" };
+const donor = { id: "github:3", username: "carol", github: "carol" };
+const reviewer = { id: "github:4", username: "dan", github: "dan" };
+
+function act(input: Partial<NextActionInput> & { proposal: Proposal }) {
+  return resolveNextAction(input);
+}
+
+describe("resolveNextAction", () => {
+  const rows: {
+    name: string;
+    input: NextActionInput;
+    sentence: string | RegExp;
+    button: NextActionInput extends never ? never : ReturnType<typeof resolveNextAction>["button"];
+    more?: string[];
+  }[] = [
+    {
+      name: "unindexed proposer",
+      input: { proposal: proposal({ status: "unindexed" }), user: proposer },
+      sentence: "Waiting on listing.",
+      button: null,
+    },
+    {
+      name: "pr_open proposer",
+      input: { proposal: proposal({ status: "pr_open" }), user: proposer },
+      sentence: "Waiting on listing.",
+      button: null,
+    },
+    {
+      name: "listed visitor",
+      input: { proposal: proposal({ status: "listed" }) },
+      sentence: "Still raising.",
+      button: "donate",
+    },
+    {
+      name: "funding anyone",
+      input: { proposal: proposal({ status: "funding" }), user: donor },
+      sentence: "Still raising.",
+      button: "donate",
+    },
+    {
+      name: "below floor",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({ state: "below_floor", confirmed_balance_sats: 1 }),
+      },
+      sentence: "Still raising.",
+      button: "donate",
+    },
+    {
+      name: "declined_fundable",
+      input: { proposal: proposal({ status: "declined_fundable" }) },
+      sentence: "Listing declined. You can still fund.",
+      button: "donate",
+    },
+    {
+      name: "claimable proposer_select proposer",
+      input: {
+        proposal: proposal({ status: "claimable", claim_mode: "proposer_select" }),
+        claim: claim({ state: "open" }),
+        user: proposer,
+      },
+      sentence: "Pick a bonded builder.",
+      button: null,
+    },
+    {
+      name: "claimable first_bonded proposer",
+      input: {
+        proposal: proposal({ status: "claimable", claim_mode: "first_bonded" }),
+        claim: claim({ state: "open" }),
+        user: proposer,
+      },
+      sentence: "First bonded builder wins.",
+      button: null,
+    },
+    {
+      name: "claimable signed-in applicant",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "open" }),
+        user: builder,
+      },
+      sentence: "Apply with a bond.",
+      button: "apply",
+    },
+    {
+      name: "claimable already applied",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "open" }),
+        apps: { mine_application_id: "app-1", claim_mode: "proposer_select" },
+        user: builder,
+      },
+      sentence: "Application in.",
+      button: null,
+    },
+    {
+      name: "claimable visitor",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "open" }),
+      },
+      sentence: "Open for builders.",
+      button: "donate",
+    },
+    {
+      name: "claimed builder",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "bob",
+          path: "proposals/claimed/demo.md",
+        }),
+        claim: claim({ state: "claimed", claimer: "bob" }),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
+    },
+    {
+      name: "claimed proposer",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({ state: "claimed", claimer: "bob" }),
+        user: proposer,
+      },
+      sentence: "Waiting on the builder.",
+      button: null,
+    },
+    {
+      name: "claimed donor can challenge",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          can_challenge_abandoned: true,
+        }),
+        user: donor,
+      },
+      sentence: "Waiting on the builder.",
+      button: null,
+      more: ["challenge"],
+    },
+    {
+      name: "in_review proposer can mark done",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({ state: "in_review", claimer: "bob", can_mark_done: true }),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "in_review other",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({ state: "in_review", claimer: "bob" }),
+        user: donor,
+      },
+      sentence: "Waiting on the proposer.",
+      button: null,
+    },
+    {
+      name: "window open donor",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          donor_review_status: "window_open",
+          can_flag_close: true,
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\.\s+3 days left\./,
+      button: "flag",
+    },
+    {
+      name: "window open other",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 2 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 2 * 86400_000).toISOString(),
+        }),
+        user: builder,
+      },
+      sentence: /Donors have 2 days to flag\./,
+      button: null,
+    },
+    {
+      name: "flagged reviewer",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "flagged",
+        }),
+        claim: claim({
+          state: "in_review",
+          donor_review_status: "flagged",
+          review_decision_open: true,
+        }),
+        user: reviewer,
+        reviewerActive: true,
+      },
+      sentence: "Vote whether this meets the project.",
+      button: null,
+    },
+    {
+      name: "flagged other",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "flagged",
+        }),
+        claim: claim({ state: "in_review", donor_review_status: "flagged" }),
+        user: donor,
+      },
+      sentence: "Reviewers are checking the work.",
+      button: null,
+    },
+    {
+      name: "rejected builder",
+      input: {
+        proposal: proposal({
+          status: "rejected",
+          claimer: "bob",
+          rebuttal_expires_at: new Date(Date.now() + 5 * 86400_000).toISOString(),
+        }),
+        claim: claim({ state: "unavailable", claimer: "bob" }),
+        user: builder,
+      },
+      sentence: /You can file one reply\.\s+5 days left\./,
+      button: "rebuttal",
+    },
+    {
+      name: "rejected other",
+      input: {
+        proposal: proposal({
+          status: "rejected",
+          claimer: "bob",
+          rebuttal_expires_at: new Date(Date.now() + 1 * 86400_000).toISOString(),
+        }),
+        user: donor,
+      },
+      sentence: "The builder has 1 day to reply once.",
+      button: null,
+    },
+    {
+      name: "completed",
+      input: { proposal: proposal({ status: "completed" }) },
+      sentence: "Approved. Paid after keyholders sign.",
+      button: null,
+    },
+    {
+      name: "stall",
+      input: {
+        proposal: proposal({
+          status: "completed",
+          release_blocked_reason: "Keyholder stall",
+          release_blocked_seats: [1, 4],
+        }),
+      },
+      sentence: "Release stalled. Unsigned: seat 1, seat 4.",
+      button: null,
+    },
+    {
+      name: "underfunded with escrow",
+      input: {
+        proposal: proposal({ status: "underfunded", balance_sats: 50_000 }),
+      },
+      sentence: "Vote on remaining funds.",
+      button: null,
+    },
+    {
+      name: "underfunded empty",
+      input: {
+        proposal: proposal({ status: "underfunded", balance_sats: 0 }),
+      },
+      sentence: "Funding ended before this could open.",
+      button: null,
+    },
+    {
+      name: "abandoned_vote",
+      input: { proposal: proposal({ status: "abandoned_vote" }) },
+      sentence: "Vote on remaining funds.",
+      button: null,
+    },
+    {
+      name: "refunding",
+      input: { proposal: proposal({ status: "refunding" }) },
+      sentence: "Add a refund address.",
+      button: "register",
+    },
+    {
+      name: "redirected",
+      input: { proposal: proposal({ status: "redirected" }) },
+      sentence: "Funds are moving to another project.",
+      button: null,
+    },
+    {
+      name: "direct funding visitor",
+      input: {
+        proposal: proposal({ status: "funding", proposal_type: "direct" }),
+      },
+      sentence: "Donate. Paid monthly.",
+      button: "donate",
+    },
+    {
+      name: "direct proposer deliverable",
+      input: {
+        proposal: proposal({
+          status: "claimable",
+          proposal_type: "direct",
+        }),
+        claim: claim({ state: "open" }),
+        user: proposer,
+      },
+      sentence: "Submit work if you want it on the record.",
+      button: "deliverable",
+    },
+    {
+      name: "direct listed proposer with floor met",
+      input: {
+        proposal: proposal({
+          status: "listed",
+          proposal_type: "direct",
+          balance_sats: 200_000,
+        }),
+        user: proposer,
+      },
+      sentence: "Submit work if you want it on the record.",
+      button: "deliverable",
+    },
+    {
+      name: "proposer+builder while claimed uses builder row",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "alice",
+          proposer: { id: "github:1", github: "alice", username: "alice" },
+        }),
+        claim: claim({ state: "claimed", claimer: "alice" }),
+        user: proposer,
+      },
+      sentence: "Submit the work when it is done.",
+      button: "deliverable",
+    },
+    {
+      name: "proposer+builder in_review uses done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "alice",
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "alice",
+          can_mark_done: true,
+        }),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+  ];
+
+  it.each(rows)("$name", ({ input, sentence, button, more }) => {
+    const got = act(input);
+    if (typeof sentence === "string") expect(got.sentence).toBe(sentence);
+    else expect(got.sentence).toMatch(sentence);
+    expect(got.button).toBe(button);
+    if (more) expect(got.moreIds).toEqual(more);
+    expect(got.button === null || Boolean(got.button)).toBe(true);
+  });
+
+  it("never returns two primaries", () => {
+    for (const row of rows) {
+      const got = act(row.input);
+      const html = nextActionPrimaryHtml(got);
+      const primaries = html.match(/class="btn"/g) || [];
+      expect(primaries.length).toBe(got.button ? 1 : 0);
+    }
+  });
+});
+
+describe("nextActionCardHtml", () => {
+  it("uses bindable ids for donate, done, and flag", () => {
+    const donate = nextActionCardHtml({
+      sentence: "Still raising.",
+      button: "donate",
+      moreIds: [],
+    });
+    expect(donate).toContain('id="donate-open"');
+    expect(donate).toContain("data-open-donate");
+    expect(donate).toContain("Still raising.");
+    expect(donate.match(/class="btn"/g)?.length).toBe(1);
+
+    const done = nextActionPrimaryHtml({
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+      moreIds: [],
+    });
+    expect(done).toContain('id="builder-done"');
+    expect(done).toContain("This is done");
+
+    const flag = nextActionPrimaryHtml({
+      sentence: "Flag if the work is not finished.",
+      button: "flag",
+      moreIds: [],
+    });
+    expect(flag).toContain('id="builder-flag"');
+    expect(flag).not.toMatch(/deliverable_confirm|⌈|tos-2026|decision_id|psbt/i);
+  });
+
+  it("does not put a Donate primary on claimed, in_review, or completed", () => {
+    for (const status of ["claimed", "in_review", "completed"] as const) {
+      const html = nextActionCardHtml(
+        resolveNextAction({ proposal: proposal({ status, claimer: "bob" }) }),
+      );
+      expect(html).not.toContain("data-open-donate");
+      expect(html).not.toContain('id="donate-open"');
+    }
+  });
+});
+
+describe("project-page chrome contracts", () => {
+  const src = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "proposal-page.ts"),
+    "utf8",
+  );
+
+  it("keeps a static next-card and stable panel mounts", () => {
+    expect(src).toContain('id="next-card"');
+    expect(src).toContain("reviewPanelHtml");
+    expect(src).toContain("rebuttalPanelHtml");
+    expect(src).toContain("ballotPanelHtml");
+    expect(src).toContain("refundRegisterHtml");
+    expect(src).toContain("builderPanelHtml");
+  });
+
+  it("omits donate-open from the slot when the card owns Donate", () => {
+    expect(src).toContain("proposal-donate-slot");
+    expect(src).toMatch(/proposal-donate-slot" hidden/);
+  });
+});

@@ -68,6 +68,7 @@ import { isKnownSocialUrl, profileLinksListHtml } from "./social-links";
 import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
 import { isSafeHttpUrl, safeHrefAttr } from "./social-links";
+import { avatarImgHtml } from "./media";
 import { escapeHtml, formatSats } from "./util";
 import { downloadReceiptPdf, fetchMyReceipts, type DonationReceipt } from "./receipts";
 import { bindWebPushPanel, webPushPanelHtml } from "./web-push";
@@ -329,7 +330,7 @@ export function connectedAccountsHtml(user: AuthUser): string {
         ? new Date(at).toISOString().slice(0, 10)
         : "?";
       const avatar = o.avatar_url
-        ? `<img class="avatar account-org-card-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+        ? avatarImgHtml(o.avatar_url, "avatar account-org-card-avatar", 36)
         : `<span class="user-avatar-slot org-avatar-slot" data-avatar-org="${escapeHtml(login)}" hidden></span>`;
       return `<li class="account-org-card">
         <a class="account-org-card-link" href="${orgHref(login)}">
@@ -1030,7 +1031,7 @@ export async function renderAccount(
             const login = orgLoginLabel(o.login);
             const already = linkedOrgSet.has(login.toLowerCase());
             const avatar = o.avatar_url
-              ? `<img class="avatar account-org-card-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+              ? avatarImgHtml(o.avatar_url, "avatar account-org-card-avatar", 36)
               : `<span class="user-avatar-slot org-avatar-slot" data-avatar-org="${escapeHtml(login)}" hidden></span>`;
             return `<li>
               <label class="account-org-pick-row${already ? " is-linked" : ""}">
@@ -1401,7 +1402,7 @@ function profilePublicOrgsHtml(
             <a href="${orgHref(login)}" title="${escapeHtml(login)}">
               ${
                 o.avatar_url
-                  ? `<img class="avatar org-member-avatar" src="${escapeHtml(o.avatar_url)}" alt="" width="36" height="36" loading="lazy" />`
+                  ? avatarImgHtml(o.avatar_url, "avatar org-member-avatar", 36)
                   : orgAvatarSlotHtml(login)
               }
               <span>${escapeHtml(label)}</span>
@@ -1519,9 +1520,7 @@ export async function renderPublicProfile(
       <header class="profile-hero profile-hero-user">
         ${
           profile.avatar_url
-            ? `<div class="profile-hero-avatar">
-                <img class="avatar profile-hero-avatar-img" src="${escapeHtml(profile.avatar_url)}" alt="" width="64" height="64" loading="lazy" />
-              </div>`
+            ? `<div class="profile-hero-avatar">${avatarImgHtml(profile.avatar_url, "avatar profile-hero-avatar-img", 64)}</div>`
             : ""
         }
         <div class="profile-hero-content">

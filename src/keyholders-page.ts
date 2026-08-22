@@ -2,6 +2,7 @@ import { authFetch, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
 import { href, projectsHref } from "./router";
+import { authFetchWithTos } from "./tos-modal";
 import { escapeHtml, formatSats } from "./util";
 
 export type KeyholdersShell = (inner: string) => string;
@@ -25,6 +26,259 @@ type DisburseItem = {
   psbt_status?: string;
   required_threshold?: number;
 };
+
+/** One sentence on a ready, signable release. Null otherwise. */
+export function keyholderPackageSentence(item: {
+  kind: string;
+  monthly_accruing?: boolean;
+  outputs: unknown[];
+}): string | null {
+  if (item.kind !== "release") return null;
+  if (item.monthly_accruing) return null;
+  if (!item.outputs.length) return null;
+  return "Sign this release.";
+}
+
+export type KeyholderDeskItem = {
+  kind: string;
+  proposal_id: string;
+  state: string;
+  monthly_accruing?: boolean;
+  addresses_frozen?: boolean;
+  period?: string;
+  outputs: { address: string; amount_sats: number; label?: string }[];
+  line_items?: { proposal_id: string; payout_sats: number; escrow_address?: string }[];
+  partials?: { keyholder_id: string; fingerprint: string }[];
+  required_threshold?: number;
+  ln_destination?: string;
+  ln_amount_sats?: number;
+  settle_txid?: string;
+  settle_proposed_by?: string;
+  psbts?: { sha256: string }[];
+};
+
+export function keyholderDeskStep(opts: {
+  kind: string;
+  monthly_accruing?: boolean;
+  needsLn: boolean;
+  outputs: unknown[];
+  canUnsigned: boolean;
+  canPartial: boolean;
+  canBroadcast: boolean;
+  isRelease: boolean;
+}): "lockup" | "accruing" | "wait" | "freeze" | "sign" | "broadcast" | "settle" {
+  if (opts.monthly_accruing) return "accruing";
+  if (opts.needsLn) return "lockup";
+  if (!opts.outputs.length) return "wait";
+  if (opts.isRelease) {
+    if (opts.canUnsigned) return "freeze";
+    if (opts.canBroadcast) return "broadcast";
+    return "sign";
+  }
+  return "settle";
+}
+
+function khStepClass(
+  name: ReturnType<typeof keyholderDeskStep>,
+  current: ReturnType<typeof keyholderDeskStep>,
+  order: ReturnType<typeof keyholderDeskStep>[],
+): string {
+  const i = order.indexOf(name);
+  const c = order.indexOf(current);
+  if (i < 0) return "";
+  if (i < c) return "is-done";
+  if (i === c) return "is-current";
+  return "";
+}
+
+export function keyholderDeskHtml(
+  item: KeyholderDeskItem,
+  opts: {
+    needsLn: boolean;
+    canPsbt: boolean;
+    canUnsigned: boolean;
+    canPartial: boolean;
+    canBroadcast: boolean;
+    isRelease: boolean;
+    requiresDualSettle: boolean;
+    userId: string;
+  },
+): string {
+  const signed = item.partials?.length || 0;
+  const need = item.required_threshold || 0;
+  const step = keyholderDeskStep({
+    kind: item.kind,
+    monthly_accruing: item.monthly_accruing,
+    needsLn: opts.needsLn,
+    outputs: item.outputs,
+    canUnsigned: opts.canUnsigned,
+    canPartial: opts.canPartial,
+    canBroadcast: opts.canBroadcast,
+    isRelease: opts.isRelease,
+  });
+  const readyLine =
+    keyholderPackageSentence(item) ||
+    (item.kind === "release" ? null : "Finish this refund.");
+  const releaseOrder: ReturnType<typeof keyholderDeskStep>[] = [
+    "freeze",
+    "sign",
+    "broadcast",
+  ];
+  const steps = opts.isRelease
+    ? `<ol class="kh-steps">
+        <li class="${khStepClass("freeze", step, releaseOrder)}">Check the outputs, then freeze the unsigned transaction</li>
+        <li class="${khStepClass("sign", step, releaseOrder)}">Sign in Sparrow and paste the partial</li>
+        <li class="${khStepClass("broadcast", step, releaseOrder)}">Broadcast when the threshold is met</li>
+      </ol>`
+    : `<ol class="kh-steps">
+        <li class="${step === "settle" ? "is-current" : ""}">Check the outputs, then propose the settle txid</li>
+      </ol>`;
+
+  const outputs = `<table class="kh-outputs">
+    <caption class="sr-only">Outputs</caption>
+    <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
+    <tbody>
+      ${
+        item.outputs.length
+          ? item.outputs
+              .map(
+                (o) =>
+                  `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="3" class="muted">No outputs yet</td></tr>`
+      }
+    </tbody>
+  </table>`;
+
+  const freezeBlock = opts.isRelease
+    ? `<div class="comment-compose-actions" ${step === "freeze" || item.psbts?.[0] ? "" : "hidden"}>
+          <label class="donate-amount-label" for="kh-psbt-unsigned">Unsigned transaction (base64)</label>
+          <textarea id="kh-psbt-unsigned" class="comment-input mono" rows="3" placeholder="Paste from Sparrow" ${
+            opts.canUnsigned ? "" : "disabled"
+          }></textarea>
+          <button type="button" class="btn" id="kh-psbt-upload" ${
+            opts.canUnsigned ? "" : "disabled"
+          }>Freeze outputs</button>
+          ${
+            item.psbts?.[0]
+              ? `<button type="button" class="btn ghost" id="kh-psbt-dl">Download latest</button>`
+              : ""
+          }
+        </div>`
+    : `<div class="comment-compose-actions" hidden>
+          <textarea id="kh-psbt-unsigned" hidden></textarea>
+          <button type="button" id="kh-psbt-upload" hidden></button>
+        </div>`;
+
+  const signBlock = opts.isRelease
+    ? `<div class="comment-compose-actions" ${
+        step === "sign" || step === "broadcast" ? "" : "hidden"
+      }>
+        <label class="donate-amount-label" for="kh-psbt-partial">Signed partial (base64)</label>
+        <textarea id="kh-psbt-partial" class="comment-input mono" rows="3" placeholder="Paste from Sparrow" ${
+          opts.canPartial ? "" : "disabled"
+        }></textarea>
+        <button type="button" class="btn" id="kh-sign" ${
+          opts.canPartial ? "" : "disabled"
+        }>Upload signature</button>
+        <button type="button" class="btn ${step === "broadcast" ? "" : "ghost"}" id="kh-broadcast" ${
+          opts.canBroadcast ? "" : "disabled"
+        }>Broadcast</button>
+      </div>`
+    : "";
+
+  return `<div class="form-panel form-panel-wide">
+    <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
+    ${readyLine ? `<p class="next-card-sentence">${escapeHtml(readyLine)}</p>` : ""}
+    ${
+      item.monthly_accruing
+        ? `<p class="muted">Signing opens after month-end freeze.</p>`
+        : need
+          ? `<p class="muted">${signed}/${need} signed${item.period ? ` · ${escapeHtml(item.period)}` : ""}</p>`
+          : ""
+    }
+    ${steps}
+    ${
+      item.line_items?.length
+        ? `<table class="kh-outputs">
+             <caption class="sr-only">Line items</caption>
+             <thead><tr><th scope="col">Proposal</th><th scope="col">Escrow</th><th scope="col">Payout</th></tr></thead>
+             <tbody>${item.line_items
+               .map(
+                 (l) =>
+                   `<tr><td class="mono">${escapeHtml(l.proposal_id)}</td><td class="mono">${escapeHtml(l.escrow_address || "—")}</td><td>${formatSats(l.payout_sats)}</td></tr>`,
+               )
+               .join("")}</tbody>
+           </table>`
+        : ""
+    }
+    ${
+      item.ln_destination
+        ? `<p class="muted mono">${escapeHtml(item.ln_destination)}${
+            item.ln_amount_sats != null ? ` · ${formatSats(item.ln_amount_sats)}` : ""
+          }</p>`
+        : ""
+    }
+    ${
+      opts.needsLn
+        ? `<div class="lifecycle-banner lifecycle-warn">
+            <span class="lifecycle-k">Lockup</span>
+            <p>Paste the lockup address, then sign in Sparrow.</p>
+            <label class="donate-amount-label" for="kh-lockup">Lockup address</label>
+            <input id="kh-lockup" class="donate-amount mono" placeholder="bc1… / tb1…" />
+            <button type="button" class="btn" id="kh-lockup-save">Attach lockup</button>
+          </div>`
+        : ""
+    }
+    ${
+      !opts.canPsbt && !opts.needsLn && !item.monthly_accruing
+        ? `<p class="muted">Waiting on payout addresses.</p>`
+        : ""
+    }
+    ${outputs}
+    ${freezeBlock}
+    ${signBlock}
+    <details class="next-card-more">
+      <summary>Other settle tools</summary>
+      <label class="donate-amount-label" for="kh-txid">Broadcast txid</label>
+      <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
+        opts.canPsbt ? "" : "disabled"
+      } />
+      <div id="kh-verify-panel" class="lifecycle-banner" hidden>
+        <span class="lifecycle-k">Verify</span>
+        <p>Match this txid to the outputs above.</p>
+        <ul class="kh-verify-outputs">${item.outputs
+          .map(
+            (o) =>
+              `<li class="mono">${escapeHtml(o.address)} · ${formatSats(o.amount_sats)}${
+                o.label ? ` · ${escapeHtml(o.label)}` : ""
+              }</li>`,
+          )
+          .join("")}</ul>
+      </div>
+      <div class="comment-compose-actions">
+        <button type="button" class="btn ghost" id="kh-propose" ${
+          opts.canPsbt ? "" : "disabled"
+        }>Propose settle</button>
+        ${
+          opts.requiresDualSettle
+            ? `<button type="button" class="btn ghost" id="kh-confirm"${
+                item.settle_proposed_by === opts.userId || !opts.canPsbt
+                  ? " disabled"
+                  : ""
+              }>Confirm settle</button>`
+            : ""
+        }
+      </div>
+      <div id="kh-chat"></div>
+      <label class="sr-only" for="kh-chat-input">Message other keyholders</label>
+      <textarea id="kh-chat-input" class="comment-input" rows="2" maxlength="2000" placeholder="Message other keyholders…"></textarea>
+      <button type="button" class="btn ghost" id="kh-chat-send">Post</button>
+    </details>
+    <p class="builder-msg" id="kh-settle-msg" hidden role="status" aria-live="polite"></p>
+  </div>`;
+}
 
 type KeyholderMe = {
   user_id: string;
@@ -90,7 +344,7 @@ export async function renderKeyholders(
       <header class="declined-head">
         <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ops</p>
         <h1>Keyholders</h1>
-        <p class="lede">Sparrow cosigns for escrow releases and refunds.</p>
+        <p class="lede">Sign releases and refunds.</p>
         ${
           kh.status === "active"
             ? `<p class="kh-earnings">Accrued: <strong>${formatSats(earnings)}</strong></p>`
@@ -254,153 +508,16 @@ export async function renderKeyholders(
     const canPartial = isRelease && canPsbt && hasUnsigned;
     const canBroadcast = canPartial && need > 0 && signed >= need;
     detailEl.hidden = false;
-    detailEl.innerHTML = `
-      <div class="form-panel form-panel-wide">
-        <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
-        <p class="muted">State: ${escapeHtml(item.state)}${item.addresses_frozen ? " · addresses frozen" : ""}${item.period ? ` · ${escapeHtml(item.period)}` : ""}${item.monthly_accruing ? " · accruing (not yet signable)" : ""}${item.required_threshold ? ` · ${item.partials?.length || 0}/${item.required_threshold} signatures` : ""}</p>
-        ${
-          item.line_items?.length
-            ? `<h3 class="proposal-block-title">Line items</h3>
-               <table class="kh-outputs">
-                 <caption class="sr-only">Line items</caption>
-                 <thead><tr><th scope="col">Proposal</th><th scope="col">Escrow</th><th scope="col">Payout</th></tr></thead>
-                 <tbody>${item.line_items
-                   .map(
-                     (l) =>
-                       `<tr><td class="mono">${escapeHtml(l.proposal_id)}</td><td class="mono">${escapeHtml(l.escrow_address || "—")}</td><td>${formatSats(l.payout_sats)}</td></tr>`,
-                   )
-                   .join("")}</tbody>
-               </table>
-               <h3 class="proposal-block-title">Signers</h3>
-               <ul>${
-                 item.partials?.length
-                   ? item.partials
-                       .map(
-                         (p) =>
-                           `<li class="mono">${escapeHtml(p.keyholder_id)} · ${escapeHtml(p.fingerprint)}</li>`,
-                       )
-                       .join("")
-                   : `<li class="muted">No partials yet</li>`
-               }</ul>`
-            : ""
-        }
-        ${
-          item.ln_destination
-            ? `<p class="lifecycle-banner"><span class="lifecycle-k">Lightning payout</span>
-                <span class="mono">${escapeHtml(item.ln_destination)}</span>
-                ${item.ln_amount_sats != null ? ` · ${formatSats(item.ln_amount_sats)}` : ""}
-               </p>`
-            : ""
-        }
-        ${
-          needsLn
-            ? `<div class="lifecycle-banner lifecycle-warn">
-                <span class="lifecycle-k">Boltz lockup required</span>
-                <p>Paste the lockup address, then sign in Sparrow.</p>
-                <label class="donate-amount-label" for="kh-lockup">Boltz lockup address</label>
-                <input id="kh-lockup" class="donate-amount mono" placeholder="bc1… / tb1…" />
-                <button type="button" class="btn" id="kh-lockup-save">Attach lockup</button>
-              </div>`
-            : ""
-        }
-        ${
-          item.monthly_accruing
-            ? `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Accruing</span><p>Signing opens after month-end freeze.</p></div>`
-            : ""
-        }
-        ${
-          !isRelease
-            ? `<p class="muted">Sign in Sparrow, then Propose / Confirm.</p>`
-            : ""
-        }
-        ${
-          !canPsbt && !needsLn && !item.monthly_accruing
-            ? `<p class="builder-msg bad">Waiting on refund/payout addresses — settle and PSBT upload are blocked until outputs exist.</p>`
-            : ""
-        }
-        <table class="kh-outputs">
-          <caption class="sr-only">Outputs</caption>
-          <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
-          <tbody>
-            ${
-              item.outputs.length
-                ? item.outputs
-                    .map(
-                      (o) =>
-                        `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
-                    )
-                    .join("")
-                : `<tr><td colspan="3" class="muted">No outputs yet</td></tr>`
-            }
-          </tbody>
-        </table>
-        <div class="comment-compose-actions">
-          <label class="donate-amount-label" for="kh-psbt-unsigned">Unsigned PSBT (base64) — freeze addresses</label>
-          <textarea id="kh-psbt-unsigned" class="comment-input mono" rows="3" placeholder="cHNidP8…" ${
-            canUnsigned ? "" : "disabled"
-          }></textarea>
-          <button type="button" class="btn" id="kh-psbt-upload" ${
-            canUnsigned ? "" : "disabled"
-          }>Upload unsigned</button>
-          ${
-            item.psbts?.[0]
-              ? `<button type="button" class="btn ghost" id="kh-psbt-dl">Download latest (${escapeHtml(item.psbts[0].sha256.slice(0, 12))}…)</button>`
-              : ""
-          }
-        </div>
-        ${
-          isRelease
-            ? `<div class="comment-compose-actions">
-          <label class="donate-amount-label" for="kh-psbt-partial">Partial PSBT (base64)</label>
-          <textarea id="kh-psbt-partial" class="comment-input mono" rows="3" placeholder="cHNidP8…" ${
-            canPartial ? "" : "disabled"
-          }></textarea>
-          <button type="button" class="btn" id="kh-sign" ${
-            canPartial ? "" : "disabled"
-          }>Upload partial</button>
-          <button type="button" class="btn ghost" id="kh-broadcast" ${
-            canBroadcast ? "" : "disabled"
-          }>Broadcast</button>
-        </div>`
-            : ""
-        }
-        <label class="donate-amount-label" for="kh-txid">Broadcast txid</label>
-        <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
-          canPsbt ? "" : "disabled"
-        } />
-        <div id="kh-verify-panel" class="lifecycle-banner" hidden>
-          <span class="lifecycle-k">Verify before settle</span>
-          <p>Match this txid to the outputs above.</p>
-          <ul class="kh-verify-outputs">${item.outputs
-            .map(
-              (o) =>
-                `<li class="mono">${escapeHtml(o.address)} · ${formatSats(o.amount_sats)}${
-                  o.label ? ` · ${escapeHtml(o.label)}` : ""
-                }</li>`,
-            )
-            .join("")}</ul>
-        </div>
-        <div class="comment-compose-actions">
-          <button type="button" class="btn" id="kh-propose" ${
-            canPsbt ? "" : "disabled"
-          }>Propose settle${isRelease ? " (fallback)" : ""}</button>
-          ${
-            data.requires_dual_settle
-              ? `<button type="button" class="btn ghost" id="kh-confirm"${
-                  item.settle_proposed_by === kh.user_id || !canPsbt
-                    ? " disabled"
-                    : ""
-                }>Confirm settle${isRelease ? " (fallback)" : ""}</button>`
-              : ""
-          }
-        </div>
-        <p class="builder-msg" id="kh-settle-msg" hidden role="status" aria-live="polite"></p>
-        <h3 class="proposal-block-title">Coordination</h3>
-        <div id="kh-chat"></div>
-        <label class="sr-only" for="kh-chat-input">Message other keyholders</label>
-        <textarea id="kh-chat-input" class="comment-input" rows="2" maxlength="2000" placeholder="Message other keyholders…"></textarea>
-        <button type="button" class="btn ghost" id="kh-chat-send">Post</button>
-      </div>`;
+    detailEl.innerHTML = keyholderDeskHtml(item, {
+      needsLn,
+      canPsbt,
+      canUnsigned,
+      canPartial,
+      canBroadcast,
+      isRelease,
+      requiresDualSettle: data.requires_dual_settle,
+      userId: kh.user_id,
+    });
 
     detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
 
@@ -445,7 +562,7 @@ export async function renderKeyholders(
         danger: wouldComplete,
       });
       if (!ok) return;
-      const res = await authFetch(`${api()}/disburse/${id}/sign`, {
+      const res = await authFetchWithTos(`${api()}/disburse/${id}/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ psbt_base64: b64 }),
@@ -477,7 +594,7 @@ export async function renderKeyholders(
         danger: true,
       });
       if (!ok) return;
-      const res = await authFetch(`${api()}/disburse/${id}/broadcast`, {
+      const res = await authFetchWithTos(`${api()}/disburse/${id}/broadcast`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
@@ -520,7 +637,7 @@ export async function renderKeyholders(
         confirmLabel: "Upload",
       });
       if (!ok) return;
-      const res = await authFetch(`${api()}/disburse/${id}/psbt`, {
+      const res = await authFetchWithTos(`${api()}/disburse/${id}/psbt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ psbt_base64: b64 }),

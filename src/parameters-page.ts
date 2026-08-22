@@ -75,7 +75,8 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
               .join("")}</tbody></table>`
           : `<p class="muted">No active keyholders published yet.</p>`
       }
-      <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder responsibilities</a> · <a href="${projectsHref()}">Projects</a></p>
+      <p class="muted">Some dispute votes pay 10,000 sats each, from forfeited claim bonds. That payment is not enabled yet. Ordinary completion review is unpaid.</p>
+      <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder responsibilities</a> · <a href="${href("/terms")}">Terms</a> · <a href="${projectsHref()}">Projects</a></p>
     </section>
   `);
 }

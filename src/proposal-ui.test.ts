@@ -12,8 +12,11 @@ import {
   proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
+  proposalCurrentStep,
+  proposalStepperHtml,
   proposalShareUrl,
   proposerBylineHtml,
+  ballotPanelHtml,
   refundRegisterHtml,
   shareSlotHtml,
   statusClass,
@@ -134,20 +137,91 @@ describe("proposal UI critical render helpers", () => {
     expect(statusPillHtml("funding")).toContain("pill-status");
   });
 
-  it("lifecycle banners cover in_review and rejected", () => {
+  it("lifecycle banners skip in_review and rejected", () => {
     const review = proposalLifecycleBannersHtml({
       status: "in_review",
       milestones: [],
     } as Proposal);
-    expect(review).toContain("In review");
+    expect(review).toBe("");
+    expect(review).not.toContain("In review");
+    expect(review).not.toContain("Donor check");
     expect(review).not.toContain("AI first-pass");
 
     const rejected = proposalLifecycleBannersHtml({
       status: "rejected",
       milestones: [],
     } as Proposal);
-    expect(rejected).toContain("Rejected");
-    expect(rejected).toContain("rebuttal");
+    expect(rejected).toBe("");
+    expect(rejected).not.toContain("rebuttal");
+    expect(rejected).not.toContain("third appeal");
+  });
+
+  it("donor-window clock is not a second banner", () => {
+    const exp = new Date(Date.now() + 4 * 86400_000).toISOString();
+    const html = proposalLifecycleBannersHtml({
+      status: "in_review",
+      milestones: [],
+      donor_review_status: "window_open",
+      donor_review_expires_at: exp,
+    } as Proposal);
+    expect(html).toBe("");
+    expect(html).not.toContain("Donor check");
+    expect(html).not.toContain("4 days left");
+  });
+
+  it("emits at most one banner when stall, funding window, and milestones could all fire", () => {
+    const html = proposalLifecycleBannersHtml({
+      status: "listed",
+      milestones: [],
+      release_blocked_reason: "Keyholder stall",
+      release_blocked_seats: [2],
+      funding_window_ends_at: new Date(Date.now() + 5 * 86400_000).toISOString(),
+      milestones_due_at: new Date(Date.now() + 10 * 86400_000).toISOString(),
+    } as Proposal);
+    expect(html.match(/lifecycle-banner/g)?.length).toBe(1);
+    expect(html).toContain("Release stalled");
+    expect(html).not.toContain("Funding window");
+    expect(html).not.toContain("Milestones");
+  });
+
+  it("rejected clock lives on the card, not a banner", () => {
+    const exp = new Date(Date.now() + 5 * 86400_000).toISOString();
+    const html = proposalLifecycleBannersHtml({
+      status: "rejected",
+      milestones: [],
+      rebuttal_expires_at: exp,
+    } as Proposal);
+    expect(html).toBe("");
+    expect(html).not.toContain("5 days left");
+  });
+
+  it("stall banner prints seat numbers and no forced exit", () => {
+    const html = proposalLifecycleBannersHtml({
+      status: "completed",
+      milestones: [],
+      release_blocked_reason: "Keyholder stall",
+      release_blocked_seats: [1, 4],
+    } as Proposal);
+    expect(html).toContain("seat 1");
+    expect(html).toContain("seat 4");
+    expect(html).not.toContain("on-chain");
+    expect(html).not.toContain("forced");
+  });
+
+  it("stepper marks in_review as Review", () => {
+    const p = { status: "in_review", milestones: [] } as Proposal;
+    expect(proposalCurrentStep(p)).toBe("Review");
+    expect(proposalStepperHtml(p)).toContain("aria-current=\"step\"");
+    expect(proposalStepperHtml(p)).toContain("Review");
+    expect(proposalStepperHtml({ ...p, proposal_type: "direct" })).not.toContain(
+      ">Award</li>",
+    );
+    const rejected = proposalStepperHtml({
+      ...p,
+      status: "rejected",
+    } as Proposal);
+    expect(rejected).toContain("Rebuttal");
+    expect(rejected).toContain('aria-current="step"');
   });
 
   it("lifecycle banners cover refunding with Funds copy", () => {
@@ -179,10 +253,17 @@ describe("proposal UI critical render helpers", () => {
 
   it("refundRegisterHtml includes status host for signed-in funder", () => {
     const html = refundRegisterHtml("p1");
+    expect(html).toContain('id="refund-panel"');
     expect(html).toContain("refund-status");
     expect(html).toContain("refund-register-form");
     expect(html).toContain("refund_rail");
     expect(html).toContain("refund-swap-id");
+  });
+
+  it("ballot panel keeps a stable host id", () => {
+    const html = ballotPanelHtml("p1");
+    expect(html).toContain('id="ballot-panel"');
+    expect(html).toContain('data-proposal-id="p1"');
   });
 
   it("lifecycle banners do not mention delivery-window refunds", () => {

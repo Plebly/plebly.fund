@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyClaimStatusToProposal,
   claimWindowDaysLeft,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
   isTakenStatus,
+  type ClaimStatus,
 } from "./builder";
 import type { Proposal } from "./types";
 
@@ -90,5 +92,68 @@ describe("claim floor helpers", () => {
     expect(isDirectProposal(proposal({ proposal_type: undefined }))).toBe(false);
     expect(isOpenToClaim(direct, floor)).toBe(false);
     expect(isNearFloor(direct, floor)).toBe(false);
+  });
+});
+
+describe("applyClaimStatusToProposal", () => {
+  it("overlays claimed / in_review / declined from Worker status", () => {
+    const base = proposal({ status: "listed", claimer: null });
+    const claimed: ClaimStatus = {
+      proposal_id: "demo",
+      proposal_path: base.path,
+      state: "claimed",
+      confirmed_balance_sats: 1,
+      claim_floor_sats: 1,
+      claimer: "bob",
+      claimed_at: "2026-08-14T00:00:00Z",
+    };
+    expect(applyClaimStatusToProposal(base, claimed)).toMatchObject({
+      status: "claimed",
+      claimer: "bob",
+    });
+    expect(
+      applyClaimStatusToProposal(base, { ...claimed, state: "in_review" }),
+    ).toMatchObject({ status: "in_review" });
+    expect(
+      applyClaimStatusToProposal(base, {
+        ...claimed,
+        state: "unavailable",
+        status: "declined",
+      }),
+    ).toMatchObject({ status: "declined" });
+    expect(
+      applyClaimStatusToProposal(base, {
+        ...claimed,
+        state: "open",
+        status: "listed",
+        escrow_address: "tb1qallocated",
+        funding_window_ends_at: "2026-09-01T00:00:00Z",
+      }),
+    ).toMatchObject({
+      status: "listed",
+      escrow_address: "tb1qallocated",
+      funding_window_ends_at: "2026-09-01T00:00:00Z",
+    });
+    expect(
+      applyClaimStatusToProposal(base, {
+        ...claimed,
+        state: "in_review",
+        status: "in_review",
+        release_blocked: true,
+        release_blocked_reason: "Keyholder stall",
+        release_blocked_seats: [2],
+        donor_review_status: "window_open",
+        donor_review_expires_at: "2026-08-21T00:00:00Z",
+        rebuttal_expires_at: "2026-08-28T00:00:00Z",
+        rebuttal_reasoning: "Here is the reply.",
+      }),
+    ).toMatchObject({
+      release_blocked_reason: "Keyholder stall",
+      release_blocked_seats: [2],
+      donor_review_status: "window_open",
+      donor_review_expires_at: "2026-08-21T00:00:00Z",
+      rebuttal_expires_at: "2026-08-28T00:00:00Z",
+      rebuttal_reasoning: "Here is the reply.",
+    });
   });
 });

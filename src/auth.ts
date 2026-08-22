@@ -821,6 +821,7 @@ export type ProposalAuthorInput = {
 };
 
 export type SubmitProposalInput = ProposalAuthorInput & {
+  tos_ack?: boolean;
   submission_fee_txid: string;
   source_issue?: {
     owner: string;
@@ -832,6 +833,7 @@ export type SubmitProposalInput = ProposalAuthorInput & {
 };
 
 export type UpdateProposalInput = ProposalAuthorInput & {
+  tos_ack?: boolean;
   proposal_path: string;
 };
 

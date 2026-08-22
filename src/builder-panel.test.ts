@@ -6,6 +6,11 @@ import {
   claimerTrackHtml,
   payoutStatusCardHtml,
 } from "./builder-panel";
+import {
+  nextActionCardHtml,
+  nextActionMoreHtml,
+  resolveNextAction,
+} from "./next-action";
 import type { ClaimApplicationsResponse, ClaimStatus } from "./builder";
 import type { Proposal } from "./types";
 
@@ -36,8 +41,9 @@ describe("builderPanelHtml proposal types", () => {
     );
     expect(html).toContain("direct-deliverable-slot");
     expect(html).toContain("payout-status-slot");
-    expect(html).toContain("Donations go to the proposer");
-    expect(html).toContain("Paid monthly");
+    expect(html).toContain("Donate. Paid monthly.");
+    expect(html).toContain("data-open-donate");
+    expect(html).toContain('id="builder-watch"');
     expect(html).not.toContain("builder-title");
     expect(html).not.toContain("Direct funding");
     expect(html).not.toContain("builder-claim-modal");
@@ -77,8 +83,52 @@ describe("builderPanelHtml proposal types", () => {
 
   it("uses progress copy instead of a disabled claim below floor", () => {
     const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false);
-    expect(html).toContain("Needs");
+    expect(html).toContain("Still raising.");
     expect(html).not.toContain('id="builder-claim" disabled');
+  });
+
+  it("claimed visitor has no Donate primary and keeps Watch", () => {
+    const html = builderPanelHtml(proposal({ status: "claimed", claimer: "bob" }), 200_000, false);
+    expect(html).toContain("Waiting on the builder.");
+    expect(html).toContain('id="builder-watch"');
+    expect(html).not.toContain("data-open-donate");
+  });
+});
+
+describe("claimed-builder More extras", () => {
+  it("puts checkpoint, extension, and challenge in More, not a second primary", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "claimed", claimer: "bob" }),
+      claim: {
+        proposal_id: "demo",
+        proposal_path: "proposals/claimed/demo.md",
+        state: "claimed",
+        confirmed_balance_sats: 200_000,
+        claim_floor_sats: 10_000,
+        claimer: "bob",
+        can_challenge_abandoned: true,
+      },
+      user: { id: "github:2", username: "bob", github: "bob" },
+    });
+    const html = nextActionCardHtml(action, {
+      extra: nextActionMoreHtml(action, {
+        checkpoint: `<button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>`,
+        extension: `<button type="button" class="btn ghost" id="builder-request-extension">Request 30-day extension</button>`,
+        challenge: `<button type="button" class="btn ghost" id="builder-challenge">Challenge as abandoned</button>`,
+        collab: `<div id="claim-collab-host"></div>`,
+        workboard: `<div id="workboard-settings-host"></div>`,
+      }),
+    });
+    expect(html).toContain("Submit the work when it is done.");
+    expect(html).toContain('id="builder-deliverable"');
+    expect(html).toContain("next-card-more");
+    expect(html).toContain("builder-checkpoint");
+    expect(html).toContain("builder-request-extension");
+    expect(html).not.toContain("builder-challenge");
+    expect(html.match(/class="btn"/g)?.length).toBe(1);
+    expect(html).not.toContain("data-rev-vote");
+    expect(html).not.toContain("data-dec-vote");
+    expect(html).not.toMatch(/deliverable_confirm|⌈|tos-2026|decision_id|PSBT/i);
   });
 });
 

@@ -58,6 +58,20 @@ export type ClaimStatus = {
   claim_extension_used?: boolean;
   review_decision_open?: boolean;
   can_challenge_abandoned?: boolean;
+  donor_review_status?: "window_open" | "flagged" | "auto_completed" | null;
+  donor_review_expires_at?: string | null;
+  can_mark_done?: boolean;
+  can_flag_close?: boolean;
+  escrow_address?: string | null;
+  funding_window_ends_at?: string | null;
+  delivery_window_ends_at?: string | null;
+  milestones_due_at?: string | null;
+  escrow_allocated_at?: string | null;
+  release_blocked?: boolean;
+  release_blocked_reason?: string | null;
+  release_blocked_seats?: number[] | null;
+  rebuttal_expires_at?: string | null;
+  rebuttal_reasoning?: string | null;
 };
 
 export type ClaimLedgerView = {
@@ -94,6 +108,7 @@ export type ClaimParams = {
   claim_decision_grace_days?: number;
   max_claim_applications?: number;
   max_claim_collaborators?: number;
+  donor_review_days?: number;
 };
 
 export type ClaimApplicationView = {
@@ -296,6 +311,56 @@ export async function removeWatch(proposalPath: string): Promise<void> {
   }
 }
 
+/** Overlay Worker claim/listing state onto a git-catalog proposal. */
+export function applyClaimStatusToProposal(
+  proposal: Proposal,
+  status: ClaimStatus,
+): Proposal {
+  const nextStatus =
+    status.status ||
+    (status.state === "claimed" ||
+    status.state === "in_review" ||
+    status.state === "completed"
+      ? status.state
+      : proposal.status);
+  return {
+    ...proposal,
+    status: nextStatus,
+    claimer: status.claimer ?? proposal.claimer,
+    claimer_type: status.claimer_type ?? proposal.claimer_type,
+    claim_agent: status.claim_agent ?? proposal.claim_agent,
+    claimed_at: status.claimed_at ?? proposal.claimed_at,
+    escrow_address: status.escrow_address || proposal.escrow_address,
+    funding_window_ends_at:
+      status.funding_window_ends_at || proposal.funding_window_ends_at,
+    delivery_window_ends_at:
+      status.delivery_window_ends_at || proposal.delivery_window_ends_at,
+    milestones_due_at: status.milestones_due_at || proposal.milestones_due_at,
+    escrow_allocated_at:
+      status.escrow_allocated_at || proposal.escrow_allocated_at,
+    donor_review_status:
+      status.donor_review_status ?? proposal.donor_review_status,
+    donor_review_expires_at:
+      status.donor_review_expires_at ?? proposal.donor_review_expires_at,
+    release_blocked_reason:
+      status.release_blocked === true
+        ? status.release_blocked_reason ?? null
+        : status.release_blocked === false
+          ? null
+          : proposal.release_blocked_reason,
+    release_blocked_seats:
+      status.release_blocked === true
+        ? status.release_blocked_seats ?? null
+        : status.release_blocked === false
+          ? null
+          : proposal.release_blocked_seats,
+    rebuttal_expires_at:
+      status.rebuttal_expires_at ?? proposal.rebuttal_expires_at,
+    rebuttal_reasoning:
+      status.rebuttal_reasoning ?? proposal.rebuttal_reasoning,
+  };
+}
+
 export async function fetchClaimStatus(
   proposalPath: string,
 ): Promise<ClaimStatus | null> {
@@ -427,6 +492,7 @@ export async function submitClaim(input: {
   claim_bond_txid: string;
   claimer_type?: "individual" | "org";
   org_login?: string;
+  tos_ack?: boolean;
 }): Promise<{
   pr_url?: string;
   proposal_id: string;
@@ -454,10 +520,7 @@ export async function submitClaim(input: {
   };
   if (res.status === 401) throw new Error("login_required");
   if (!res.ok) {
-    const hint = data.pending?.pr_url
-      ? ` Pending: ${data.pending.pr_url}`
-      : "";
-    throw new Error((data.error || `Claim failed (${res.status})`) + hint);
+    throw new Error(data.error || `Claim failed (${res.status})`);
   }
   return {
     pr_url: data.pr_url,
@@ -472,7 +535,7 @@ export async function submitClaim(input: {
 export async function acceptClaimApplication(input: {
   proposal_path: string;
   application_id: string;
-}): Promise<{ pr_url: string }> {
+}): Promise<{ ok: true }> {
   const res = await fetch(
     `${API()}/claims/applications/${encodeURIComponent(input.application_id)}/accept`,
     {
@@ -482,11 +545,11 @@ export async function acceptClaimApplication(input: {
       body: JSON.stringify({ proposal_path: input.proposal_path }),
     },
   );
-  const data = (await res.json()) as { ok?: boolean; pr_url?: string; error?: string };
-  if (!res.ok || !data.pr_url) {
+  const data = (await res.json()) as { ok?: boolean; error?: string };
+  if (!res.ok) {
     throw new Error(data.error || `Accept failed (${res.status})`);
   }
-  return { pr_url: data.pr_url };
+  return { ok: true };
 }
 
 export async function rejectClaimApplication(input: {
@@ -598,10 +661,49 @@ export async function submitCheckpoint(input: {
   if (!res.ok) throw new Error(data.error || `Checkpoint failed (${res.status})`);
 }
 
+export async function markProposalDone(input: {
+  proposal_path: string;
+  proposal_id?: string;
+}): Promise<{ expires_at?: string }> {
+  const res = await fetch(`${API()}/claims/done`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    expires_at?: string;
+  };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok) throw new Error(data.error || `Mark done failed (${res.status})`);
+  return { expires_at: data.expires_at };
+}
+
+export async function flagProposalClose(input: {
+  proposal_path: string;
+  proposal_id?: string;
+  reason: string;
+}): Promise<{ decision_id?: string }> {
+  const res = await fetch(`${API()}/claims/flag`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    decision_id?: string;
+  };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok) throw new Error(data.error || `Flag failed (${res.status})`);
+  return { decision_id: data.decision_id };
+}
+
 export async function submitAbandonedChallenge(input: {
   proposal_path: string;
   reason?: string;
-}): Promise<{ pr_url?: string }> {
+}): Promise<{ ok: true }> {
   const res = await fetch(`${API()}/claims/challenge`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
@@ -610,16 +712,15 @@ export async function submitAbandonedChallenge(input: {
   });
   const data = (await res.json()) as {
     ok?: boolean;
-    challenge?: { pr_url?: string };
     error?: string;
   };
   if (res.status === 401) throw new Error("login_required");
   if (!res.ok) throw new Error(data.error || `Challenge failed (${res.status})`);
-  return { pr_url: data.challenge?.pr_url };
+  return { ok: true };
 }
 
 export type DeliverableResult = {
-  pr_url: string;
+  pr_url?: string;
   decision_id?: string;
   ai_review?: {
     outcome: "pass" | "fail" | "ambiguous";
@@ -644,11 +745,10 @@ export async function submitDeliverable(input: {
   });
   const data = (await res.json()) as DeliverableResult & { error?: string };
   if (res.status === 401) throw new Error("login_required");
-  if (!res.ok || !data.pr_url) {
+  if (!res.ok) {
     throw new Error(data.error || `Deliverable failed (${res.status})`);
   }
   return {
-    pr_url: data.pr_url,
     decision_id: data.decision_id,
     ai_review: data.ai_review,
   };

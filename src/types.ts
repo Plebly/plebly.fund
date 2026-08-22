@@ -32,6 +32,8 @@ export type UserProfile = {
   funder_credit?: FunderCreditPreferences;
   /** Private: linked GitHub orgs for claim-as-org (from Account). */
   github_orgs?: GithubOrgAttestation[];
+  tos_version?: string;
+  tos_accepted_at?: string;
   created_at?: string;
   updated_at?: string;
   username_claimed_at?: string;
@@ -162,6 +164,12 @@ export type Proposal = {
   delivery_window_ends_at?: string | null;
   milestones_due_at?: string | null;
   release_blocked_reason?: string | null;
+  /** Seat numbers 1–5 when ops published them on a stall. */
+  release_blocked_seats?: number[] | null;
+  rebuttal_expires_at?: string | null;
+  rebuttal_reasoning?: string | null;
+  donor_review_status?: "window_open" | "flagged" | "auto_completed" | null;
+  donor_review_expires_at?: string | null;
   view_count?: number;
   /** Catalog enrich: rescue stall signal (optional). */
   rescue?: boolean;
@@ -189,6 +197,7 @@ export type Route =
   | { name: "donations" }
   | { name: "keyholders" }
   | { name: "params" }
+  | { name: "terms" }
   | { name: "account" }
   | { name: "work" }
   | { name: "propose" }

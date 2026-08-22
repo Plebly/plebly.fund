@@ -93,10 +93,10 @@ function donateCreditStepHtml(signedIn: boolean): string {
     return `<section class="donate-step" data-donate-step="credit" id="donate-step-credit">
       <div class="donate-panel-head">
         <h2 class="donate-title" id="donate-modal-title">Get credit for this donation</h2>
-        <p class="donate-lede">Sign in before you pay so we can link this donation to your profile on the funder list. Amounts stay private unless you opt in later.</p>
+        <p class="donate-lede">Sign in before you pay so you can flag work later, get notified when the proposer marks it done, and keep this donation on your profile. Amounts stay private unless you opt in later.</p>
       </div>
       <aside class="donate-credit-advisory" role="note">
-        <p><strong>Suggested:</strong> Log in first if you want this donation on your profile. Anonymous gifts still fund the project. Keep your receipt if you might need a refund later.</p>
+        <p><strong>Suggested:</strong> Log in first if you want more options later — flag a close, get notifications, and credit on your profile. Anonymous gifts still fund the project. Keep your receipt if you might need a refund later.</p>
       </aside>
       <div class="donate-credit-login">
         ${loginChoicesHtml(undefined, currentReturnPath())}
@@ -142,7 +142,7 @@ function donatePayStepHtml(
              <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
              <p class="muted donate-legal-hint">Private. Not shown on the funder list. An npub is not a legal name. A receipt appears in Account after on-chain confirmation.</p>`
           : `<aside class="donate-credit-advisory" role="note">
-               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want this donation credited.${
+               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want more options later (flag a close, notifications, credit).${
                  endowment
                    ? ""
                    : " Keep your receipt if you might need a refund later."
@@ -294,82 +294,138 @@ export function statusPillHtml(status: string): string {
   return `<span class="pill pill-status ${statusClass(s)}">${escapeHtml(statusLabel(s))}</span>`;
 }
 
+export type ProposalStep =
+  | "List"
+  | "Fund"
+  | "Award"
+  | "Build"
+  | "Review"
+  | "Rebuttal"
+  | "Release";
+
+export function proposalCurrentStep(p: Proposal): ProposalStep {
+  const status = String(p.status || "");
+  const isDirect = String(p.proposal_type || "bounty") === "direct";
+  if (p.release_blocked_reason) return "Release";
+  if (status === "completed") return "Release";
+  if (status === "rejected") return "Rebuttal";
+  if (status === "in_review") return "Review";
+  if (status === "claimed") return "Build";
+  if (status === "claimable" || status === "listed" || status === "funding") {
+    if (isDirect) return "Fund";
+    if (status === "claimable") return "Award";
+    return "Fund";
+  }
+  if (status === "unindexed" || status === "pr_open") return "List";
+  return "List";
+}
+
+export function proposalStepperHtml(p: Proposal): string {
+  const isDirect = String(p.proposal_type || "bounty") === "direct";
+  const current = proposalCurrentStep(p);
+  const steps: ProposalStep[] = isDirect
+    ? ["List", "Fund", "Build", "Review", "Release"]
+    : ["List", "Fund", "Award", "Build", "Review", "Release"];
+  if (current === "Rebuttal" && !steps.includes("Rebuttal")) {
+    const i = steps.indexOf("Review");
+    steps.splice(i + 1, 0, "Rebuttal");
+  }
+  const currentIdx = steps.indexOf(current === "Rebuttal" ? "Rebuttal" : current);
+  return `<ol class="proposal-stepper" aria-label="Project path">
+    ${steps
+      .map((step, i) => {
+        const state =
+          i === currentIdx ? "current" : i < currentIdx ? "done" : "todo";
+        return `<li class="proposal-step proposal-step-${state}"${
+          state === "current" ? ' aria-current="step"' : ""
+        }>${escapeHtml(step)}</li>`;
+      })
+      .join("")}
+  </ol>`;
+}
+
 /** Lifecycle banners: funding window, milestones grace, keyholder stall, ballot. */
-export function proposalLifecycleBannersHtml(
-  p: Proposal,
-  balance?: number | null,
-): string {
-  const parts: string[] = [];
-  if (p.release_blocked_reason) {
-    parts.push(
-      `<div class="lifecycle-banner lifecycle-stall" role="status"><span class="lifecycle-k">Release stalled</span><p>${escapeHtml(p.release_blocked_reason)}</p></div>`,
+function lifecycleBanner(k: string, body: string, cls = ""): string {
+  return `<div class="lifecycle-banner${cls ? ` ${cls}` : ""}" role="status"><span class="lifecycle-k">${k}</span><p>${body}</p></div>`;
+}
+
+function fundingWindowBanner(p: Proposal): string {
+  if (!p.funding_window_ends_at) return "";
+  const end = new Date(p.funding_window_ends_at);
+  if (Number.isNaN(end.getTime())) return "";
+  const days = Math.ceil((end.getTime() - Date.now()) / 86400_000);
+  if (days >= 0 && days <= 30) {
+    return lifecycleBanner(
+      "Funding window",
+      `${days} day${days === 1 ? "" : "s"} remaining`,
     );
   }
-  if (p.funding_window_ends_at) {
-    const end = new Date(p.funding_window_ends_at);
-    if (!Number.isNaN(end.getTime())) {
-      const days = Math.ceil((end.getTime() - Date.now()) / 86400_000);
-      if (days >= 0 && days <= 30) {
-        parts.push(
-          `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Funding window</span><p>${days} day${days === 1 ? "" : "s"} remaining</p></div>`,
-        );
-      } else if (days < 0 && ["listed", "funding", "declined_fundable"].includes(String(p.status))) {
-        parts.push(
-          `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Funding window</span><p>Window ended</p></div>`,
-        );
-      }
-    }
+  if (days < 0 && ["listed", "funding", "declined_fundable"].includes(String(p.status))) {
+    return lifecycleBanner("Funding window", "Window ended", "lifecycle-warn");
   }
+  return "";
+}
+
+function milestonesBanner(p: Proposal, balance?: number | null): string {
   if (p.milestones_due_at && !p.milestones.length) {
     const due = new Date(p.milestones_due_at);
     if (!Number.isNaN(due.getTime())) {
       const overdue = Date.now() > due.getTime();
-      parts.push(
-        `<div class="lifecycle-banner ${overdue ? "lifecycle-warn" : ""}" role="status"><span class="lifecycle-k">Milestones</span><p>${
-          overdue
-            ? "This project needs a milestone list before it can pay out."
-            : `Milestones due by ${due.toLocaleDateString()}`
-        }</p></div>`,
+      return lifecycleBanner(
+        "Milestones",
+        overdue
+          ? "This project needs a milestone list before it can pay out."
+          : `Milestones due by ${due.toLocaleDateString()}`,
+        overdue ? "lifecycle-warn" : "",
       );
     }
-  } else if (
-    !p.milestones.length &&
-    balance != null &&
-    balance >= 1_000_000
-  ) {
-    parts.push(
-      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Milestones</span><p>This project needs a milestone list.</p></div>`,
+  }
+  if (!p.milestones.length && balance != null && balance >= 1_000_000) {
+    return lifecycleBanner("Milestones", "This project needs a milestone list.");
+  }
+  return "";
+}
+
+/** At most one banner. Priority: stall → open vote/refund → funding window → milestones. */
+export function proposalLifecycleBannersHtml(
+  p: Proposal,
+  balance?: number | null,
+): string {
+  if (p.release_blocked_reason) {
+    const seats = (p.release_blocked_seats || [])
+      .filter((n) => n >= 1 && n <= 5)
+      .map((n) => `seat ${n}`);
+    const seatLine = seats.length ? ` Unsigned: ${seats.join(", ")}.` : "";
+    return lifecycleBanner(
+      "Release stalled",
+      `${escapeHtml(p.release_blocked_reason)}${escapeHtml(seatLine)}`,
+      "lifecycle-stall",
     );
   }
   if (String(p.status) === "abandoned_vote") {
-    parts.push(
-      `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Vote open</span><p>Donors are voting: extend, refund, or move remaining funds.</p></div>`,
+    return lifecycleBanner(
+      "Vote open",
+      "Donors are voting: extend, refund, or move remaining funds.",
     );
-  } else if (String(p.status) === "underfunded") {
-    // Workers open a Q18 ballot only when escrow balance > 0.
+  }
+  if (String(p.status) === "underfunded") {
     if (balance != null && balance > 0) {
-      parts.push(
-        `<div class="lifecycle-banner" role="status"><span class="lifecycle-k">Vote open</span><p>Funding ended short. Donors are voting: extend, refund, or move remaining funds.</p></div>`,
-      );
-    } else {
-      parts.push(
-        `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Underfunded</span><p>Funding ended before this project could open.</p></div>`,
+      return lifecycleBanner(
+        "Vote open",
+        "Funding ended short. Donors are voting: extend, refund, or move remaining funds.",
       );
     }
-  }
-  if (String(p.status) === "in_review") {
-    parts.push(
-      `<div class="lifecycle-banner lifecycle-review" role="status"><span class="lifecycle-k">In review</span><p>Reviewers are checking the work.</p></div>`,
-    );
-  }
-  if (String(p.status) === "rejected") {
-    parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Rejected</span><p>The fulfiller may file one formal rebuttal within 14 days. One second review follows. No third appeal.</p></div>`,
+    return lifecycleBanner(
+      "Underfunded",
+      "Funding ended before this project could open.",
+      "lifecycle-warn",
     );
   }
   if (String(p.status) === "refunding") {
-    parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Refunding</span><p>Add a refund address below. Track it in <a href="${href("/account", "?tab=funds")}">Account</a>.</p></div>`,
+    return lifecycleBanner(
+      "Refunding",
+      `Add a refund address below. Track it in <a href="${href("/account", "?tab=funds")}">Account</a>.`,
+      "lifecycle-warn",
     );
   }
   if (
@@ -381,13 +437,15 @@ export function proposalLifecycleBannersHtml(
     ).trim();
     const label =
       String(p.status) === "redirected" ? "Redirected" : "Redirect pending";
-    parts.push(
-      `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">${label}</span><p>Donors voted to move remaining funds${
+    return lifecycleBanner(
+      label,
+      `Donors voted to move remaining funds${
         target ? ` to <code class="mono">${escapeHtml(target)}</code>` : ""
-      }.</p></div>`,
+      }.`,
+      "lifecycle-warn",
     );
   }
-  return parts.join("");
+  return fundingWindowBanner(p) || milestonesBanner(p, balance);
 }
 
 /**

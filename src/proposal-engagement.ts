@@ -11,6 +11,7 @@ import { WORKERS_API } from "./config";
 import { fileModerationReport } from "./reports";
 import { profileHref } from "./router";
 import { safeHrefAttr } from "./social-links";
+import { avatarImgHtml } from "./media";
 import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
 
 type PublicContribution = {
@@ -201,7 +202,11 @@ function avatarHandleFromComment(comment: ProposalComment): string | null {
 
 function commentAvatarHtml(comment: ProposalComment): string {
   if (comment.avatar_url) {
-    return `<img class="user-avatar proposal-comment-avatar" src="${escapeHtml(comment.avatar_url)}" alt="" width="32" height="32" loading="lazy" decoding="async" />`;
+    return avatarImgHtml(
+      comment.avatar_url,
+      "user-avatar proposal-comment-avatar",
+      32,
+    );
   }
   const handle = avatarHandleFromComment(comment);
   if (handle) {

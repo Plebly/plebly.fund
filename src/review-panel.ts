@@ -1,7 +1,9 @@
 import type { AuthUser } from "./auth";
 import { loginChoicesHtml } from "./auth";
 import { btnWithIcon } from "./icons";
+import { daysLeftFrom } from "./next-action";
 import {
+  decisionKindLabel,
   fetchOpenReviewDecision,
   fetchReviewerMe,
   publishDissent,
@@ -34,10 +36,8 @@ export function aiReviewCardHtml(ai: AiReviewView, opts?: { compact?: boolean })
       : "";
   const next =
     ai.outcome === "fail"
-      ? `<p class="ai-next">No reviewer ballot opened. Revise and resubmit before the claim window ends.</p>`
-      : ai.outcome === "pass"
-        ? `<p class="ai-next">Reviewers still confirm. AI never releases funds.</p>`
-        : `<p class="ai-next">Escalated to a full reviewer vote.</p>`;
+      ? `<p class="ai-next">Revise and resubmit.</p>`
+      : `<p class="ai-next">The proposer can mark this done.</p>`;
   return `<div class="ai-review-card ${aiOutcomeClass(ai.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
     <div class="ai-review-head">
       <span class="ai-k">AI first-pass</span>
@@ -46,7 +46,6 @@ export function aiReviewCardHtml(ai: AiReviewView, opts?: { compact?: boolean })
     <p class="ai-reasoning">${escapeHtml(ai.reasoning)}</p>
     ${failList}
     ${next}
-    <p class="ai-meta muted">Prompt <code class="mono">${escapeHtml(ai.prompt_version)}</code> · ${escapeHtml(ai.model)}</p>
   </div>`;
 }
 
@@ -60,24 +59,50 @@ export function reviewPanelHtml(proposalId: string): string {
       <button type="button" class="btn ghost" data-rev-vote="no">${btnWithIcon("xmark", "Reject")}</button>
       <button type="button" class="btn ghost" data-rev-vote="abstain">Abstain</button>
     </div>
+    <div id="review-dissents" class="review-dissents"></div>
     <div id="review-dissent" class="review-dissent" hidden>
-      <label class="donate-amount-label" for="dissent-text">Publish dissent (permanent in git)</label>
-      <textarea id="dissent-text" class="donate-amount" rows="3" placeholder="Your reasoning for the public record…"></textarea>
-      <button type="button" class="btn ghost" id="dissent-submit">Open dissent PR</button>
+      <label class="donate-amount-label" for="dissent-text">Publish dissent</label>
+      <textarea id="dissent-text" class="donate-amount" rows="3" placeholder="Why this does not meet the project…"></textarea>
+      <button type="button" class="btn ghost" id="dissent-submit">Publish dissent</button>
     </div>
     <p class="builder-msg" id="review-msg" hidden></p>
   </div>`;
 }
 
-export function rebuttalPanelHtml(): string {
+export function rebuttalPanelHtml(
+  expiresAt?: string | null,
+  filed?: string | null,
+): string {
+  if (filed) {
+    return `<div class="rebuttal-panel" id="rebuttal-panel">
+    <p class="next-card-sentence">Reply filed. Reviewers will take a second look.</p>
+    <p class="review-dissent-text">${escapeHtml(filed)}</p>
+  </div>`;
+  }
+  const days = daysLeftFrom(expiresAt);
+  const sentence =
+    days != null
+      ? `You can file one reply. ${days} day${days === 1 ? "" : "s"} left.`
+      : "You can file one reply.";
   return `<div class="rebuttal-panel" id="rebuttal-panel">
-    <h3 class="review-panel-title">Rebuttal</h3>
-    <p class="muted">Within 14 days of rejection you may file one formal rebuttal. Reviewers get one second vote. No third appeal.</p>
-    <label class="donate-amount-label" for="rebuttal-text">Rebuttal</label>
+    <p class="next-card-sentence">${escapeHtml(sentence)}</p>
+    <label class="donate-amount-label" for="rebuttal-text">Reply</label>
     <textarea id="rebuttal-text" class="donate-amount" rows="4" placeholder="Address the rejection with concrete evidence…"></textarea>
-    <button type="button" class="btn" id="rebuttal-submit">Submit rebuttal PR</button>
+    <button type="button" class="btn" id="rebuttal-submit">File reply</button>
     <p class="builder-msg" id="rebuttal-msg" hidden></p>
   </div>`;
+}
+
+export function dissentListHtml(
+  entries: NonNullable<ReviewDecisionView["dissent"]>,
+): string {
+  if (!entries.length) return "";
+  return `<ul class="review-dissent-list">${entries
+    .map(
+      (e) =>
+        `<li class="review-dissent-item"><p class="review-dissent-text">${escapeHtml(e.reasoning)}</p></li>`,
+    )
+    .join("")}</ul>`;
 }
 
 function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
@@ -93,33 +118,50 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
   el.className = `builder-msg ${cls}`.trim();
 }
 
+export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
+  const kind = decisionKindLabel(d.kind);
+  if (d.status !== "open") {
+    const result = d.result || d.status;
+    return `${kind} · Closed · ${result}${d.passed ? " (passed)" : ""}`;
+  }
+  const closes = new Date(d.closes_at).toLocaleDateString();
+  const second = d.round === 2 ? " · Second look" : "";
+  return `${kind}${second} · ${d.vote_count} vote(s) · closes ${closes}.`;
+}
+
 function renderDecision(
   root: ParentNode,
   d: ReviewDecisionView,
   isReviewer: boolean,
+  userId?: string | null,
 ): void {
   const statusEl = root.querySelector<HTMLElement>("#review-status");
   const counts = root.querySelector<HTMLElement>("#review-counts");
   const actions = root.querySelector<HTMLElement>("#review-actions");
   const dissent = root.querySelector<HTMLElement>("#review-dissent");
+  const list = root.querySelector<HTMLElement>("#review-dissents");
+  const mine = Boolean(
+    userId && (d.dissent || []).some((e) => e.user_id === userId),
+  );
 
   if (statusEl) {
-    const closes = new Date(d.closes_at).toLocaleDateString();
-    statusEl.textContent =
-      d.status === "open"
-        ? `Round ${d.round} · ${d.vote_count} vote(s) · closes ${closes} · need ⌈⅔⌉ yes + 5 non-abstain`
-        : `Closed · ${d.result || d.status}${d.passed ? " (passed)" : ""}`;
+    statusEl.textContent = reviewDecisionStatusLine(d);
   }
   if (counts) {
     counts.hidden = false;
     counts.innerHTML = `
       <span class="review-count yes">Yes ${d.counts.yes}</span>
       <span class="review-count no">No ${d.counts.no}</span>
-      <span class="review-count abstain">Abstain ${d.counts.abstain}</span>
-      ${d.need_yes != null ? `<span class="muted">Need ${d.need_yes} yes</span>` : ""}`;
+      <span class="review-count abstain">Abstain ${d.counts.abstain}</span>`;
+  }
+  if (list) {
+    const reply = d.rebuttal?.reasoning
+      ? `<p class="review-dissent-text">${escapeHtml(d.rebuttal.reasoning)}</p>`
+      : "";
+    list.innerHTML = `${reply}${dissentListHtml(d.dissent || [])}`;
   }
   if (actions) actions.hidden = !(d.status === "open" && isReviewer);
-  if (dissent) dissent.hidden = !isReviewer;
+  if (dissent) dissent.hidden = !(isReviewer && !mine);
 }
 
 export async function bindReviewPanel(
@@ -149,7 +191,7 @@ export async function bindReviewPanel(
     return;
   }
 
-  renderDecision(panel, decision, isReviewer);
+  renderDecision(panel, decision, isReviewer, opts.user?.id);
 
   if (!opts.user && decision.status === "open") {
     const actions = panel.querySelector<HTMLElement>("#review-actions");
@@ -165,7 +207,7 @@ export async function bindReviewPanel(
       setMsg(msg, "Recording vote…");
       try {
         const next = await voteReviewDecision(decision.id, vote);
-        renderDecision(panel, next, isReviewer);
+        renderDecision(panel, next, isReviewer, opts.user?.id);
         setMsg(msg, "Vote recorded.", "success");
       } catch (e) {
         if ((e as Error).message === "login_required") {
@@ -187,10 +229,11 @@ export async function bindReviewPanel(
       setMsg(msg, "Dissent needs at least 20 characters.", "error");
       return;
     }
-    setMsg(msg, "Opening dissent PR…");
+    setMsg(msg, "Publishing…");
     try {
-      const { pr_url } = await publishDissent(decision.id, text);
-      setMsg(msg, `Dissent PR opened: ${pr_url}`, "success");
+      const next = await publishDissent(decision.id, text);
+      renderDecision(panel, next, isReviewer, opts.user?.id);
+      setMsg(msg, "Dissent published.", "success");
     } catch (e) {
       if ((e as Error).message === "login_required") {
         if (msg) {
@@ -209,6 +252,7 @@ export async function bindRebuttalPanel(
     proposalPath: string;
     user: AuthUser | null;
     isFulfiller: boolean;
+    expiresAt?: string | null;
   },
 ): Promise<void> {
   const panel = root.querySelector<HTMLElement>("#rebuttal-panel");
@@ -216,14 +260,19 @@ export async function bindRebuttalPanel(
   const msg = panel.querySelector<HTMLElement>("#rebuttal-msg");
 
   if (!opts.isFulfiller) {
-    panel.innerHTML = `<h3 class="review-panel-title">Rejected</h3><p class="muted">The fulfiller may file one rebuttal within 14 days.</p>`;
+    const days = daysLeftFrom(opts.expiresAt);
+    const sentence =
+      days != null
+        ? `The builder has ${days} day${days === 1 ? "" : "s"} to reply once.`
+        : "The builder has time to reply once.";
+    panel.innerHTML = `<p class="next-card-sentence">${escapeHtml(sentence)}</p>`;
     return;
   }
   if (!opts.user) {
     panel.querySelector("#rebuttal-submit")?.replaceWith(
       (() => {
         const d = document.createElement("div");
-        d.innerHTML = loginChoicesHtml("Sign in as the fulfiller to rebut.");
+        d.innerHTML = loginChoicesHtml("Sign in as the builder to file a reply.");
         return d;
       })(),
     );
@@ -235,21 +284,17 @@ export async function bindRebuttalPanel(
       panel.querySelector("#rebuttal-text") as HTMLTextAreaElement | null
     )?.value.trim();
     if (!reasoning || reasoning.length < 40) {
-      setMsg(msg, "Rebuttal needs at least 40 characters.", "error");
+      setMsg(msg, "Reply needs at least 40 characters.", "error");
       return;
     }
-    setMsg(msg, "Opening rebuttal PR…");
+    setMsg(msg, "Filing reply…");
     try {
-      const result = await submitRebuttal({
+      const next = await submitRebuttal({
         proposal_id: opts.proposalId,
         proposal_path: opts.proposalPath,
         reasoning,
       });
-      setMsg(
-        msg,
-        `Rebuttal opened. Second review ${result.decision_id}. ${result.pr_url}`,
-        "success",
-      );
+      panel.outerHTML = rebuttalPanelHtml(opts.expiresAt, next.reasoning || reasoning);
     } catch (e) {
       setMsg(msg, (e as Error).message, "error");
     }

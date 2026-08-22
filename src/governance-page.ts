@@ -4,6 +4,7 @@ import {
   authFetch,
   type AuthUser,
 } from "./auth";
+import { authFetchWithTos, tosCheckboxHtml } from "./tos-modal";
 import { WORKERS_API } from "./config";
 import { btnWithIcon } from "./icons";
 import {
@@ -39,7 +40,6 @@ import {
   type ReviewerRoster,
 } from "./reviewers";
 import { href, projectsHref, proposalHref } from "./router";
-import { safeHrefAttr } from "./social-links";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
 export type GovernanceShell = (inner: string) => string;
@@ -138,6 +138,7 @@ export function opsRoleBallotCardHtml(
       <span class="gov-card-title">${escapeHtml(opsRoleLabel(b.kind))}</span>
       <span class="pill">${escapeHtml(opsActionLabel(b.action))}</span>
     </div>
+    <p class="next-card-sentence">Vote on this role.</p>
     <p class="mono muted gov-nominee">Nominee ${escapeHtml(shortUserId(b.nominee_user_id))}</p>
     <p class="gov-evidence">${escapeHtml(b.rationale)}</p>
     <div class="gov-counts">
@@ -418,6 +419,14 @@ export function openDecisionsHtml(
     .join("")}</ul>`;
 }
 
+export function inboxDecisionSentence(kind: string): string {
+  if (kind === "deliverable_confirm") return "Vote whether this meets the project.";
+  if (kind === "second_review") return "Vote on the builder's reply.";
+  if (kind === "claim_extension") return "Vote on more time.";
+  if (kind === "listing_challenge") return "Vote on this listing.";
+  return "Vote on this decision.";
+}
+
 export function decisionCardHtml(
   d: ReviewDecisionView,
   isReviewer: boolean,
@@ -436,11 +445,15 @@ export function decisionCardHtml(
       <span class="pill">${escapeHtml(decisionKindLabel(d.kind))}</span>
       ${d.round === 2 ? `<span class="pill">Round 2</span>` : ""}
     </div>
+    <p class="next-card-sentence">${escapeHtml(inboxDecisionSentence(d.kind))}</p>
+    ${
+      d.rebuttal?.reasoning
+        ? `<p class="review-dissent-text">${escapeHtml(d.rebuttal.reasoning)}</p>`
+        : ""
+    }
     <div class="gov-counts">
       <span class="review-count yes">Yes ${d.counts.yes}</span>
       <span class="review-count no">No ${d.counts.no}</span>
-      <span class="muted">Abstain ${d.counts.abstain}</span>
-      <span class="muted">Need ⌈⅔⌉ of ${d.roster_size ?? "?"} (≥${d.need_yes ?? "?"} yes)</span>
     </div>
     <p class="muted gov-closes">Closes ${escapeHtml(closesLabel(d.closes_at))}</p>
     ${voteRow}
@@ -478,23 +491,8 @@ export function removalCardHtml(
       <span class="gov-card-title mono">${escapeHtml(shortUserId(b.target_user_id))}</span>
       <span class="pill">Removal</span>
     </div>
+    <p class="next-card-sentence">Vote whether to remove this reviewer.</p>
     <p class="gov-evidence">${escapeHtml(b.evidence)}</p>
-    ${
-      (() => {
-        const ev = safeHrefAttr(b.evidence_pr_url);
-        const res = safeHrefAttr(b.result_pr_url);
-        if (!ev && !res) return "";
-        return `<p class="muted gov-closes">${
-          ev
-            ? `<a href="${ev}" target="_blank" rel="noreferrer">Evidence PR</a>`
-            : ""
-        }${
-          res
-            ? `${ev ? " · " : ""}<a href="${res}" target="_blank" rel="noreferrer">Result PR</a>`
-            : ""
-        }</p>`;
-      })()
-    }
     <div class="gov-counts">
       <span class="review-count yes">Remove ${b.counts.yes}</span>
       <span class="review-count no">Keep ${b.counts.no}</span>
@@ -598,6 +596,7 @@ export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
     <label class="donate-amount-label" for="kh-apply-statement">Statement</label>
     <textarea id="kh-apply-statement" class="comment-input" rows="4" required maxlength="2000" placeholder="Why you can stay reachable and sign monthly releases…"></textarea>
     <label class="muted"><input type="checkbox" id="kh-apply-ack" required /> I have read the <a href="${href("/docs/keyholder-responsibilities.md")}">keyholder responsibilities</a>, including that the operator can spend the keyholder pool on the fee address until cash-out.</label>
+    ${tosCheckboxHtml("kh-apply-tos")}
     <div class="form-actions"><button type="submit" class="btn">Apply</button></div>
     <p class="builder-msg" id="kh-apply-msg" hidden></p>
   </form>`;
@@ -611,6 +610,7 @@ export function khElectionCardHtml(
   const handle = application?.handle || application?.github || election.applicant_id;
   return `<li class="gov-card" data-kh-election="${escapeHtml(election.id)}">
     <p class="gov-card-title">${escapeHtml(handle)}</p>
+    <p class="next-card-sentence">Vote on this keyholder.</p>
     <p class="muted">${escapeHtml(application?.hw_type || "")} · yes ${election.yes} / no ${election.no} · closes ${escapeHtml(election.closes_at.slice(0, 10))}</p>
     ${application?.statement ? `<p>${escapeHtml(application.statement)}</p>` : ""}
     ${
@@ -713,7 +713,7 @@ export async function renderGovernance(
 
       <section class="gov-block account-pane" data-gov-pane="roster" id="roster" ${tab === "roster" ? "" : "hidden"}>
         <h2 class="gov-block-title">Active roster</h2>
-        <p class="muted gov-block-lede">⌈⅔⌉ yes of the active roster, with at least five non-abstaining votes, passes a decision.${funderEligible ? " Select an earned seat to prefill a removal." : ""}</p>
+        <p class="muted gov-block-lede">A decision passes with two-thirds yes from the active roster, and at least five yes-or-no votes.${funderEligible ? " Select an earned seat to prefill a removal." : ""}</p>
         ${rosterSectionHtml(roster, { selectable: funderEligible })}
       </section>
 
@@ -1056,7 +1056,7 @@ function bindGovernanceHandlers(
     if (!id || !vote) return;
     const card = btn.closest(".gov-card");
     setCardMsg(card, "Submitting…");
-    const res = await authFetch(`${govApi()}/keyholders/election/${encodeURIComponent(id)}/vote`, {
+    const res = await authFetchWithTos(`${govApi()}/keyholders/election/${encodeURIComponent(id)}/vote`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ vote }),
@@ -1089,6 +1089,7 @@ function bindGovernanceHandlers(
           handle: page.querySelector<HTMLInputElement>("#kh-apply-handle")?.value || "",
           statement: page.querySelector<HTMLTextAreaElement>("#kh-apply-statement")?.value || "",
           ack: page.querySelector<HTMLInputElement>("#kh-apply-ack")?.checked,
+          tos_ack: page.querySelector<HTMLInputElement>("#kh-apply-tos")?.checked,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };

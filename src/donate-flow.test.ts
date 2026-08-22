@@ -57,6 +57,7 @@ import {
   donateModalHtml,
   donateTriggerHtml,
 } from "./proposal-ui";
+import { nextActionPrimaryHtml } from "./next-action";
 
 const proposal = {
   id: "PLEBLY-42",
@@ -285,6 +286,24 @@ describe("donate modal UX", () => {
     expect(modal.hidden).toBe(true);
   });
 
+  it("opens from the next-action card primary via data-open-donate", async () => {
+    document.body.innerHTML = `
+      ${nextActionPrimaryHtml({ sentence: "Still raising.", button: "donate", moreIds: [] })}
+      ${donateModalHtml(proposal, { signedIn: true })}
+    `;
+    bindDonateModal(document);
+    await bindDonatePanel(document, {
+      address: proposal.escrow_address!,
+      proposalId: proposal.id,
+      proposalPath: proposal.path,
+      signedIn: true,
+    });
+    const modal = document.querySelector<HTMLElement>("#donate-modal")!;
+    expect(modal.hidden).toBe(true);
+    document.querySelector<HTMLButtonElement>("[data-open-donate]")!.click();
+    expect(modal.hidden).toBe(false);
+  });
+
   it("switches rails on the payment step", async () => {
     mountDonate({ signedIn: true, open: true });
     await bindSignedInPanel();
@@ -341,6 +360,8 @@ describe("donate credit UX (signed out)", () => {
     expect(document.body.textContent).toContain("GitHub");
     expect(document.body.textContent).toContain("Nostr");
     expect(document.querySelector(".donate-credit-advisory")).toBeTruthy();
+    expect(document.body.textContent).toContain("more options later");
+    expect(document.body.textContent).toContain("flag a close");
     expect(document.querySelector("#donate-credit-public")).toBeNull();
     expect(document.querySelector("#donate-credit-continue")?.textContent).toContain(
       "Continue anonymously",
