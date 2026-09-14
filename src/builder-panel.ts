@@ -49,6 +49,7 @@ import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
 import { safeHrefAttr } from "./social-links";
 import {
+  BOUNTY_ONCHAIN_PAYOUT_ERROR,
   isLightningPayoutDestination,
   payoutLooksValid,
   type PayoutRail,
@@ -467,23 +468,10 @@ export function builderPanelHtml(
                 <span class="claim-refund-rail-name">On-chain</span>
                 <span class="claim-refund-rail-meta mono">${addressHrp()}…</span>
               </label>
-              <label class="claim-refund-rail-card${!lightningUiAllowed() ? " is-disabled" : ""}" title="${
-                lightningUiAllowed()
-                  ? "Lightning Address or LNURL"
-                  : "Lightning refunds unavailable on signet — use mainnet"
-              }">
-                <input type="radio" name="claim_payout_rail" value="lightning"${
-                  lightningUiAllowed() ? "" : " disabled"
-                } aria-describedby="claim-ln-rail-note" />
-                <span class="claim-refund-rail-kicker">Lightning</span>
-                <span class="claim-refund-rail-name">Lightning</span>
-                <span class="claim-refund-rail-meta" id="claim-ln-rail-note">${
-                  lightningUiAllowed()
-                    ? "you@host · lnurl"
-                    : "Unavailable on signet"
-                }</span>
-              </label>
             </div>
+            <p class="claim-refund-dest-hint muted" id="claim-ln-rail-note">
+              Bounty payouts must be an on-chain address so they can be baked into a presigned PSBT. Lightning Address and LNURL are for Direct campaigns only.
+            </p>
           </fieldset>
 
           <div class="claim-refund-dest">
@@ -976,14 +964,7 @@ export async function bindBuilderPanel(
     feePay?.setStep("pay");
   };
 
-  const selectedPayoutRail = (): PayoutRail => {
-    const v = (
-      panel.querySelector(
-        'input[name="claim_payout_rail"]:checked',
-      ) as HTMLInputElement | null
-    )?.value;
-    return v === "lightning" && lightningUiAllowed() ? "lightning" : "onchain";
-  };
+  const selectedPayoutRail = (): PayoutRail => "onchain";
 
   const syncPayoutRailUi = () => {
     const rail = selectedPayoutRail();
@@ -1085,17 +1066,12 @@ export async function bindBuilderPanel(
     }
   };
 
-  if (payoutInput && opts.user?.payout_address) {
+  if (
+    payoutInput &&
+    opts.user?.payout_address &&
+    !isLightningPayoutDestination(opts.user.payout_address)
+  ) {
     payoutInput.value = opts.user.payout_address;
-    if (
-      lightningUiAllowed() &&
-      isLightningPayoutDestination(opts.user.payout_address)
-    ) {
-      const ln = panel.querySelector<HTMLInputElement>(
-        'input[name="claim_payout_rail"][value="lightning"]',
-      );
-      if (ln) ln.checked = true;
-    }
   }
   await showClaimStep("who");
 
@@ -1644,13 +1620,17 @@ export async function bindBuilderPanel(
     if (claimStep === "refund") {
       const payout = payoutInput?.value.trim() || "";
       const rail = selectedPayoutRail();
+      if (isLightningPayoutDestination(payout)) {
+        payoutInput?.setAttribute("aria-invalid", "true");
+        setMsg(modalMsg(), BOUNTY_ONCHAIN_PAYOUT_ERROR, "error");
+        payoutInput?.focus();
+        return;
+      }
       if (!payoutLooksValid(payout, rail)) {
         payoutInput?.setAttribute("aria-invalid", "true");
         setMsg(
           modalMsg(),
-          rail === "lightning"
-            ? "Enter a Lightning Address (you@host) or lnurl1…"
-            : `Enter a valid ${addressHrp()}… address for this network.`,
+          `Enter a valid ${addressHrp()}… address for this network.`,
           "error",
         );
         payoutInput?.focus();
@@ -1708,16 +1688,6 @@ export async function bindBuilderPanel(
 
   payoutInput?.addEventListener("input", () => {
     if (payoutAck) payoutAck.checked = false;
-    // Auto-select Lightning rail when the value looks like an LN destination.
-    if (lightningUiAllowed() && isLightningPayoutDestination(payoutInput.value)) {
-      const ln = panel.querySelector<HTMLInputElement>(
-        'input[name="claim_payout_rail"][value="lightning"]',
-      );
-      if (ln && !ln.checked) {
-        ln.checked = true;
-        syncPayoutRailUi();
-      }
-    }
   });
 
   panel.querySelectorAll<HTMLInputElement>('input[name="claim_payout_rail"]').forEach(
@@ -1737,9 +1707,19 @@ export async function bindBuilderPanel(
     }
     const payout = payoutInput?.value.trim() || "";
     const bond = feePay?.getTxid() || "";
-    if (!payoutLooksValid(payout, selectedPayoutRail()) || !payoutAck?.checked) {
+    if (
+      isLightningPayoutDestination(payout) ||
+      !payoutLooksValid(payout, selectedPayoutRail()) ||
+      !payoutAck?.checked
+    ) {
       await showClaimStep("refund");
-      setMsg(modalMsg(), "Complete refund readiness before submitting.", "error");
+      setMsg(
+        modalMsg(),
+        isLightningPayoutDestination(payout)
+          ? BOUNTY_ONCHAIN_PAYOUT_ERROR
+          : "Complete refund readiness before submitting.",
+        "error",
+      );
       return;
     }
     if (!bond || bond.length !== 64) {
@@ -1909,19 +1889,24 @@ export async function bindBuilderPanel(
         requireLogin("Sign in as the proposer to mark this done.");
         return;
       }
+      const allocationId =
+        panel.querySelector<HTMLSelectElement>("#builder-allocation")?.value.trim() ||
+        undefined;
       const ok = await confirmAction({
         title: "Mark this done?",
-        body: "Confirmed donors get 7 days to flag. If nobody flags, payout can proceed.",
+        body: "Confirmed donors get a size-scaled window to flag (7, 14, or 30 days). If nobody flags, the clean branch is selected for keyholder review.",
         confirmLabel: "This is done",
       });
       if (!ok) return;
       setMsg(msg, "Opening the donor window…");
       try {
-        await markProposalDone({
+        const done = await markProposalDone({
           proposal_path: opts.proposal.path,
           proposal_id: opts.proposal.id || undefined,
+          allocation_id: allocationId,
         });
-        setMsg(msg, "Donors have 7 days to flag.", "success");
+        const days = done.window_days || 7;
+        setMsg(msg, `Donors have ${days} days to flag.`, "success");
         if (refresh) await refresh();
       } catch (e) {
         const err = (e as Error).message;

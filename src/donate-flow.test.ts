@@ -430,14 +430,17 @@ describe("donate credit UX (signed in, on-chain)", () => {
     await vi.advanceTimersByTimeAsync(100);
     await vi.waitFor(() => {
       expect(recordContribution).toHaveBeenCalled();
-      expect(claimContributionWithRetry).toHaveBeenCalledWith({
-        proposal_id: "PLEBLY-42",
-        txid,
-        vout: 1,
-        public_credit: true,
-        anonymous: false,
-        show_amount: true,
-      });
+      expect(claimContributionWithRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proposal_id: "PLEBLY-42",
+          txid,
+          vout: 1,
+          public_credit: true,
+          anonymous: false,
+          show_amount: true,
+          proposal_path: "proposals/demo.md",
+        }),
+      );
       expect(linked).toHaveBeenCalled();
       expect(document.querySelector("#donate-confirm-status")?.textContent).toContain(
         "Credit linked",

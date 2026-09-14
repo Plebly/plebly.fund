@@ -396,8 +396,10 @@ async function render() {
   scrollToHashTarget();
 }
 
-migrateHashRoute();
-consumeSessionFromHash();
-bindSpaNavigation();
-window.addEventListener("popstate", () => void render());
-void render();
+void (async () => {
+  migrateHashRoute();
+  await consumeSessionFromHash();
+  bindSpaNavigation();
+  window.addEventListener("popstate", () => void render());
+  await render();
+})();

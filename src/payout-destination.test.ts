@@ -16,6 +16,12 @@ describe("payoutLooksValid", () => {
     expect(payoutLooksValid("satoshi@getalby.com", "lightning")).toBe(true);
   });
 
+  it("exports the bounty on-chain-only apply error", async () => {
+    const { BOUNTY_ONCHAIN_PAYOUT_ERROR } = await import("./payout-destination");
+    expect(BOUNTY_ONCHAIN_PAYOUT_ERROR).toMatch(/presigned PSBT/i);
+    expect(BOUNTY_ONCHAIN_PAYOUT_ERROR).toMatch(/Direct campaign/i);
+  });
+
   it("rejects Lightning on signet", async () => {
     vi.stubEnv("VITE_BITCOIN_NETWORK", "signet");
     const { payoutLooksValid } = await import("./payout-destination");

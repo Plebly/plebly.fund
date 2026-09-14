@@ -152,7 +152,7 @@ export function keyholdersHtml(live: {
     <p class="about-section-lede">Live <strong>${escapeHtml(mOfN)}</strong>. Min ${min}, target ${target}.</p>
     ${
       mode === "single-key-test" || n < min
-        ? `<p class="muted">This is a temporary ${escapeHtml(mOfN)} setup. Launch is 3-of-5. After approval, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
+        ? `<p class="muted">This is a temporary ${escapeHtml(mOfN)} setup. Target is 3-of-5; three keyholders is 2-of-3 until then. After approval, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
         : `<p class="muted">After reviewers approve, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
     }
     ${status}

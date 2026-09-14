@@ -72,10 +72,10 @@ describe("builderPanelHtml proposal types", () => {
     expect(html).toContain("withdraw before award");
     expect(html).toContain("Claim window expires");
     expect(html).toContain('name="claim_payout_rail"');
-    expect(html).toContain('value="lightning"');
-    // Visible even when disabled (signet) so users know LN exists on mainnet.
-    expect(html).toContain("Unavailable on signet");
-    expect(html).toContain("is-disabled");
+    expect(html).toContain('value="onchain"');
+    expect(html).not.toContain('value="lightning"');
+    expect(html).toMatch(/presigned PSBT/i);
+    expect(html).toMatch(/Direct campaigns only/i);
     expect(html).not.toMatch(/claim-refund-rail-card[^>]*\bhidden\b/);
     expect(html).toContain('aria-describedby="claim-payout-desc"');
     expect(html).toContain('id="claim-next"');

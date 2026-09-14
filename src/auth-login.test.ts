@@ -94,10 +94,31 @@ describe("login UX helpers", () => {
     expect(html).not.toContain("Continue with X");
   });
 
-  it("consumeSessionFromHash stores Bearer token and strips the hash", () => {
-    locationState.hash = "#plebly_auth=tok%2B123";
-    expect(consumeSessionFromHash()).toBe(true);
+  it("consumeSessionFromHash exchanges a one-time code and strips the hash", async () => {
+    locationState.hash = "#plebly_code=abc123";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ token: "tok+123" }), { status: 200 }),
+      ),
+    );
+    expect(await consumeSessionFromHash()).toBe(true);
     expect(sessionStorage.getItem("plebly_session")).toBe("tok+123");
+    expect(locationState.hash).toBe("");
+  });
+
+  it("consumeSessionFromHash does not store a token when exchange fails", async () => {
+    locationState.hash = "#plebly_code=used";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: "code expired or already used" }), {
+          status: 400,
+        }),
+      ),
+    );
+    expect(await consumeSessionFromHash()).toBe(false);
+    expect(sessionStorage.getItem("plebly_session")).toBeNull();
     expect(locationState.hash).toBe("");
   });
 

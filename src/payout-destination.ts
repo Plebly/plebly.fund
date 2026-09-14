@@ -6,6 +6,9 @@ import { addressHrp, lightningUiAllowed } from "./config";
 
 export type PayoutRail = "onchain" | "lightning";
 
+export const BOUNTY_ONCHAIN_PAYOUT_ERROR =
+  "Bounty payouts must be an on-chain address (bc1…/tb1…). Lightning Address and LNURL cannot be baked into a presigned PSBT. Use a Direct campaign if you need Lightning payout.";
+
 export function isLightningPayoutDestination(raw: string): boolean {
   const s = raw.trim();
   if (!s) return false;

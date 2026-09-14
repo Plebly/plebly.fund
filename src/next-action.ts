@@ -27,6 +27,7 @@ export type NextAction = {
   sentence: string;
   button: NextButton;
   moreIds: NextMoreId[];
+  doneAllocations?: { id: string; allocation_sats: number }[];
 };
 
 export type NextActionInput = {
@@ -54,6 +55,37 @@ function clock(iso?: string | null): string {
 
 function isDirect(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
+}
+
+function structuredState(claim?: ClaimStatus | null): string | null {
+  const state = claim?.psbt?.structured_state;
+  return state ? String(state) : null;
+}
+
+function selectedBranchesSettled(claim?: ClaimStatus | null): boolean {
+  const selected = Object.keys(claim?.psbt?.selected || {});
+  if (!selected.length) return false;
+  const signoff = claim?.psbt?.signoff || {};
+  return selected.every((id) => signoff[id]?.state === "settled");
+}
+
+function pendingDoneAllocations(
+  claim?: ClaimStatus | null,
+): { id: string; allocation_sats: number }[] | undefined {
+  const allocs = claim?.allocations || [];
+  if (allocs.length <= 1) return undefined;
+  const closed = new Set(
+    (claim?.donor_reviews || [])
+      .filter(
+        (r) =>
+          r.status === "window_open" ||
+          r.status === "flagged" ||
+          r.status === "auto_completed",
+      )
+      .map((r) => r.allocation_id || "bounty"),
+  );
+  const pending = allocs.filter((a) => !closed.has(a.id));
+  return pending.length ? pending : undefined;
 }
 
 function claimMode(p: Proposal, apps?: NextActionInput["apps"]): string {
@@ -223,8 +255,19 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   }
 
   if (status === "completed" || claim?.state === "completed") {
+    if (isDirect(p)) {
+      return {
+        sentence: "Approved. Paid after keyholders sign.",
+        button: null,
+        moreIds,
+      };
+    }
+    if (selectedBranchesSettled(claim)) {
+      return { sentence: "Settled on-chain.", button: null, moreIds };
+    }
     return {
-      sentence: "Approved. Paid after keyholders sign.",
+      sentence:
+        "Approved. Keyholders sign the selected branch; broadcast stays in Sparrow.",
       button: null,
       moreIds,
     };
@@ -264,20 +307,41 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         sentence: "Mark it done if the work is finished.",
         button: claim?.can_mark_done ? "done" : null,
         moreIds: isBuilder ? ["extension"] : moreIds,
+        doneAllocations: pendingDoneAllocations(claim),
       };
     }
     return { sentence: "Waiting on the proposer.", button: null, moreIds };
   }
 
   if (status === "claimed" || claim?.state === "claimed") {
+    const structured = structuredState(claim);
     if (isBuilder) {
       return {
-        sentence: "Submit the work when it is done.",
+        sentence:
+          structured === "psbt_ready"
+            ? "Submit the work when it is done. Structured funding is ready for keyholders."
+            : structured === "awaiting_funds"
+              ? "Submit the work when it is done. The pot is still pooling."
+              : "Submit the work when it is done.",
         button: "deliverable",
         moreIds: ["checkpoint", "extension", "collab", "workboard"],
       };
     }
     if (claim?.can_challenge_abandoned) moreIds.push("challenge");
+    if (structured === "psbt_ready") {
+      return {
+        sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
+        button: null,
+        moreIds,
+      };
+    }
+    if (structured === "awaiting_funds") {
+      return {
+        sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+        button: "donate",
+        moreIds,
+      };
+    }
     return { sentence: "Waiting on the builder.", button: null, moreIds };
   }
 
@@ -311,6 +375,22 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     status === "funding" ||
     claim?.state === "below_floor"
   ) {
+    const structured = structuredState(claim);
+    if (structured === "psbt_ready") {
+      return {
+        sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
+        button: null,
+        moreIds,
+      };
+    }
+    if (structured === "awaiting_funds") {
+      return {
+        sentence:
+          "Donate until the frozen allocation, reserve, and miner fee are met.",
+        button: "donate",
+        moreIds,
+      };
+    }
     return { sentence: "Still raising.", button: "donate", moreIds };
   }
 
@@ -329,7 +409,19 @@ export function nextActionPrimaryHtml(action: NextAction): string {
     return `<button type="button" class="btn" id="builder-deliverable">Submit deliverable</button>`;
   }
   if (action.button === "done") {
-    return `<button type="button" class="btn" id="builder-done">This is done</button>`;
+    const sel =
+      action.doneAllocations && action.doneAllocations.length
+        ? `<label class="donate-amount-label" for="builder-allocation">Milestone</label>
+           <select id="builder-allocation" class="donate-amount">
+             ${action.doneAllocations
+               .map(
+                 (a) =>
+                   `<option value="${escapeHtml(a.id)}">${escapeHtml(a.id)}</option>`,
+               )
+               .join("")}
+           </select>`
+        : "";
+    return `${sel}<button type="button" class="btn" id="builder-done">This is done</button>`;
   }
   if (action.button === "flag") {
     return `<button type="button" class="btn" id="builder-flag">Flag this close</button>`;

@@ -304,8 +304,66 @@ describe("resolveNextAction", () => {
     {
       name: "completed",
       input: { proposal: proposal({ status: "completed" }) },
-      sentence: "Approved. Paid after keyholders sign.",
+      sentence:
+        "Approved. Keyholders sign the selected branch; broadcast stays in Sparrow.",
       button: null,
+    },
+    {
+      name: "completed settled branches",
+      input: {
+        proposal: proposal({ status: "completed" }),
+        claim: claim({
+          state: "completed",
+          psbt: {
+            structured_state: "confirmed",
+            selected: { bounty: { kind: "clean" } },
+            signoff: { bounty: { state: "settled", signed: 2, required_threshold: 2 } },
+          },
+        }),
+      },
+      sentence: "Settled on-chain.",
+      button: null,
+    },
+    {
+      name: "claimed pot still pooling",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+        user: donor,
+      },
+      sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+      button: "donate",
+    },
+    {
+      name: "claimed structured ready",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "psbt_ready" },
+        }),
+        user: donor,
+      },
+      sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
+      button: null,
+    },
+    {
+      name: "listed awaiting frozen pot",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({
+          state: "below_floor",
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+      },
+      sentence:
+        "Donate until the frozen allocation, reserve, and miner fee are met.",
+      button: "donate",
     },
     {
       name: "stall",
@@ -458,6 +516,20 @@ describe("nextActionCardHtml", () => {
     });
     expect(done).toContain('id="builder-done"');
     expect(done).toContain("This is done");
+    expect(done).not.toContain("builder-allocation");
+
+    const doneMs = nextActionPrimaryHtml({
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+      moreIds: [],
+      doneAllocations: [
+        { id: "m1", allocation_sats: 80_000 },
+        { id: "m2", allocation_sats: 40_000 },
+      ],
+    });
+    expect(doneMs).toContain('id="builder-allocation"');
+    expect(doneMs).toContain("m1");
+    expect(doneMs).toContain("m2");
 
     const flag = nextActionPrimaryHtml({
       sentence: "Flag if the work is not finished.",

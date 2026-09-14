@@ -43,7 +43,7 @@ export function aiReviewCardHtml(ai: AiReviewView, opts?: { compact?: boolean })
       <span class="ai-k">AI first-pass</span>
       <span class="pill ${aiOutcomeClass(ai.outcome)}">${escapeHtml(aiOutcomeLabel(ai.outcome))}</span>
     </div>
-    <p class="ai-reasoning">${escapeHtml(ai.reasoning)}</p>
+    ${ai.reasoning ? `<p class="ai-reasoning">${escapeHtml(ai.reasoning)}</p>` : ""}
     ${failList}
     ${next}
   </div>`;

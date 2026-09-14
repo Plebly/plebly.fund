@@ -36,19 +36,11 @@ function clearStoredSession(): void {
   clearUnreadNotificationCache();
 }
 
-/**
- * Read OAuth session from URL hash and strip it.
- * Workers append `#plebly_auth=…` because workers.dev cookies are third-party on plebly.fund.
- */
-export function consumeSessionFromHash(): boolean {
+function stripAuthHash(): void {
   const hash = location.hash;
-  const match = hash.match(/plebly_auth=([^&]+)/);
-  if (!match) return false;
-
-  setStoredSession(decodeURIComponent(match[1]));
-  clearUnreadNotificationCache();
   const cleaned = hash
     .replace(/^[?#]/, "")
+    .replace(/[?&]?plebly_code=[^&]*/g, "")
     .replace(/[?&]?plebly_auth=[^&]*/g, "")
     .replace(/^&/, "");
   const nextHash = cleaned ? `#${cleaned}` : "";
@@ -57,7 +49,33 @@ export function consumeSessionFromHash(): boolean {
     "",
     `${location.pathname}${location.search}${nextHash}`,
   );
-  return true;
+}
+
+/**
+ * Redeem one-time OAuth code from URL hash and strip it.
+ * Workers append `#plebly_code=…` because workers.dev cookies are third-party on plebly.fund.
+ */
+export async function consumeSessionFromHash(): Promise<boolean> {
+  const hash = location.hash;
+  const match = hash.match(/plebly_code=([^&]+)/);
+  if (!match) return false;
+  const code = decodeURIComponent(match[1]);
+  stripAuthHash();
+  try {
+    const res = await fetch(`${API()}/auth/session/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { token?: string };
+    if (!res.ok || !data.token) return false;
+    setStoredSession(data.token);
+    clearUnreadNotificationCache();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
@@ -174,11 +192,6 @@ export async function confirmGithubOrgs(
     throw new Error(data.error || `Confirm orgs failed (${res.status})`);
   }
   return { user: data.user, linked: data.linked || [] };
-}
-
-/** @deprecated X OAuth hidden until secrets are configured. */
-export function xLoginUrl(returnPath?: string): string {
-  return `${API()}/auth/x?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
 }
 
 type Nip07Event = {

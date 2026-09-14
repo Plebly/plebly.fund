@@ -37,6 +37,7 @@ import { watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
 import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
+import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
 import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
@@ -1157,6 +1158,9 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
           proposal_id: opts.proposalId,
           txid: utxo.txid,
           vout: utxo.vout,
+          legal_name: readLegalName(panel),
+          proposal_path: opts.proposalPath,
+          proposal_title: opts.proposalTitle,
           ...prefs,
         });
       }
@@ -1848,6 +1852,263 @@ export function onChainPanelHtml(p: Proposal): string {
     <summary>On-chain details</summary>
     <div class="onchain-panel">${rows.join("")}</div>
   </details>`;
+}
+
+export function structuredFundingPanelHtml(p: Proposal): string {
+  const type = String(p.proposal_type || "bounty").toLowerCase();
+  if (type === "direct" || !p.escrow_address || !p.id) return "";
+  return `<section class="proposal-structured" id="structured-funding" hidden>
+    <h2 class="proposal-block-title">Structured funding</h2>
+    <p class="muted structured-funding-status" id="structured-funding-status"></p>
+    <div id="structured-funding-body"></div>
+  </section>`;
+}
+
+type StructuredFundingView = {
+  psbt_kind?: string;
+  allocations?: { id: string; allocation_sats: number }[];
+  reviewer_reserve_percent?: number;
+  reserve_sats?: number;
+  donate_address?: string;
+  pool_refund_address?: string;
+  structured?: {
+    state?: string;
+    sha256?: string;
+    psbt_base64?: string;
+    settle_txid?: string;
+    decode?: {
+      version?: number;
+      locktime?: number;
+      miner_fee_sats?: number;
+      inputs?: { address: string; amount_sats: number }[];
+      outputs?: { address: string; amount_sats: number; label?: string }[];
+    };
+  };
+};
+
+export function bindStructuredFunding(
+  root: ParentNode,
+  proposalId: string,
+): void {
+  const panel = root.querySelector<HTMLElement>("#structured-funding");
+  const statusEl = root.querySelector<HTMLElement>("#structured-funding-status");
+  const bodyEl = root.querySelector<HTMLElement>("#structured-funding-body");
+  if (!panel || !statusEl || !bodyEl || !proposalId) return;
+  const api = WORKERS_API.replace(/\/$/, "");
+  void (async () => {
+    try {
+      const res = await fetch(
+        `${api}/proposals/${encodeURIComponent(proposalId)}/structured-funding`,
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as StructuredFundingView;
+      panel.hidden = false;
+      const state = data.structured?.state || "awaiting_funds";
+      const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
+      statusEl.textContent =
+        state === "awaiting_funds"
+          ? `${kind} — waiting for confirmed funds to reach the frozen allocation, reviewer reserve, and miner fee.`
+          : state === "confirmed"
+            ? `${kind} — structured funding confirmed on-chain.`
+            : `${kind} — unsigned structured-funding PSBT ready for keyholder review.`;
+      bodyEl.innerHTML = structuredFundingBodyHtml(data);
+      const branchRes = await fetch(
+        `${api}/proposals/${encodeURIComponent(proposalId)}/branches`,
+      );
+      if (branchRes.ok) {
+        const branches = (await branchRes.json()) as BranchPublicView;
+        bodyEl.insertAdjacentHTML(
+          "beforeend",
+          branchListHtml(branches.branches, branches.selected, branches.signoff),
+        );
+        bindBranchHashGate(bodyEl, branches);
+      }
+      bindProposalCopyButtons(bodyEl);
+    } catch {
+      /* public view is optional */
+    }
+  })();
+}
+
+type BranchPublicView = {
+  selected?: Record<string, { kind?: string; sha256?: string }>;
+  signoff?: Record<
+    string,
+    {
+      signed?: number;
+      required_threshold?: number;
+      state?: string;
+      settle_txid?: string;
+    }
+  >;
+  branches?: {
+    state?: string;
+    items?: {
+      allocation_id: string;
+      kind: string;
+      sha256: string;
+      locktime: number;
+      psbt_base64?: string;
+    }[];
+  };
+};
+
+function selectedBranchHash(view: BranchPublicView): string {
+  const selected = view.selected || {};
+  for (const row of Object.values(selected)) {
+    if (row?.sha256) return row.sha256;
+  }
+  const items = view.branches?.items || [];
+  const clean = items.find((b) => b.kind === "clean");
+  return clean?.sha256 || items[0]?.sha256 || "";
+}
+
+function bindBranchHashGate(root: ParentNode, view: BranchPublicView): void {
+  const published = selectedBranchHash(view);
+  bindHashGate({
+    input: root.querySelector<HTMLTextAreaElement>("#branch-psbt-verify"),
+    status: root.querySelector<HTMLElement>("#branch-hash-status"),
+    publishedHash: published,
+    action: root.querySelector<HTMLButtonElement>("#branch-sign-ready"),
+    enableActionWithoutHash: false,
+  });
+  const btn = root.querySelector<HTMLButtonElement>("#branch-sign-ready");
+  const input = root.querySelector<HTMLTextAreaElement>("#branch-psbt-verify");
+  btn?.addEventListener("click", () => {
+    if (btn.disabled) return;
+    const b64 = input?.value.trim() || "";
+    const item = (view.branches?.items || []).find((b) => b.sha256 === published);
+    const copy = b64 || item?.psbt_base64 || "";
+    if (!copy) return;
+    void navigator.clipboard.writeText(copy).catch(() => undefined);
+  });
+}
+
+function branchListHtml(
+  branches?: BranchPublicView["branches"],
+  selected?: BranchPublicView["selected"],
+  signoff?: BranchPublicView["signoff"],
+): string {
+  if (!branches) return "";
+  if (branches.state !== "ready" || !branches.items?.length) {
+    return `<p class="muted structured-funding-status">Refund and timelock branches construct after structured funding confirms. Clean and disputed pay branches wait for an awarded on-chain payout.</p>`;
+  }
+  const picked = selected || {};
+  const pickedSignoff = signoff || {};
+  const rows = branches.items
+    .map((b) => {
+      const sel = picked[b.allocation_id];
+      const isSel = sel?.kind === b.kind;
+      const so = pickedSignoff[b.allocation_id];
+      const signLabel =
+        isSel && so
+          ? ` · ${so.signed ?? 0}/${so.required_threshold ?? 0} signed${
+              so.state === "settled" && so.settle_txid
+                ? ` · settled ${so.settle_txid}`
+                : so.state
+                  ? ` · ${so.state}`
+                  : ""
+            }`
+          : "";
+      return `<tr${isSel ? ' class="is-selected"' : ""}>
+        <td>${escapeHtml(b.allocation_id)}</td>
+        <td>${escapeHtml(b.kind)}${isSel ? " · selected" : ""}${signLabel}</td>
+        <td class="mono">${escapeHtml(b.sha256)}</td>
+        <td>${escapeHtml(String(b.locktime))}</td>
+        <td>${copyBtn(b.sha256, "hash")}${b.psbt_base64 ? copyBtn(b.psbt_base64, "PSBT") : ""}</td>
+      </tr>`;
+    })
+    .join("");
+  const published = selectedBranchHash({ selected, branches });
+  return `<div class="structured-decode">
+    <p class="onchain-label">Release branches (unsigned)</p>
+    <table>
+      <thead><tr><th>Output</th><th>Branch</th><th>SHA-256</th><th>Locktime</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${hashGateHtml({
+      publishedHash: published,
+      inputId: "branch-psbt-verify",
+      statusId: "branch-hash-status",
+    })}
+    <button type="button" class="btn" id="branch-sign-ready" disabled>Hash matches — copy for Sparrow</button>
+  </div>`;
+}
+
+function structuredFundingBodyHtml(data: StructuredFundingView): string {
+  const rows: string[] = [];
+  if (data.pool_refund_address) {
+    rows.push(`<div class="onchain-row">
+      <span class="onchain-label">Donor pool refund</span>
+      <div class="onchain-value">
+        <code class="mono">${escapeHtml(data.pool_refund_address)}</code>
+        <span class="onchain-actions">${copyBtn(data.pool_refund_address, "address")}</span>
+      </div>
+    </div>`);
+  }
+  if (data.reserve_sats != null) {
+    rows.push(`<div class="onchain-row onchain-row-inline">
+      <span class="onchain-label">Reviewer reserve</span>
+      <span class="onchain-inline-value">${escapeHtml(formatSats(data.reserve_sats))} (${escapeHtml(String(data.reviewer_reserve_percent ?? ""))}%)</span>
+    </div>`);
+  }
+  const hash = data.structured?.sha256;
+  if (hash) {
+    rows.push(`<div class="onchain-row">
+      <span class="onchain-label">PSBT SHA-256</span>
+      <div class="onchain-value">
+        <code class="mono">${escapeHtml(hash)}</code>
+        <span class="onchain-actions">${copyBtn(hash, "hash")}</span>
+      </div>
+    </div>`);
+  }
+  const decode = data.structured?.decode;
+  if (decode) {
+    rows.push(`<div class="onchain-row onchain-row-inline">
+      <span class="onchain-label">Locktime / version / miner fee</span>
+      <span class="onchain-inline-value">${escapeHtml(String(decode.locktime ?? 0))} / v${escapeHtml(String(decode.version ?? 2))} / ${escapeHtml(formatSats(decode.miner_fee_sats || 0))}</span>
+    </div>`);
+    const io = [
+      ...(decode.inputs || []).map(
+        (i) =>
+          `<tr><td>in</td><td></td><td class="mono">${escapeHtml(i.address)}</td><td>${escapeHtml(formatSats(i.amount_sats))}</td></tr>`,
+      ),
+      ...(decode.outputs || []).map(
+        (o) =>
+          `<tr><td>out</td><td>${escapeHtml(o.label || "")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${escapeHtml(formatSats(o.amount_sats))}</td></tr>`,
+      ),
+    ].join("");
+    if (io) {
+      rows.push(`<div class="structured-decode">
+        <table>
+          <thead><tr><th></th><th>Label</th><th>Address</th><th>Amount</th></tr></thead>
+          <tbody>${io}</tbody>
+        </table>
+      </div>`);
+    }
+  }
+  const b64 = data.structured?.psbt_base64;
+  if (b64) {
+    rows.push(`<details class="structured-psbt">
+      <summary>Unsigned PSBT (base64)</summary>
+      <code class="mono structured-psbt-b64">${escapeHtml(b64)}</code>
+      <p>${copyBtn(b64, "PSBT")}</p>
+    </details>`);
+  }
+  if (data.structured?.settle_txid) {
+    const tx = data.structured.settle_txid;
+    rows.push(`<div class="onchain-row">
+      <span class="onchain-label">Structured funding tx</span>
+      <div class="onchain-value">
+        <code class="mono">${escapeHtml(tx)}</code>
+        <span class="onchain-actions">
+          ${explorerLink(`${MEMPOOL_WEB}/tx/${tx}`, "Explorer")}
+          ${copyBtn(tx, "txid")}
+        </span>
+      </div>
+    </div>`);
+  }
+  return rows.join("");
 }
 
 /** Quiet meta line: created date, id, type, claim mode, and tags (status/byline live elsewhere). */

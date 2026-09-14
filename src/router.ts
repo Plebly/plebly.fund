@@ -51,7 +51,7 @@ export function projectsHref(search = ""): string {
 /** Smooth-scroll to a location.hash target (ignores auth hash fragments). */
 export function scrollToHashId(hash: string): void {
   const raw = hash.startsWith("#") ? hash : `#${hash}`;
-  if (!raw || raw === "#" || raw.includes("plebly_auth=")) return;
+  if (!raw || raw === "#" || raw.includes("plebly_code=") || raw.includes("plebly_auth=")) return;
   const id = decodeURIComponent(raw.slice(1).split("&")[0] || "");
   if (!id) return;
   requestAnimationFrame(() => {
@@ -158,18 +158,18 @@ function resolveInAppUrl(to: string): string {
 
 /**
  * Migrate legacy hash routes (#/propose) to path routes (/propose).
- * Leaves #plebly_auth=… alone for OAuth session handoff.
+ * Leaves #plebly_code=… (and legacy #plebly_auth=) alone for OAuth session handoff.
  */
 export function migrateHashRoute(): boolean {
   const raw = location.hash;
   if (!raw || raw === "#") return false;
-  if (/^#(?:plebly_auth=)/.test(raw)) return false;
+  if (/^#(?:plebly_code=|plebly_auth=)/.test(raw)) return false;
   if (!raw.startsWith("#/")) return false;
 
   const body = raw.slice(1); // /propose?tab=x or /propose
-  const authMatch = body.match(/[?&]?(plebly_auth=[^&]+)/);
+  const authMatch = body.match(/[?&]?((?:plebly_code|plebly_auth)=[^&]+)/);
   const cleaned = body
-    .replace(/[?&]?plebly_auth=[^&]*/g, "")
+    .replace(/[?&]?(?:plebly_code|plebly_auth)=[^&]*/g, "")
     .replace(/\?&/, "?")
     .replace(/\?$/, "");
   const qIdx = cleaned.indexOf("?");

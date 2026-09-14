@@ -6107,6 +6107,44 @@ a.claim-app-bond:hover {
   content: "▾";
 }
 
+.proposal-structured {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+}
+
+.proposal-structured .structured-funding-status {
+  margin: 0.35rem 0 0.75rem;
+}
+
+.structured-decode table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.structured-decode th,
+.structured-decode td {
+  text-align: left;
+  padding: 0.25rem 0.35rem 0.25rem 0;
+  vertical-align: top;
+}
+
+.structured-psbt {
+  margin-top: 0.5rem;
+}
+
+.structured-psbt-b64 {
+  display: block;
+  max-height: 8rem;
+  overflow: auto;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
 .proposal-onchain .onchain-panel {
   margin-top: 0.75rem;
   padding: 0;

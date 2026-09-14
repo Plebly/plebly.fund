@@ -15,7 +15,7 @@ function authHeaders(): HeadersInit {
 
 export type AiReviewView = {
   outcome: "pass" | "fail" | "ambiguous";
-  reasoning: string;
+  reasoning?: string;
   failing_criteria?: string[];
   prompt_version: string;
   model: string;

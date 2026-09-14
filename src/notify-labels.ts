@@ -3,12 +3,21 @@ import { href, proposalHref } from "./router";
 /** Shared notification titles for nav dropdown + Account. */
 export function notificationTypeLabel(
   type: string,
-  payload?: { needs_address?: boolean; needs_refund_address?: boolean } | null,
+  payload?: {
+    needs_address?: boolean;
+    needs_refund_address?: boolean;
+    window_days?: number;
+  } | null,
 ): string {
   const needsRefund =
     Boolean(payload?.needs_address) || Boolean(payload?.needs_refund_address);
   if (type === "bond_refundable" && needsRefund) {
     return "Bond refundable — set refund address in Funds";
+  }
+  if (type === "donor_review_opened") {
+    const days = Math.floor(Number(payload?.window_days));
+    const n = Number.isFinite(days) && days > 0 ? days : 7;
+    return `Proposer marked this done — ${n} days to flag`;
   }
   const labels: Record<string, string> = {
     listed: "Project listed",
@@ -24,7 +33,6 @@ export function notificationTypeLabel(
     claim_auto_awarded: "Auto-awarded earliest bond",
     checkpoint_submitted: "Checkpoint submitted",
     deliverable_submitted: "Deliverable submitted",
-    donor_review_opened: "Proposer marked this done — 7 days to flag",
     donor_review_flagged: "A donor flagged this close",
     completed: "Project completed",
     bond_refundable: "Bond refundable — check Funds",
@@ -35,6 +43,7 @@ export function notificationTypeLabel(
     release_queued: "Payout queued",
     release_broadcast: "Paid",
     disburse_ready: "Monthly release ready to sign",
+    branch_ready: "Bounty branch ready to sign",
     keyholder_application: "Keyholder application opened",
     donation_receipt: "Donation receipt",
     disburse_chat: "Keyholder coordination message",
@@ -65,6 +74,7 @@ export function notificationTargetHref(n: {
     return href("/account", "?tab=receipts");
   }
   if (n.type === "disburse_ready") return href("/keyholders");
+  if (n.type === "branch_ready") return href("/keyholders", "?tab=branch");
   if (n.type === "keyholder_application") {
     return href("/reviewers", "?tab=keyholders");
   }

@@ -159,6 +159,9 @@ export async function claimContribution(input: {
   txid?: string;
   vout?: number;
   swap_id?: string;
+  legal_name?: string;
+  proposal_path?: string;
+  proposal_title?: string;
 } & CreditPreferences): Promise<void> {
   const res = await authFetch(`${api()}/contributions/claim`, {
     method: "POST",

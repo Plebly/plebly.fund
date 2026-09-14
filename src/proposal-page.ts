@@ -39,6 +39,8 @@ import {
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
+  structuredFundingPanelHtml,
+  bindStructuredFunding,
   proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
@@ -667,6 +669,7 @@ export async function renderProposalPage(
                 : ""
             }
             ${onChainPanelHtml(match)}
+            ${structuredFundingPanelHtml(match)}
           </aside>
         </div>
         ${escrowOk ? donateMobileCtaHtml() : ""}
@@ -675,6 +678,7 @@ export async function renderProposalPage(
     `);
 
     bindProposalCopyButtons(app);
+    if (match.id) bindStructuredFunding(app, match.id);
     bindShareButtons(app);
     let reloadEngagement: (() => Promise<void>) | null = null;
     // Open Donate before claim/lightning network work so guests are not stuck waiting.

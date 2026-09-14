@@ -19,6 +19,13 @@ describe("notificationTypeLabel", () => {
   it("uses Funds copy when address already set", () => {
     expect(notificationTypeLabel("bond_refundable")).toContain("Funds");
   });
+
+  it("uses payload window days for donor review", () => {
+    expect(notificationTypeLabel("donor_review_opened")).toContain("7 days");
+    expect(
+      notificationTypeLabel("donor_review_opened", { window_days: 30 }),
+    ).toContain("30 days");
+  });
 });
 
 describe("notificationTargetHref", () => {
@@ -49,8 +56,12 @@ describe("notificationTargetHref", () => {
 
   it("routes keyholder money notices to console / election tab", () => {
     expect(notificationTypeLabel("disburse_ready")).toMatch(/Monthly release/);
+    expect(notificationTypeLabel("branch_ready")).toMatch(/Bounty branch/);
     expect(notificationTargetHref({ type: "disburse_ready" })).toMatch(
       /\/keyholders$/,
+    );
+    expect(notificationTargetHref({ type: "branch_ready" })).toMatch(
+      /\/keyholders\?tab=branch$/,
     );
     expect(notificationTypeLabel("keyholder_application")).toMatch(/Keyholder/);
     expect(

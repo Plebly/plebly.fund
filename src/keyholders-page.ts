@@ -3,9 +3,28 @@ import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
 import { href, projectsHref } from "./router";
 import { authFetchWithTos } from "./tos-modal";
+import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { escapeHtml, formatSats } from "./util";
 
 export type KeyholdersShell = (inner: string) => string;
+
+const KH_TABS = [
+  "release",
+  "branch",
+  "bond_refund",
+  "contrib_refund",
+  "roster",
+] as const;
+
+export type KeyholderTab = (typeof KH_TABS)[number];
+
+export function keyholderTabFromSearch(search: string): KeyholderTab {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const tab = new URLSearchParams(raw).get("tab") || "";
+  return (KH_TABS as readonly string[]).includes(tab)
+    ? (tab as KeyholderTab)
+    : "release";
+}
 
 type DisburseItem = {
   id: string;
@@ -15,6 +34,7 @@ type DisburseItem = {
   outputs: { address: string; amount_sats: number; label?: string }[];
   settle_txid?: string;
   settle_proposed_by?: string;
+  unsigned_sha256?: string;
   psbts?: { sha256: string; uploader: string; created_at: string; kind?: string }[];
   addresses_frozen?: boolean;
   ln_destination?: string;
@@ -54,8 +74,110 @@ export type KeyholderDeskItem = {
   ln_amount_sats?: number;
   settle_txid?: string;
   settle_proposed_by?: string;
-  psbts?: { sha256: string }[];
+  unsigned_sha256?: string;
+  psbts?: { sha256: string; kind?: string }[];
 };
+
+export type BranchSignDeskItem = {
+  proposal_id: string;
+  allocation_id: string;
+  kind: string;
+  published_sha256: string;
+  psbt_base64?: string;
+  signed: number;
+  required_threshold: number;
+  state: string;
+  combined_sha256?: string;
+  settle_txid?: string;
+  settle_proposed_by?: string;
+  decode?: {
+    outputs?: { address: string; amount_sats: number; label?: string }[];
+  };
+};
+
+export function branchSignDeskHtml(
+  item: BranchSignDeskItem,
+  opts?: { userId?: string },
+): string {
+  const need = item.required_threshold || 0;
+  const signed = item.signed || 0;
+  const outputs = item.decode?.outputs || [];
+  const settled = item.state === "settled";
+  const proposed = item.state === "settle_proposed";
+  const stateLabel =
+    item.state === "threshold_met"
+      ? " · threshold met"
+      : proposed
+        ? " · settle proposed"
+        : settled
+          ? " · settled"
+          : "";
+  return `<div class="form-panel form-panel-wide">
+    <h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">${escapeHtml(item.kind)} · ${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</h2>
+    <p class="next-card-sentence">Verify the published hash, then sign in Sparrow. The Worker does not broadcast.</p>
+    <p class="muted">${signed}/${need} signed${stateLabel}</p>
+    <table class="kh-outputs">
+      <caption class="sr-only">Outputs</caption>
+      <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
+      <tbody>
+        ${
+          outputs.length
+            ? outputs
+                .map(
+                  (o) =>
+                    `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
+                )
+                .join("")
+            : `<tr><td colspan="3" class="muted">No outputs</td></tr>`
+        }
+      </tbody>
+    </table>
+    ${hashGateHtml({
+      publishedHash: item.published_sha256,
+      inputId: "kh-branch-verify",
+      statusId: "kh-branch-hash-status",
+    })}
+    <label class="donate-amount-label" for="kh-branch-partial">Signed partial (base64)</label>
+    <textarea id="kh-branch-partial" class="comment-input mono" rows="3" placeholder="Paste from Sparrow"></textarea>
+    <div class="comment-compose-actions">
+      <button type="button" class="btn" id="kh-branch-sign" disabled>Upload signature</button>
+      ${
+        item.combined_sha256
+          ? `<button type="button" class="btn ghost" id="kh-branch-combined">Download combined</button>`
+          : ""
+      }
+    </div>
+    <p class="builder-msg" id="kh-branch-msg" hidden role="status" aria-live="polite"></p>
+    ${
+      settled
+        ? `<p class="muted">Settled <code class="mono">${escapeHtml(item.settle_txid || "")}</code>. Broadcast stays in Sparrow.</p>`
+        : `<div class="form-panel">
+      <h3 class="proposal-block-title">Record broadcast</h3>
+      <p class="muted">After you broadcast the combined transaction in Sparrow, paste the txid. A second keyholder must confirm.</p>
+      <label class="donate-amount-label" for="kh-branch-txid">Settle txid</label>
+      <input id="kh-branch-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${proposed ? "readonly" : ""} autocomplete="off" />
+      <div class="comment-compose-actions">
+        <button type="button" class="btn" id="kh-branch-propose" ${proposed ? "disabled" : ""}>Propose settle</button>
+        <button type="button" class="btn ghost" id="kh-branch-confirm" ${
+          !proposed || item.settle_proposed_by === opts?.userId ? "disabled" : ""
+        }>Confirm settle</button>
+      </div>
+    </div>`
+    }
+  </div>`;
+}
+
+export function publishedUnsignedHash(item: {
+  unsigned_sha256?: string;
+  psbts?: { sha256: string; kind?: string }[];
+}): string {
+  return (
+    item.unsigned_sha256 ||
+    item.psbts?.find((p) => p.kind === "unsigned")?.sha256 ||
+    item.psbts?.[0]?.sha256 ||
+    ""
+  );
+}
 
 export function keyholderDeskStep(opts: {
   kind: string;
@@ -171,16 +293,23 @@ export function keyholderDeskHtml(
           <button type="button" id="kh-psbt-upload" hidden></button>
         </div>`;
 
+  const publishedHash = publishedUnsignedHash(item);
+  const signBlocked = !opts.canPartial || Boolean(publishedHash);
   const signBlock = opts.isRelease
     ? `<div class="comment-compose-actions" ${
         step === "sign" || step === "broadcast" ? "" : "hidden"
       }>
+        ${hashGateHtml({
+          publishedHash,
+          inputId: "kh-psbt-verify",
+          statusId: "kh-hash-status",
+        })}
         <label class="donate-amount-label" for="kh-psbt-partial">Signed partial (base64)</label>
         <textarea id="kh-psbt-partial" class="comment-input mono" rows="3" placeholder="Paste from Sparrow" ${
           opts.canPartial ? "" : "disabled"
         }></textarea>
         <button type="button" class="btn" id="kh-sign" ${
-          opts.canPartial ? "" : "disabled"
+          signBlocked ? "disabled" : ""
         }>Upload signature</button>
         <button type="button" class="btn ${step === "broadcast" ? "" : "ghost"}" id="kh-broadcast" ${
           opts.canBroadcast ? "" : "disabled"
@@ -406,6 +535,7 @@ export async function renderKeyholders(
       }
       <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
         <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
+        <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
         <button type="button" class="account-tab" role="tab" id="kh-tab-bond_refund" data-kh-tab="bond_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Bond refunds</button>
         <button type="button" class="account-tab" role="tab" id="kh-tab-contrib_refund" data-kh-tab="contrib_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Contributor refunds</button>
         <button type="button" class="account-tab" role="tab" id="kh-tab-roster" data-kh-tab="roster" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Roster</button>
@@ -424,6 +554,37 @@ export async function renderKeyholders(
     queueEl.setAttribute("aria-busy", "true");
     if (kh.status !== "active") {
       queueEl.innerHTML = `<p class="muted">Activate your seat to see the disbursement queue.</p>`;
+      queueEl.removeAttribute("aria-busy");
+      return;
+    }
+    if (kind === "branch") {
+      const res = await authFetch(`${api()}/keyholders/branch-queue`);
+      if (!res.ok) {
+        queueEl.innerHTML = `<p class="muted">Could not load branch queue.</p>`;
+        queueEl.removeAttribute("aria-busy");
+        return;
+      }
+      const data = (await res.json()) as { items: BranchSignDeskItem[] };
+      if (!data.items.length) {
+        queueEl.innerHTML = `<p class="muted">No selected bounty branches ready to sign.</p>`;
+        queueEl.removeAttribute("aria-busy");
+        return;
+      }
+      queueEl.innerHTML = `<ul class="declined-list">${data.items
+        .map((item) => {
+          return `<li class="declined-row">
+            <button type="button" class="declined-title btn ghost" data-branch="${escapeHtml(item.proposal_id)}" data-alloc="${escapeHtml(item.allocation_id)}" aria-label="${escapeHtml(item.proposal_id)} ${escapeHtml(item.kind)} ${item.signed} of ${item.required_threshold} signed">${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</button>
+            <span class="declined-meta"><span class="pill">${escapeHtml(item.kind)}</span>
+            <span class="muted">${item.signed}/${item.required_threshold} signed</span>
+            <span class="pill">${escapeHtml(item.state)}</span></span>
+          </li>`;
+        })
+        .join("")}</ul>`;
+      queueEl.querySelectorAll<HTMLButtonElement>("[data-branch]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          void openBranchDetail(btn.dataset.branch || "", btn.dataset.alloc || "");
+        });
+      });
       queueEl.removeAttribute("aria-busy");
       return;
     }
@@ -482,6 +643,161 @@ export async function renderKeyholders(
     queueEl.removeAttribute("aria-busy");
   };
 
+  const openBranchDetail = async (proposalId: string, allocationId: string) => {
+    const res = await authFetch(
+      `${api()}/keyholders/branch-sign/${encodeURIComponent(proposalId)}/${encodeURIComponent(allocationId)}`,
+    );
+    if (!res.ok) {
+      detailEl.hidden = false;
+      detailEl.innerHTML = `<p class="builder-msg bad" role="alert">Could not load branch.</p>`;
+      return;
+    }
+    const data = (await res.json()) as { item: BranchSignDeskItem };
+    const item = data.item;
+    detailEl.hidden = false;
+    detailEl.innerHTML = branchSignDeskHtml(item, { userId: kh.user_id });
+    detailEl.querySelector<HTMLElement>("#kh-branch-title")?.focus();
+    bindHashGate({
+      input: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-verify"),
+      status: detailEl.querySelector<HTMLElement>("#kh-branch-hash-status"),
+      publishedHash: item.published_sha256,
+      action: detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign"),
+      enableActionWithoutHash: false,
+    });
+    const setMsg = (t: string) => {
+      const el = detailEl.querySelector<HTMLElement>("#kh-branch-msg");
+      if (!el) return;
+      el.hidden = !t;
+      el.textContent = t;
+    };
+    detailEl.querySelector("#kh-branch-sign")?.addEventListener("click", async () => {
+      const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign");
+      if (btn?.disabled) {
+        setMsg("Verify the published SHA-256 before uploading a signature.");
+        return;
+      }
+      const b64 =
+        detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-partial")?.value.trim() ||
+        "";
+      if (!b64) {
+        setMsg("Paste a signed partial.");
+        return;
+      }
+      const ok = await confirmAction({
+        title: "Upload signature",
+        body: "Store your signature on the selected branch. The Worker will not broadcast.",
+        confirmLabel: "Upload",
+      });
+      if (!ok) return;
+      const res = await authFetchWithTos(
+        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            psbt_base64: b64,
+            published_sha256: item.published_sha256,
+          }),
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        threshold_met?: boolean;
+        broadcast?: boolean;
+      };
+      setMsg(
+        res.ok
+          ? body.threshold_met
+            ? "Threshold met — download the combined transaction and broadcast in Sparrow."
+            : "Partial stored"
+          : body.error || "Sign failed",
+      );
+      if (res.ok) {
+        void openBranchDetail(item.proposal_id, item.allocation_id);
+        void loadQueue();
+      }
+    });
+    detailEl.querySelector("#kh-branch-combined")?.addEventListener("click", async () => {
+      const dl = await authFetch(
+        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/combined`,
+      );
+      if (!dl.ok) {
+        setMsg("Combined transaction is not ready.");
+        return;
+      }
+      const blob = await dl.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${item.proposal_id}-${item.allocation_id}.psbt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    detailEl.querySelector("#kh-branch-propose")?.addEventListener("click", async () => {
+      const txid =
+        detailEl.querySelector<HTMLInputElement>("#kh-branch-txid")?.value.trim() ||
+        "";
+      if (!txid) {
+        setMsg("Paste the broadcast txid.");
+        return;
+      }
+      const ok = await confirmAction({
+        title: "Propose settle",
+        body: "Confirm this txid pays every output on the selected branch. A second keyholder must confirm. The Worker will not broadcast.",
+        confirmLabel: "Propose",
+      });
+      if (!ok) return;
+      const res = await authFetch(
+        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/propose-settle`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ txid }),
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        missing?: { address: string; amount_sats: number }[];
+      };
+      if (res.ok) {
+        setMsg("Settle proposed. A second keyholder must confirm.");
+        void openBranchDetail(item.proposal_id, item.allocation_id);
+        void loadQueue();
+        return;
+      }
+      const miss = body.missing?.length
+        ? ` Missing: ${body.missing
+            .map((m) => `${m.address} (${m.amount_sats} sats)`)
+            .join("; ")}`
+        : "";
+      setMsg((body.error || "Failed") + miss);
+    });
+    detailEl.querySelector("#kh-branch-confirm")?.addEventListener("click", async () => {
+      const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-confirm");
+      if (btn?.disabled) {
+        setMsg("A second keyholder must confirm settle.");
+        return;
+      }
+      const ok = await confirmAction({
+        title: "Confirm settle",
+        body: "Second keyholder confirmation. Re-verifies the txid against the selected branch outputs.",
+        confirmLabel: "Confirm",
+        danger: true,
+      });
+      if (!ok) return;
+      const res = await authFetch(
+        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/confirm-settle`,
+        { method: "POST" },
+      );
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setMsg(res.ok ? "Settled." : body.error || "Failed");
+      if (res.ok) {
+        void openBranchDetail(item.proposal_id, item.allocation_id);
+        void loadQueue();
+      }
+    });
+  };
+
   const openDetail = async (id: string) => {
     const res = await authFetch(`${api()}/disburse/${encodeURIComponent(id)}`);
     if (!res.ok) {
@@ -521,6 +837,15 @@ export async function renderKeyholders(
 
     detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
 
+    const publishedHash = publishedUnsignedHash(item);
+    bindHashGate({
+      input: detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt-verify"),
+      status: detailEl.querySelector<HTMLElement>("#kh-hash-status"),
+      publishedHash,
+      action: detailEl.querySelector<HTMLButtonElement>("#kh-sign"),
+      enableActionWithoutHash: canPartial,
+    });
+
     const setMsg = (t: string) => {
       const el = detailEl.querySelector<HTMLElement>("#kh-settle-msg");
       if (!el) return;
@@ -547,6 +872,11 @@ export async function renderKeyholders(
     });
 
     detailEl.querySelector("#kh-sign")?.addEventListener("click", async () => {
+      const signBtn = detailEl.querySelector<HTMLButtonElement>("#kh-sign");
+      if (signBtn?.disabled) {
+        setMsg("Verify the published SHA-256 before uploading a signature.");
+        return;
+      }
       const b64 = detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt-partial")?.value.trim() || "";
       if (!b64) {
         setMsg("Paste a partial PSBT.");
@@ -919,5 +1249,15 @@ export async function renderKeyholders(
     setTab(next.dataset.khTab || "release", next);
   });
 
-  void loadQueue();
+  const initial = keyholderTabFromSearch(
+    typeof location !== "undefined" ? location.search : "",
+  );
+  const start = app.querySelector<HTMLButtonElement>(
+    `[data-kh-tab="${initial}"]`,
+  );
+  if (start && initial !== "release") {
+    setTab(initial, start);
+  } else {
+    void loadQueue();
+  }
 }

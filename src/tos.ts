@@ -1,9 +1,11 @@
 export const TOS_CURRENT = {
-  version: "tos-2026-08-13",
-  published_at: "2026-08-13T00:00:00.000Z",
+  version: "tos-2026-09-13",
+  published_at: "2026-09-13T00:00:00.000Z",
 } as const;
 
-export const TOS_PREVIOUS: { version: string } | null = null;
+export const TOS_PREVIOUS: { version: string } | null = {
+  version: "tos-2026-08-13",
+};
 export const TOS_GRACE_DAYS = 30;
 
 export type TosStatus = "current" | "grace" | "required";

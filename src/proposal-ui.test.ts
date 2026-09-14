@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  bindStructuredFunding,
   canEditProposal,
   deliverableChipHtml,
   donatePanelHtml,
@@ -9,6 +10,7 @@ import {
   isPastFundingTarget,
   metaChipsHtml,
   milestonesHtml,
+  structuredFundingPanelHtml,
   proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
@@ -553,5 +555,81 @@ describe("proposal UI critical render helpers", () => {
     expect(html).not.toContain("fa-x-twitter");
     expect(html).not.toContain("fa-reddit");
     expect(html).not.toContain("intent/post");
+  });
+
+  it("structuredFundingPanelHtml is bounty+escrow only", () => {
+    expect(
+      structuredFundingPanelHtml({
+        id: "PLEBLY-1",
+        escrow_address: "tb1qtest",
+        proposal_type: "bounty",
+        milestones: [],
+      } as Proposal),
+    ).toContain('id="structured-funding"');
+    expect(
+      structuredFundingPanelHtml({
+        id: "PLEBLY-1",
+        escrow_address: "tb1qtest",
+        proposal_type: "direct",
+        milestones: [],
+      } as Proposal),
+    ).toBe("");
+    expect(
+      structuredFundingPanelHtml({
+        id: "PLEBLY-1",
+        proposal_type: "bounty",
+        milestones: [],
+      } as Proposal),
+    ).toBe("");
+  });
+
+  it("bindStructuredFunding shows Type 1 ready copy, hash-gates, and never offers broadcast", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/structured-funding")) {
+          return new Response(
+            JSON.stringify({
+              psbt_kind: "single",
+              structured: { state: "psbt_ready", sha256: "aa".repeat(32) },
+            }),
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            branches: {
+              state: "ready",
+              items: [
+                {
+                  allocation_id: "bounty",
+                  kind: "clean",
+                  sha256: "aa".repeat(32),
+                  locktime: 0,
+                  psbt_base64: "cHNidP8BAAD4",
+                },
+              ],
+            },
+            selected: { bounty: { kind: "clean", sha256: "aa".repeat(32) } },
+            signoff: { bounty: { signed: 0, required_threshold: 2, state: "open" } },
+          }),
+        );
+      }),
+    );
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-1",
+      escrow_address: "tb1qtest",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-1");
+    await vi.waitFor(() => {
+      expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
+    });
+    expect(document.querySelector("#structured-funding-status")?.textContent).toMatch(
+      /Type 1/,
+    );
+    expect(document.querySelector("#branch-psbt-verify")).toBeTruthy();
+    expect(document.body.innerHTML.toLowerCase()).not.toContain("broadcast");
+    vi.unstubAllGlobals();
   });
 });

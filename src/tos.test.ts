@@ -16,7 +16,8 @@ describe("tosDisplayMarkdown", () => {
 describe("tosStatus", () => {
   it("requires when missing", () => {
     expect(tosStatus(null)).toBe("required");
-    expect(tosStatus({ tos_version: "tos-2026-08-13" })).toBe("current");
+    expect(tosStatus({ tos_version: "tos-2026-09-13" })).toBe("current");
+    expect(tosStatus({ tos_version: "tos-2026-08-13" })).toBe("grace");
   });
 });
 

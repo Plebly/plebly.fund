@@ -60,6 +60,17 @@ export type ClaimStatus = {
   can_challenge_abandoned?: boolean;
   donor_review_status?: "window_open" | "flagged" | "auto_completed" | null;
   donor_review_expires_at?: string | null;
+  donor_review_days?: number | null;
+  donor_review_allocation_id?: string | null;
+  allocations?: { id: string; allocation_sats: number }[];
+  donor_reviews?: {
+    open: boolean;
+    status: "window_open" | "flagged" | "auto_completed" | null;
+    expires_at: string | null;
+    allocation_id: string | null;
+    window_days: number | null;
+    chosen_kind: "clean" | "disputed" | null;
+  }[];
   can_mark_done?: boolean;
   can_flag_close?: boolean;
   escrow_address?: string | null;
@@ -72,6 +83,20 @@ export type ClaimStatus = {
   release_blocked_seats?: number[] | null;
   rebuttal_expires_at?: string | null;
   rebuttal_reasoning?: string | null;
+  psbt?: {
+    psbt_kind?: "single" | "milestone";
+    structured_state?: string;
+    selected?: Record<string, { kind?: string }>;
+    signoff?: Record<
+      string,
+      {
+        kind?: string;
+        state?: string;
+        signed?: number;
+        required_threshold?: number;
+      }
+    >;
+  };
 };
 
 export type ClaimLedgerView = {
@@ -664,7 +689,8 @@ export async function submitCheckpoint(input: {
 export async function markProposalDone(input: {
   proposal_path: string;
   proposal_id?: string;
-}): Promise<{ expires_at?: string }> {
+  allocation_id?: string;
+}): Promise<{ expires_at?: string; window_days?: number }> {
   const res = await fetch(`${API()}/claims/done`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
@@ -674,15 +700,17 @@ export async function markProposalDone(input: {
   const data = (await res.json().catch(() => ({}))) as {
     error?: string;
     expires_at?: string;
+    window_days?: number;
   };
   if (res.status === 401) throw new Error("login_required");
   if (!res.ok) throw new Error(data.error || `Mark done failed (${res.status})`);
-  return { expires_at: data.expires_at };
+  return { expires_at: data.expires_at, window_days: data.window_days };
 }
 
 export async function flagProposalClose(input: {
   proposal_path: string;
   proposal_id?: string;
+  allocation_id?: string;
   reason: string;
 }): Promise<{ decision_id?: string }> {
   const res = await fetch(`${API()}/claims/flag`, {

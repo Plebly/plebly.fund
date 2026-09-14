@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";
+import { emitFundParametersTs } from "../../proposals/scripts/parameters-lib.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -424,34 +425,10 @@ export const ABOUT_KEYHOLDERS: AboutKeyholders = ${JSON.stringify(
 export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
   );
 
-  emitTs(
+  const paramsTs = emitFundParametersTs(resolved);
+  writeFileSync(
     join(genDir, "parameters.ts"),
-    `export const SUBMISSION_FEE_SATS = ${resolved.submission_fee_sats};
-export const CLAIM_FLOOR_SATS = ${resolved.claim_floor_sats};
-export const MILESTONE_THRESHOLD_SATS = ${resolved.milestone_threshold_sats};
-export const PLATFORM_FEE_PERCENT = ${resolved.platform_fee_percent};
-export const KEYHOLDER_FEE_PERCENT = ${resolved.keyholder_fee_percent ?? 2};
-export const KEYHOLDER_CAP_SATS = ${resolved.keyholder_cap_sats ?? 500000};
-export const CLAIM_BOND_SATS = ${resolved.claim_bond_sats};
-export const MAX_ACTIVE_CLAIMS = ${resolved.max_active_claims};
-export const CLAIM_PENDING_TTL_HOURS = ${resolved.claim_pending_ttl_hours};
-export const RECLAIM_COOLDOWN_DAYS = ${resolved.reclaim_cooldown_days};
-export const CLAIM_CHECKPOINT_DAY = ${resolved.claim_checkpoint_day};
-export const CLAIM_CHECKPOINT_GRACE_DAYS = ${resolved.claim_checkpoint_grace_days};
-export const CLAIM_ABUSE_ESCALATION_THRESHOLD = ${resolved.claim_abuse_escalation_threshold};
-export const CORE_ANNUAL_GAP_SATS = ${resolved.core_annual_gap_sats};
-export const MAX_SITE_CLAIM_PRS_PER_DAY = ${resolved.max_site_claim_prs_per_day};
-export const IDENTITY_RELINK_COOLDOWN_DAYS = ${resolved.identity_relink_cooldown_days};
-export const CLAIM_WINDOW_DAYS = ${resolved.claim_window_days};
-export const CLAIM_EXTENSION_DAYS = ${resolved.claim_extension_days};
-export const FUNDING_WINDOW_DAYS = ${resolved.funding_window_days};
-export const FUNDING_WINDOW_EXTENSION_DAYS = ${resolved.funding_window_extension_days};
-export const DELIVERY_WINDOW_DAYS = ${resolved.delivery_window_days};
-export const FUNDING_CONFIRMATIONS = ${resolved.funding_confirmations};
-export const BADGE_NOTABLE_SATS = ${resolved.badge_notable_sats};
-export const BADGE_MAJOR_SATS = ${resolved.badge_major_sats};
-export const BADGE_PATRON_SATS = ${resolved.badge_patron_sats};
-export const PLEBLY_PARAMETERS_NETWORK = ${JSON.stringify(resolved.network)} as const;`,
+    paramsTs.endsWith("\n") ? paramsTs : `${paramsTs}\n`,
   );
 
   console.log(
