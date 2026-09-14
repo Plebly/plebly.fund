@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";
-import { emitFundParametersTs } from "../../proposals/scripts/parameters-lib.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -71,8 +70,46 @@ function resolveNetworkParams(doc, bitcoinNetwork) {
     claim_floor_sats: overlay.claim_floor_sats,
     submission_fee_address: overlay.submission_fee_address ?? null,
     claim_floor_note: overlay.claim_floor_note,
+    keyholder_fee_percent: doc.shared.keyholder_fee_percent ?? 2,
+    bdi_fee_percent: doc.shared.bdi_fee_percent ?? 1,
+    reviewer_reserve_percent: doc.shared.reviewer_reserve_percent ?? 2,
+    keyholder_cap_sats: doc.shared.keyholder_cap_sats ?? 500000,
     network,
   };
+}
+
+/** Keep codegen inside this repo — CI checks out plebly.fund alone. */
+function emitFundParametersTs(p) {
+  return `/* Auto-generated from proposals/parameters.json — do not edit */
+export const SUBMISSION_FEE_SATS = ${p.submission_fee_sats};
+export const CLAIM_FLOOR_SATS = ${p.claim_floor_sats};
+export const MILESTONE_THRESHOLD_SATS = ${p.milestone_threshold_sats};
+export const PLATFORM_FEE_PERCENT = ${p.platform_fee_percent};
+export const KEYHOLDER_FEE_PERCENT = ${p.keyholder_fee_percent};
+export const BDI_FEE_PERCENT = ${p.bdi_fee_percent};
+export const REVIEWER_RESERVE_PERCENT = ${p.reviewer_reserve_percent};
+export const KEYHOLDER_CAP_SATS = ${p.keyholder_cap_sats};
+export const CLAIM_BOND_SATS = ${p.claim_bond_sats};
+export const MAX_ACTIVE_CLAIMS = ${p.max_active_claims};
+export const CLAIM_PENDING_TTL_HOURS = ${p.claim_pending_ttl_hours};
+export const RECLAIM_COOLDOWN_DAYS = ${p.reclaim_cooldown_days};
+export const CLAIM_CHECKPOINT_DAY = ${p.claim_checkpoint_day};
+export const CLAIM_CHECKPOINT_GRACE_DAYS = ${p.claim_checkpoint_grace_days};
+export const CLAIM_ABUSE_ESCALATION_THRESHOLD = ${p.claim_abuse_escalation_threshold};
+export const CORE_ANNUAL_GAP_SATS = ${p.core_annual_gap_sats};
+export const MAX_SITE_CLAIM_PRS_PER_DAY = ${p.max_site_claim_prs_per_day};
+export const IDENTITY_RELINK_COOLDOWN_DAYS = ${p.identity_relink_cooldown_days};
+export const CLAIM_WINDOW_DAYS = ${p.claim_window_days};
+export const CLAIM_EXTENSION_DAYS = ${p.claim_extension_days};
+export const FUNDING_WINDOW_DAYS = ${p.funding_window_days};
+export const FUNDING_WINDOW_EXTENSION_DAYS = ${p.funding_window_extension_days};
+export const DELIVERY_WINDOW_DAYS = ${p.delivery_window_days};
+export const FUNDING_CONFIRMATIONS = ${p.funding_confirmations};
+export const BADGE_NOTABLE_SATS = ${p.badge_notable_sats};
+export const BADGE_MAJOR_SATS = ${p.badge_major_sats};
+export const BADGE_PATRON_SATS = ${p.badge_patron_sats};
+export const PLEBLY_PARAMETERS_NETWORK = ${JSON.stringify(p.network)} as const;
+`;
 }
 
 /** Template placeholders for content/about.md */
