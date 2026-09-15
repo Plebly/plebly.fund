@@ -6,6 +6,7 @@ import {
   picksInChipLabel,
   refreshClaimModeChips,
   relativeTimeLeft,
+  showApplicationWindow,
 } from "./claim-mode-ui";
 import type { Proposal } from "./types";
 
@@ -28,6 +29,15 @@ function openBounty(partial: Partial<Proposal> = {}): Proposal {
     ...partial,
   };
 }
+
+describe("showApplicationWindow", () => {
+  it("is only for bounty proposer_select", () => {
+    expect(showApplicationWindow("bounty", "proposer_select")).toBe(true);
+    expect(showApplicationWindow("bounty", "first_bonded")).toBe(false);
+    expect(showApplicationWindow("direct", "proposer_select")).toBe(false);
+    expect(showApplicationWindow("direct", "first_bonded")).toBe(false);
+  });
+});
 
 describe("deadlineChipLabel / relativeTimeLeft", () => {
   const now = Date.parse("2026-08-06T12:00:00.000Z");

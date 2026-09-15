@@ -1,6 +1,7 @@
-import { authFetch, type AuthUser } from "./auth";
+import { authFetch, currentReturnPath, loginChoicesHtml, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
+import { bindKhApplyForm, khApplyFormHtml } from "./governance-page";
 import { href, projectsHref } from "./router";
 import { authFetchWithTos } from "./tos-modal";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
@@ -418,9 +419,247 @@ type KeyholderMe = {
   status: string;
   verified_at?: string | null;
   keys_stale?: boolean;
+  attest_count?: number;
 };
 
+export type KeyholderOnboardPhase =
+  | "sign_in"
+  | "earn_reviewer"
+  | "apply"
+  | "election"
+  | "submit_keys"
+  | "await_attest"
+  | "active";
+
+export type KeyholderOnboardApplication = {
+  status: string;
+  reapply_after?: string | null;
+  hw_type?: string;
+  handle?: string;
+  election?: {
+    status: string;
+    yes: number;
+    no: number;
+    closes_at: string;
+  } | null;
+};
+
+export type KeyholderOnboardInput = {
+  signedIn: boolean;
+  canApply: boolean;
+  /** Live active seats from GET /keyholders/public. <2 means co-attest cannot run. */
+  activeSeats?: number;
+  application?: KeyholderOnboardApplication | null;
+  keyholder?: {
+    status: string;
+    fingerprint?: string | null;
+    xpub?: string | null;
+    keys_stale?: boolean;
+    attest_count?: number;
+  } | null;
+};
+
+export function keyholderColdStart(activeSeats?: number): boolean {
+  return typeof activeSeats === "number" && activeSeats < 2;
+}
+
+export function keyholderColdStartHtml(activeSeats?: number): string {
+  if (!keyholderColdStart(activeSeats)) return "";
+  return `<div class="lifecycle-banner" role="status">
+    <span class="lifecycle-k">First seats</span>
+    <p>No sitting keyholders yet. Ops activates the first two together. Apply and co-attest on this page start after that.</p>
+  </div>`;
+}
+
+const ONBOARD_STEPS: { id: KeyholderOnboardPhase; label: string }[] = [
+  { id: "sign_in", label: "Sign in" },
+  { id: "earn_reviewer", label: "Finish a completed review" },
+  { id: "apply", label: "Apply — reviewers vote for 7 days" },
+  { id: "submit_keys", label: "Register fingerprint + xpub" },
+  { id: "await_attest", label: "Two keyholders co-attest" },
+  { id: "active", label: "Sign releases" },
+];
+
+export function keyholderOnboardPhase(
+  input: KeyholderOnboardInput,
+): KeyholderOnboardPhase {
+  if (!input.signedIn) return "sign_in";
+  const st = input.keyholder?.status;
+  if (st === "active") return "active";
+  if (st === "pending_attest") return "await_attest";
+  if (st === "invited") return "submit_keys";
+  if (input.application?.status === "pending") return "election";
+  if (input.application?.status === "approved") return "submit_keys";
+  if (input.canApply) return "apply";
+  return "earn_reviewer";
+}
+
+export function keyholderOnboardStepIndex(phase: KeyholderOnboardPhase): number {
+  if (phase === "election") return 2;
+  return ONBOARD_STEPS.findIndex((s) => s.id === phase);
+}
+
+export function keyholderOnboardLede(phase: KeyholderOnboardPhase): string {
+  switch (phase) {
+    case "sign_in":
+      return "Sign in, then follow the steps.";
+    case "earn_reviewer":
+      return "Finish one completed review, then apply here.";
+    case "apply":
+      return "Reviewers vote for seven days.";
+    case "election":
+      return "Waiting on the reviewer vote.";
+    case "submit_keys":
+      return "Register fingerprint and xpub with the Worker. This does not update the Sparrow descriptor.";
+    case "await_attest":
+      return "Two sitting keyholders must co-attest your keys.";
+    case "active":
+      return "Sign releases and refunds.";
+  }
+}
+
+function coldStartLede(phase: KeyholderOnboardPhase, activeSeats = 0): string {
+  if (keyholderColdStart(activeSeats) && phase !== "active") {
+    return "Ops seats the first two. This page is for later seats.";
+  }
+  return keyholderOnboardLede(phase);
+}
+
+export function keyholderKeysFormHtml(opts: {
+  fingerprint?: string | null;
+  xpub?: string | null;
+  heading: string;
+}): string {
+  return `<div class="form-panel" id="kh-keys-panel">
+    <h2 class="proposal-block-title">${escapeHtml(opts.heading)}</h2>
+    <p class="muted">Registers fingerprint + xpub on the Worker so other keyholders can co-attest. It does not change the Sparrow descriptor — ops publishes that separately. Saving again clears co-attestations. Never paste a seed.</p>
+    <label class="donate-amount-label" for="kh-fp">Fingerprint (8 hex)</label>
+    <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(opts.fingerprint || "")}" autocomplete="off" />
+    <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
+    <textarea id="kh-xpub" class="comment-input mono" rows="3">${escapeHtml(opts.xpub || "")}</textarea>
+    <label class="donate-amount-label" for="kh-auth-addr-keys">Auth address (P2WPKH from this xpub)</label>
+    <input id="kh-auth-addr-keys" class="donate-amount mono" placeholder="tb1… / bc1…" autocomplete="off" />
+    <button type="button" class="btn" id="kh-keys-submit">Save keys</button>
+    <p class="builder-msg" id="kh-keys-msg" hidden role="status" aria-live="polite"></p>
+  </div>`;
+}
+
+function onboardReapplyBlocked(app: KeyholderOnboardApplication | null | undefined): boolean {
+  if (app?.status !== "rejected" || !app.reapply_after) return false;
+  const t = Date.parse(app.reapply_after);
+  return Number.isFinite(t) && Date.now() < t;
+}
+
+function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
+  const phase = keyholderOnboardPhase(input);
+  const app = input.application;
+  const kh = input.keyholder;
+  const cold = keyholderColdStart(input.activeSeats);
+  if (phase === "sign_in") {
+    return `<div class="form-panel kh-onboard-card">
+      <p class="next-card-sentence">Sign in to continue.</p>
+      ${loginChoicesHtml(undefined, currentReturnPath())}
+      <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+    </div>`;
+  }
+  if (phase === "earn_reviewer") {
+    return `<div class="form-panel kh-onboard-card">
+      <p class="next-card-sentence">${
+        cold
+          ? "Later seats open to earned reviewers after the first two are seated."
+          : "Seats open to earned reviewers — people who have finished at least one review."
+      }</p>
+      <p><a class="btn" href="${href("/reviewers")}">Reviewers</a>
+      <a class="btn ghost" href="${href("/wanted")}">Most wanted</a></p>
+      <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+    </div>`;
+  }
+  if (phase === "election") {
+    const closes = app?.election?.closes_at?.slice(0, 10) || "";
+    const tally =
+      app?.election
+        ? `yes ${app.election.yes} / no ${app.election.no}`
+        : "votes pending";
+    return `<div class="form-panel kh-onboard-card">
+      <p class="next-card-sentence">Reviewers are voting on your application.</p>
+      <p class="muted">${closes ? `Closes ${escapeHtml(closes)} · ` : ""}${escapeHtml(tally)}. Fail → 90 days before you can apply again.</p>
+    </div>`;
+  }
+  if (phase === "apply") {
+    const blocked = onboardReapplyBlocked(app);
+    const cooldown = blocked
+      ? `<p class="muted">You can apply again after ${escapeHtml((app?.reapply_after || "").slice(0, 10))}.</p>`
+      : "";
+    return `<div class="kh-onboard-card">
+      <p class="next-card-sentence">Apply here. A pass invites you to register keys.</p>
+      ${cooldown}
+      ${blocked ? "" : khApplyFormHtml(true, true)}
+    </div>`;
+  }
+  if (phase === "submit_keys") {
+    return `<div class="kh-onboard-card">
+      <p class="next-card-sentence">Submit the fingerprint and xpub from your hardware wallet.</p>
+      ${keyholderKeysFormHtml({
+        fingerprint: kh?.fingerprint,
+        xpub: kh?.xpub,
+        heading: "Your keys",
+      })}
+    </div>`;
+  }
+  if (phase === "await_attest") {
+    const n = kh?.attest_count || 0;
+    return `<div class="kh-onboard-card">
+      <p class="next-card-sentence">${
+        cold
+          ? "Co-attest cannot start until two seats are already active."
+          : `Waiting for two sitting keyholders (${n}/2).`
+      }</p>
+      <p class="muted">Fingerprint <code class="mono">${escapeHtml(kh?.fingerprint || "—")}</code>. ${
+        cold
+          ? "Ops activates the first two together."
+          : "They open this page → Roster → Co-attest."
+      }</p>
+      ${keyholderKeysFormHtml({
+        fingerprint: kh?.fingerprint,
+        xpub: kh?.xpub,
+        heading: "Update keys",
+      })}
+    </div>`;
+  }
+  return `<div class="form-panel kh-onboard-card">
+    <p class="next-card-sentence">You are seated.</p>
+    <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+  </div>`;
+}
+
+export function keyholderOnboardHtml(input: KeyholderOnboardInput): string {
+  const phase = keyholderOnboardPhase(input);
+  const current = keyholderOnboardStepIndex(phase);
+  const steps = ONBOARD_STEPS.map((step, i) => {
+    const cls = i < current ? "is-done" : i === current ? "is-current" : "";
+    return `<li class="${cls}">${escapeHtml(step.label)}</li>`;
+  }).join("");
+  return `<div class="kh-onboard">
+    ${keyholderColdStartHtml(input.activeSeats)}
+    <ol class="kh-steps" aria-label="Keyholder onboarding">
+      ${steps}
+    </ol>
+    ${keyholderOnboardCardHtml(input)}
+  </div>`;
+}
+
 const api = () => WORKERS_API.replace(/\/$/, "");
+
+async function loadActiveSeats(): Promise<number> {
+  try {
+    const res = await fetch(`${api()}/keyholders/public`);
+    if (!res.ok) return 0;
+    const data = (await res.json()) as { seats?: number };
+    return typeof data.seats === "number" ? data.seats : 0;
+  } catch {
+    return 0;
+  }
+}
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -431,18 +670,56 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function bindKeyholderKeys(
+  root: ParentNode,
+  opts?: { onSaved?: () => void },
+): void {
+  root.querySelector("#kh-keys-submit")?.addEventListener("click", async () => {
+    const fingerprint = (
+      root.querySelector<HTMLInputElement>("#kh-fp")?.value || ""
+    ).trim();
+    const xpub = (
+      root.querySelector<HTMLTextAreaElement>("#kh-xpub")?.value || ""
+    ).trim();
+    const res = await authFetch(`${api()}/keyholders/me/keys`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fingerprint,
+        xpub,
+        auth_address: (
+          root.querySelector<HTMLInputElement>("#kh-auth-addr-keys")?.value ||
+          root.querySelector<HTMLInputElement>("#kh-auth-addr")?.value ||
+          ""
+        ).trim(),
+      }),
+    });
+    const msg = root.querySelector<HTMLElement>("#kh-keys-msg");
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (msg) {
+      msg.hidden = false;
+      msg.textContent = res.ok ? "Keys saved." : body.error || "Failed";
+    }
+    if (res.ok) opts?.onSaved?.();
+  });
+}
+
 export async function renderKeyholders(
   shell: KeyholdersShell,
   user: AuthUser | null,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
+  const rerender = () => void renderKeyholders(shell, user);
+  const activeSeats = await loadActiveSeats();
   if (!user) {
     app.innerHTML = shell(`
-      <section class="wrap-wide detail">
-        <h1>Keyholders</h1>
-        <p class="lede">Sign in to open the keyholder console.</p>
-        <p><a class="btn" href="${href("/account")}">Account</a></p>
-        <p class="muted"><a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+      <section class="wrap-wide detail keyholders-page">
+        <header class="declined-head">
+          <p class="eyebrow"><a href="${projectsHref()}">Projects</a></p>
+          <h1>Keyholders</h1>
+          <p class="lede">${escapeHtml(coldStartLede("sign_in", activeSeats))}</p>
+        </header>
+        ${keyholderOnboardHtml({ signedIn: false, canApply: false, activeSeats })}
       </section>
     `);
     return;
@@ -453,18 +730,34 @@ export async function renderKeyholders(
     ? ((await meRes.json()) as {
         keyholder: KeyholderMe | null;
         earnings_sats?: number;
+        can_apply?: boolean;
+        application?: KeyholderOnboardApplication | null;
       })
-    : { keyholder: null, earnings_sats: 0 };
+    : { keyholder: null, earnings_sats: 0, can_apply: false, application: null };
   const kh = meBody.keyholder;
   const earnings = meBody.earnings_sats || 0;
-  if (!kh || (kh.status !== "active" && kh.status !== "invited" && kh.status !== "pending_attest")) {
+  const onboardInput: KeyholderOnboardInput = {
+    signedIn: true,
+    canApply: Boolean(meBody.can_apply),
+    application: meBody.application,
+    keyholder: kh,
+    activeSeats,
+  };
+  const phase = keyholderOnboardPhase(onboardInput);
+
+  if (!kh || kh.status !== "active") {
     app.innerHTML = shell(`
-      <section class="wrap-wide detail">
-        <h1>Keyholders</h1>
-        <p class="lede">Active keyholders only.</p>
-        <p><a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a> · <a href="${projectsHref()}">Projects</a></p>
+      <section class="wrap-wide detail keyholders-page">
+        <header class="declined-head">
+          <p class="eyebrow"><a href="${projectsHref()}">Projects</a></p>
+          <h1>Keyholders</h1>
+          <p class="lede">${escapeHtml(coldStartLede(phase, activeSeats))}</p>
+        </header>
+        ${keyholderOnboardHtml(onboardInput)}
       </section>
     `);
+    bindKhApplyForm(app, { onApplied: rerender });
+    bindKeyholderKeys(app, { onSaved: rerender });
     return;
   }
 
@@ -473,64 +766,34 @@ export async function renderKeyholders(
       <header class="declined-head">
         <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ops</p>
         <h1>Keyholders</h1>
-        <p class="lede">Sign releases and refunds.</p>
-        ${
-          kh.status === "active"
-            ? `<p class="kh-earnings">Accrued: <strong>${formatSats(earnings)}</strong></p>`
-            : ""
-        }
+        <p class="lede">${escapeHtml(keyholderOnboardLede("active"))}</p>
+        <p class="kh-earnings">Accrued: <strong>${formatSats(earnings)}</strong></p>
         ${
           kh.keys_stale
             ? `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Keys older than 1 year</span><p>Re-confirm fingerprint + xpub below.</p></div>`
             : ""
         }
       </header>
+      ${keyholderOnboardHtml(onboardInput)}
+      <div class="form-panel">
+        <h2 class="proposal-block-title">Signing session</h2>
+        <label class="donate-amount-label" for="kh-auth-addr">Auth address</label>
+        <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" value="${escapeHtml(kh.auth_address || "")}" autocomplete="off" />
+        <button type="button" class="btn" id="kh-challenge">Request challenge</button>
+        <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
+        <button type="button" class="btn ghost" id="kh-challenge-copy" hidden>Copy message</button>
+        <label class="donate-amount-label" for="kh-challenge-sig">Signature (base64)</label>
+        <textarea id="kh-challenge-sig" class="comment-input mono" rows="2" placeholder="Paste compact signed message"></textarea>
+        <button type="button" class="btn ghost" id="kh-challenge-verify">Verify</button>
+        <p class="builder-msg" id="kh-challenge-status" hidden role="status" aria-live="polite"></p>
+      </div>
       ${
-        kh.status === "active"
-          ? `<div class="form-panel">
-              <h2 class="proposal-block-title">Signing session</h2>
-              <label class="donate-amount-label" for="kh-auth-addr">Auth address</label>
-              <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" value="${escapeHtml(kh.auth_address || "")}" autocomplete="off" />
-              <button type="button" class="btn" id="kh-challenge">Request challenge</button>
-              <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
-              <button type="button" class="btn ghost" id="kh-challenge-copy" hidden>Copy message</button>
-              <label class="donate-amount-label" for="kh-challenge-sig">Signature (base64)</label>
-              <textarea id="kh-challenge-sig" class="comment-input mono" rows="2" placeholder="Paste compact signed message"></textarea>
-              <button type="button" class="btn ghost" id="kh-challenge-verify">Verify</button>
-              <p class="builder-msg" id="kh-challenge-status" hidden role="status" aria-live="polite"></p>
-            </div>`
-          : ""
-      }
-      ${
-        kh.status === "active" && kh.keys_stale
-          ? `<div class="form-panel">
-              <h2 class="proposal-block-title">Re-confirm keys</h2>
-              <p class="muted">Attestation older than 365 days.</p>
-              <label class="donate-amount-label" for="kh-fp">Fingerprint (8 hex)</label>
-              <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(kh.fingerprint || "")}" />
-              <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
-              <textarea id="kh-xpub" class="comment-input mono" rows="3">${escapeHtml(kh.xpub || "")}</textarea>
-              <label class="donate-amount-label" for="kh-auth-addr-keys">Auth address (P2WPKH from this xpub)</label>
-              <input id="kh-auth-addr-keys" class="donate-amount mono" placeholder="tb1… / bc1…" />
-              <button type="button" class="btn" id="kh-keys-submit">Save keys</button>
-              <p class="builder-msg" id="kh-keys-msg" hidden role="status" aria-live="polite"></p>
-            </div>`
-          : ""
-      }
-      ${
-        kh.status !== "active"
-          ? `<div class="form-panel">
-              <h2 class="proposal-block-title">Your keys</h2>
-              <p class="muted">Status: ${escapeHtml(kh.status)}. Submit fingerprint + xpub for two co-attestations.</p>
-              <label class="donate-amount-label" for="kh-fp">Fingerprint (8 hex)</label>
-              <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(kh.fingerprint || "")}" />
-              <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
-              <textarea id="kh-xpub" class="comment-input mono" rows="3">${escapeHtml(kh.xpub || "")}</textarea>
-              <label class="donate-amount-label" for="kh-auth-addr-keys">Auth address (P2WPKH from this xpub)</label>
-              <input id="kh-auth-addr-keys" class="donate-amount mono" placeholder="tb1… / bc1…" />
-              <button type="button" class="btn" id="kh-keys-submit">Save keys</button>
-              <p class="builder-msg" id="kh-keys-msg" hidden role="status" aria-live="polite"></p>
-            </div>`
+        kh.keys_stale
+          ? keyholderKeysFormHtml({
+              fingerprint: kh.fingerprint,
+              xpub: kh.xpub,
+              heading: "Re-confirm keys",
+            })
           : ""
       }
       <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
@@ -552,11 +815,6 @@ export async function renderKeyholders(
 
   const loadQueue = async () => {
     queueEl.setAttribute("aria-busy", "true");
-    if (kh.status !== "active") {
-      queueEl.innerHTML = `<p class="muted">Activate your seat to see the disbursement queue.</p>`;
-      queueEl.removeAttribute("aria-busy");
-      return;
-    }
     if (kind === "branch") {
       const res = await authFetch(`${api()}/keyholders/branch-queue`);
       if (!res.ok) {
@@ -1137,29 +1395,7 @@ export async function renderKeyholders(
     }
   });
 
-  app.querySelector("#kh-keys-submit")?.addEventListener("click", async () => {
-    const fingerprint = (
-      app.querySelector<HTMLInputElement>("#kh-fp")?.value || ""
-    ).trim();
-    const xpub = (
-      app.querySelector<HTMLTextAreaElement>("#kh-xpub")?.value || ""
-    ).trim();
-    const res = await authFetch(`${api()}/keyholders/me/keys`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fingerprint, xpub, auth_address: (
-        app.querySelector<HTMLInputElement>("#kh-auth-addr-keys")?.value ||
-        app.querySelector<HTMLInputElement>("#kh-auth-addr")?.value ||
-        ""
-      ).trim() }),
-    });
-    const msg = app.querySelector<HTMLElement>("#kh-keys-msg");
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (msg) {
-      msg.hidden = false;
-      msg.textContent = res.ok ? "Keys saved." : body.error || "Failed";
-    }
-  });
+  bindKeyholderKeys(app);
 
   const loadRoster = async () => {
     const [pub, pending] = await Promise.all([

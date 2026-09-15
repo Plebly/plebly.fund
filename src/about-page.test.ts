@@ -36,6 +36,8 @@ describe("keyholdersHtml", () => {
     expect(html).toContain("which seats have not signed");
     expect(html).toContain("Plebly cannot move the coins");
     expect(html).toContain("/terms");
+    expect(html).toContain("/keyholders");
+    expect(html).not.toContain("tab=keyholders");
     expect(html).not.toContain("PSBT");
     expect(html).not.toContain("Dispute catalog");
     expect(html).not.toContain("on-chain");

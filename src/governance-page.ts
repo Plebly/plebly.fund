@@ -602,6 +602,42 @@ export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
   </form>`;
 }
 
+export function bindKhApplyForm(
+  root: ParentNode,
+  opts?: { onApplied?: () => void },
+): void {
+  root
+    .querySelector<HTMLFormElement>("#kh-apply-form")
+    ?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = root.querySelector<HTMLElement>("#kh-apply-msg");
+      if (!msg) return;
+      msg.hidden = false;
+      msg.textContent = "Submitting…";
+      const res = await authFetch(`${govApi()}/keyholders/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pubkey:
+            root.querySelector<HTMLTextAreaElement>("#kh-apply-pubkey")?.value ||
+            "",
+          hw_type: root.querySelector<HTMLInputElement>("#kh-apply-hw")?.value || "",
+          handle:
+            root.querySelector<HTMLInputElement>("#kh-apply-handle")?.value || "",
+          statement:
+            root.querySelector<HTMLTextAreaElement>("#kh-apply-statement")
+              ?.value || "",
+          ack: root.querySelector<HTMLInputElement>("#kh-apply-ack")?.checked,
+          tos_ack: root.querySelector<HTMLInputElement>("#kh-apply-tos")?.checked,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      msg.textContent = res.ok ? "Application opened." : body.error || "Apply failed";
+      msg.className = `builder-msg ${res.ok ? "success" : "error"}`;
+      if (res.ok) opts?.onApplied?.();
+    });
+}
+
 export function khElectionCardHtml(
   election: KhElectionView,
   application: KhApplicationView | undefined,
@@ -1072,28 +1108,5 @@ function bindGovernanceHandlers(
     setCardMsg(card, `Recorded (${body.election?.yes ?? "?"} yes / ${body.election?.no ?? "?"} no).`);
   });
 
-  page
-    .querySelector<HTMLFormElement>("#kh-apply-form")
-    ?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const msg = page.querySelector<HTMLElement>("#kh-apply-msg");
-      if (!msg) return;
-      msg.hidden = false;
-      msg.textContent = "Submitting…";
-      const res = await authFetch(`${govApi()}/keyholders/apply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pubkey: page.querySelector<HTMLTextAreaElement>("#kh-apply-pubkey")?.value || "",
-          hw_type: page.querySelector<HTMLInputElement>("#kh-apply-hw")?.value || "",
-          handle: page.querySelector<HTMLInputElement>("#kh-apply-handle")?.value || "",
-          statement: page.querySelector<HTMLTextAreaElement>("#kh-apply-statement")?.value || "",
-          ack: page.querySelector<HTMLInputElement>("#kh-apply-ack")?.checked,
-          tos_ack: page.querySelector<HTMLInputElement>("#kh-apply-tos")?.checked,
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      msg.textContent = res.ok ? "Application opened." : body.error || "Apply failed";
-      msg.className = `builder-msg ${res.ok ? "success" : "error"}`;
-    });
+  bindKhApplyForm(page);
 }

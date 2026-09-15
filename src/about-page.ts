@@ -128,7 +128,7 @@ export function keyholdersHtml(live: {
         : keyholderQuorumLabel(min));
   const needMore = mode !== "single-key-test" && n < min;
   const status = needMore
-    ? `<p class="about-keyholders-status" role="status">Need ${min} seats (${n} live). <a href="${href("/reviewers")}?tab=keyholders">Apply</a>.</p>`
+        ? `<p class="about-keyholders-status" role="status">Need ${min} seats (${n} live). <a href="${href("/keyholders")}">Apply</a>.</p>`
     : "";
   const liveBody = n
     ? `<div class="about-keyholders-table-wrap">
@@ -158,7 +158,7 @@ export function keyholdersHtml(live: {
     ${status}
     <div class="about-keyholders-roster">
       ${liveBody}
-      <p class="muted"><a href="${href("/reviewers")}?tab=keyholders">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a> · <a href="${href("/terms")}">Terms</a> · <a href="${href("/parameters")}">Parameters</a></p>
+      <p class="muted"><a href="${href("/keyholders")}">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a> · <a href="${href("/terms")}">Terms</a> · <a href="${href("/parameters")}">Parameters</a></p>
     </div>
   </section>`;
 }

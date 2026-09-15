@@ -6,6 +6,13 @@ import {
   branchSignDeskHtml,
   keyholderDeskHtml,
   keyholderDeskStep,
+  keyholderColdStart,
+  keyholderColdStartHtml,
+  keyholderKeysFormHtml,
+  keyholderOnboardHtml,
+  keyholderOnboardLede,
+  keyholderOnboardPhase,
+  keyholderOnboardStepIndex,
   keyholderPackageSentence,
   keyholderTabFromSearch,
 } from "./keyholders-page";
@@ -149,5 +156,119 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("does not broadcast");
     expect(html).not.toContain("Broadcast");
     expect(html).not.toContain("cHNidP8");
+  });
+});
+
+describe("keyholder onboarding", () => {
+  it("steps signed-out through apply to active", () => {
+    expect(keyholderOnboardPhase({ signedIn: false, canApply: false })).toBe(
+      "sign_in",
+    );
+    expect(
+      keyholderOnboardPhase({ signedIn: true, canApply: false }),
+    ).toBe("earn_reviewer");
+    expect(
+      keyholderOnboardPhase({ signedIn: true, canApply: true }),
+    ).toBe("apply");
+    expect(
+      keyholderOnboardPhase({
+        signedIn: true,
+        canApply: true,
+        application: { status: "pending" },
+      }),
+    ).toBe("election");
+    expect(
+      keyholderOnboardPhase({
+        signedIn: true,
+        canApply: false,
+        keyholder: { status: "invited" },
+      }),
+    ).toBe("submit_keys");
+    expect(
+      keyholderOnboardPhase({
+        signedIn: true,
+        canApply: false,
+        keyholder: { status: "pending_attest", attest_count: 1 },
+      }),
+    ).toBe("await_attest");
+    expect(
+      keyholderOnboardPhase({
+        signedIn: true,
+        canApply: true,
+        keyholder: { status: "active" },
+      }),
+    ).toBe("active");
+    expect(keyholderOnboardStepIndex("election")).toBe(2);
+    expect(keyholderOnboardStepIndex("submit_keys")).toBe(3);
+  });
+
+  it("renders the current action only — no genesis, no seed", () => {
+    const signedOut = keyholderOnboardHtml({
+      signedIn: false,
+      canApply: false,
+    });
+    expect(signedOut).toContain("Sign in to continue");
+    expect(signedOut).toContain("is-current");
+    expect(keyholderOnboardLede("sign_in")).toMatch(/Sign in/);
+
+    const apply = keyholderOnboardHtml({ signedIn: true, canApply: true });
+    expect(apply).toContain("kh-apply-form");
+    expect(keyholderOnboardLede("submit_keys")).toContain(
+      "does not update the Sparrow descriptor",
+    );
+
+    const keys = keyholderOnboardHtml({
+      signedIn: true,
+      canApply: false,
+      keyholder: { status: "invited" },
+    });
+    expect(keys).toContain("kh-fp");
+    expect(keys).toContain("Never paste a seed");
+    expect(keys).not.toContain("genesis");
+    expect(keys).not.toContain("HOOK_SECRET");
+
+    const wait = keyholderOnboardHtml({
+      signedIn: true,
+      canApply: false,
+      keyholder: {
+        status: "pending_attest",
+        fingerprint: "AABBCCDD",
+        attest_count: 1,
+      },
+    });
+    expect(wait).toContain("1/2");
+    expect(wait).toContain("AABBCCDD");
+
+    const form = keyholderKeysFormHtml({
+      fingerprint: "11223344",
+      xpub: "tpub1",
+      heading: "Your keys",
+    });
+    expect(form).toContain("does not change the Sparrow descriptor");
+    expect(form).not.toContain("mnemonic");
+  });
+
+  it("tells an empty roster that ops seats the first two", () => {
+    expect(keyholderColdStart(0)).toBe(true);
+    expect(keyholderColdStart(1)).toBe(true);
+    expect(keyholderColdStart(2)).toBe(false);
+    const empty = keyholderOnboardHtml({
+      signedIn: false,
+      canApply: false,
+      activeSeats: 0,
+    });
+    expect(empty).toContain("First seats");
+    expect(empty).toContain("Ops activates the first two together");
+    expect(empty).not.toContain("genesis");
+    expect(empty).not.toContain("HOOK_SECRET");
+    expect(keyholderColdStartHtml(2)).toBe("");
+
+    const stuck = keyholderOnboardHtml({
+      signedIn: true,
+      canApply: false,
+      activeSeats: 0,
+      keyholder: { status: "pending_attest", fingerprint: "AABBCCDD" },
+    });
+    expect(stuck).toContain("cannot start until two seats are already active");
   });
 });

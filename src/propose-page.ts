@@ -67,7 +67,14 @@ import {
 } from "./propose-wizard";
 import { avatarImgHtml } from "./media";
 import { href, orgHref, projectsHref, proposalHref } from "./router";
+import { showApplicationWindow } from "./claim-mode-ui";
 import { tosCheckboxHtml } from "./tos-modal";
+import {
+  clearProposeDraft,
+  loadProposeDraft,
+  saveProposeDraft,
+  type ProposeLocalDraft,
+} from "./propose-draft";
 import {
   hydrateAvatarSlots,
   orgAvatarSlotHtml,
@@ -293,7 +300,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const editOrgLogin = prefill?.proposer_org_login || "";
   let feeAddress: string | null = null;
   let claimModeDefault = "proposer_select";
-  let claimWindowPresets = [3, 7, 14];
+  let claimWindowPresets = [3, 7, 14, 30, 90];
   let claimWindowDefault = 7;
   if (!isEdit) {
     try {
@@ -329,6 +336,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const reviewLede = isEdit
     ? "Confirm the amend, then open the pull request. Lifecycle fields stay intact until merge."
     : `Confirm the draft, then pay the ${feeLabel} submission fee on ${networkLabel}.`;
+  const savedDraft = !isEdit && !isBridge ? loadProposeDraft() : null;
 
   app.innerHTML = ctx.shell(`
     <section class="wrap-wide detail propose-page propose-wizard">
@@ -455,7 +463,14 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               <label class="radio-row"><input type="radio" name="claim_mode" value="first_bonded"${
                 claimModeDefault === "first_bonded" ? " checked" : ""
               } /><span><strong>First bonded</strong>: first builder who pays the claim bond gets the exclusive claim.</span></label>
-              <div class="claim-window-presets" data-claim-window-presets>
+              <div class="claim-window-presets" data-claim-window-presets${
+                showApplicationWindow(
+                  String(prefill?.proposal_type || "bounty"),
+                  claimModeDefault,
+                )
+                  ? ""
+                  : " hidden"
+              }>
                 <span class="field-hint">Application window (starts when the project opens for builders)</span>
                 <div class="chip-row">
                   ${windowChips}
@@ -555,6 +570,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               address: feeAddress,
               txidName: "submission_fee_txid",
               note: "Required to open a proposal. Exact amount on-chain.",
+              initialTxid: savedDraft?.fee_txid,
             })}
           </fieldset>`
           }
@@ -596,8 +612,49 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const stepCountEl = document.getElementById("propose-wizard-step-count")!;
 
   const tagsInput = bindTagInput(document, "propose-tags");
-  let coverUrl: string | null = prefill?.cover_image || null;
+  let coverUrl: string | null =
+    prefill?.cover_image || savedDraft?.cover_image || null;
   let coverUploading = false;
+  let currentStep: ProposeWizardStepId = "basics";
+
+  const persistDraft = () => {
+    if (isEdit || isBridge) return;
+    const draft: ProposeLocalDraft = {
+      v: 1,
+      saved_at: Date.now(),
+      step: currentStep,
+      title: readNamedValue(form, "title"),
+      proposer_type:
+        readNamedValue(form, "proposer_type") === "org" ? "org" : "individual",
+      proposer_org_login: readNamedValue(form, "proposer_org_login"),
+      proposal_type:
+        readNamedValue(form, "proposal_type") === "direct" ? "direct" : "bounty",
+      claim_mode:
+        readNamedValue(form, "claim_mode") === "first_bonded"
+          ? "first_bonded"
+          : "proposer_select",
+      claim_window_days: Number(readNamedValue(form, "claim_window_days") || 7),
+      tags: tagsInput?.getTags() || [],
+      parent_initiative: readNamedValue(form, "parent_initiative"),
+      problem: readNamedValue(form, "problem"),
+      deliverable: readNamedValue(form, "deliverable"),
+      verification: readNamedValue(form, "verification"),
+      out_of_scope: readNamedValue(form, "out_of_scope"),
+      notes: readNamedValue(form, "notes"),
+      target_sats: readNamedValue(form, "target_sats"),
+      cover_image: coverUrl,
+      fee_txid: feePay?.getTxid() || "",
+      milestones: collectMilestoneDrafts(milestonesList),
+      depends_on: collectDependsOn(dependsList),
+      related_work: collectRelatedWork(relatedList),
+    };
+    saveProposeDraft(draft);
+  };
+  let persistTimer = 0;
+  const schedulePersist = () => {
+    window.clearTimeout(persistTimer);
+    persistTimer = window.setTimeout(persistDraft, 200);
+  };
 
   const syncClaimModeFields = () => {
     const bounty =
@@ -605,9 +662,16 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const modeFields = form.querySelector<HTMLElement>("[data-claim-mode-fields]");
     const presets = form.querySelector<HTMLElement>("[data-claim-window-presets]");
     if (modeFields) modeFields.hidden = !bounty;
-    const selectMode =
-      readNamedValue(form, "claim_mode") !== "first_bonded";
-    if (presets) presets.hidden = !bounty || !selectMode;
+    const showWindow = showApplicationWindow(
+      readNamedValue(form, "proposal_type") || "bounty",
+      readNamedValue(form, "claim_mode") || "proposer_select",
+    );
+    if (presets) {
+      presets.hidden = !showWindow;
+      presets.querySelectorAll<HTMLInputElement>("input").forEach((el) => {
+        el.disabled = !showWindow;
+      });
+    }
   };
   form
     .querySelectorAll('input[name="proposal_type"], input[name="claim_mode"]')
@@ -664,7 +728,6 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     .forEach((el) => el.addEventListener("change", syncProposeOrgSlot));
   syncProposeOrgSlot();
 
-  let currentStep: ProposeWizardStepId = "basics";
   let maxReachedIdx = 0;
 
   const showWizardMsg = (text: string, kind: "" | "error" = "") => {
@@ -895,11 +958,17 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const t = e.target as Element | null;
     if (!t) return;
     clearControlFieldError(t);
+    schedulePersist();
   });
   form.addEventListener("change", (e) => {
     const t = e.target as Element | null;
     if (!t) return;
     clearControlFieldError(t);
+    schedulePersist();
+  });
+  form.addEventListener("click", (e) => {
+    const link = (e.target as Element | null)?.closest("a.tos-doc-link");
+    if (link) persistDraft();
   });
 
   const setWizardStep = (next: ProposeWizardStepId) => {
@@ -944,6 +1013,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     if (next === "review") refreshReviewSummary();
     clearProposeFieldErrors(form);
     showWizardMsg("");
+    persistDraft();
     document
       .querySelector(".propose-wizard-step-meta")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1230,6 +1300,67 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   syncEmpty(relatedList, relatedEmpty);
   syncAddButtons();
 
+  const setRadio = (name: string, value: string) => {
+    form.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((el) => {
+      el.checked = el.value === value;
+    });
+  };
+  const setNamed = (name: string, value: string) => {
+    const el = form.elements.namedItem(name);
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      el.value = value;
+    } else if (el instanceof HTMLSelectElement) {
+      el.value = value;
+    }
+  };
+
+  if (savedDraft) {
+    setNamed("title", savedDraft.title);
+    setRadio("proposer_type", savedDraft.proposer_type);
+    setNamed("proposer_org_login", savedDraft.proposer_org_login);
+    setRadio("proposal_type", savedDraft.proposal_type);
+    setRadio("claim_mode", savedDraft.claim_mode);
+    setRadio("claim_window_days", String(savedDraft.claim_window_days));
+    setNamed("parent_initiative", savedDraft.parent_initiative);
+    setNamed("problem", savedDraft.problem);
+    setNamed("deliverable", savedDraft.deliverable);
+    setNamed("verification", savedDraft.verification);
+    setNamed("out_of_scope", savedDraft.out_of_scope);
+    setNamed("notes", savedDraft.notes);
+    setNamed("target_sats", savedDraft.target_sats);
+    tagsInput?.setTags(savedDraft.tags);
+    if (!prefill?.milestones.length && savedDraft.milestones.length) {
+      savedDraft.milestones.forEach((m) => addMilestone(m));
+    }
+    if (!prefill?.depends_on.length && savedDraft.depends_on.length) {
+      savedDraft.depends_on.forEach((d, i) => {
+        dependsList.insertAdjacentHTML("beforeend", dependsOnRowHtml(i, d));
+        const row = dependsList.lastElementChild as HTMLElement | null;
+        if (row) syncDependsOnKindUi(row);
+      });
+    }
+    if (!prefill?.related_work.length && savedDraft.related_work.length) {
+      savedDraft.related_work.forEach((d, i) => {
+        relatedList.insertAdjacentHTML("beforeend", relatedWorkRowHtml(i, d));
+      });
+    }
+    if (savedDraft.fee_txid && feePay) {
+      feePay.txidInput.value = savedDraft.fee_txid;
+      feePay.setStep("txid");
+    }
+    syncClaimModeFields();
+    syncProposeOrgSlot();
+    syncEmpty(dependsList, dependsEmpty);
+    syncEmpty(relatedList, relatedEmpty);
+    syncAddButtons();
+    refreshMilestoneTotal();
+    maxReachedIdx = Math.max(
+      maxReachedIdx,
+      proposeWizardStepIndex(savedDraft.step),
+    );
+    setWizardStep(savedDraft.step);
+  }
+
   const coverInput = document.getElementById(
     "propose-cover-input",
   ) as HTMLInputElement;
@@ -1457,7 +1588,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       claim_mode: proposal_type === "bounty" ? claim_mode : undefined,
       claim_window_days:
         proposal_type === "bounty" && claim_mode === "proposer_select"
-          ? [3, 7, 14].includes(claim_window_raw)
+          ? claimWindowPresets.includes(claim_window_raw)
             ? claim_window_raw
             : 7
           : undefined,
@@ -1506,6 +1637,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           submission_fee_txid: feeTxid,
           source_issue: bridgeSource,
         });
+        if (!isEdit) clearProposeDraft();
         showProposeSuccess({
           title: isBridge ? "Bridge proposal funded" : "Proposal submitted",
           body: isBridge

@@ -72,6 +72,13 @@ a:hover {
   color: var(--muted);
 }
 
+.muted a,
+a.tos-doc-link {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
 #app {
   min-height: 100vh;
   display: flex;
@@ -5757,6 +5764,10 @@ a.claim-app-bond:hover {
   font-size: 0.8125rem;
 }
 
+.claim-window-presets[hidden] {
+  display: none !important;
+}
+
 .propose-claim-mode .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -8086,6 +8097,14 @@ a.claim-app-bond:hover {
   padding: 0.35rem 0.5rem;
   border-bottom: 1px solid var(--line-soft);
   vertical-align: top;
+}
+
+.kh-onboard {
+  margin: 0.75rem 0 1.25rem;
+}
+
+.kh-onboard-card {
+  margin-top: 0.75rem;
 }
 
 .kh-steps {

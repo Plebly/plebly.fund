@@ -1,6 +1,17 @@
 /**
  * Shared claim-mode chips / relative timers for home cards, proposal hero, builder panel.
  */
+
+/** Application window is only for bounty + proposer_select. */
+export function showApplicationWindow(
+  proposalType: string,
+  claimMode: string,
+): boolean {
+  return (
+    String(proposalType || "bounty").toLowerCase() !== "direct" &&
+    String(claimMode || "proposer_select") !== "first_bonded"
+  );
+}
 import { isOpenToClaim } from "./builder";
 import { CLAIM_FLOOR_SATS } from "./config";
 import type { Proposal } from "./types";

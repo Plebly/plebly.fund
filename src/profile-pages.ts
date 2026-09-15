@@ -474,7 +474,7 @@ export async function renderAccount(
             reviewerMe?.active
               ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} seat</span> <a href="${href("/reviewers")}">Open governance</a>${
                   (reviewerMe.reviewer?.completed_proposal_ids?.length || 0) >= 1
-                    ? ` · <a href="${href("/reviewers")}?tab=keyholders">Apply as keyholder</a>`
+                    ? ` · <a href="${href("/keyholders")}">Apply as keyholder</a>`
                     : ""
                 }</p>`
               : reviewerMe?.funder_eligible

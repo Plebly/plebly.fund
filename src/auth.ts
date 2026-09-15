@@ -868,6 +868,14 @@ async function proposalMutation(
     draft?: string;
   };
   if (!res.ok) {
+    if (
+      res.status === 502 &&
+      /failed to open/i.test(String(data.error || ""))
+    ) {
+      throw new Error(
+        "Could not open the pull request. Your draft is saved on this device — try Submit again.",
+      );
+    }
     throw new Error(data.error || data.detail || `HTTP ${res.status}`);
   }
   return data;

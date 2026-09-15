@@ -3,7 +3,7 @@ import { WORKERS_API } from "./config";
 import { href } from "./router";
 
 export function tosCheckboxHtml(id: string): string {
-  return `<label class="muted"><input type="checkbox" id="${id}" required /> I accept the <a href="${href("/terms")}">Terms</a>.</label>`;
+  return `<label class="tos-ack-label muted"><input type="checkbox" id="${id}" required /> I accept the <a class="tos-doc-link" href="${href("/terms")}" target="_blank" rel="noopener noreferrer">Terms</a>.</label>`;
 }
 
 export async function acceptCurrentTos(): Promise<boolean> {

@@ -32,7 +32,7 @@ Plebly’s claim market is permissionless: anyone authenticated may **apply** wh
 | Mode | Award rule |
 |------|------------|
 | `first_bonded` | First confirmed bond wins immediately |
-| `proposer_select` | Window 3/7/14d from claimable; proposer Accept; else auto earliest bonded after 3d grace |
+| `proposer_select` | Window 3/7/14/30/90d from claimable; proposer Accept; else auto earliest bonded after 3d grace |
 
 Window starts at **claim floor met**, not at propose time. Bond is verified **synchronously at apply** (v1); there is no separate unconfirmed `pending_bond` settle path.
 

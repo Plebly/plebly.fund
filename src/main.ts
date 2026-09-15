@@ -16,7 +16,6 @@ assertParametersNetwork();
 import { renderGovernance } from "./governance-page";
 import { renderHome } from "./home-page";
 import {
-  authFetch,
   consumeSessionFromHash,
   fetchCurrentUser,
   fetchUnreadNotificationCount,
@@ -65,33 +64,11 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 let currentUser: AuthUser | null = null;
 let unreadNotifications = 0;
-/** Set when GET /keyholders/me returns invited | pending_attest | active. */
-let keyholderNavStatus: string | null = null;
 /** Platform config admin (Plebly org member). */
 let platformAdminNav = false;
 
 function route(): Route {
   return parseLocation();
-}
-
-async function refreshKeyholderNav(): Promise<void> {
-  keyholderNavStatus = null;
-  if (!currentUser || !WORKERS_API) return;
-  try {
-    const res = await authFetch(
-      `${WORKERS_API.replace(/\/$/, "")}/keyholders/me`,
-    );
-    if (!res.ok) return;
-    const data = (await res.json()) as {
-      keyholder?: { status?: string } | null;
-    };
-    const st = data.keyholder?.status || "";
-    if (st === "active" || st === "invited" || st === "pending_attest") {
-      keyholderNavStatus = st;
-    }
-  } catch {
-    /* ignore */
-  }
 }
 
 async function refreshPlatformAdminNav(): Promise<void> {
@@ -110,12 +87,9 @@ function authNavHtml(): string {
   if (currentUser) {
     const label = accountNavLabel(currentUser);
     const badge = notificationNavBadgeHtml(unreadNotifications);
-    const kh =
-      keyholderNavStatus != null
-        ? `<a href="${href("/keyholders")}" class="${route().name === "keyholders" ? "active" : ""}"${
-            route().name === "keyholders" ? ' aria-current="page"' : ""
-          }>Keyholders</a>`
-        : "";
+    const kh = `<a href="${href("/keyholders")}" class="${route().name === "keyholders" ? "active" : ""}"${
+      route().name === "keyholders" ? ' aria-current="page"' : ""
+    }>Keyholders</a>`;
     const adm = platformAdminNav
       ? `<a href="${href("/admin")}" class="${route().name === "admin" ? "active" : ""}"${
           route().name === "admin" ? ' aria-current="page"' : ""
@@ -155,7 +129,7 @@ function siteFooterHtml(routeName: string): string {
           <h2 class="footer-col-title">Contribute</h2>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
-          <a href="${href("/reviewers")}?tab=keyholders">Apply as keyholder</a>
+          <a href="${href("/keyholders")}">Apply as keyholder</a>
           <a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder duties</a>
         </div>
         <div class="footer-col">
@@ -226,7 +200,7 @@ async function render() {
     ? await fetchUnreadNotificationCount().catch(() => 0)
     : 0;
   if (currentUser) void syncWebPushIfEnabled();
-  await Promise.all([refreshKeyholderNav(), refreshPlatformAdminNav()]);
+  await refreshPlatformAdminNav();
   const r = route();
   const ctx = {
     user: currentUser,
