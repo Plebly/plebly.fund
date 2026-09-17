@@ -29,6 +29,10 @@ import {
   createLightningInvoice,
   fetchLightningStatus,
   fetchLightningSwap,
+  lightningAmountError,
+  lightningFeeHint,
+  lightningLimits,
+  lightningStatusSentence,
   weblnPay,
   type LightningStatus,
   type LightningSwapView,
@@ -62,7 +66,7 @@ const MEMPOOL_WEB =
     : "https://mempool.space";
 
 const DONATE_PRESETS_SATS = [10_000, 50_000, 100_000, 500_000];
-/** Boltz reverse-swap floors are typically ~25k; clamp LN presets at runtime. */
+/** Invoice presets. Escrow credit waits for OpenNode chain sweep (≥0.002 BTC). */
 const LN_PRESETS_SATS = [25_000, 50_000, 100_000, 500_000];
 
 export type DonateBindOpts = {
@@ -152,8 +156,8 @@ function donatePayStepHtml(
       }
     </div>`;
   const lnIntro = endowment
-    ? "Fees apply."
-    : "Lightning. Fees apply.";
+    ? "Lightning pays OpenNode now. Endowment UTXOs appear after a batched on-chain sweep (min 0.002 BTC pending)."
+    : "Lightning pays OpenNode now. It counts toward the claim floor after a batched on-chain sweep (min 0.002 BTC pending per escrow).";
   const creditBlock = endowment
     ? ""
     : `<div class="donate-credit-link" id="donate-credit">
@@ -201,32 +205,45 @@ function donatePayStepHtml(
     <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
       <div id="donate-ln-ready" hidden>
         <p class="donate-pane-intro">${lnIntro}</p>
-        <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
-        <div class="donate-amount-row">
-          <input id="donate-ln-amount" class="donate-amount mono" type="number" min="25000" step="1000" placeholder="25000+" />
-        </div>
-        <div class="donate-presets donate-ln-presets">${lnPresets}</div>
-        <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
-        <div class="donate-actions donate-ln-create-row">
-          <button type="button" class="btn" id="donate-ln-create">Create Lightning invoice</button>
+        <p class="donate-ln-login muted" id="donate-ln-login" hidden>
+          Sign in to create a Lightning invoice. On-chain works without an account.
+          <button type="button" class="donate-credit-signin" id="donate-ln-signin">Sign in</button>
+        </p>
+        <div id="donate-ln-compose">
+          <p class="donate-ln-limits muted" id="donate-ln-limits" hidden></p>
+          <label class="donate-amount-label" for="donate-ln-amount">Amount (sats)</label>
+          <div class="donate-amount-row">
+            <input id="donate-ln-amount" class="donate-amount mono" type="number" min="1" step="1000" placeholder="Amount" />
+          </div>
+          <div class="donate-presets donate-ln-presets">${lnPresets}</div>
+          <p class="donate-ln-fee muted" id="donate-ln-fee" hidden></p>
+          <div class="donate-actions donate-ln-create-row">
+            <button type="button" class="btn" id="donate-ln-create">Create Lightning invoice</button>
+          </div>
         </div>
         <div class="donate-ln-invoice" id="donate-ln-invoice" hidden>
-          <div class="donate-qr-wrap donate-qr-wrap-ln">
-            <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
-          </div>
-          <code class="donate-address mono" id="donate-ln-bolt11"></code>
-          <div class="donate-actions">
-            <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
-            <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
+          <p class="donate-ln-amount-echo" id="donate-ln-amount-echo" hidden></p>
+          <div class="donate-pay-layout">
+            <div class="donate-qr-wrap donate-qr-wrap-ln">
+              <img class="donate-qr" id="donate-ln-qr" alt="QR code for Lightning invoice" width="168" height="168" />
+            </div>
+            <div class="donate-pay-fields">
+              <code class="donate-address mono" id="donate-ln-bolt11"></code>
+              <div class="donate-actions">
+                <button type="button" class="btn donate-copy" id="donate-ln-copy">Copy invoice</button>
+                <button type="button" class="btn ghost" id="donate-ln-webln" hidden>Pay with WebLN</button>
+              </div>
+            </div>
           </div>
           <p class="donate-ln-status" id="donate-ln-status" aria-live="polite"></p>
           <div class="donate-ln-receipt" id="donate-ln-receipt" hidden>
-            <p class="donate-credit-seen">Save swap id for refunds:</p>
+            <p class="donate-credit-seen">Save this payment id for refunds:</p>
             <code class="donate-address mono" id="donate-ln-swap-id"></code>
             <div class="donate-actions">
               <button type="button" class="btn" id="donate-ln-copy-swap">Copy swap id</button>
             </div>
           </div>
+          <button type="button" class="btn ghost donate-ln-new" id="donate-ln-new" hidden>New Lightning invoice</button>
         </div>
         <p class="donate-ln-error error" id="donate-ln-error" hidden></p>
       </div>
@@ -946,19 +963,6 @@ async function bindOnchainDonate(
   });
 }
 
-function estimateLnCredit(status: LightningStatus, invoiceSats: number): {
-  feeSats: number;
-  expectedOnchain: number;
-} | null {
-  if (!status.fees) return null;
-  const service = Math.ceil((invoiceSats * status.fees.percentage) / 100);
-  const feeSats = service + status.fees.minerFees.claim;
-  return {
-    feeSats,
-    expectedOnchain: Math.max(0, invoiceSats - feeSats),
-  };
-}
-
 function selectDonateRail(panel: Element, name: "onchain" | "lightning"): void {
   panel.querySelectorAll<HTMLButtonElement>(".donate-rail").forEach((rail) => {
     const on = rail.dataset.tab === name;
@@ -1460,7 +1464,16 @@ function bindLightningDonate(
   const receiptEl = panel.querySelector<HTMLElement>("#donate-ln-receipt");
   const swapIdEl = panel.querySelector<HTMLElement>("#donate-ln-swap-id");
   const copySwapBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-copy-swap");
+  const amountEcho = panel.querySelector<HTMLElement>("#donate-ln-amount-echo");
+  const newBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-new");
+  const readyEl = panel.querySelector<HTMLElement>("#donate-ln-ready");
   let settledLinked = false;
+  let waitingInvoice = false;
+
+  const setLnPhase = (phase: "compose" | "wait" | "done") => {
+    waitingInvoice = phase === "wait";
+    if (readyEl) readyEl.dataset.lnPhase = phase;
+  };
 
   const showSwapReceipt = (swapId: string) => {
     try {
@@ -1475,28 +1488,32 @@ function bindLightningDonate(
     if (receiptEl) receiptEl.hidden = false;
   };
 
-  try {
-    const raw = sessionStorage.getItem(`plebly:donate-receipt:${opts.address}`);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { rail?: string; swap_id?: string };
-      if (parsed.rail === "lightning" && parsed.swap_id) {
-        showSwapReceipt(parsed.swap_id);
-      }
-    }
-  } catch {
-    /* ignore */
+  const { min, max } = lightningLimits(status);
+  const guestProject = opts.mode !== "endowment" && !opts.signedIn;
+  const loginEl = panel.querySelector<HTMLElement>("#donate-ln-login");
+  const limitsEl = panel.querySelector<HTMLElement>("#donate-ln-limits");
+  if (loginEl) loginEl.hidden = !guestProject;
+  if (createBtn && guestProject) {
+    createBtn.disabled = true;
+    createBtn.textContent = "Sign in to invoice";
   }
-
-  const min = status.limits?.minimal ?? 25_000;
+  panel.querySelector("#donate-ln-signin")?.addEventListener("click", () => {
+    panel.querySelector<HTMLButtonElement>("#donate-credit-signin")?.click();
+  });
   if (amountInput) {
     amountInput.min = String(min);
+    amountInput.max = String(max);
     amountInput.placeholder = `${min}+`;
   }
+  if (limitsEl) {
+    limitsEl.hidden = false;
+    limitsEl.textContent = `${formatSats(min)}–${formatSats(max)} per invoice.`;
+  }
 
-  // Drop presets below Boltz minimum
+  // Drop presets outside processor limits
   panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="ln"]').forEach((btn) => {
     const sats = Number(btn.dataset.sats);
-    if (Number.isFinite(sats) && sats < min) btn.hidden = true;
+    if (Number.isFinite(sats) && (sats < min || sats > max)) btn.hidden = true;
   });
 
   const updateFeeHint = () => {
@@ -1506,14 +1523,11 @@ function bindLightningDonate(
       feeEl.hidden = true;
       return;
     }
-    const est = estimateLnCredit(status, n);
-    if (!est) {
-      feeEl.hidden = true;
-      return;
-    }
     feeEl.hidden = false;
-    const dest = opts.mode === "endowment" ? "endowment" : "escrow";
-    feeEl.textContent = `Est. ${dest} credit ~${formatSats(est.expectedOnchain)} after ~${formatSats(est.feeSats)} fees`;
+    feeEl.textContent = lightningFeeHint({
+      status,
+      mode: opts.mode === "endowment" ? "endowment" : "project",
+    });
   };
 
   amountInput?.addEventListener("input", updateFeeHint);
@@ -1555,11 +1569,20 @@ function bindLightningDonate(
       bolt11El.textContent = swap.bolt11;
       bolt11El.title = swap.bolt11;
     }
+    if (amountEcho && swap.invoice_amount_sats > 0) {
+      amountEcho.hidden = false;
+      amountEcho.textContent = `Invoice for ${formatSats(swap.invoice_amount_sats)}.`;
+    }
     if (qrImg) {
       try {
-        qrImg.src = await QRCode.toDataURL(swap.bolt11.toUpperCase(), {
+        const bolt11 = swap.bolt11.trim();
+        const uri = /^lightning:/i.test(bolt11)
+          ? bolt11
+          : `lightning:${bolt11}`;
+        qrImg.src = await QRCode.toDataURL(uri.toUpperCase(), {
           width: 168,
           margin: 1,
+          errorCorrectionLevel: "L",
           color: themeQrColors(),
         });
       } catch {
@@ -1573,37 +1596,44 @@ function bindLightningDonate(
     }
     if (feeEl) {
       feeEl.hidden = false;
-      const dest = opts.mode === "endowment" ? "the endowment" : "the project";
-      feeEl.textContent = `About ${formatSats(swap.expected_onchain_sats)} lands in ${dest} after fees.`;
+      feeEl.textContent = lightningFeeHint({
+        status,
+        mode: opts.mode === "endowment" ? "endowment" : "project",
+        expectedOnchainSats: swap.expected_onchain_sats,
+      });
     }
     if (swap.swap_id) showSwapReceipt(swap.swap_id);
     if (statusEl) {
-      const map: Record<string, string> = {
-        pending: "Waiting for Lightning payment…",
-        invoice_paid: "Invoice paid. Landing in the project…",
-        claiming: "Sending to the project…",
-        settled: "Paid.",
-        failed:
-          swap.error ||
-          "Payment didn’t go through. Try again or use on-chain.",
-        expired: "Invoice expired. Create a new Lightning invoice.",
-      };
-      statusEl.textContent = map[swap.status] || swap.status;
-      const live = ["pending", "invoice_paid", "claiming"].includes(swap.status);
-      statusEl.classList.toggle("live", live);
-      statusEl.classList.toggle("ok", swap.status === "settled");
-      statusEl.classList.toggle(
-        "bad",
-        swap.status === "failed" || swap.status === "expired",
-      );
+      const sentence = lightningStatusSentence(swap.status, {
+        error: swap.error,
+        endowment: opts.mode === "endowment",
+      });
+      statusEl.textContent = sentence.text;
+      statusEl.classList.toggle("live", sentence.kind === "live");
+      statusEl.classList.toggle("ok", sentence.kind === "ok");
+      statusEl.classList.toggle("bad", sentence.kind === "bad");
+    }
+    if (["failed", "expired"].includes(swap.status)) {
+      setLnPhase("compose");
+      if (newBtn) newBtn.hidden = false;
+    } else if (swap.status === "settled") {
+      setLnPhase("done");
+      if (newBtn) newBtn.hidden = true;
+    } else {
+      setLnPhase("wait");
+      if (newBtn) newBtn.hidden = true;
     }
   };
 
-  const startPoll = (swapId: string) => {
+  const startPoll = (swapId: string, immediate = false) => {
     stopPoll();
     settledLinked = false;
-    let delayMs = 4000;
+    let delayMs = 8_000;
     const tick = async () => {
+      if (document.hidden) {
+        pollTimer = setTimeout(() => void tick(), delayMs);
+        return;
+      }
       try {
         const swap = await fetchLightningSwap(swapId);
         await renderSwap(swap);
@@ -1619,23 +1649,47 @@ function bindLightningDonate(
           stopPoll();
           return;
         }
-        delayMs = Math.min(delayMs + 2000, 15_000);
+        delayMs = Math.min(delayMs + 4_000, 20_000);
       } catch {
         /* keep polling */
       }
       pollTimer = setTimeout(() => void tick(), delayMs);
     };
-    pollTimer = setTimeout(() => void tick(), delayMs);
+    pollTimer = setTimeout(() => void tick(), immediate ? 0 : delayMs);
+  };
+
+  const resetCompose = () => {
+    stopPoll();
+    waitingInvoice = false;
+    setLnPhase("compose");
+    if (invoiceWrap) invoiceWrap.hidden = true;
+    if (newBtn) newBtn.hidden = true;
+    if (statusEl) {
+      statusEl.textContent = "";
+      statusEl.classList.remove("live", "ok", "bad");
+    }
+    if (createBtn && !guestProject) {
+      createBtn.disabled = false;
+      createBtn.textContent = "Create Lightning invoice";
+    }
   };
 
   createBtn?.addEventListener("click", async () => {
+    if (waitingInvoice) return;
     setError(null);
     stopPoll();
-    const amount = Math.floor(Number(amountInput?.value));
-    if (!Number.isFinite(amount) || amount < min) {
-      setError(`Enter at least ${formatSats(min)}.`);
+    if (guestProject) {
+      setError("Sign in to create a Lightning invoice.");
       return;
     }
+    const amount = Math.floor(Number(amountInput?.value));
+    const amountErr = lightningAmountError(amount, status);
+    if (amountErr) {
+      setError(amountErr);
+      if (amountInput) amountInput.setAttribute("aria-invalid", "true");
+      return;
+    }
+    amountInput?.removeAttribute("aria-invalid");
     if (createBtn) {
       createBtn.disabled = true;
       createBtn.textContent = "Creating…";
@@ -1661,13 +1715,18 @@ function bindLightningDonate(
       startPoll(swap.swap_id);
     } catch (e) {
       setError((e as Error).message);
-      if (invoiceWrap) invoiceWrap.hidden = true;
+      resetCompose();
     } finally {
-      if (createBtn) {
+      if (createBtn && !waitingInvoice) {
         createBtn.disabled = false;
         createBtn.textContent = "Create Lightning invoice";
       }
     }
+  });
+
+  newBtn?.addEventListener("click", () => {
+    setError(null);
+    resetCompose();
   });
 
   copyBtn?.addEventListener("click", async () => {
@@ -1706,11 +1765,36 @@ function bindLightningDonate(
     setError(null);
     try {
       await weblnPay(bolt11);
-      if (statusEl) statusEl.textContent = "Payment sent. Waiting for settle…";
+      if (statusEl) {
+        statusEl.textContent = "Payment sent. Waiting for confirmation.";
+        statusEl.classList.add("live");
+        statusEl.classList.remove("ok", "bad");
+      }
     } catch (e) {
       setError((e as Error).message || "WebLN payment failed");
     }
   });
+
+  try {
+    const raw = sessionStorage.getItem(`plebly:donate-receipt:${opts.address}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { rail?: string; swap_id?: string };
+      if (parsed.rail === "lightning" && parsed.swap_id) {
+        void fetchLightningSwap(parsed.swap_id)
+          .then(async (swap) => {
+            await renderSwap(swap);
+            if (!["failed", "expired", "settled"].includes(swap.status)) {
+              startPoll(swap.swap_id);
+            }
+          })
+          .catch(() => {
+            showSwapReceipt(parsed.swap_id!);
+          });
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function bindDonatePanel(
@@ -1754,7 +1838,7 @@ export async function bindDonatePanel(
     setLightningUnavailable(
       panel,
       status.reason ||
-        "Lightning reverse swaps are unavailable right now. Use Bitcoin on-chain.",
+        "Lightning invoices are unavailable right now. Use Bitcoin on-chain.",
     );
     return;
   }
@@ -2120,7 +2204,7 @@ export function metaChipsHtml(p: Proposal): string {
     bits.push(`<span class="mono proposal-meta-id">${escapeHtml(p.id)}</span>`);
   }
   const type = String(p.proposal_type || "bounty").toLowerCase();
-  bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Direct" : "Bounty")}</span>`);
+  bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Campaign" : "Bounty")}</span>`);
   if (p.endowment_funded) {
     bits.push(
       `<a class="proposal-meta-chip proposal-meta-chip-endowment" href="${href("/endowment")}" title="Endowment">Endowment</a>`,

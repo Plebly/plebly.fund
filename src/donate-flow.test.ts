@@ -30,14 +30,21 @@ vi.mock("./mempool", () => ({
 
 const fetchLightningStatus = vi.fn();
 const createLightningInvoice = vi.fn();
+const createEndowmentLightningInvoice = vi.fn();
 const fetchLightningSwap = vi.fn();
 const weblnPay = vi.fn();
-vi.mock("./lightning", () => ({
-  fetchLightningStatus: (...args: unknown[]) => fetchLightningStatus(...args),
-  createLightningInvoice: (...args: unknown[]) => createLightningInvoice(...args),
-  fetchLightningSwap: (...args: unknown[]) => fetchLightningSwap(...args),
-  weblnPay: (...args: unknown[]) => weblnPay(...args),
-}));
+vi.mock("./lightning", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./lightning")>();
+  return {
+    ...actual,
+    fetchLightningStatus: (...args: unknown[]) => fetchLightningStatus(...args),
+    createLightningInvoice: (...args: unknown[]) => createLightningInvoice(...args),
+    createEndowmentLightningInvoice: (...args: unknown[]) =>
+      createEndowmentLightningInvoice(...args),
+    fetchLightningSwap: (...args: unknown[]) => fetchLightningSwap(...args),
+    weblnPay: (...args: unknown[]) => weblnPay(...args),
+  };
+});
 
 const recordContribution = vi.fn();
 const claimContributionWithRetry = vi.fn();
@@ -101,6 +108,7 @@ beforeEach(() => {
   document.body.innerHTML = "";
   document.body.className = "";
   storage.clear();
+  sessionStorage.clear();
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => storage.get(k) ?? null,
     setItem: (k: string, v: string) => storage.set(k, v),
@@ -126,10 +134,12 @@ beforeEach(() => {
   fetchLightningStatus.mockReset();
   fetchLightningStatus.mockResolvedValue({
     enabled: true,
+    processor: "opennode",
     limits: { maximal: 10_000_000, minimal: 25_000 },
-    fees: { percentage: 0.5, minerFees: { claim: 500, lockup: 0 } },
+    sweep: { chain_min_sats: 200_000, pending_min_sats: 207_000, fee_bps: 100 },
   });
   createLightningInvoice.mockReset();
+  createEndowmentLightningInvoice.mockReset();
   fetchLightningSwap.mockReset();
   weblnPay.mockReset();
   Object.defineProperty(window, "location", {
@@ -487,7 +497,7 @@ describe("donate credit UX (signed in, Lightning)", () => {
     document.querySelector<HTMLButtonElement>("#donate-ln-create")!.click();
 
     await vi.waitFor(() => expect(createLightningInvoice).toHaveBeenCalled());
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(8000);
     await vi.waitFor(() => {
       expect(claimContributionWithRetry).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -497,6 +507,183 @@ describe("donate credit UX (signed in, Lightning)", () => {
       );
       expect(linked).toHaveBeenCalled();
     });
+  });
+
+  it("does not link credit while OpenNode is still waiting to sweep", async () => {
+    vi.useFakeTimers();
+    const linked = vi.fn();
+    createLightningInvoice.mockResolvedValue({
+      swap_id: "chg-wait",
+      proposal_id: "PLEBLY-42",
+      escrow_address: proposal.escrow_address,
+      invoice_amount_sats: 50_000,
+      expected_onchain_sats: 0,
+      fee_sats: 0,
+      bolt11: "lnbc50u1ptest",
+      status: "pending",
+    });
+    fetchLightningSwap.mockResolvedValue({
+      swap_id: "chg-wait",
+      proposal_id: "PLEBLY-42",
+      escrow_address: proposal.escrow_address,
+      invoice_amount_sats: 50_000,
+      expected_onchain_sats: 0,
+      fee_sats: 0,
+      bolt11: "lnbc50u1ptest",
+      status: "invoice_paid",
+    });
+
+    mountDonate({ signedIn: true, open: true });
+    await bindSignedInPanel({ onCreditLinked: linked });
+    await vi.waitFor(() =>
+      expect(document.querySelector("#donate-credit-continue")).toBeTruthy(),
+    );
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    document.querySelector<HTMLInputElement>("#donate-ln-amount")!.value = "50000";
+    document.querySelector<HTMLButtonElement>("#donate-ln-create")!.click();
+    await vi.waitFor(() => expect(createLightningInvoice).toHaveBeenCalled());
+    await vi.advanceTimersByTimeAsync(8000);
+    await vi.waitFor(() => {
+      expect(document.querySelector("#donate-ln-status")?.textContent).toMatch(
+        /batched on-chain sweep/i,
+      );
+    });
+    expect(claimContributionWithRetry).not.toHaveBeenCalled();
+    expect(linked).not.toHaveBeenCalled();
+  });
+});
+
+describe("donate Lightning OpenNode UX", () => {
+  it("shows processor unavailable copy", async () => {
+    fetchLightningStatus.mockResolvedValue({
+      enabled: false,
+      reason: "OPENNODE_API_KEY not set",
+    });
+    mountDonate({ signedIn: true, open: true });
+    await bindSignedInPanel();
+    await vi.waitFor(() =>
+      expect(document.querySelector("#donate-credit-continue")).toBeTruthy(),
+    );
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    expect(document.querySelector("#donate-ln-wait")?.textContent).toContain(
+      "OPENNODE_API_KEY",
+    );
+    expect(document.querySelector("#donate-ln-ready")?.hidden).toBe(true);
+  });
+
+  it("requires sign-in on project invoices", async () => {
+    mountDonate({ signedIn: false, open: true });
+    await bindDonatePanel(document, {
+      address: proposal.escrow_address!,
+      proposalId: proposal.id,
+      proposalPath: proposal.path,
+      signedIn: false,
+    });
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    expect(document.querySelector("#donate-ln-login")?.hidden).toBe(false);
+    const create = document.querySelector<HTMLButtonElement>("#donate-ln-create")!;
+    expect(create.disabled).toBe(true);
+    expect(create.textContent).toMatch(/Sign in/i);
+    document.querySelector<HTMLInputElement>("#donate-ln-amount")!.value = "50000";
+    create.click();
+    expect(createLightningInvoice).not.toHaveBeenCalled();
+  });
+
+  it("rejects amounts outside OpenNode limits", async () => {
+    mountDonate({ signedIn: true, open: true });
+    await bindSignedInPanel();
+    await vi.waitFor(() =>
+      expect(document.querySelector("#donate-credit-continue")).toBeTruthy(),
+    );
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    const amount = document.querySelector<HTMLInputElement>("#donate-ln-amount")!;
+    const create = document.querySelector<HTMLButtonElement>("#donate-ln-create")!;
+    amount.value = "1000";
+    create.click();
+    expect(createLightningInvoice).not.toHaveBeenCalled();
+    expect(document.querySelector("#donate-ln-error")?.textContent).toMatch(
+      /at least/i,
+    );
+    amount.value = "20000000";
+    create.click();
+    expect(createLightningInvoice).not.toHaveBeenCalled();
+    expect(document.querySelector("#donate-ln-error")?.textContent).toMatch(
+      /at most/i,
+    );
+  });
+
+  it("hides the compose form and waits for payment after invoice create", async () => {
+    createLightningInvoice.mockResolvedValue({
+      swap_id: "chg-wait",
+      proposal_id: "PLEBLY-42",
+      escrow_address: proposal.escrow_address,
+      invoice_amount_sats: 50_000,
+      expected_onchain_sats: 0,
+      fee_sats: 0,
+      bolt11: "lnbc50u1ptest",
+      status: "pending",
+    });
+    mountDonate({ signedIn: true, open: true });
+    await bindSignedInPanel();
+    await vi.waitFor(() =>
+      expect(document.querySelector("#donate-credit-continue")).toBeTruthy(),
+    );
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    document.querySelector<HTMLInputElement>("#donate-ln-amount")!.value = "50000";
+    document.querySelector<HTMLButtonElement>("#donate-ln-create")!.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector("#donate-ln-status")?.textContent).toBe(
+        "Waiting for payment.",
+      );
+    });
+    expect(document.querySelector("#donate-ln-ready")?.getAttribute("data-ln-phase")).toBe(
+      "wait",
+    );
+    expect(document.querySelector("#donate-ln-amount-echo")?.textContent).toMatch(
+      /50,000/,
+    );
+    expect(document.querySelector("#donate-ln-invoice")?.hidden).toBe(false);
+    document.querySelector<HTMLButtonElement>("#donate-ln-create")!.click();
+    expect(createLightningInvoice).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores an unpaid invoice instead of creating another", async () => {
+    sessionStorage.setItem(
+      `plebly:donate-receipt:${proposal.escrow_address}`,
+      JSON.stringify({ rail: "lightning", swap_id: "chg-resume", at: Date.now() }),
+    );
+    fetchLightningSwap.mockResolvedValue({
+      swap_id: "chg-resume",
+      proposal_id: "PLEBLY-42",
+      escrow_address: proposal.escrow_address,
+      invoice_amount_sats: 50_000,
+      expected_onchain_sats: 0,
+      fee_sats: 0,
+      bolt11: "lnbc50u1resume",
+      status: "pending",
+    });
+    mountDonate({ signedIn: true, open: true });
+    await bindSignedInPanel();
+    await vi.waitFor(() =>
+      expect(document.querySelector("#donate-credit-continue")).toBeTruthy(),
+    );
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    await vi.waitFor(() => {
+      expect(fetchLightningSwap).toHaveBeenCalledWith("chg-resume");
+      expect(document.querySelector("#donate-ln-status")?.textContent).toBe(
+        "Waiting for payment.",
+      );
+    });
+    expect(createLightningInvoice).not.toHaveBeenCalled();
+    expect(document.querySelector("#donate-ln-bolt11")?.textContent).toBe(
+      "lnbc50u1resume",
+    );
   });
 });
 
@@ -513,6 +700,12 @@ describe("donate markup contract", () => {
     expect(html).toContain('id="donate-legal-name"');
     expect(html).toContain('data-tab="onchain"');
     expect(html).toContain('data-tab="lightning"');
+    expect(html).toContain("OpenNode");
+    expect(html).toContain("payment id");
+    expect(html).toContain('id="donate-ln-login"');
+    expect(html).toContain('id="donate-ln-limits"');
+    expect(html).toContain('id="donate-ln-compose"');
+    expect(html).toContain('id="donate-ln-amount-echo"');
   });
 
   it("omits the legal-name field when signed out", () => {

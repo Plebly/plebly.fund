@@ -318,7 +318,7 @@ describe("proposal UI critical render helpers", () => {
       tags: ["knots", "policy"],
       created_at: null,
     } as Proposal);
-    expect(html).toContain("Direct");
+    expect(html).toContain("Campaign");
     expect(html).toContain("knots");
     expect(html).toContain("policy");
     expect(html).toContain("PLEBLY-1");

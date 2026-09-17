@@ -116,20 +116,17 @@ export function keyholdersHtml(live: {
   target_seats?: number;
 }): string {
   const n = live.seats ?? live.keyholders.length;
-  const mode = live.escrow_mode || "unknown";
   const min = live.min_seats ?? KEYHOLDER_MIN_SEATS;
   const target = live.target_seats ?? KEYHOLDER_TARGET_SEATS;
-  const mOfN =
-    live.quorum ||
-    (mode === "single-key-test"
-      ? "1-of-1"
-      : n >= min
-        ? keyholderQuorumLabel(n)
-        : keyholderQuorumLabel(min));
-  const needMore = mode !== "single-key-test" && n < min;
-  const status = needMore
-        ? `<p class="about-keyholders-status" role="status">Need ${min} seats (${n} live). <a href="${href("/keyholders")}">Apply</a>.</p>`
-    : "";
+  const liveQuorum = n >= min ? keyholderQuorumLabel(n) : null;
+  const targetQuorum = keyholderQuorumLabel(target);
+  const lede = liveQuorum
+    ? `Live <strong>${escapeHtml(liveQuorum)}</strong>. Target ${escapeHtml(targetQuorum)}.`
+    : `Target <strong>${escapeHtml(targetQuorum)}</strong>.`;
+  const status =
+    n < min
+      ? `<p class="about-keyholders-status" role="status">Need ${min} seats (${n} live). <a href="${href("/keyholders")}">Apply</a>.</p>`
+      : "";
   const liveBody = n
     ? `<div class="about-keyholders-table-wrap">
         <table class="about-keyholders-table">
@@ -149,12 +146,8 @@ export function keyholdersHtml(live: {
 
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
-    <p class="about-section-lede">Live <strong>${escapeHtml(mOfN)}</strong>. Min ${min}, target ${target}.</p>
-    ${
-      mode === "single-key-test" || n < min
-        ? `<p class="muted">This is a temporary ${escapeHtml(mOfN)} setup. Target is 3-of-5; three keyholders is 2-of-3 until then. After approval, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
-        : `<p class="muted">After reviewers approve, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>`
-    }
+    <p class="about-section-lede">${lede}</p>
+    <p class="muted">After reviewers approve, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>
     ${status}
     <div class="about-keyholders-roster">
       ${liveBody}

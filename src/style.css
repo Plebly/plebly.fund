@@ -512,7 +512,8 @@ html.pwa-standalone body {
   scroll-margin-top: 4.5rem;
 }
 
-#projects {
+#projects,
+#campaigns {
   scroll-margin-top: 4.5rem;
 }
 
@@ -3942,6 +3943,15 @@ a.project-card-by:hover .project-card-by-text {
   }
 }
 
+.donate-ln-login {
+  margin: 0.35rem 0 0.75rem;
+}
+
+.donate-ln-limits {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+}
+
 .donate-ln-fee {
   margin: 0 0 0.75rem;
   font-size: 0.75rem;
@@ -3950,6 +3960,21 @@ a.project-card-by:hover .project-card-by-text {
 
 .donate-ln-create-row {
   grid-template-columns: 1fr;
+}
+
+#donate-ln-ready[data-ln-phase="wait"] #donate-ln-compose,
+#donate-ln-ready[data-ln-phase="done"] #donate-ln-compose {
+  display: none;
+}
+
+.donate-ln-amount-echo {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.donate-ln-new {
+  margin-top: 0.75rem;
 }
 
 .donate-ln-status {

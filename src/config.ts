@@ -18,7 +18,7 @@ export const BITCOIN_NETWORK =
 
 /**
  * Show Lightning donate UI when mainnet/testnet.
- * Signet stays on-chain only (Boltz has no signet pair).
+ * Signet stays on-chain only (OpenNode is not signet escrow).
  * `VITE_LIGHTNING_TESTNET=1` / `VITE_LIGHTNING=1` are for testnet staging builds only.
  */
 export function lightningUiAllowed(): boolean {

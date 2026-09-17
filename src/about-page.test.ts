@@ -42,6 +42,23 @@ describe("keyholdersHtml", () => {
     expect(html).not.toContain("Dispute catalog");
     expect(html).not.toContain("on-chain");
   });
+
+  it("never advertises signet single-key-test as a 1-of-1 product", () => {
+    const html = keyholdersHtml({
+      escrow_mode: "single-key-test",
+      keyholders: [],
+      seats: 0,
+      threshold: 1,
+      quorum: "1-of-1",
+      min_seats: 2,
+      target_seats: 5,
+    });
+    expect(html).toContain("3-of-5");
+    expect(html).toContain("Need 2 seats (0 live)");
+    expect(html).not.toContain("1-of-1");
+    expect(html).not.toContain("temporary");
+    expect(html).not.toContain("single-key");
+  });
 });
 
 describe("publicKeyholderStatus", () => {
