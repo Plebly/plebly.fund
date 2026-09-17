@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFloorShortfall } from "./builder";
+import { partitionListings, proposalCardHtml } from "./home-page";
 import type { Proposal } from "./types";
 
 function proposal(
@@ -47,5 +48,46 @@ describe("claimFloorShortfall", () => {
       projectCount: 0,
       fundedTowardFloor: 0,
     });
+  });
+});
+
+describe("partitionListings", () => {
+  it("splits bounties from direct campaigns", () => {
+    const { bounties, campaigns } = partitionListings([
+      proposal({ status: "listed", proposal_type: "bounty", id: "b1" }),
+      proposal({ status: "listed", proposal_type: "direct", id: "c1" }),
+      proposal({ status: "funding", id: "b2" }),
+    ]);
+    expect(bounties.map((p) => p.id)).toEqual(["b1", "b2"]);
+    expect(campaigns.map((p) => p.id)).toEqual(["c1"]);
+  });
+});
+
+describe("proposalCardHtml lightning badge", () => {
+  it("marks listed projects when Lightning is live", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        escrow_address: "bc1qescrowxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      }),
+      10_000,
+      true,
+      false,
+    );
+    expect(html).toContain("project-card-ln");
+    expect(html).toContain("Lightning");
+  });
+
+  it("hides the badge when Lightning is off", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        escrow_address: "bc1qescrowxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("project-card-ln");
   });
 });

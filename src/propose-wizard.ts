@@ -23,7 +23,7 @@ export const PROPOSE_WIZARD_STEPS: ProposeWizardStep[] = [
     label: "Basics",
     short: "1",
     title: "Project basics",
-    lede: "Name the work, choose bounty or direct, and set discovery fields.",
+    lede: "Name the work, choose bounty or campaign, and set discovery fields.",
   },
   {
     id: "scope",
@@ -51,7 +51,7 @@ export const PROPOSE_WIZARD_STEPS: ProposeWizardStep[] = [
     label: "Review",
     short: "5",
     title: "Review & submit",
-    lede: "Confirm the draft, then pay the submission fee to open the pull request.",
+    lede: "Confirm the draft, then pay the submission fee to list it.",
   },
 ];
 
@@ -92,10 +92,10 @@ export function proposeWizardNavHtml(opts: {
   const isFirst = idx <= 0;
   const isLast = idx >= PROPOSE_WIZARD_STEPS.length - 1;
   const submitLabel = opts.isEdit
-    ? "Open amend PR"
+    ? "Save amend"
     : opts.isBridge
-      ? "Pay fee & update draft PR"
-      : "Open proposal";
+      ? "Pay fee & list"
+      : "List project";
   return `<div class="propose-wizard-nav" id="propose-wizard-nav">
     <button type="button" class="btn ghost" id="propose-wizard-back" ${isFirst ? "hidden" : ""}>Back</button>
     <div class="propose-wizard-nav-end">
@@ -336,7 +336,7 @@ function clip(text: string, max = 160): string {
 }
 
 export function proposeReviewSummaryHtml(input: ReviewSummaryInput): string {
-  const typeLabel = input.proposal_type === "direct" ? "Direct" : "Bounty";
+  const typeLabel = input.proposal_type === "direct" ? "Campaign" : "Bounty";
   const tags =
     input.tags.length > 0
       ? input.tags.map((t) => `<span class="pill">${escapeHtml(t)}</span>`).join(" ")
@@ -431,8 +431,8 @@ export function proposeReviewSummaryHtml(input: ReviewSummaryInput): string {
     </div>
     ${
       input.isEdit
-        ? `<p class="field-hint">No submission fee for amends. Opening an amend PR keeps lifecycle fields intact until merge.</p>`
-        : `<p class="field-hint">Submission fee: <strong>${escapeHtml(input.feeLabel)}</strong>, exact amount on-chain. Unpaid invoices do not open a PR.</p>`
+        ? `<p class="field-hint">No submission fee for amends. Lifecycle fields stay intact.</p>`
+        : `<p class="field-hint">Submission fee: <strong>${escapeHtml(input.feeLabel)}</strong>, exact amount on-chain. The listing goes live after that payment is verified.</p>`
     }
   </div>`;
 }

@@ -36,6 +36,7 @@ import {
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
 } from "./funder-credit";
+import { isBusy, runBusy, runFormBusy } from "./form-busy";
 import { orgAttestationTitle, orgLoginLabel } from "./github-orgs-client";
 import {
   listAllPublicProposals,
@@ -1273,12 +1274,16 @@ export async function renderAccount(
 
   document.getElementById("claim-username-btn")?.addEventListener("click", async () => {
     if (!msg) return;
+    const btn = document.getElementById("claim-username-btn") as HTMLButtonElement;
+    if (btn.dataset.submitBusy === "1") return;
     const input = document.getElementById("username-input") as HTMLInputElement;
     msg.hidden = false;
     msg.className = "form-msg";
     msg.textContent = "Claiming username…";
     try {
-      await claimUsername(input.value.trim());
+      await runBusy(btn, () => claimUsername(input.value.trim()), {
+        busyLabel: "Claiming…",
+      });
       msg.textContent = "Username claimed.";
       msg.className = "form-msg success";
       ctx.rerender();
@@ -1291,6 +1296,7 @@ export async function renderAccount(
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!msg || !linksList) return;
+    if (isBusy(form)) return;
     msg.hidden = false;
     msg.textContent = "Saving…";
     msg.className = "form-msg";
@@ -1319,13 +1325,19 @@ export async function renderAccount(
         public_credit: credit.public_credit,
         show_amount: credit.show_amount,
       };
-      const saved = await updateProfile({
-        bio,
-        links,
-        payout_address,
-        skills_tags,
-        funder_credit,
-      });
+      const saved = await runFormBusy(
+        form,
+        () =>
+          updateProfile({
+            bio,
+            links,
+            payout_address,
+            skills_tags,
+            funder_credit,
+          }),
+        { busyLabel: "Saving…" },
+      );
+      if (!saved) return;
       saveStoredCreditPreferences(credit);
       syncStoredCreditPreferencesFromProfile(saved.funder_credit || funder_credit);
       msg.textContent = "Profile saved.";
@@ -1338,18 +1350,27 @@ export async function renderAccount(
   });
 
   document.getElementById("delete-account-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("delete-account-btn") as HTMLButtonElement | null;
     const deleteMsg = document.getElementById("delete-account-msg");
     const confirmed = window.confirm(
       "Delete your Plebly account? This removes your profile, watch list, and saved settings. This cannot be undone.",
     );
     if (!confirmed) return;
+    if (btn?.dataset.submitBusy === "1") return;
     if (deleteMsg) {
       deleteMsg.hidden = false;
       deleteMsg.textContent = "Deleting account…";
       deleteMsg.className = "form-msg";
     }
     try {
-      await deleteAccount();
+      if (btn) {
+        await runBusy(btn, () => deleteAccount(), {
+          busyLabel: "Deleting…",
+          stayBusyOnSuccess: true,
+        });
+      } else {
+        await deleteAccount();
+      }
       navigate("/", { replace: true });
       ctx.rerender();
     } catch (err) {

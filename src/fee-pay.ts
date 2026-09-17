@@ -19,6 +19,8 @@ export type FeePayOpts = {
   initialTxid?: string;
   /** Submission fee vs claim bond copy (default fee). */
   kind?: "fee" | "bond";
+  /** Address is bound to this signed-in session. */
+  assigned?: boolean;
 };
 
 /**
@@ -46,6 +48,11 @@ export function feePayHtml(opts: FeePayOpts): string {
       <p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong></p>
       ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${escapeHtml(opts.note)}</p>` : ""}
+      ${
+        opts.assigned
+          ? `<p class="fee-pay-note">This address is only for your account. A watcher cannot use this payment on another login.</p>`
+          : ""
+      }
       <code class="donate-address mono" id="${escapeHtml(opts.id)}-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
       <div class="donate-actions">
         <button type="button" class="btn" id="${escapeHtml(opts.id)}-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
@@ -57,10 +64,10 @@ export function feePayHtml(opts: FeePayOpts): string {
       <div class="fee-pay-nav">
         <button type="button" class="btn ghost" id="${escapeHtml(opts.id)}-manual">Enter txid manually</button>
       </div>`
-    : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong> to the published ${escapeHtml(noun)} address.</p>
+    : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong>.</p>
       ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${escapeHtml(opts.note)}</p>` : ""}
-      <p class="field-hint">${kind === "bond" ? "Bond" : "Fee"} address is not available from the API yet. Pay using the published address, then continue.</p>
+      <p class="field-hint">${kind === "bond" ? "Bond" : "Fee"} address is not ready yet. Stay signed in and try again.</p>
       <div class="fee-pay-nav">
         <button type="button" class="btn ghost" id="${escapeHtml(opts.id)}-manual">Enter txid manually</button>
       </div>`;

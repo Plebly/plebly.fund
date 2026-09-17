@@ -15,7 +15,7 @@ export async function renderTerms(shell: TermsShell): Promise<void> {
   const markdown = res?.ok ? tosDisplayMarkdown(await res.text()) : "";
   const body = markdown
     ? `<div class="prose-rich">${renderMarkdown(markdown)}</div>`
-    : `<p class="muted">Terms could not be loaded. They are published in the public git repo.</p>`;
+    : `<p class="muted">Terms could not be loaded. They are published on this site at /terms.</p>`;
   app.innerHTML = shell(`
     <section class="wrap-wide detail">
       <header class="declined-head">

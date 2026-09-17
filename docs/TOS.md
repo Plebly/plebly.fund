@@ -3,7 +3,7 @@
 version: tos-2026-09-13  
 published_at: 2026-09-13T00:00:00.000Z
 
-These terms describe how the operator of [plebly.fund](https://plebly.fund) coordinates public Bitcoin funding. They are not legal advice. They do not create a company, charity, partnership, or custody relationship. Process and numeric parameters live in public git (`Plebly/proposals`).
+These terms describe how the operator of [plebly.fund](https://plebly.fund) coordinates public Bitcoin funding. They are not legal advice. They do not create a company, charity, partnership, or custody relationship. Process and numeric parameters are published on the site.
 
 ## 1. Coordinator, not custodian
 

@@ -288,8 +288,31 @@ export function clearListedProposalsCache(): void {
   listedCache = null;
 }
 
+async function loadProposalDocFromWorker(
+  idOrPath: string,
+): Promise<Proposal | null> {
+  if (!WORKERS_API) return null;
+  try {
+    const res = await fetch(
+      `${WORKERS_API.replace(/\/$/, "")}/proposals/doc/${encodeURIComponent(idOrPath)}`,
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      markdown?: string;
+      path?: string;
+    };
+    if (!data.markdown || !data.path) return null;
+    const dir = data.path.split("/")[1] || "listed";
+    return proposalFromMarkdown(data.markdown, data.path, dir);
+  } catch {
+    return null;
+  }
+}
+
 async function loadProposalByPath(path: string): Promise<Proposal | null> {
   const normalized = path.replace(/^\//, "");
+  const fromWorker = await loadProposalDocFromWorker(normalized);
+  if (fromWorker) return fromWorker;
   try {
     const raw = await fetch(`${PROPOSALS_RAW}/${normalized}`);
     if (!raw.ok) return null;
@@ -305,6 +328,9 @@ export async function findListedProposalById(
 ): Promise<Proposal | null> {
   const normalized = id.trim();
   if (!normalized) return null;
+
+  const fromDoc = await loadProposalDocFromWorker(normalized);
+  if (fromDoc) return fromDoc;
 
   // Prefer Worker id→path index (O(1)); fall back to GitHub directory walk.
   // Lookup returns 200 with path:null when missing (avoids console 404 noise).

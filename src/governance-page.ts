@@ -4,6 +4,7 @@ import {
   authFetch,
   type AuthUser,
 } from "./auth";
+import { isBusy, runFormBusy } from "./form-busy";
 import { authFetchWithTos, tosCheckboxHtml } from "./tos-modal";
 import { WORKERS_API } from "./config";
 import { btnWithIcon } from "./icons";
@@ -610,31 +611,51 @@ export function bindKhApplyForm(
     .querySelector<HTMLFormElement>("#kh-apply-form")
     ?.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const form = e.currentTarget as HTMLFormElement;
       const msg = root.querySelector<HTMLElement>("#kh-apply-msg");
-      if (!msg) return;
+      if (!msg || isBusy(form)) return;
       msg.hidden = false;
       msg.textContent = "Submitting…";
-      const res = await authFetch(`${govApi()}/keyholders/apply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pubkey:
-            root.querySelector<HTMLTextAreaElement>("#kh-apply-pubkey")?.value ||
-            "",
-          hw_type: root.querySelector<HTMLInputElement>("#kh-apply-hw")?.value || "",
-          handle:
-            root.querySelector<HTMLInputElement>("#kh-apply-handle")?.value || "",
-          statement:
-            root.querySelector<HTMLTextAreaElement>("#kh-apply-statement")
-              ?.value || "",
-          ack: root.querySelector<HTMLInputElement>("#kh-apply-ack")?.checked,
-          tos_ack: root.querySelector<HTMLInputElement>("#kh-apply-tos")?.checked,
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      msg.textContent = res.ok ? "Application opened." : body.error || "Apply failed";
-      msg.className = `builder-msg ${res.ok ? "success" : "error"}`;
-      if (res.ok) opts?.onApplied?.();
+      try {
+        await runFormBusy(
+          form,
+          async () => {
+            const res = await authFetch(`${govApi()}/keyholders/apply`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                pubkey:
+                  root.querySelector<HTMLTextAreaElement>("#kh-apply-pubkey")
+                    ?.value || "",
+                hw_type:
+                  root.querySelector<HTMLInputElement>("#kh-apply-hw")?.value ||
+                  "",
+                handle:
+                  root.querySelector<HTMLInputElement>("#kh-apply-handle")
+                    ?.value || "",
+                statement:
+                  root.querySelector<HTMLTextAreaElement>("#kh-apply-statement")
+                    ?.value || "",
+                ack: root.querySelector<HTMLInputElement>("#kh-apply-ack")
+                  ?.checked,
+                tos_ack: root.querySelector<HTMLInputElement>("#kh-apply-tos")
+                  ?.checked,
+              }),
+            });
+            const body = (await res.json().catch(() => ({}))) as {
+              error?: string;
+            };
+            if (!res.ok) throw new Error(body.error || "Apply failed");
+            msg.textContent = "Application opened.";
+            msg.className = "builder-msg success";
+            opts?.onApplied?.();
+          },
+          { busyLabel: "Submitting…", stayBusyOnSuccess: true },
+        );
+      } catch (err) {
+        msg.textContent = (err as Error).message;
+        msg.className = "builder-msg error";
+      }
     });
 }
 
@@ -990,22 +1011,30 @@ function bindGovernanceHandlers(
     .querySelector<HTMLFormElement>("#ops-nominate-form")
     ?.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const form = e.currentTarget as HTMLFormElement;
       const msg = page.querySelector<HTMLElement>("#ops-nominate-msg");
       const kind = page.querySelector<HTMLSelectElement>("#ops-kind");
       const action = page.querySelector<HTMLSelectElement>("#ops-action");
       const nominee = page.querySelector<HTMLInputElement>("#ops-nominee");
       const rationale = page.querySelector<HTMLTextAreaElement>("#ops-rationale");
       if (!msg || !kind || !action || !nominee || !rationale) return;
+      if (isBusy(form)) return;
       msg.hidden = false;
       msg.className = "builder-msg";
       msg.textContent = "Opening role ballot…";
       try {
-        const ballot = await nominateOpsRole({
-          kind: kind.value,
-          action: action.value as "grant" | "remove" | "retain",
-          nominee_user_id: nominee.value.trim(),
-          rationale: rationale.value.trim(),
-        });
+        const ballot = await runFormBusy(
+          form,
+          () =>
+            nominateOpsRole({
+              kind: kind.value,
+              action: action.value as "grant" | "remove" | "retain",
+              nominee_user_id: nominee.value.trim(),
+              rationale: rationale.value.trim(),
+            }),
+          { busyLabel: "Opening role ballot…" },
+        );
+        if (!ballot) return;
         msg.textContent = "Role ballot opened.";
         msg.className = "builder-msg success";
         const list = page.querySelector("#gov-ops-ballots");
@@ -1041,18 +1070,26 @@ function bindGovernanceHandlers(
     .querySelector<HTMLFormElement>("#removal-open-form")
     ?.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const form = e.currentTarget as HTMLFormElement;
       const msg = page.querySelector<HTMLElement>("#removal-open-msg");
       const target = page.querySelector<HTMLInputElement>("#removal-target");
       const evidence = page.querySelector<HTMLTextAreaElement>("#removal-evidence");
       if (!target || !evidence || !msg) return;
+      if (isBusy(form)) return;
       msg.hidden = false;
       msg.className = "builder-msg";
       msg.textContent = "Opening ballot…";
       try {
-        const ballot = await openRemovalBallot({
-          target_user_id: target.value.trim(),
-          evidence: evidence.value.trim(),
-        });
+        const ballot = await runFormBusy(
+          form,
+          () =>
+            openRemovalBallot({
+              target_user_id: target.value.trim(),
+              evidence: evidence.value.trim(),
+            }),
+          { busyLabel: "Opening ballot…" },
+        );
+        if (!ballot) return;
         msg.textContent = "Ballot opened.";
         msg.className = "builder-msg success";
         const block = page.querySelector("#removals");

@@ -10,6 +10,7 @@ import {
   fetchOpenReviewDecision,
   type ReviewerMe,
 } from "./reviewers";
+import { isBusy, runFormBusy } from "./form-busy";
 import { href } from "./router";
 import { escapeHtml, formatTimeAgo } from "./util";
 
@@ -135,6 +136,8 @@ export async function bindListingReportControl(
     .querySelector<HTMLFormElement>("#listing-report-form")
     ?.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const form = e.currentTarget as HTMLFormElement;
+      if (isBusy(form)) return;
       const reason =
         wrap
           .querySelector<HTMLTextAreaElement>("#listing-report-reason")
@@ -166,13 +169,19 @@ export async function bindListingReportControl(
         msg.textContent = "Submitting report…";
       }
       try {
-        const result = await fileModerationReport({
-          target_type: "listing",
-          proposal_id: opts.proposalId!,
-          proposal_path: opts.proposalPath,
-          reason,
-          escalate,
-        });
+        const result = await runFormBusy(
+          form,
+          () =>
+            fileModerationReport({
+              target_type: "listing",
+              proposal_id: opts.proposalId!,
+              proposal_path: opts.proposalPath,
+              reason,
+              escalate,
+            }),
+          { busyLabel: "Submitting…", stayBusyOnSuccess: true },
+        );
+        if (!result) return;
         if (msg) {
           msg.className = "builder-msg success";
           msg.textContent =

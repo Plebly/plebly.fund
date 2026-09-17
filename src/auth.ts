@@ -78,11 +78,31 @@ export async function consumeSessionFromHash(): Promise<boolean> {
   }
 }
 
+const FETCH_TIMEOUT_MS = 40_000;
+
 export function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = storedSession();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(input, { ...init, headers, credentials: "include" });
+  const ctrl = new AbortController();
+  if (init.signal) {
+    if (init.signal.aborted) ctrl.abort();
+    else init.signal.addEventListener("abort", () => ctrl.abort(), { once: true });
+  }
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: "include",
+    signal: ctrl.signal,
+  })
+    .catch((err: unknown) => {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new Error("Request timed out — try again.");
+      }
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
 }
 
 export type AuthUser = UserProfile;
@@ -853,7 +873,16 @@ export type UpdateProposalInput = ProposalAuthorInput & {
 async function proposalMutation(
   path: "/proposals/submit" | "/proposals/update",
   input: unknown,
-): Promise<{ pr_url?: string; branch?: string; ok?: boolean }> {
+): Promise<{
+  ok?: boolean;
+  listed?: boolean;
+  id?: string;
+  path?: string;
+  proposal_id?: string;
+  escrow_address?: string;
+  pr_url?: string;
+  branch?: string;
+}> {
   const res = await authFetch(`${API()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -861,6 +890,11 @@ async function proposalMutation(
   });
   const data = (await res.json()) as {
     ok?: boolean;
+    listed?: boolean;
+    id?: string;
+    path?: string;
+    proposal_id?: string;
+    escrow_address?: string;
     pr_url?: string;
     branch?: string;
     error?: string;
@@ -868,14 +902,6 @@ async function proposalMutation(
     draft?: string;
   };
   if (!res.ok) {
-    if (
-      res.status === 502 &&
-      /failed to open/i.test(String(data.error || ""))
-    ) {
-      throw new Error(
-        "Could not open the pull request. Your draft is saved on this device — try Submit again.",
-      );
-    }
     throw new Error(data.error || data.detail || `HTTP ${res.status}`);
   }
   return data;
@@ -883,12 +909,27 @@ async function proposalMutation(
 
 export async function submitProposal(
   input: SubmitProposalInput,
-): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
+): Promise<{
+  ok?: boolean;
+  listed?: boolean;
+  id?: string;
+  path?: string;
+  proposal_id?: string;
+  escrow_address?: string;
+  error?: string;
+}> {
   return proposalMutation("/proposals/submit", input);
 }
 
 export async function updateProposal(
   input: UpdateProposalInput,
-): Promise<{ pr_url?: string; branch?: string; ok?: boolean; error?: string }> {
+): Promise<{
+  ok?: boolean;
+  listed?: boolean;
+  id?: string;
+  path?: string;
+  proposal_id?: string;
+  error?: string;
+}> {
   return proposalMutation("/proposals/update", input);
 }

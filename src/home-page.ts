@@ -4,6 +4,7 @@ import {
   fetchWanted,
   fetchWatchMetaBatch,
   fetchWatches,
+  isDirectProposal,
   isNearFloor,
   isOpenToClaim,
   isTakenStatus,
@@ -30,13 +31,33 @@ import {
 import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
 import { projectCardProposerHtml } from "./github-orgs-client";
-import { href, orgHref, profileHref, projectsHref, proposalHref } from "./router";
+import {
+  campaignsHref,
+  href,
+  orgHref,
+  profileHref,
+  projectsHref,
+  proposalHref,
+} from "./router";
 import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
 
 export type HomeShell = (inner: string) => string;
+
+export function partitionListings(proposals: Proposal[]): {
+  bounties: Proposal[];
+  campaigns: Proposal[];
+} {
+  const bounties: Proposal[] = [];
+  const campaigns: Proposal[] = [];
+  for (const p of proposals) {
+    if (isDirectProposal(p)) campaigns.push(p);
+    else bounties.push(p);
+  }
+  return { bounties, campaigns };
+}
 
 type SortKey = "funded" | "newest" | "floor";
 type ClaimFilter = "all" | "open" | "near" | "taken";
@@ -66,10 +87,11 @@ function landingHeroHtml(): string {
       ${networkBadgeHtml()}
       <h1 class="landing-brand">Plebly</h1>
       <p class="landing-title">Fund open Bitcoin work.<br />Protocol over platform.</p>
-      <p class="landing-sub">Public escrow anyone can verify. No custodian in the middle.</p>
+      <p class="landing-sub">Bounties for builders. Campaigns for causes. Public escrow anyone can verify.</p>
       ${signetHeroNoteHtml()}
       <div class="landing-cta-row">
-        <a class="btn landing-btn" href="${projectsHref()}">Donate to a project</a>
+        <a class="btn landing-btn" href="${projectsHref()}">Fund a bounty</a>
+        <a class="btn ghost landing-btn" href="${campaignsHref()}">Give to a campaign</a>
         <a class="btn ghost landing-btn" href="${href("/propose")}">Start a project</a>
       </div>
     </div>
@@ -81,7 +103,7 @@ function audiencePathsHtml(): string {
     {
       kicker: "Creators",
       title: "Name the problem",
-      body: "Describe what needs building and what done looks like. Pay a small on-chain fee, then let donations fill in public.",
+      body: "List a bounty for builders or a direct campaign for a cause. Pay a small on-chain fee, then let donations fill in public.",
       href: href("/propose"),
       cta: "Start a project",
     },
@@ -166,8 +188,8 @@ function howItWorksHtml(): string {
   const steps = [
     { n: "01", title: "Propose", body: "Name the problem and what done looks like." },
     { n: "02", title: "Donate", body: "Anyone sends Bitcoin to the project’s public address." },
-    { n: "03", title: "Build", body: "When funding is high enough, a builder takes the work." },
-    { n: "04", title: "Pay", body: "Reviewers check the result. Payment goes out monthly." },
+    { n: "03", title: "Build or receive", body: "Bounties open for builders. Campaigns go to the organizer." },
+    { n: "04", title: "Pay", body: "Reviewers check bounty work. Campaign payouts follow the published rules." },
   ];
   return `<section class="landing-how">
     <div class="wrap-wide">
@@ -192,7 +214,7 @@ function howItWorksHtml(): string {
 function trustStripHtml(): string {
   const items = [
     { title: "Non-custodial", body: "Funds sit on Bitcoin. Plebly cannot take them." },
-    { title: "Uncensorable", body: "Every proposal lives in a public git repo." },
+    { title: "Public record", body: "Every listing and its escrow address is visible to anyone." },
     { title: "Transparent fees", body: "5% when a project is paid. Published in git." },
   ];
   return `<section class="wrap-wide landing-trust">
@@ -246,7 +268,7 @@ function gapTickerHtml(
 function discoverToolbarHtml(count: number): string {
   return `<div class="discover-toolbar">
     <div class="discover-toolbar-left">
-      <h2 id="projects-heading">Open projects</h2>
+      <h2 id="projects-heading">Bounties</h2>
       <p class="projects-sub"><span id="project-count">${count}</span> live</p>
     </div>
     <div class="discover-controls">
@@ -306,7 +328,7 @@ function discoverToolbarHtml(count: number): string {
               <span class="builder-filter-label">Type</span>
               <button type="button" class="builder-filter active" data-type="all">Any</button>
               <button type="button" class="builder-filter" data-type="bounty">Bounty</button>
-              <button type="button" class="builder-filter" data-type="direct">Direct</button>
+              <button type="button" class="builder-filter" data-type="direct">Campaign</button>
             </div>
             <div class="builder-filter-group" role="group" aria-label="Endowment">
               <span class="builder-filter-label">Endowment</span>
@@ -325,17 +347,19 @@ function progressHtml(p: Proposal, floor: number): string {
   const remaining = Math.max(0, floor - bal);
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
-  const isDirect = String(p.proposal_type || "bounty").toLowerCase() === "direct";
+  const isDirect = isDirectProposal(p);
   const target = fundingTargetSats(p.target_sats);
-  // Claim floor is the minimum to start work — "overfunded" only past the soft target.
+  // Claim floor is the minimum to start bounty work — "overfunded" only past the soft target.
   const over = isPastFundingTarget(bal, target);
   const overLabel = over && target ? overfundRatioLabel(bal, target) : "";
+  const campaignGoal = target || floor;
+  const campaignRemaining = Math.max(0, campaignGoal - bal);
   const label = over
     ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
     : isDirect
-      ? bal >= floor
+      ? bal >= campaignGoal
         ? "Receiving"
-        : `${formatSats(remaining)} to open`
+        : `${formatSats(campaignRemaining)} to goal`
       : open
         ? "Open to apply"
         : near
@@ -343,10 +367,18 @@ function progressHtml(p: Proposal, floor: number): string {
           : isTakenStatus(String(p.status)) || p.claimer
             ? "Taken"
             : `${formatSats(remaining)} to open`;
-  const labelClass = over ? "overfunded" : open || (isDirect && bal >= floor) ? "claimable" : "";
-  const satsLine = target
-    ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
-    : `${formatSats(bal)} / ${formatSats(floor)} to open`;
+  const labelClass = over
+    ? "overfunded"
+    : open || (isDirect && bal >= campaignGoal)
+      ? "claimable"
+      : "";
+  const satsLine = isDirect
+    ? target
+      ? `${formatSats(bal)} / ${formatSats(target)} goal`
+      : formatSats(bal)
+    : target
+      ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
+      : `${formatSats(bal)} / ${formatSats(floor)} to open`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>
@@ -371,9 +403,9 @@ export function proposalCardHtml(
     orgAvatarSlotHtml,
   });
   const donateHref = `${proposalHref(p.path, p.id)}?donate`;
-  const isDirect = String(p.proposal_type || "bounty").toLowerCase() === "direct";
+  const isDirect = isDirectProposal(p);
   const typeBadge = isDirect
-    ? `<span class="project-card-type" title="Proposer is the recipient">Direct</span>`
+    ? `<span class="project-card-type" title="Organizer receives donations">Campaign</span>`
     : "";
   const endowmentBadge = p.endowment_funded
     ? `<a class="project-card-endowment" href="${href("/endowment")}" title="Endowment">Endowment</a>`
@@ -459,9 +491,13 @@ function railHtml(
     const emptyBody =
       id === "completed-projects"
         ? "Nothing here yet. Projects move here after public review and release."
-        : `No ${title.toLowerCase()} yet.`;
+        : id === "campaigns"
+          ? "No campaigns yet. List a charity or cause as a direct campaign — donations go to the organizer."
+          : `No ${title.toLowerCase()} yet.`;
     const emptyBrowse = opts.browseHref
-      ? `<a href="${escapeHtml(opts.browseHref)}">Browse archive →</a>`
+      ? `<a href="${escapeHtml(opts.browseHref)}">${
+          id === "campaigns" ? "Start a campaign →" : "Browse archive →"
+        }</a>`
       : "";
     return `<section class="wrap-wide project-rail project-rail-empty" aria-labelledby="${id}">
       <div class="rail-head">
@@ -553,7 +589,11 @@ function bindDiscover(
   )
     ? "open"
     : "all";
-  let typeFilter: TypeFilter = "all";
+  const typeFromUrl = new URLSearchParams(location.search).get("type");
+  let typeFilter: TypeFilter =
+    typeFromUrl === "direct" || typeFromUrl === "all" || typeFromUrl === "bounty"
+      ? typeFromUrl
+      : "bounty";
   let endowmentFilter: "all" | "funded" = /(?:^|[?&])endowment=1(?:&|$)/.test(
     location.search,
   )
@@ -717,6 +757,15 @@ function bindDiscover(
       filtered = filtered.filter((p) => Boolean(p.endowment_funded));
     }
     filtered = sortProposals(filtered, sort, floor);
+    const heading = root.querySelector("#projects-heading");
+    if (heading) {
+      heading.textContent =
+        typeFilter === "direct"
+          ? "Campaigns"
+          : typeFilter === "all"
+            ? "Open projects"
+            : "Bounties";
+    }
     if (countEl) countEl.textContent = String(filtered.length);
     if (filtered.length === 0) {
       listEl.className = "empty-state";
@@ -846,6 +895,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <section id="activity-strip" class="wrap-wide activity-strip" hidden aria-label="Recent activity"></section>
     ${audiencePathsHtml()}
     <div id="endowment-strip">${endowmentStripHtml(null)}</div>
+    <div id="campaigns-rail"></div>
     <div id="wanted-rail"></div>
     <div id="featured-rail"></div>
     <div id="completed-rail"></div>
@@ -911,7 +961,31 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     if (wantedRail) wantedRail.innerHTML = wantedRailHtml(wanted);
     const pinned = new Set<string>(); // Ops may populate this later from public config.
     const excluded = new Set<string>();
-    const featured = proposals
+    const { campaigns: campaignList } = partitionListings(proposals);
+    const campaigns = campaignList
+      .filter((proposal) => String(proposal.status) !== "completed")
+      .sort((a, b) => (b.balance_sats ?? 0) - (a.balance_sats ?? 0))
+      .slice(0, 8);
+    const campaignsRail = app.querySelector("#campaigns-rail");
+    if (campaignsRail) {
+      campaignsRail.innerHTML = railHtml(
+        "campaigns",
+        "Campaigns & charities",
+        "Direct listings. The organizer receives donations — no builder claim step.",
+        campaigns,
+        CLAIM_FLOOR_SATS,
+        lightningEnabled,
+        watchPaths,
+        {
+          browseHref: campaigns.length
+            ? projectsHref("?type=direct")
+            : href("/propose"),
+        },
+      );
+      bindCardWatches(campaignsRail, watchPaths);
+    }
+    const { bounties } = partitionListings(proposals);
+    const featured = bounties
       .filter(
         (proposal) =>
           String(proposal.status) !== "completed" &&
@@ -942,8 +1016,8 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     if (featuredRail) {
       featuredRail.innerHTML = railHtml(
         "featured-projects",
-        "Featured work",
-        "Close to opening, and drawing attention.",
+        "Featured bounties",
+        "Close to opening for builders, and drawing attention.",
         featured,
         CLAIM_FLOOR_SATS,
         lightningEnabled,
@@ -970,7 +1044,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       listEl.className = "empty-state";
       listEl.innerHTML = `<div class="empty-state-inner">
         <p class="empty-state-title">No open projects yet</p>
-        <p class="empty-state-body">Be the first to list funded work in the open repo.</p>
+        <p class="empty-state-body">Be the first to list a bounty or campaign.</p>
         <a class="btn" href="${href("/propose")}">Start a project</a>
       </div>`;
       return;

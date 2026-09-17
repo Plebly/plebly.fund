@@ -2,6 +2,7 @@ import { authFetch } from "./auth";
 import {
   CLAIM_BOND_SATS,
   CLAIM_FLOOR_SATS,
+  SUBMISSION_FEE_SATS,
   WORKERS_API,
 } from "./config";
 import type { Proposal } from "./types";
@@ -127,6 +128,7 @@ export type ClaimParams = {
   checkpoint_day: number;
   checkpoint_grace_days: number;
   fee_address: string | null;
+  fee_address_mode?: "unique" | "shared";
   claim_mode_default?: string;
   claim_window_days_presets?: number[];
   claim_window_days_default?: number;
@@ -227,6 +229,7 @@ export function claimFloorShortfall(
   for (const p of proposals) {
     const status = String(p.status);
     if (status === "completed") continue;
+    if (isDirectProposal(p)) continue;
     if (isTakenStatus(status) || p.claimer) continue;
     const bal = Math.max(0, p.balance_sats ?? 0);
     const need = Math.max(0, floor - bal);
@@ -429,6 +432,50 @@ export async function fetchPayoutStatus(
   if (res.status === 404) return null;
   if (!res.ok) return null;
   return (await res.json()) as PayoutStatus;
+}
+
+export type PayIntent = {
+  address: string;
+  purpose: "submission_fee" | "claim_bond";
+  mode: "unique" | "shared";
+  required_sats: number;
+  unique: boolean;
+};
+
+export async function fetchPayIntent(
+  purpose: "submission_fee" | "claim_bond",
+): Promise<PayIntent> {
+  if (!WORKERS_API) {
+    throw new Error("API is not configured");
+  }
+  const res = await authFetch(`${API()}/payments/intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ purpose }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    address?: string;
+    purpose?: PayIntent["purpose"];
+    mode?: PayIntent["mode"];
+    required_sats?: number;
+    unique?: boolean;
+    error?: string;
+  };
+  if (!res.ok || !body.address) {
+    throw new Error(body.error || "Could not issue a fee address");
+  }
+  return {
+    address: body.address,
+    purpose: body.purpose === "claim_bond" ? "claim_bond" : "submission_fee",
+    mode: body.mode === "unique" ? "unique" : "shared",
+    required_sats:
+      typeof body.required_sats === "number"
+        ? body.required_sats
+        : purpose === "claim_bond"
+          ? CLAIM_BOND_SATS
+          : SUBMISSION_FEE_SATS,
+    unique: Boolean(body.unique),
+  };
 }
 
 export async function fetchClaimParams(): Promise<ClaimParams> {

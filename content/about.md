@@ -8,16 +8,16 @@ We built it for people who want hard problems solved in the open.
 
 **Nobody holds the keys.** Project funds sit in public Bitcoin escrow. Plebly cannot freeze, redirect, or take them.
 
-**The record is public.** Proposals live in [Plebly/proposals](https://github.com/Plebly/proposals). Anyone can fork it.
+**The record is public.** Every listing has a public page and a verifiable escrow address.
 
-**Rules over discretion.** Fees and payout rules are published in git. Changes happen in the open.
+**Rules over discretion.** Fees and payout rules are published. Changes happen in the open.
 
 ## How it works
 
 1. **Propose:** Describe the problem and what done looks like.
 2. **Donate:** Anyone sends Bitcoin to the project’s public address.
-3. **Build:** When funding is high enough, a builder takes the work.
-4. **Pay:** Reviewers check the result. Payment goes out monthly.
+3. **Build or receive:** Bounties open for builders. Direct campaigns go to the organizer.
+4. **Pay:** Reviewers check bounty work. Campaign payouts follow the published rules.
 
 Browse [open projects](/) or [start a project](/propose).
 
@@ -31,7 +31,7 @@ Lightning lands in the same public address as on-chain donations. Unpaid invoice
 
 ## Key numbers
 
-These come from [`parameters.json`](https://github.com/Plebly/proposals/blob/main/parameters.json) on **{{bitcoin_network}}**:
+These come from the published parameters on **{{bitcoin_network}}**:
 
 - **Submission fee:** {{submission_fee}}
 - **Platform fee:** {{platform_fee}}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parseLocation,
+  campaignsHref,
   projectsHref,
   proposalHref,
   proposalJsonLd,
@@ -12,6 +13,7 @@ describe("router governance paths", () => {
   it("links Projects nav to the home open-projects section", () => {
     expect(projectsHref()).toBe("/#projects");
     expect(projectsHref("?for=builders")).toBe("/?for=builders#projects");
+    expect(campaignsHref()).toBe("/#campaigns");
   });
 
   it("parses /reviewers and /governance", () => {

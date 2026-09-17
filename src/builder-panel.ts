@@ -5,6 +5,7 @@ import {
   claimWindowDaysLeft,
   fetchClaimApplications,
   fetchClaimParams,
+  fetchPayIntent,
   fetchClaimStatus,
   fetchGithubFollowing,
   fetchPayoutStatus,
@@ -45,6 +46,7 @@ import {
 import { authFetch, loginChoicesHtml, updateProfile } from "./auth";
 import type { AuthUser } from "./auth";
 import { confirmAction, promptText } from "./confirm-modal";
+import { runBusy } from "./form-busy";
 import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { btnWithIcon, solidIcon } from "./icons";
 import { safeHrefAttr } from "./social-links";
@@ -825,13 +827,27 @@ export async function bindBuilderPanel(
         return;
       }
       setMsg(msg, "Submitting…");
+      const delivBtn = panel.querySelector<HTMLButtonElement>("#deliv-submit");
       try {
-        const result = await submitDeliverable({
-          proposal_path: opts.proposal.path,
-          deliverable_url: url,
-          description,
-          artifact_hash: hash || undefined,
-        });
+        const result = delivBtn
+          ? await runBusy(
+              delivBtn,
+              () =>
+                submitDeliverable({
+                  proposal_path: opts.proposal.path,
+                  deliverable_url: url,
+                  description,
+                  artifact_hash: hash || undefined,
+                }),
+              { busyLabel: "Submitting…" },
+            )
+          : await submitDeliverable({
+              proposal_path: opts.proposal.path,
+              deliverable_url: url,
+              description,
+              artifact_hash: hash || undefined,
+            });
+        if (!result) return;
         const next =
           result.ai_review?.outcome === "fail"
             ? "Revise and resubmit."
@@ -940,28 +956,46 @@ export async function bindBuilderPanel(
   const mountClaimFeePay = async () => {
     if (!bondSlot) return;
     feePay?.stop();
-    const feeAddr = params.fee_address?.trim() || "";
+    feePay = null;
     const bondSats =
       typeof params.claim_bond_sats === "number" &&
       params.claim_bond_sats === CLAIM_BOND_SATS
         ? params.claim_bond_sats
         : CLAIM_BOND_SATS;
-    if (!feeAddr || !escrowAddressMatchesNetwork(feeAddr)) {
-      bondSlot.innerHTML =
-        `<p class="builder-status error">Bond fee address unavailable or wrong network — refresh and try again.</p>`;
-      return;
+    bondSlot.innerHTML = `<p class="muted">Issuing your bond address…</p>`;
+    try {
+      const intent = await fetchPayIntent("claim_bond");
+      const feeAddr = intent.address.trim();
+      if (!feeAddr || !escrowAddressMatchesNetwork(feeAddr)) {
+        bondSlot.innerHTML =
+          `<p class="builder-status error">Bond fee address unavailable or wrong network — refresh and try again.</p>`;
+        return;
+      }
+      bondSlot.innerHTML = feePayHtml({
+        id: "claim-bond",
+        amountSats: bondSats,
+        address: feeAddr,
+        kind: "bond",
+        assigned: true,
+        note:
+          intent.mode === "unique"
+            ? "Pay on-chain to this bond address (not your payout). Bond refunds to the destination from the previous step · forfeited on expiry or abandoned checkpoint"
+            : "Pay on-chain to your assigned bond address (not your payout). Bond refunds to the destination from the previous step · forfeited on expiry or abandoned checkpoint",
+      });
+      feePay = await bindFeePay(panel, "claim-bond", {
+        onStep: syncClaimFeeStep,
+      });
+      feePay?.setStep("pay");
+    } catch (err) {
+      const text =
+        err instanceof Error ? err.message : "Could not issue a bond address";
+      bondSlot.innerHTML = `<p class="builder-status error">${escapeHtml(text)}</p><button type="button" class="btn ghost" id="claim-bond-retry">Try again</button>`;
+      bondSlot
+        .querySelector("#claim-bond-retry")
+        ?.addEventListener("click", () => {
+          void mountClaimFeePay();
+        });
     }
-    bondSlot.innerHTML = feePayHtml({
-      id: "claim-bond",
-      amountSats: bondSats,
-      address: feeAddr,
-      kind: "bond",
-      note: "Pay on-chain to the published bond address (not your payout). Bond refunds to the destination from the previous step · forfeited on expiry or abandoned checkpoint",
-    });
-    feePay = await bindFeePay(panel, "claim-bond", {
-      onStep: syncClaimFeeStep,
-    });
-    feePay?.setStep("pay");
   };
 
   const selectedPayoutRail = (): PayoutRail => "onchain";
@@ -1753,16 +1787,36 @@ export async function bindBuilderPanel(
       return;
     }
     setMsg(modalMsg(), "Submitting bonded application…");
+    const confirmBtn = panel.querySelector<HTMLButtonElement>("#claim-confirm");
     try {
-      const result = await submitClaim({
-        proposal_path: opts.proposal.path,
-        payout_address: payout,
-        note: noteInput?.value.trim() || undefined,
-        claim_bond_txid: bond,
-        claimer_type: claimerType,
-        org_login: claimerType === "org" ? orgLogin : undefined,
-        tos_ack: true,
-      });
+      const result = confirmBtn
+        ? await runBusy(
+            confirmBtn,
+            () =>
+              submitClaim({
+                proposal_path: opts.proposal.path,
+                payout_address: payout,
+                note: noteInput?.value.trim() || undefined,
+                claim_bond_txid: bond,
+                claimer_type: claimerType,
+                org_login: claimerType === "org" ? orgLogin : undefined,
+                tos_ack: true,
+              }),
+            {
+              busyLabel: "Submitting…",
+              stayBusyOnSuccess: true,
+            },
+          )
+        : await submitClaim({
+            proposal_path: opts.proposal.path,
+            payout_address: payout,
+            note: noteInput?.value.trim() || undefined,
+            claim_bond_txid: bond,
+            claimer_type: claimerType,
+            org_login: claimerType === "org" ? orgLogin : undefined,
+            tos_ack: true,
+          });
+      if (!result) return;
       closeClaimModal();
       setMsg(
         msg,

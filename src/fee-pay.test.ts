@@ -48,7 +48,7 @@ describe("feePayHtml", () => {
       amountSats: 10_000,
       address: null,
     });
-    expect(html).toContain("Fee address is not available from the API yet");
+    expect(html).toContain("Fee address is not ready yet");
     expect(html).not.toContain("bitcoin:");
   });
 
@@ -60,7 +60,7 @@ describe("feePayHtml", () => {
       kind: "bond",
     });
     expect(html).toContain("Send bond");
-    expect(html).toContain("Bond address is not available from the API yet");
+    expect(html).toContain("Bond address is not ready yet");
     expect(html).toContain('data-kind="bond"');
   });
 });

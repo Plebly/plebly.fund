@@ -4,7 +4,7 @@ import {
   submitProposal,
   updateProposal,
 } from "./auth";
-import { fetchClaimParams } from "./builder";
+import { fetchClaimParams, fetchPayIntent } from "./builder";
 import {
   PROPOSALS_RAW,
   SUBMISSION_FEE_SATS,
@@ -13,7 +13,8 @@ import {
   networkLabel as bitcoinNetworkLabel,
 } from "./config";
 import { safeHrefAttr } from "./social-links";
-import { bindFeePay, feePayHtml } from "./fee-pay";
+import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
+import { isBusy, runFormBusy } from "./form-busy";
 import { sanitizePublicError } from "./public-errors";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
 import { isSignet, signetFaucetLinksHtml } from "./signet";
@@ -218,7 +219,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     app.innerHTML = ctx.shell(`
       <section class="wrap-wide detail propose-page">
         <h1>${editParam ? "Edit proposal" : "Start a project"}</h1>
-        <p class="lede">Sign in to ${editParam ? "open an amend pull request" : "open a proposal"}.</p>
+        <p class="lede">Sign in to ${editParam ? "edit this listing" : "list a project"}.</p>
         ${loginChoicesHtml(undefined, returnPath)}
       </section>
     `);
@@ -238,7 +239,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       app.innerHTML = ctx.shell(`
         <section class="wrap-wide detail propose-page">
           <h1>Cannot edit</h1>
-          <p class="lede">This proposal is not on main yet, is past claim, or was not found. In-app edit works after the submission PR merges and before claim.</p>
+          <p class="lede">This listing was not found, or it is past the point where the proposer can edit.</p>
           <p><a class="btn" href="${projectsHref()}">Browse projects</a></p>
         </section>
       `);
@@ -298,16 +299,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
   const editProposerType =
     prefill?.proposer_type === "org" ? ("org" as const) : ("individual" as const);
   const editOrgLogin = prefill?.proposer_org_login || "";
-  let feeAddress: string | null = null;
   let claimModeDefault = "proposer_select";
   let claimWindowPresets = [3, 7, 14, 30, 90];
   let claimWindowDefault = 7;
   if (!isEdit) {
     try {
       const params = await fetchClaimParams();
-      const addr = params.fee_address?.trim() || null;
-      feeAddress =
-        addr && escrowAddressMatchesNetwork(addr) ? addr : null;
       if (params.claim_mode_default === "first_bonded") {
         claimModeDefault = "first_bonded";
       }
@@ -334,7 +331,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     .join("\n                  ");
 
   const reviewLede = isEdit
-    ? "Confirm the amend, then open the pull request. Lifecycle fields stay intact until merge."
+    ? "Confirm the amend, then save. Lifecycle fields stay intact."
     : `Confirm the draft, then pay the ${feeLabel} submission fee on ${networkLabel}.`;
   const savedDraft = !isEdit && !isBridge ? loadProposeDraft() : null;
 
@@ -365,7 +362,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             </div>`
             : isEdit
             ? `<div class="edit-banner" role="status">
-                <p>Editing on main · status <span class="pill">${escapeHtml(prefill!.status)}</span></p>
+                <p>Editing listed project · status <span class="pill">${escapeHtml(prefill!.status)}</span></p>
                 <p class="edit-banner-path mono">${escapeHtml(prefill!.path)}</p>
                 <p class="edit-banner-actions">
                   <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
@@ -452,8 +449,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             </fieldset>
             <fieldset class="field propose-type">
               <span>Proposal type</span>
-              <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: open for builders to apply with a bond</span></label>
-              <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Direct</strong>: you are the recipient (no claim step)</span></label>
+              <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: builders apply with a bond and get paid after review</span></label>
+              <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Campaign</strong>: charity or cause — you receive donations, no builder claim</span></label>
             </fieldset>
             <fieldset class="field propose-claim-mode" data-claim-mode-fields>
               <span>Who gets the claim</span>
@@ -567,9 +564,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             ${feePayHtml({
               id: "propose-fee",
               amountSats: SUBMISSION_FEE_SATS,
-              address: feeAddress,
+              address: null,
               txidName: "submission_fee_txid",
-              note: "Required to open a proposal. Exact amount on-chain.",
+              note: "Your fee address is issued on this step.",
               initialTxid: savedDraft?.fee_txid,
             })}
           </fieldset>`
@@ -591,7 +588,46 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     </section>
   `);
 
-  const feePay = isEdit ? null : await bindFeePay(document, "propose-fee");
+  let feePay: FeePayBinding | null = isEdit
+    ? null
+    : await bindFeePay(document, "propose-fee");
+
+  const mountProposeFee = async () => {
+    if (isEdit) return;
+    const block = form.querySelector(".propose-fee-block");
+    if (!block) return;
+    const existingTxid = feePay?.getTxid() || savedDraft?.fee_txid || "";
+    feePay?.stop();
+    feePay = null;
+    block.innerHTML = `<legend>Submission fee</legend><p class="muted">Issuing your fee address…</p>`;
+    try {
+      const intent = await fetchPayIntent("submission_fee");
+      const addr =
+        intent.address && escrowAddressMatchesNetwork(intent.address)
+          ? intent.address
+          : null;
+      block.innerHTML = `<legend>Submission fee</legend>${feePayHtml({
+        id: "propose-fee",
+        amountSats: SUBMISSION_FEE_SATS,
+        address: addr,
+        txidName: "submission_fee_txid",
+        assigned: Boolean(addr),
+        note:
+          intent.mode === "unique"
+            ? "Required to open a proposal. Exact amount on-chain to this address only."
+            : "Required to open a proposal. Exact amount on-chain.",
+        initialTxid: existingTxid,
+      })}`;
+      feePay = await bindFeePay(document, "propose-fee");
+    } catch (err) {
+      const text =
+        err instanceof Error ? err.message : "Could not issue a fee address";
+      block.innerHTML = `<legend>Submission fee</legend><p class="field-hint">${escapeHtml(text)}</p><button type="button" class="btn ghost" id="propose-fee-retry">Try again</button>`;
+      document.getElementById("propose-fee-retry")?.addEventListener("click", () => {
+        void mountProposeFee();
+      });
+    }
+  };
   const form = document.getElementById("propose-form") as HTMLFormElement;
   const msg = document.getElementById("propose-msg")!;
   const milestonesList = document.getElementById("milestones-list")!;
@@ -1010,7 +1046,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         });
       });
 
-    if (next === "review") refreshReviewSummary();
+    if (next === "review") {
+      refreshReviewSummary();
+      void mountProposeFee();
+    }
     clearProposeFieldErrors(form);
     showWizardMsg("");
     persistDraft();
@@ -1483,6 +1522,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (isBusy(form)) return;
     if (currentStep !== "review") {
       goNext();
       return;
@@ -1629,23 +1669,35 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         showWizardMsg("Accept the Terms to submit.", "error");
         return;
       }
-      showWizardMsg("Opening pull request…");
+      showWizardMsg("Listing project…");
       try {
-        const result = await submitProposal({
-          ...author,
-          tos_ack: true,
-          submission_fee_txid: feeTxid,
-          source_issue: bridgeSource,
-        });
+        const result = await runFormBusy(
+          form,
+          () =>
+            submitProposal({
+              ...author,
+              tos_ack: true,
+              submission_fee_txid: feeTxid,
+              source_issue: bridgeSource,
+            }),
+          { busyLabel: "Listing project…", stayBusyOnSuccess: true },
+        );
+        if (!result) return;
         if (!isEdit) clearProposeDraft();
+        const listedId = result.id || result.proposal_id;
+        const listedPath =
+          result.path ||
+          (listedId ? `proposals/listed/${listedId}.md` : "");
         showProposeSuccess({
-          title: isBridge ? "Bridge proposal funded" : "Proposal submitted",
-          body: isBridge
-            ? "Your draft PR was updated with the fee and full fields. It becomes listed after merge + escrow allocate; the source issue then gets the funding comment."
-            : "Your submission pull request is open. It becomes editable in-app after merge to main.",
-          prUrl: result.pr_url,
-          backHref: projectsHref(),
-          backLabel: "Browse projects",
+          title: proposal_type === "direct" ? "Campaign listed" : "Bounty listed",
+          body:
+            proposal_type === "direct"
+              ? "Your campaign is live. Open the page to receive donations."
+              : "Your bounty is live. Open the project page to donate to escrow.",
+          backHref: listedPath
+            ? proposalHref(listedPath, listedId)
+            : projectsHref(),
+          backLabel: listedPath ? "Open project" : "Browse projects",
         });
       } catch (err) {
         showWizardMsg((err as Error).message, "error");
@@ -1660,18 +1712,26 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       showWizardMsg("Accept the Terms to amend.", "error");
       return;
     }
-    showWizardMsg("Opening amend pull request…");
+    showWizardMsg("Saving amend…");
     try {
-      const result = await updateProposal({
-        ...author,
-        tos_ack: true,
-        proposal_path: prefill!.path,
-      });
+      const result = await runFormBusy(
+        form,
+        () =>
+          updateProposal({
+            ...author,
+            tos_ack: true,
+            proposal_path: prefill!.path,
+          }),
+        { busyLabel: "Saving amend…", stayBusyOnSuccess: true },
+      );
+      if (!result) return;
       showProposeSuccess({
-        title: "Amend submitted",
-        body: "Your amend pull request is open. Lifecycle fields stay intact until merge.",
-        prUrl: result.pr_url,
-        backHref: proposalHref(prefill!.path, prefill!.id),
+        title: "Amend saved",
+        body: "The listing is updated. Lifecycle fields stay intact.",
+        backHref: proposalHref(
+          result.path || prefill!.path,
+          result.id || prefill!.id,
+        ),
         backLabel: "Back to project",
       });
     } catch (err) {

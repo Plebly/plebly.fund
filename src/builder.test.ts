@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyClaimStatusToProposal,
+  claimFloorShortfall,
   claimWindowDaysLeft,
   isDirectProposal,
   isNearFloor,
@@ -92,6 +93,26 @@ describe("claim floor helpers", () => {
     expect(isDirectProposal(proposal({ proposal_type: undefined }))).toBe(false);
     expect(isOpenToClaim(direct, floor)).toBe(false);
     expect(isNearFloor(direct, floor)).toBe(false);
+  });
+
+  it("claim-floor shortfall ignores direct campaigns", () => {
+    const out = claimFloorShortfall(
+      [
+        proposal({
+          proposal_type: "direct",
+          status: "listed",
+          balance_sats: 1_000,
+        }),
+        proposal({
+          proposal_type: "bounty",
+          status: "listed",
+          balance_sats: 2_000,
+        }),
+      ],
+      10_000,
+    );
+    expect(out.projectCount).toBe(1);
+    expect(out.shortfallSats).toBe(8_000);
   });
 });
 

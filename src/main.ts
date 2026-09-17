@@ -45,6 +45,7 @@ import {
   migrateHashRoute,
   navigate,
   parseLocation,
+  campaignsHref,
   projectsHref,
   scrollToHashId,
   seoForRoute,
@@ -114,12 +115,13 @@ function siteFooterHtml(routeName: string): string {
     <div class="wrap-wide footer-inner">
       <div class="footer-brand">
         <a class="footer-brand-name" href="${href("/")}">Plebly</a>
-        <p class="footer-tagline">Non-custodial Bitcoin bounties.<br />Protocol over platform.</p>
+        <p class="footer-tagline">Non-custodial Bitcoin funding.<br />Protocol over platform.</p>
       </div>
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
           <h2 class="footer-col-title">Browse</h2>
-          <a href="${projectsHref()}"${fa("home")}>Projects</a>
+          <a href="${projectsHref()}"${fa("home")}>Bounties</a>
+          <a href="${campaignsHref()}">Campaigns</a>
           <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
           <a href="${href("/endowment")}"${fa("endowment")}>Endowment</a>
           <a href="${href("/donations")}"${fa("donations")}>Donations</a>
@@ -163,7 +165,8 @@ function shell(inner: string): string {
       </a>
       <div class="header-end">
         <nav class="nav" aria-label="Primary">
-          <a href="${projectsHref()}" class="${active("home")}"${current("home")}>Projects</a>
+          <a href="${projectsHref()}" class="${active("home")}"${current("home")}>Bounties</a>
+          <a href="${campaignsHref()}">Campaigns</a>
           <a href="${href("/endowment")}" class="${active("endowment")}"${current("endowment")}>Endowment</a>
           <a href="${href("/propose")}" class="${active("propose")}"${current("propose")}>Start a project</a>
           <a href="${href("/about")}" class="${active("about")}"${current("about")}>About</a>

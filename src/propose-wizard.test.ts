@@ -48,7 +48,7 @@ describe("propose wizard steps", () => {
       isEdit: false,
       isBridge: false,
     });
-    expect(review).toContain("Open proposal");
+    expect(review).toContain("List project");
     expect(review).not.toContain("propose-wizard-next");
 
     const context = proposeWizardNavHtml({

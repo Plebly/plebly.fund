@@ -19,7 +19,7 @@ import {
   isFundableStatus,
 } from "./config";
 import { promptText } from "./confirm-modal";
-import { proposalFromMarkdown } from "./github";
+import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
@@ -437,11 +437,18 @@ export async function renderProposalPage(
     if (preloaded && preloaded.path === path) {
       match = preloaded;
     } else {
-      const res = await fetch(
-        `https://raw.githubusercontent.com/Plebly/proposals/main/${path}`,
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      match = proposalFromMarkdown(await res.text(), path);
+      const fromWorker =
+        (await findListedProposalById(path)) ||
+        (await findListedProposalById(path.split("/").pop() || ""));
+      if (fromWorker) {
+        match = fromWorker;
+      } else {
+        const res = await fetch(
+          `https://raw.githubusercontent.com/Plebly/proposals/main/${path}`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        match = proposalFromMarkdown(await res.text(), path);
+      }
     }
     if (match.id && WORKERS_API && match.endowment_funded == null) {
       try {

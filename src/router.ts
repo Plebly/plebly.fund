@@ -43,9 +43,14 @@ export function href(path: string, search = "", hash = ""): string {
   return `${prefixed}${q}${h}`;
 }
 
-/** Home page open-projects section (menu, breadcrumbs, browse CTAs). */
+/** Home page bounty browser (menu, breadcrumbs, browse CTAs). */
 export function projectsHref(search = ""): string {
   return href("/", search, "#projects");
+}
+
+/** Home page direct campaigns / charities rail. */
+export function campaignsHref(search = ""): string {
+  return href("/", search, "#campaigns");
 }
 
 /** Smooth-scroll to a location.hash target (ignores auth hash fragments). */
