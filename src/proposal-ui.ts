@@ -6,6 +6,7 @@ import {
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
+import { isDirectProposal, isOpenToClaim, isTakenStatus } from "./builder";
 import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
@@ -627,15 +628,41 @@ export function overfundRatioLabel(funded: number, target: number): string {
   return `${pretty} target`;
 }
 
+/** Optional lifecycle fields so the meter does not say Open to apply when awarded. */
+export type FundingProgressContext = {
+  status?: string | null;
+  claimer?: string | null;
+  proposal_type?: string | null;
+};
+
+function fundingClosedLabel(status: string): string {
+  const s = String(status || "").toLowerCase();
+  if (s === "claimed") return "Claimed";
+  if (s === "in_review") return "In review";
+  if (s === "rejected") return "Rejected";
+  if (s === "completed") return "Completed";
+  return "Applications closed";
+}
+
 export function fundingProgressHtml(
   balance: number | undefined,
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
+  ctx: FundingProgressContext = {},
 ): string {
   const funded = balance ?? 0;
   const { scale, markers } = fundingBarScale(floor, target, milestones);
-  const claimable = funded >= floor;
+  const pastFloor = funded >= floor;
+  const eligibility = {
+    status: ctx.status ?? "claimable",
+    claimer: ctx.claimer ?? null,
+    balance_sats: funded,
+    proposal_type: ctx.proposal_type ?? "bounty",
+  } as Proposal;
+  const open = isOpenToClaim(eligibility, floor);
+  const taken =
+    isTakenStatus(String(eligibility.status)) || Boolean(eligibility.claimer);
   const targetSats = fundingTargetSats(target);
   const over = isPastFundingTarget(funded, targetSats);
   const remaining = Math.max(0, floor - funded);
@@ -650,12 +677,18 @@ export function fundingProgressHtml(
     : floorPct;
   const label = over
     ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
-    : claimable
+    : open
       ? "Open to apply"
-      : `${formatSats(remaining)} to open`;
+      : taken
+        ? fundingClosedLabel(String(eligibility.status))
+        : pastFloor
+          ? isDirectProposal(eligibility)
+            ? "Receiving"
+            : "Applications closed"
+          : `${formatSats(remaining)} to open`;
   const labelClass = over
     ? " overfunded"
-    : claimable
+    : open
       ? " claimable"
       : "";
   // Always name the claim floor — never let target_sats look like the floor.
@@ -677,9 +710,10 @@ export function proposalFundingBarHtml(
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
+  ctx: FundingProgressContext = {},
 ): string {
   return `<div class="proposal-funding-bar" data-milestones="${milestones.length}">
-    ${fundingProgressHtml(balance, floor, target, milestones)}
+    ${fundingProgressHtml(balance, floor, target, milestones, ctx)}
   </div>`;
 }
 
@@ -690,6 +724,7 @@ export function updateProposalFundingBar(
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
+  ctx: FundingProgressContext = {},
 ): void {
   const host = root.querySelector(".proposal-funding-bar");
   if (!host) return;
@@ -698,7 +733,7 @@ export function updateProposalFundingBar(
       (el) => (el as HTMLElement).style.left,
     ),
   );
-  host.innerHTML = fundingProgressHtml(balance, floor, target, milestones);
+  host.innerHTML = fundingProgressHtml(balance, floor, target, milestones, ctx);
   for (const el of host.querySelectorAll(".funding-marker.is-unlocked")) {
     const left = (el as HTMLElement).style.left;
     if (!prevUnlocked.has(left) && el.classList.contains("funding-marker-threshold")) {

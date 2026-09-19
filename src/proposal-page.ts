@@ -2,6 +2,7 @@ import {
   applyClaimStatusToProposal,
   fetchClaimStatus,
   fetchWatches,
+  isOpenToClaim,
   type ClaimStatus,
 } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
@@ -627,6 +628,11 @@ export async function renderProposalPage(
                 CLAIM_FLOOR_SATS,
                 match.target_sats,
                 match.milestones,
+                {
+                  status: match.status,
+                  claimer: match.claimer,
+                  proposal_type: match.proposal_type,
+                },
               )
             : ""
         }
@@ -741,12 +747,18 @@ export async function renderProposalPage(
             void reloadEngagement?.();
           },
           onBalanceUpdate: (next) => {
+            const fundingCtx = {
+              status: match.status,
+              claimer: match.claimer,
+              proposal_type: match.proposal_type,
+            };
             updateProposalFundingBar(
               app,
               next,
               CLAIM_FLOOR_SATS,
               match.target_sats,
               match.milestones,
+              fundingCtx,
             );
             const needEl = app.querySelector(".builder-status.muted");
             if (
@@ -756,10 +768,16 @@ export async function renderProposalPage(
               )
             ) {
               const need = Math.max(0, CLAIM_FLOOR_SATS - next);
+              const open = isOpenToClaim(
+                { ...match, balance_sats: next },
+                CLAIM_FLOOR_SATS,
+              );
               needEl.textContent =
                 need > 0
                   ? `Needs ${formatSats(need)} more to open for builders.`
-                  : "Open for builders. Refresh if Apply does not appear.";
+                  : open
+                    ? "Open for builders. Refresh if Apply does not appear."
+                    : "Applications closed.";
             }
           },
         })
