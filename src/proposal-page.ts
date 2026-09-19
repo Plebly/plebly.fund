@@ -782,6 +782,32 @@ export async function renderProposalPage(
           },
         })
       : Promise.resolve();
+    // Comments must not wait on builder/claim network (placeholder is already
+    // "Loading comments…" in the HTML). Start engagement alongside builder work.
+    const reviewerMePromise = user
+      ? fetchReviewerMe().catch(() => null)
+      : Promise.resolve(null);
+    const engagementReady = (async () => {
+      // Prefer moderation flags when reviewer/me returns quickly; never stall comments.
+      const reviewerMe = await Promise.race([
+        reviewerMePromise,
+        new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), 400);
+        }),
+      ]);
+      return bindProposalEngagement(app, Boolean(user), onAuthed, {
+        user,
+        canModerate: Boolean(reviewerMe?.active),
+        proposalId: match.id,
+        discussionClosed: discussionClosedForStatus(status),
+      });
+    })().catch(() => {
+      const el = app.querySelector<HTMLElement>("#proposal-comment-list");
+      if (el && /Loading comments/i.test(el.textContent || "")) {
+        el.innerHTML = `<p class="muted">Could not load comments right now.</p>`;
+      }
+      return async () => undefined;
+    });
     await Promise.all([
       bindBuilderPanel(app, {
         proposal: { ...match, balance_sats: balance },
@@ -793,9 +819,7 @@ export async function renderProposalPage(
       donateReady,
     ]);
     bindRefundAndBallot(app, match);
-    const reviewerMe = user
-      ? await fetchReviewerMe().catch(() => null)
-      : null;
+    const reviewerMe = await reviewerMePromise;
     await bindListingReportControl(app, {
       proposalId: match.id,
       proposalPath: match.path,
@@ -804,17 +828,7 @@ export async function renderProposalPage(
       reviewerMe,
       onAuthed,
     });
-    reloadEngagement = await bindProposalEngagement(
-      app,
-      Boolean(user),
-      onAuthed,
-      {
-        user,
-        canModerate: Boolean(reviewerMe?.active),
-        proposalId: match.id,
-        discussionClosed: discussionClosedForStatus(status),
-      },
-    );
+    reloadEngagement = await engagementReady;
     void hydrateAvatarSlots(app);
     if (user && (match.id || match.path)) {
       void markNotificationsForProposalRead({

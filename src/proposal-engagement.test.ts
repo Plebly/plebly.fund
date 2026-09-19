@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  bindProposalEngagement,
   commentsHtml,
   commentsListHtml,
   funderCreditHtml,
@@ -16,7 +17,11 @@ const locationState = {
 
 beforeAll(() => {
   Object.defineProperty(globalThis, "window", {
-    value: { location: locationState },
+    value: {
+      location: locationState,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    },
     configurable: true,
   });
   Object.defineProperty(globalThis, "location", {
@@ -202,5 +207,87 @@ describe("fundersListHtml", () => {
     ]);
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
+  });
+});
+
+describe("bindProposalEngagement", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/comments/")) {
+          return new Response(
+            JSON.stringify({
+              comments: [
+                {
+                  id: "c1",
+                  author: "alice",
+                  username: "alice",
+                  body: "hello there",
+                  created_at: "2026-07-26T16:40:00.000Z",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (url.includes("/contributions/")) {
+          return new Response(JSON.stringify({ contributions: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response("{}", { status: 404 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("clears Loading comments after a successful fetch", async () => {
+    document.body.innerHTML = commentsHtml("PLEBLY-1", false);
+    expect(document.body.textContent).toContain("Loading comments");
+    await bindProposalEngagement(document.body, false, () => undefined, {
+      proposalId: "PLEBLY-1",
+    });
+    expect(document.body.textContent).not.toContain("Loading comments");
+    expect(document.body.textContent).toContain("hello there");
+  });
+
+  it("clears Loading when proposalId cannot be resolved", async () => {
+    const root = document.createElement("div");
+    // Placeholder present, but no proposal id on opts or data attributes.
+    root.innerHTML = `<div id="proposal-comment-list"><p class="muted">Loading comments…</p></div>`;
+    await bindProposalEngagement(root, false, () => undefined, {});
+    expect(root.textContent).not.toContain("Loading comments");
+    expect(root.textContent).toContain("Comments unavailable");
+  });
+
+  it("shows an error instead of Loading when comments fetch fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/comments/")) {
+          return new Response("nope", { status: 500 });
+        }
+        if (url.includes("/contributions/")) {
+          return new Response(JSON.stringify({ contributions: [] }), {
+            status: 200,
+          });
+        }
+        return new Response("{}", { status: 404 });
+      }),
+    );
+    document.body.innerHTML = commentsHtml("PLEBLY-1", false);
+    await bindProposalEngagement(document.body, false, () => undefined, {
+      proposalId: "PLEBLY-1",
+    });
+    expect(document.body.textContent).not.toContain("Loading comments");
+    expect(document.body.textContent).toMatch(/Could not load comments/i);
   });
 });
