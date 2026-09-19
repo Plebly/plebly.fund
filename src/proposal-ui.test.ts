@@ -507,6 +507,30 @@ describe("proposal UI critical render helpers", () => {
     expect(noTarget).not.toContain("Overfunded");
   });
 
+  it("does not show Open to apply when claimed or awarded", () => {
+    const claimed = fundingProgressHtml(50_000, 10_000, 100_000, [], {
+      status: "claimed",
+      claimer: "alice",
+      proposal_type: "bounty",
+    });
+    expect(claimed).toContain("Claimed");
+    expect(claimed).not.toContain("Open to apply");
+    expect(claimed).not.toContain("claimable");
+
+    const claimableOpen = fundingProgressHtml(50_000, 10_000, 100_000, [], {
+      status: "claimable",
+      proposal_type: "bounty",
+    });
+    expect(claimableOpen).toContain("Open to apply");
+
+    const withClaimer = fundingProgressHtml(50_000, 10_000, null, [], {
+      status: "claimable",
+      claimer: "bob",
+    });
+    expect(withClaimer).not.toContain("Open to apply");
+    expect(withClaimer).toContain("Applications closed");
+  });
+
   it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {
     const empty = fundingBarScale(10_000, null, []);
     expect(empty.scale).toBe(10_000);
