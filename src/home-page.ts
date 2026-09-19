@@ -18,7 +18,6 @@ import { safeHttpsImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
-import { ENDOWMENT_BLURB } from "./endowment-copy";
 import {
   endowmentMeterHtml,
   fundingBarTrackHtml,
@@ -32,7 +31,6 @@ import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
 import { projectCardProposerHtml } from "./github-orgs-client";
 import {
-  campaignsHref,
   href,
   orgHref,
   profileHref,
@@ -46,6 +44,11 @@ import { bindActivityStrip } from "./activity";
 
 export type HomeShell = (inner: string) => string;
 
+/** Public landing copy — kept short so listings stay first. */
+export function landingMarketingHtml(): string {
+  return `${landingHeroHtml()}${howItWorksHtml()}${bottomCtaHtml()}`;
+}
+
 export function partitionListings(proposals: Proposal[]): {
   bounties: Proposal[];
   campaigns: Proposal[];
@@ -57,6 +60,22 @@ export function partitionListings(proposals: Proposal[]): {
     else bounties.push(p);
   }
   return { bounties, campaigns };
+}
+
+/** True when two or more listings publish the same receive address. */
+export function listingsShareEscrow(proposals: Proposal[]): boolean {
+  const counts = new Map<string, number>();
+  for (const p of proposals) {
+    const addr = p.escrow_address?.trim();
+    if (!addr) continue;
+    counts.set(addr, (counts.get(addr) || 0) + 1);
+  }
+  return [...counts.values()].some((n) => n > 1);
+}
+
+export function sharedEscrowNoteHtml(proposals: Proposal[]): string {
+  if (!listingsShareEscrow(proposals)) return "";
+  return `<p class="shared-escrow-note" role="status">These listings share one test escrow. The balances are the same pot, not separate funds.</p>`;
 }
 
 type SortKey = "funded" | "newest" | "floor";
@@ -86,56 +105,18 @@ function landingHeroHtml(): string {
     <div class="wrap-wide landing-hero-inner">
       ${networkBadgeHtml()}
       <h1 class="landing-brand">Plebly</h1>
-      <p class="landing-title">Fund open Bitcoin work.<br />Protocol over platform.</p>
-      <p class="landing-sub">Bounties for builders. Campaigns for causes. Public escrow anyone can verify.</p>
+      <p class="landing-title">Fund Bitcoin work in public.</p>
+      <ul class="landing-facts">
+        <li>On-chain escrow</li>
+        <li>Bounties &amp; campaigns</li>
+        <li>5% when paid</li>
+      </ul>
       ${signetHeroNoteHtml()}
       <div class="landing-cta-row">
-        <a class="btn landing-btn" href="${projectsHref()}">Fund a bounty</a>
-        <a class="btn ghost landing-btn" href="${campaignsHref()}">Give to a campaign</a>
+        <a class="btn landing-btn" href="${projectsHref()}">Browse</a>
         <a class="btn ghost landing-btn" href="${href("/propose")}">Start a project</a>
       </div>
     </div>
-  </section>`;
-}
-
-function audiencePathsHtml(): string {
-  const paths = [
-    {
-      kicker: "Creators",
-      title: "Name the problem",
-      body: "List a bounty for builders or a direct campaign for a cause. Pay a small on-chain fee, then let donations fill in public.",
-      href: href("/propose"),
-      cta: "Start a project",
-    },
-    {
-      kicker: "Donors",
-      title: "Fund a project",
-      body: "Pick a project and send Bitcoin. No account required.",
-      href: projectsHref(),
-      cta: "Browse projects",
-    },
-    {
-      kicker: "Builders",
-      title: "Apply and deliver",
-      body: "When a project is funded enough, apply, do the work, and get paid after review.",
-      href: projectsHref("?for=builders"),
-      cta: "See open projects",
-    },
-  ];
-  return `<section class="wrap-wide landing-paths">
-    <div class="landing-section-head">
-      <h2>The funding loop</h2>
-    </div>
-    <div class="path-grid">${paths
-      .map(
-        (p) => `<a class="path-card" href="${p.href}">
-        <span class="path-kicker">${escapeHtml(p.kicker)}</span>
-        <h3>${escapeHtml(p.title)}</h3>
-        <p>${escapeHtml(p.body)}</p>
-        <span class="path-cta">${escapeHtml(p.cta)} →</span>
-      </a>`,
-      )
-      .join("")}</div>
   </section>`;
 }
 
@@ -171,8 +152,7 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
       <div class="endowment-strip-head">
         <div class="endowment-strip-copy">
           <p class="path-kicker">Endowment</p>
-          <h2 id="endowment-strip-heading">Shared pool</h2>
-          <p class="endowment-blurb">${escapeHtml(ENDOWMENT_BLURB)}</p>
+          <h2 id="endowment-strip-heading">Monthly gifts to popular projects</h2>
         </div>
         <div class="landing-cta-row endowment-strip-cta">
           <a class="btn" href="${href("/endowment")}?donate">Donate</a>
@@ -186,46 +166,19 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
 
 function howItWorksHtml(): string {
   const steps = [
-    { n: "01", title: "Propose", body: "Name the problem and what done looks like." },
-    { n: "02", title: "Donate", body: "Anyone sends Bitcoin to the project’s public address." },
-    { n: "03", title: "Build or receive", body: "Bounties open for builders. Campaigns go to the organizer." },
-    { n: "04", title: "Pay", body: "Reviewers check bounty work. Campaign payouts follow the published rules." },
+    { title: "List", body: "a bounty or campaign" },
+    { title: "Donate", body: "to the public address" },
+    { title: "Build", body: "or the organizer receives" },
+    { title: "Pay", body: "after public review" },
   ];
-  return `<section class="landing-how">
+  return `<section class="landing-how landing-how-compact" aria-label="How it works">
     <div class="wrap-wide">
-      <div class="landing-section-head">
-        <h2>How it works</h2>
-        <p>Four steps. Funds stay on Bitcoin. History stays public.</p>
-      </div>
-      <ol class="how-grid">${steps
+      <ol class="how-inline">${steps
         .map(
-          (s) => `<li class="how-step">
-          <span class="how-n">${s.n}</span>
-          <h3>${escapeHtml(s.title)}</h3>
-          <p>${escapeHtml(s.body)}</p>
-        </li>`,
+          (s) => `<li><strong>${escapeHtml(s.title)}</strong> ${escapeHtml(s.body)}</li>`,
         )
         .join("")}</ol>
-      <p class="landing-how-link"><a href="${href("/about")}">How Plebly works →</a></p>
     </div>
-  </section>`;
-}
-
-function trustStripHtml(): string {
-  const items = [
-    { title: "Non-custodial", body: "Funds sit on Bitcoin. Plebly cannot take them." },
-    { title: "Public record", body: "Every listing and its escrow address is visible to anyone." },
-    { title: "Transparent fees", body: "5% when a project is paid. Published in git." },
-  ];
-  return `<section class="wrap-wide landing-trust">
-    <div class="trust-grid">${items
-      .map(
-        (i) => `<div class="trust-item">
-        <h3>${escapeHtml(i.title)}</h3>
-        <p>${escapeHtml(i.body)}</p>
-      </div>`,
-      )
-      .join("")}</div>
   </section>`;
 }
 
@@ -241,7 +194,7 @@ function gapTickerHtml(
     return `<section class="wrap-wide gap-ticker gap-ticker-met">
       <div>
         <span class="gap-ticker-label">Ready for builders</span>
-        <span class="gap-ticker-note">Open projects have enough funding to apply</span>
+        <span class="gap-ticker-note">Open bounties have enough to apply</span>
         <strong>Browse and apply</strong>
       </div>
       <a href="${projectsHref()}">Browse projects →</a>
@@ -256,8 +209,8 @@ function gapTickerHtml(
     projectCount === 1 ? "1 project" : `${projectCount} projects`;
   return `<section class="wrap-wide gap-ticker">
     <div>
-      <span class="gap-ticker-label">Help these open</span>
-      <span class="gap-ticker-note">${escapeHtml(projectLabel)} still need funding before builders can apply</span>
+      <span class="gap-ticker-label">Need funding</span>
+      <span class="gap-ticker-note">${escapeHtml(projectLabel)} below the apply floor</span>
       <strong>${escapeHtml(formatSats(shortfallSats))} <span>to open</span></strong>
     </div>
     <div class="gap-ticker-meter" role="progressbar" aria-label="Funding progress toward opening for builders" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
@@ -491,8 +444,8 @@ function railHtml(
     const emptyBody =
       id === "completed-projects"
         ? "Nothing here yet. Projects move here after public review and release."
-        : id === "campaigns"
-          ? "No campaigns yet. List a charity or cause as a direct campaign — donations go to the organizer."
+          : id === "campaigns"
+          ? "None yet."
           : `No ${title.toLowerCase()} yet.`;
     const emptyBrowse = opts.browseHref
       ? `<a href="${escapeHtml(opts.browseHref)}">${
@@ -523,11 +476,10 @@ function railHtml(
 function bottomCtaHtml(): string {
   return `<section class="landing-bottom-cta">
     <div class="wrap-wide landing-bottom-inner">
-      <h2>Have a project worth funding?</h2>
-      <p>Write a clear deliverable, pay the on-chain submission fee, and list it for donors to support.</p>
+      <h2>List a project</h2>
+      <p>Pay the on-chain fee and go live.</p>
       <div class="landing-cta-row">
         <a class="btn" href="${href("/propose")}">Start a project</a>
-        <a class="btn ghost" href="${href("/about")}">About Plebly</a>
       </div>
     </div>
   </section>`;
@@ -869,7 +821,7 @@ function wantedRailHtml(
   if (!rows.length) return "";
   return `<section class="wrap-wide project-rail" aria-labelledby="wanted-projects">
     <div class="rail-head">
-      <div><h2 id="wanted-projects">Most wanted</h2><p>High watch interest relative to funding progress.</p></div>
+      <div><h2 id="wanted-projects">Most wanted</h2><p>Watched more than funded.</p></div>
       <a href="${href("/wanted")}">Full list →</a>
     </div>
     <div class="wanted-list">${rows
@@ -893,7 +845,6 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <div id="gap-ticker"></div>
     <div id="donations-live-mount"></div>
     <section id="activity-strip" class="wrap-wide activity-strip" hidden aria-label="Recent activity"></section>
-    ${audiencePathsHtml()}
     <div id="endowment-strip">${endowmentStripHtml(null)}</div>
     <div id="campaigns-rail"></div>
     <div id="wanted-rail"></div>
@@ -901,6 +852,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     <div id="completed-rail"></div>
     <section class="wrap-wide landing-discover" id="projects" aria-labelledby="projects-heading">
       ${discoverToolbarHtml(0)}
+      <div id="shared-escrow-note"></div>
       <div id="list" class="project-grid project-grid-skeleton" aria-busy="true" aria-label="Loading open projects">
         <div class="project-card skeleton-card"></div>
         <div class="project-card skeleton-card"></div>
@@ -909,7 +861,6 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       </div>
     </section>
     ${howItWorksHtml()}
-    ${trustStripHtml()}
     ${bottomCtaHtml()}
   `);
 
@@ -953,6 +904,8 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       };
     });
     const lightningEnabled = Boolean(lnStatus.enabled);
+    const sharedNote = app.querySelector("#shared-escrow-note");
+    if (sharedNote) sharedNote.innerHTML = sharedEscrowNoteHtml(proposals);
     const watchPaths = new Set(
       watches.flatMap((w) => [w.proposal_path, w.proposal_id]),
     );
@@ -970,8 +923,8 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     if (campaignsRail) {
       campaignsRail.innerHTML = railHtml(
         "campaigns",
-        "Campaigns & charities",
-        "Direct listings. The organizer receives donations — no builder claim step.",
+        "Campaigns",
+        "The organizer receives donations.",
         campaigns,
         CLAIM_FLOOR_SATS,
         lightningEnabled,
@@ -1016,8 +969,8 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     if (featuredRail) {
       featuredRail.innerHTML = railHtml(
         "featured-projects",
-        "Featured bounties",
-        "Close to opening for builders, and drawing attention.",
+        "Featured",
+        "Close to opening.",
         featured,
         CLAIM_FLOOR_SATS,
         lightningEnabled,
@@ -1031,7 +984,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
       completedRail.innerHTML = railHtml(
         "completed-projects",
         "Recently completed",
-        "Work delivered through public review.",
+        "Paid after review.",
         completed,
         CLAIM_FLOOR_SATS,
         lightningEnabled,

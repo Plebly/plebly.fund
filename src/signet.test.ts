@@ -20,12 +20,15 @@ describe("signet helpers", () => {
     const banner = signetSiteBannerHtml();
     expect(banner).toContain("signet-banner");
     expect(banner).toContain("test coins only");
+    expect(banner).toContain("share one test escrow");
     for (const f of SIGNET_FAUCETS) {
       expect(banner).toContain(f.url);
       expect(banner).toContain(f.label);
     }
     expect(signetHeroNoteHtml()).toContain("Soft launch on");
+    expect(signetHeroNoteHtml()).toContain("share one");
     expect(signetPayNoteHtml("donate")).toContain("mainnet payments will not credit");
+    expect(signetPayNoteHtml("donate")).toContain("share one test escrow");
     expect(signetPayNoteHtml("fee")).toContain("signet</strong> wallet");
   });
 

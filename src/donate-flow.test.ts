@@ -370,8 +370,8 @@ describe("donate credit UX (signed out)", () => {
     expect(document.body.textContent).toContain("GitHub");
     expect(document.body.textContent).toContain("Nostr");
     expect(document.querySelector(".donate-credit-advisory")).toBeTruthy();
-    expect(document.body.textContent).toContain("more options later");
-    expect(document.body.textContent).toContain("flag a close");
+    expect(document.body.textContent).toContain("Anonymous gifts still fund");
+    expect(document.body.textContent).toContain("sign in first");
     expect(document.querySelector("#donate-credit-public")).toBeNull();
     expect(document.querySelector("#donate-credit-continue")?.textContent).toContain(
       "Continue anonymously",
@@ -700,7 +700,7 @@ describe("donate markup contract", () => {
     expect(html).toContain('id="donate-legal-name"');
     expect(html).toContain('data-tab="onchain"');
     expect(html).toContain('data-tab="lightning"');
-    expect(html).toContain("OpenNode");
+    expect(html).toContain("on-chain sweep");
     expect(html).toContain("payment id");
     expect(html).toContain('id="donate-ln-login"');
     expect(html).toContain('id="donate-ln-limits"');

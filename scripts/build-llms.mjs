@@ -52,17 +52,15 @@ function render(projects) {
 
   return `# Plebly
 
-> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow; builders claim funded work through open pull requests. No custodian can freeze or redirect escrow.
+> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. No custodian can freeze or redirect escrow.
 
-Plebly is protocol-over-platform: rules, parameters, and proposal history live in git. The website at ${SITE} lists projects, shows mempool escrow balances, and helps donors and builders participate. Lightning donations (when enabled) settle into the same on-chain escrow address via reverse submarine swaps.
-
-Canonical proposal record: https://github.com/Plebly/proposals
+Listings and escrow balances are on the site at ${SITE}. Published fees and keyholder rules are in git. Lightning donations (when enabled) settle into the same on-chain escrow after an on-chain sweep.
 
 ## Site
 
 - [Home / open projects](${SITE}/): Browse listed projects and escrow funding progress
 - [About](${SITE}/about): Beliefs, how it works, fees, and network status
-- [Start a project](${SITE}/propose): Submit a proposal (GitHub login; on-chain submission fee required)
+- [Start a project](${SITE}/propose): List a bounty or campaign (login; on-chain fee required)
 - [Funding stats](${SITE}/stats): Public funding and completion totals
 - [Reviewers](${SITE}/reviewers): Reviewer roster and open decisions
 - [Full context for LLMs](${SITE}/llms-full.txt): Longer plain-text overview of product rules and flows
@@ -71,12 +69,10 @@ Canonical proposal record: https://github.com/Plebly/proposals
 
 ${projectLines.join("\n")}
 
-## Protocol (source of truth)
+## Protocol (published rules)
 
-- [Proposals repository](https://github.com/Plebly/proposals): Canonical uncensorable proposal and funding record
-- [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md): Fixed launch parameters (fees, claim floor, windows, claim-abuse knobs)
-- [Keyholders](${SITE}/about#keyholders): Multisig roster and rules (generated from KEYHOLDERS.md at build)
-- [Proposal template](https://github.com/Plebly/proposals/blob/main/template/proposal.md): Required fields for a new proposal
+- [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md): Fees, claim floor, windows
+- [Keyholders](${SITE}/about#keyholders): Multisig roster and rules
 - [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
 
 ## Optional

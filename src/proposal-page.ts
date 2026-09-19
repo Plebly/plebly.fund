@@ -86,6 +86,30 @@ import { recordProposalView } from "./views";
 
 export type ProposalShell = (inner: string) => string;
 
+export function missingProposalHtml(id: string): string {
+  return `<section class="wrap-wide detail">
+    <a class="back-link" href="${projectsHref()}">← Projects</a>
+    <div class="empty-state">
+      <div class="empty-state-inner">
+        <p class="empty-state-title">Project not found</p>
+        <p class="empty-state-body">No listing for <span class="mono">${escapeHtml(id)}</span>.</p>
+        <p><a class="btn ghost" href="${projectsHref()}">Browse projects</a></p>
+      </div>
+    </div>
+  </section>`;
+}
+
+export function renderMissingProposal(shell: ProposalShell, id: string): void {
+  applySeo({
+    title: "Project not found",
+    description: "This Plebly project could not be found.",
+    path: `/p/${encodeURIComponent(id)}`,
+    noindex: true,
+  });
+  const app = document.querySelector<HTMLDivElement>("#app")!;
+  app.innerHTML = shell(missingProposalHtml(id));
+}
+
 function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
   const api = WORKERS_API.replace(/\/$/, "");
 

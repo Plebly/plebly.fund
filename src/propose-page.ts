@@ -17,6 +17,7 @@ import { bindFeePay, feePayHtml, type FeePayBinding } from "./fee-pay";
 import { isBusy, runFormBusy } from "./form-busy";
 import { sanitizePublicError } from "./public-errors";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
+import { clearListedProposalsCache } from "./github";
 import { isSignet, signetFaucetLinksHtml } from "./signet";
 import {
   clientCoverPrecheck,
@@ -368,9 +369,9 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                   <a href="${proposalHref(prefill!.path, prefill!.id)}">← Back to project</a>
                 </p>
               </div>`
-            : `<p class="lede">A short guided path to open a proposal. Submission fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.${
+            : `<p class="lede">Fee: ${escapeHtml(feeLabel)} on ${escapeHtml(networkLabel)}.${
                 isSignet()
-                  ? ` Soft launch uses <strong>signet</strong> test coins — get sats from ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}.`
+                  ? ` Signet test coins — ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}.`
                   : ""
               }</p>`
         }
@@ -1684,6 +1685,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         );
         if (!result) return;
         if (!isEdit) clearProposeDraft();
+        clearListedProposalsCache();
         const listedId = result.id || result.proposal_id;
         const listedPath =
           result.path ||
@@ -1725,6 +1727,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         { busyLabel: "Saving amend…", stayBusyOnSuccess: true },
       );
       if (!result) return;
+      clearListedProposalsCache();
       showProposeSuccess({
         title: "Amend saved",
         body: "The listing is updated. Lifecycle fields stay intact.",

@@ -33,7 +33,7 @@ export function signetSiteBannerHtml(): string {
   return `<aside class="signet-banner" role="status" aria-label="Signet test network">
     <div class="wrap-wide signet-banner-inner">
       <p class="signet-banner-text">
-        <strong>Signet</strong> — test coins only. Mainnet Bitcoin will not work here.
+        <strong>Signet</strong> — test coins only. Listed projects share one test escrow; balances are not separate pots.
       </p>
       <p class="signet-banner-links">
         Get free signet sats:
@@ -52,8 +52,12 @@ export function signetPayNoteHtml(kind: "donate" | "fee" = "donate"): string {
     kind === "fee"
       ? "Pay fees from a <strong>signet</strong> wallet."
       : "Donate from a <strong>signet</strong> wallet — mainnet payments will not credit this escrow.";
+  const shared =
+    kind === "donate"
+      ? " Listings on this network share one test escrow."
+      : "";
   return `<p class="donate-network-note signet-pay-note" role="status">
-    ${action}
+    ${action}${shared}
     Need coins?
     ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
   </p>`;
@@ -63,7 +67,8 @@ export function signetPayNoteHtml(kind: "donate" | "fee" = "donate"): string {
 export function signetHeroNoteHtml(): string {
   if (!isSignet()) return "";
   return `<p class="signet-hero-note" role="status">
-    Soft launch on <strong>signet</strong> (test network). Use a signet wallet;
+    Soft launch on <strong>signet</strong> (test network). Listings share one
+    test escrow. Use a signet wallet;
     get coins from ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}.
   </p>`;
 }

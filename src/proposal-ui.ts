@@ -98,10 +98,10 @@ function donateCreditStepHtml(signedIn: boolean): string {
     return `<section class="donate-step" data-donate-step="credit" id="donate-step-credit">
       <div class="donate-panel-head">
         <h2 class="donate-title" id="donate-modal-title">Get credit for this donation</h2>
-        <p class="donate-lede">Sign in before you pay so you can flag work later, get notified when the proposer marks it done, and keep this donation on your profile. Amounts stay private unless you opt in later.</p>
+        <p class="donate-lede">Sign in to appear on the funder list and get updates. Amounts stay private unless you opt in.</p>
       </div>
       <aside class="donate-credit-advisory" role="note">
-        <p><strong>Suggested:</strong> Log in first if you want more options later — flag a close, get notifications, and credit on your profile. Anonymous gifts still fund the project. Keep your receipt if you might need a refund later.</p>
+        <p>Anonymous gifts still fund the project. <button type="button" class="donate-credit-signin" id="donate-credit-signin-credit">sign in first</button> if you want credit later.</p>
       </aside>
       <div class="donate-credit-login">
         ${loginChoicesHtml(undefined, currentReturnPath())}
@@ -116,7 +116,7 @@ function donateCreditStepHtml(signedIn: boolean): string {
     <div class="donate-panel-head">
       <p class="donate-step-kicker">Step 1 of 2</p>
       <h2 class="donate-title" id="donate-modal-title">Funder credit</h2>
-      <p class="donate-lede">Choose how you want to appear on the funder list after your payment is linked. Amounts stay private unless you opt in.</p>
+      <p class="donate-lede">How you appear on the funder list. Amounts stay private unless you opt in.</p>
     </div>
     ${creditPreferenceFieldsHtml({ idPrefix: "donate-credit" })}
     <div class="donate-step-actions">
@@ -145,19 +145,15 @@ function donatePayStepHtml(
              <button type="button" class="donate-credit-edit" id="donate-credit-edit">Change credit preferences</button>
              <label class="donate-amount-label" for="donate-legal-name">Legal name for tax receipt (optional)</label>
              <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
-             <p class="muted donate-legal-hint">Private. Not shown on the funder list. An npub is not a legal name. A receipt appears in Account after on-chain confirmation.</p>`
+             <p class="muted donate-legal-hint">Private. Used for a receipt after confirmation.</p>`
           : `<aside class="donate-credit-advisory" role="note">
-               <p>Giving anonymously — <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> if you want more options later (flag a close, notifications, credit).${
-                 endowment
-                   ? ""
-                   : " Keep your receipt if you might need a refund later."
-               }</p>
+               <p>Giving anonymously. <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> for credit or a later refund.</p>
              </aside>`
       }
     </div>`;
   const lnIntro = endowment
-    ? "Lightning pays OpenNode now. Endowment UTXOs appear after a batched on-chain sweep (min 0.002 BTC pending)."
-    : "Lightning pays OpenNode now. It counts toward the claim floor after a batched on-chain sweep (min 0.002 BTC pending per escrow).";
+    ? "Pay now. Lands on-chain after the sweep (0.002 BTC min)."
+    : "Pay now. Counts after the on-chain sweep (0.002 BTC min).";
   const creditBlock = endowment
     ? ""
     : `<div class="donate-credit-link" id="donate-credit">
@@ -1400,12 +1396,14 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     },
   );
 
-  panel.querySelector<HTMLButtonElement>("#donate-credit-signin")?.addEventListener(
-    "click",
-    () => {
+  panel.querySelectorAll<HTMLButtonElement>(".donate-credit-signin").forEach((btn) => {
+    btn.addEventListener("click", () => {
       setDonateStep(panel, "credit");
-    },
-  );
+      panel
+        .querySelector<HTMLElement>("#donate-step-credit .login-choices a, #donate-step-credit .login-choices button")
+        ?.focus();
+    });
+  });
 
   void resolveInitialDonateStep(opts).then(({ step, prefs }) => {
     if (prefs) {

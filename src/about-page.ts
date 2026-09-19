@@ -193,9 +193,8 @@ function teamSectionHtml(org: PublicOrg | null): string {
   return `<section class="about-section" id="team">
     <h2>Team</h2>
     <p class="about-section-lede">
-      Public members of the
       <a href="${escapeHtml(ghLink)}" target="_blank" rel="noreferrer">@${escapeHtml(org?.login || PLEBLY_ORG_LOGIN)}</a>
-      GitHub organization. Profiles on Plebly.
+      members.
     </p>
     ${body}
     <p class="about-section-foot">
@@ -354,7 +353,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
       : "",
     `<div class="about-detail">
       <h3>Reviewers</h3>
-      <p>Reviewers check finished work. Ordinary completion votes are unpaid — you earn a seat by finishing a bounty. Some dispute votes pay 10,000 sats each; that payment is not enabled yet. Funders can vote to remove a reviewer for bad faith.</p>
+      <p>Reviewers check finished work. You earn a seat by completing a bounty. Funders can vote to remove a reviewer.</p>
       <p class="about-detail-link"><a href="${href("/reviewers")}">Reviewer governance →</a> · <a href="${href("/terms")}">Terms</a></p>
     </div>`,
   ]
@@ -382,7 +381,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       <section class="about-section" id="how-it-works">
         <h2>How it works</h2>
-        <p class="about-section-lede">Four steps. No custody. Full history in the open.</p>
+        <p class="about-section-lede">Four steps. Funds stay on Bitcoin.</p>
         ${flowHtml()}
         <p class="about-section-foot">
           <a href="${projectsHref()}">Browse open projects</a>
@@ -406,7 +405,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       <section class="about-section" id="parameters">
         <h2>Key parameters</h2>
-        <p class="about-section-lede">Fixed at launch. Values come from the public parameters in git. <a href="${href("/parameters")}">Live parameters</a>.</p>
+        <p class="about-section-lede"><a href="${href("/parameters")}">Live parameters</a>.</p>
         ${paramsHtml()}
       </section>
 
@@ -417,7 +416,6 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       <section class="about-section about-close" id="involve">
         <h2>Get involved</h2>
-        <p class="about-section-lede">Follow updates, fund open work, or start a project.</p>
         <div class="about-cta about-close-cta">
           <a class="btn" href="${href("/propose")}">Start a project</a>
           <a class="btn ghost" href="${projectsHref()}">Browse projects</a>

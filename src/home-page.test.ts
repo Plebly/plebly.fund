@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFloorShortfall } from "./builder";
-import { partitionListings, proposalCardHtml } from "./home-page";
+import { landingMarketingHtml, listingsShareEscrow, partitionListings, proposalCardHtml, sharedEscrowNoteHtml } from "./home-page";
 import type { Proposal } from "./types";
 
 function proposal(
@@ -51,6 +51,19 @@ describe("claimFloorShortfall", () => {
   });
 });
 
+describe("landing marketing copy", () => {
+  it("leads with one sentence and skips insider jargon", () => {
+    const html = landingMarketingHtml();
+    expect(html).toContain("Fund Bitcoin work in public.");
+    expect(html).toContain("Browse");
+    expect(html).toContain("Start a project");
+    expect(html).toContain("On-chain escrow");
+    expect(html).not.toContain("Protocol over platform");
+    expect(html).not.toContain("funding loop");
+    expect(html).not.toContain("How Plebly works");
+  });
+});
+
 describe("partitionListings", () => {
   it("splits bounties from direct campaigns", () => {
     const { bounties, campaigns } = partitionListings([
@@ -60,6 +73,32 @@ describe("partitionListings", () => {
     ]);
     expect(bounties.map((p) => p.id)).toEqual(["b1", "b2"]);
     expect(campaigns.map((p) => p.id)).toEqual(["c1"]);
+  });
+});
+
+describe("shared escrow note", () => {
+  it("warns when two listings publish the same address", () => {
+    const addr = "tb1qsharedxxxxxxxxxxxxxxxxxxxxxxxxx";
+    const list = [
+      proposal({ status: "listed", id: "a", escrow_address: addr }),
+      proposal({ status: "listed", id: "b", escrow_address: addr }),
+    ];
+    expect(listingsShareEscrow(list)).toBe(true);
+    expect(sharedEscrowNoteHtml(list)).toContain("same pot");
+  });
+
+  it("stays quiet when addresses differ or only one listing has an address", () => {
+    expect(
+      listingsShareEscrow([
+        proposal({ status: "listed", id: "a", escrow_address: "tb1qaaa" }),
+        proposal({ status: "listed", id: "b", escrow_address: "tb1qbbb" }),
+      ]),
+    ).toBe(false);
+    expect(
+      sharedEscrowNoteHtml([
+        proposal({ status: "listed", id: "a", escrow_address: "tb1qonly" }),
+      ]),
+    ).toBe("");
   });
 });
 

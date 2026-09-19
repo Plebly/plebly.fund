@@ -462,7 +462,7 @@ export function seoForRoute(
       return {
         title: "About Plebly",
         description:
-          "Non-custodial escrow, uncensorable proposals, and protocol-over-platform rules for Bitcoin public goods funding.",
+          "Non-custodial Bitcoin escrow. Public listings. Published fees.",
         path: "/about",
       };
     case "params":

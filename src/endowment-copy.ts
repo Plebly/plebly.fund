@@ -1,18 +1,18 @@
 /** Public marketing copy for endowment surfaces. */
 export const ENDOWMENT_BLURB =
-  "Most projects are funded by public donations. Each month, the endowment contributes to popular projects from this shared pool.";
+  "A shared pool that gifts popular projects each month.";
 
 export const ENDOWMENT_HOW_STEPS = [
   {
-    title: "Donate to the pool",
-    body: "Send Bitcoin on-chain or Lightning into the shared endowment.",
+    title: "Donate",
+    body: "Send Bitcoin into the shared pool.",
   },
   {
-    title: "Popular projects rise",
-    body: "Community demand surfaces the most-wanted work on Plebly.",
+    title: "Demand",
+    body: "Watches surface the most-wanted work.",
   },
   {
-    title: "Monthly contributions",
-    body: "The endowment contributes to popular projects — listed publicly here.",
+    title: "Gift",
+    body: "The pool contributes monthly. Listed here.",
   },
 ] as const;

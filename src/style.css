@@ -132,6 +132,13 @@ a.tos-doc-link {
   color: var(--muted);
 }
 
+.shared-escrow-note {
+  margin: 0 0 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
 .signet-banner a,
 .signet-hero-note a,
 .signet-pay-note a,
@@ -347,7 +354,7 @@ html.pwa-standalone body {
 
 .landing-hero {
   position: relative;
-  padding: 3.25rem 0 3.5rem;
+  padding: 2.25rem 0 2.35rem;
   overflow: hidden;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -401,12 +408,31 @@ html.pwa-standalone body {
 
 .landing-title {
   margin: 0 0 1rem;
-  font-size: clamp(1.35rem, 3.2vw, 1.75rem);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.25;
+  font-size: clamp(1.5rem, 3.6vw, 2rem);
+  font-weight: 550;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  color: var(--ink);
+  max-width: 22rem;
+}
+
+.landing-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1.35rem;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-facts li {
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.3;
   color: var(--ink-secondary);
-  max-width: 36rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
 }
 
 .landing-sub {
@@ -2002,6 +2028,33 @@ a.project-card-by:hover .project-card-by-text {
     var(--bg-elevated);
   border-top: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
+}
+
+.landing-how-compact {
+  padding: 1.5rem 0;
+}
+
+.how-inline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.how-inline li {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+.how-inline strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--ink);
 }
 
 .how-grid {
@@ -4226,7 +4279,7 @@ a.proposal-meta-chip-endowment:hover {
 }
 
 .landing-endowment {
-  margin: 2.5rem auto 0;
+  margin: 1.25rem auto 0;
 }
 
 .endowment-strip {
@@ -4249,13 +4302,13 @@ a.proposal-meta-chip-endowment:hover {
   }
 
   .endowment-strip-cta {
-    padding-top: 1.55rem;
+    padding-top: 0.15rem;
   }
 }
 
 .endowment-strip-copy h2 {
-  margin: 0.25rem 0 0.5rem;
-  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
   letter-spacing: -0.02em;
 }
 
@@ -7784,8 +7837,9 @@ a.claim-app-bond:hover {
   .path-grid,
   .project-grid,
   .how-grid,
+  .how-inline,
   .trust-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
   .about-param {
     grid-template-columns: 1fr;
@@ -7903,7 +7957,8 @@ a.claim-app-bond:hover {
   .project-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .how-grid {
+  .how-grid,
+  .how-inline {
     grid-template-columns: repeat(2, 1fr);
   }
   .stats-support {

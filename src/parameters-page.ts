@@ -45,7 +45,7 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
       <header class="declined-head">
         <p class="eyebrow"><a href="${href("/about")}">About</a></p>
         <h1>Parameters</h1>
-        <p class="lede">Fees are git-canonical. Completions do not change them. Keyholders are paid from a monthly batch, not per project.</p>
+        <p class="lede">Fees are published. Completions do not change them. Keyholders are paid from a monthly batch, not per project.</p>
       </header>
       <dl class="about-params">
         <div class="about-param">

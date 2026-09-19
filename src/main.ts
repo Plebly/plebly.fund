@@ -29,7 +29,7 @@ import {
   setUnreadNotificationCount,
   type AuthUser,
 } from "./auth";
-import { renderProposalPage } from "./proposal-page";
+import { renderMissingProposal, renderProposalPage } from "./proposal-page";
 import { renderPropose } from "./propose-page";
 import { renderPublicOrgProfile } from "./org-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
@@ -115,7 +115,7 @@ function siteFooterHtml(routeName: string): string {
     <div class="wrap-wide footer-inner">
       <div class="footer-brand">
         <a class="footer-brand-name" href="${href("/")}">Plebly</a>
-        <p class="footer-tagline">Non-custodial Bitcoin funding.<br />Protocol over platform.</p>
+        <p class="footer-tagline">Bitcoin on-chain. No custodian.</p>
       </div>
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
@@ -349,8 +349,7 @@ async function render() {
     const proposal = r.stable ? await findListedProposalById(r.id) : null;
     const path = proposal?.path || (!r.stable ? r.id : "");
     if (!path) {
-      applySeo(seoForRoute({ name: "home" }));
-      await renderHome(shell);
+      renderMissingProposal(shell, r.id);
       bindAuthHandlers();
       return;
     }

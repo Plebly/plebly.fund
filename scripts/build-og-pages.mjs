@@ -24,7 +24,7 @@ const STATIC_ROUTES = [
     path: "/about",
     title: "About Plebly",
     description:
-      "Non-custodial escrow, uncensorable proposals, and protocol-over-platform rules for Bitcoin public goods funding.",
+      "Non-custodial Bitcoin escrow. Public listings. Published fees.",
   },
   {
     path: "/propose",
@@ -160,14 +160,14 @@ function replaceShell(html, attrs) {
         }
       </main>
       <footer class="boot-footer">
-        <p>Non-custodial Bitcoin bounties. Protocol over platform.</p>
+        <p>Bitcoin on-chain. No custodian.</p>
         <nav aria-label="Footer">
           <a href="/">Projects</a>
           <a href="/propose">Start a project</a>
           <a href="/about">About</a>
           <a href="/stats">Stats</a>
           <a href="/reviewers">Reviewers</a>
-          <a href="https://github.com/Plebly/proposals">Proposals repo</a>
+          <a href="https://github.com/Plebly">GitHub</a>
         </nav>
       </footer>`;
   out = out.replace(

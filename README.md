@@ -2,11 +2,11 @@
 
 Static frontend for [Plebly](https://plebly.fund).
 
-Reads proposals from [`Plebly/proposals`](https://github.com/Plebly/proposals) and balances from Mempool.space. Optional Workers API via `VITE_WORKERS_API`.
+Reads listings from the Workers catalog (`VITE_WORKERS_API`) and balances from Mempool.space. GitHub is a fallback, not the live listing path.
 
 ### Lightning → escrow
 
-Donors can pay Lightning on mainnet (or staging with `VITE_LIGHTNING_TESTNET=1` + Workers `LIGHTNING_ENABLED=true`). The Workers API creates a Boltz reverse swap, holds short-lived claim secrets in KV, and broadcasts the claim tx to the project `escrow_address`. Claim-floor math still uses the mempool address balance — never unpaid invoices.
+Donors can pay Lightning on mainnet (or staging with `VITE_LIGHTNING_TESTNET=1` + Workers `LIGHTNING_ENABLED=true`). The Workers API creates an OpenNode invoice, accrues paid charges, and sweeps on-chain into the project `escrow_address`. Claim-floor math still uses the mempool address balance — never unpaid invoices. Signet stays on-chain only.
 
 ## Develop
 
