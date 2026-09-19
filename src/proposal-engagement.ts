@@ -13,6 +13,7 @@ import { profileHref } from "./router";
 import { safeHrefAttr } from "./social-links";
 import { avatarImgHtml } from "./media";
 import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
+import { hydrateAvatarSlots } from "./profile-avatars";
 
 type PublicContribution = {
   identity: string | null;
@@ -298,14 +299,26 @@ export async function bindProposalEngagement(
   } = {},
 ): Promise<() => Promise<void>> {
   const noop = async () => undefined;
-  if (!WORKERS_API) return noop;
+  const clearCommentsPlaceholder = (message: string) => {
+    const el = root.querySelector<HTMLElement>("#proposal-comment-list");
+    if (el && /Loading comments/i.test(el.textContent || "")) {
+      el.innerHTML = `<p class="muted">${message}</p>`;
+    }
+  };
+  if (!WORKERS_API) {
+    clearCommentsPlaceholder("Comments unavailable (API not configured).");
+    return noop;
+  }
   const funder = root.querySelector<HTMLElement>("#funder-credit");
   const comments = root.querySelector<HTMLElement>("#proposal-comments");
   const proposalId =
     opts.proposalId ||
     funder?.dataset.proposalId ||
     comments?.dataset.proposalId;
-  if (!proposalId) return noop;
+  if (!proposalId) {
+    clearCommentsPlaceholder("Comments unavailable.");
+    return noop;
+  }
   let discussionClosed =
     Boolean(opts.discussionClosed) ||
     comments?.dataset.discussionClosed === "1";
@@ -317,7 +330,6 @@ export async function bindProposalEngagement(
   const commentList = root.querySelector<HTMLElement>("#proposal-comment-list");
   const userId = opts.user?.id || null;
   const canModerate = Boolean(opts.canModerate);
-  const { hydrateAvatarSlots } = await import("./profile-avatars");
 
   const loadFunders = async () => {
     const res = await fetch(`${api()}/contributions/${encodeURIComponent(proposalId)}`);
