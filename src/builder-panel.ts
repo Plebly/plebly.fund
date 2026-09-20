@@ -1428,7 +1428,9 @@ export async function bindBuilderPanel(
       seeded
         ? Promise.resolve(seeded)
         : fetchClaimStatus(opts.proposal.path, opts.proposal.id),
-      fetchClaimApplications(opts.proposal.path, opts.proposal.id),
+      fetchClaimApplications(opts.proposal.path, opts.proposal.id).catch(
+        () => null,
+      ),
       opts.user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
     ]);
     const reviewerActive = Boolean(reviewerMe?.active);

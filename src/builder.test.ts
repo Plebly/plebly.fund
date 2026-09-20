@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyClaimStatusToProposal,
   claimFloorShortfall,
   claimWindowDaysLeft,
+  fetchClaimStatus,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
@@ -194,5 +195,66 @@ describe("applyClaimStatusToProposal", () => {
       rebuttal_expires_at: "2026-08-28T00:00:00Z",
       rebuttal_reasoning: "Here is the reply.",
     });
+  });
+});
+
+describe("fetchClaimStatus", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("loads claim status with plain fetch (no Authorization)", async () => {
+    const payload: ClaimStatus = {
+      proposal_id: "demo",
+      proposal_path: "proposals/listed/demo.md",
+      state: "claimed",
+      confirmed_balance_sats: 15_000,
+      claim_floor_sats: 10_000,
+      claimer: "nostr:5255bf32",
+      claimer_user_id:
+        "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+    };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    // Session present must not attach Bearer — that path stalls Workers KV.
+    vi.stubGlobal("sessionStorage", {
+      getItem: () => "fake-bearer-token",
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+    });
+
+    const status = await fetchClaimStatus(
+      "proposals/listed/demo.md",
+      "PLEBLY-2026-001",
+    );
+    expect(status).toMatchObject({
+      state: "claimed",
+      claimer_user_id: payload.claimer_user_id,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain("/claims/");
+    expect(init.credentials).toBe("omit");
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBeNull();
+  });
+
+  it("returns null when the public fetch fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network");
+      }),
+    );
+    expect(
+      await fetchClaimStatus("proposals/listed/demo.md", "demo"),
+    ).toBeNull();
   });
 });

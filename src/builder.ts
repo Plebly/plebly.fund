@@ -413,11 +413,16 @@ export async function fetchClaimStatus(
   const key = claimsProposalPath({ id: proposalId, path: proposalPath });
   if (!key) return null;
   try {
-    // Rely on authFetch's FETCH_TIMEOUT_MS (40s). A nested 8s abort made
-    // intermittent slow /claims responses look like "Couldn't load claim status."
-    const res = await authFetch(
-      `${API()}/claims/${encodeURIComponent(key)}`,
-    );
+    // Public GET: claimer / claimer_user_id / pending / state / psbt are
+    // unauthenticated. Sending Bearer made Workers readSession + session KV
+    // intermittently stall (~19s) so authFetch aborted → null → sidebar
+    // "Couldn't load claim status" and applyClaimStatusToProposal never ran.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15_000);
+    const res = await fetch(`${API()}/claims/${encodeURIComponent(key)}`, {
+      credentials: "omit",
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
     return (await res.json()) as ClaimStatus;
   } catch {
