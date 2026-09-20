@@ -398,6 +398,7 @@ export function builderPanelHtml(
       ${firstPaint}
     </div>
     <p class="builder-msg" id="builder-msg" hidden></p>
+    <div id="ai-review-slot" hidden></div>
   </div>`;
   }
 
@@ -410,6 +411,7 @@ export function builderPanelHtml(
       ${firstPaint}
     </div>
     <p class="builder-msg" id="builder-msg" hidden></p>
+    <div id="ai-review-slot" hidden></div>
     <div class="site-modal" id="builder-claim-modal" hidden>
       <div class="site-modal-backdrop" data-close-claim tabindex="-1" aria-hidden="true"></div>
       <div class="site-modal-card builder-claim-card" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title">
@@ -849,12 +851,16 @@ export async function bindBuilderPanel(
             });
         if (!result) return;
         const next =
-          result.ai_review?.outcome === "fail"
-            ? "Revise and resubmit."
-            : result.decision_id
-              ? "Reviewer ballot opened."
-              : "Submitted.";
+          result.decision_id
+            ? "Reviewer ballot opened."
+            : "Submitted. The proposer can mark this done.";
         setMsg(msg, next, "success");
+        const slot = panel.querySelector<HTMLElement>("#ai-review-slot");
+        if (slot && result.ai_review) {
+          const { aiReviewCardHtml } = await import("./review-panel");
+          slot.hidden = false;
+          slot.innerHTML = aiReviewCardHtml(result.ai_review);
+        }
         if (refresh) await refresh();
       } catch (e) {
         if ((e as Error).message === "login_required") {

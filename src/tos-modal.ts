@@ -1,9 +1,32 @@
 import { authFetch } from "./auth";
 import { WORKERS_API } from "./config";
 import { href } from "./router";
+import { escapeHtml } from "./util";
 
 export function tosCheckboxHtml(id: string): string {
   return `<label class="tos-ack-label muted"><input type="checkbox" id="${id}" required /> I accept the <a class="tos-doc-link" href="${href("/terms")}" target="_blank" rel="noopener noreferrer">Terms</a>.</label>`;
+}
+
+/** Last-step propose card: explainer + checkbox + Back/Submit in one place. */
+export function tosAckCardHtml(opts: {
+  checkboxId: string;
+  heading: string;
+  submitLabel: string;
+}): string {
+  return `<section class="propose-wizard-nav propose-tos-card" id="propose-wizard-nav" aria-labelledby="propose-tos-title">
+    <div class="propose-tos-card-copy">
+      <h3 class="propose-tos-card-title" id="propose-tos-title">${escapeHtml(opts.heading)}</h3>
+      <p class="propose-tos-card-lede">Plebly does not sell your account or listing. Identity is used to run claims, reviews, and payouts. The listing is public. Plebly never holds your keys.</p>
+      <label class="propose-tos-ack">
+        <input type="checkbox" id="${escapeHtml(opts.checkboxId)}" required />
+        <span>I accept the <a class="tos-doc-link" href="${href("/terms")}" target="_blank" rel="noopener noreferrer">Terms</a></span>
+      </label>
+    </div>
+    <div class="propose-tos-card-actions">
+      <button type="button" class="btn ghost" id="propose-wizard-back">Back</button>
+      <button type="submit" class="btn" id="propose-wizard-submit">${escapeHtml(opts.submitLabel)}</button>
+    </div>
+  </section>`;
 }
 
 export async function acceptCurrentTos(): Promise<boolean> {

@@ -62,6 +62,21 @@ export function partitionListings(proposals: Proposal[]): {
   return { bounties, campaigns };
 }
 
+/** Hide the featured rail when it would just repeat the bounty list. */
+export function featuredDuplicatesOpenList(
+  featured: Proposal[],
+  openBounties: Proposal[],
+): boolean {
+  if (featured.length === 0) return true;
+  if (openBounties.length <= featured.length) return true;
+  const featuredIds = new Set(featured.map((p) => p.id).filter(Boolean));
+  const listedIds = openBounties.map((p) => p.id).filter(Boolean);
+  return (
+    featuredIds.size === listedIds.length &&
+    listedIds.every((id) => featuredIds.has(id))
+  );
+}
+
 /** True when two or more listings publish the same receive address. */
 export function listingsShareEscrow(proposals: Proposal[]): boolean {
   const counts = new Map<string, number>();
@@ -726,8 +741,15 @@ function bindDiscover(
     }
     if (countEl) countEl.textContent = String(filtered.length);
     if (filtered.length === 0) {
+      const campaignEmpty = typeFilter === "direct" && !q;
       listEl.className = "empty-state";
-      listEl.innerHTML = `<div class="empty-state-inner">
+      listEl.innerHTML = campaignEmpty
+        ? `<div class="empty-state-inner">
+        <p class="empty-state-title">No campaigns yet</p>
+        <p class="empty-state-body">A campaign is a cause. Donations go to the organizer’s published address.</p>
+        <a class="btn" href="${href("/propose")}">Start a campaign</a>
+      </div>`
+        : `<div class="empty-state-inner">
         <p class="empty-state-title">No matching projects</p>
         <p class="empty-state-body">Try another search, or start something new.</p>
         <a class="btn" href="${href("/propose")}">Start a project</a>
@@ -936,12 +958,13 @@ export async function renderHome(shell: HomeShell): Promise<void> {
         lightningEnabled,
         watchPaths,
         {
+          hideWhenEmpty: true,
           browseHref: campaigns.length
             ? projectsHref("?type=direct")
             : href("/propose"),
         },
       );
-      bindCardWatches(campaignsRail, watchPaths);
+      if (campaigns.length) bindCardWatches(campaignsRail, watchPaths);
     }
     const { bounties } = partitionListings(proposals);
     const featured = bounties
@@ -973,17 +996,25 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     void bindDonationsLive(app);
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
-      featuredRail.innerHTML = railHtml(
-        "featured-projects",
-        "Featured",
-        "Close to opening.",
-        featured,
-        CLAIM_FLOOR_SATS,
-        lightningEnabled,
-        watchPaths,
-        { hideWhenEmpty: true },
+      const openBounties = bounties.filter(
+        (proposal) =>
+          String(proposal.status) !== "completed" &&
+          !excluded.has(proposal.id || ""),
       );
-      bindCardWatches(featuredRail, watchPaths);
+      const hideFeatured = featuredDuplicatesOpenList(featured, openBounties);
+      featuredRail.innerHTML = hideFeatured
+        ? ""
+        : railHtml(
+            "featured-projects",
+            "Featured",
+            "Close to opening.",
+            featured,
+            CLAIM_FLOOR_SATS,
+            lightningEnabled,
+            watchPaths,
+            { hideWhenEmpty: true },
+          );
+      if (!hideFeatured) bindCardWatches(featuredRail, watchPaths);
     }
     const completedRail = app.querySelector("#completed-rail");
     if (completedRail) {

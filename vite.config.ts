@@ -8,4 +8,13 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
+  server: {
+    proxy: {
+      "/workers-api": {
+        target: "https://plebly-api.securesovereigns.workers.dev",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/workers-api/, "") || "/",
+      },
+    },
+  },
 });

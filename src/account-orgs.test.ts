@@ -44,7 +44,7 @@ describe("connectedAccountsHtml", () => {
     expect(html).not.toContain("@plebly");
     expect(html).toContain("account-org-card");
     expect(html).toContain("account-org-grid");
-    expect(html).toContain("section-title");
+    expect(html).toContain("account-card-sub");
     expect(html).toContain("Organizations · 1 linked");
     expect(html).toContain('id="add-org-grant-link"');
     expect(html).toContain("Sync from GitHub");

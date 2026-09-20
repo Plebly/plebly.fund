@@ -1,14 +1,11 @@
 import {
-  ABOUT_BELIEFS,
   ABOUT_BITCOIN_NETWORK,
-  ABOUT_BUILDERS_HTML,
   ABOUT_INTRO_HTML,
   ABOUT_LIGHTNING_HTML,
   ABOUT_PARAM_LABELS,
   ABOUT_STEPS,
-  ABOUT_TRUST_HTML,
 } from "./generated/about-data";
-import { PLEBLY_GITHUB_URL, pleblySocialAccountsHtml } from "./icons";
+import { PLEBLY_GITHUB_URL } from "./icons";
 import { WORKERS_API } from "./config";
 import { fetchPublicOrg, type PublicOrg } from "./org-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
@@ -27,35 +24,6 @@ export type AboutShell = (inner: string) => string;
 /** Canonical GitHub org login for the platform team roster. */
 export const PLEBLY_ORG_LOGIN = "Plebly";
 
-const ABOUT_NAV = [
-  { id: "beliefs", label: "Beliefs" },
-  { id: "how-it-works", label: "How it works" },
-  { id: "trust", label: "Trust" },
-  { id: "team", label: "Team" },
-  { id: "keyholders", label: "Keyholders" },
-  { id: "parameters", label: "Parameters" },
-  { id: "details", label: "Details" },
-] as const;
-
-function aboutNavHtml(): string {
-  return `<nav class="about-toc" aria-label="On this page">
-    ${ABOUT_NAV.map(
-      (item) =>
-        `<a class="about-toc-link" href="#${item.id}">${escapeHtml(item.label)}</a>`,
-    ).join("")}
-  </nav>`;
-}
-
-function beliefsHtml(): string {
-  if (!ABOUT_BELIEFS.length) return "";
-  return `<dl class="about-beliefs">${ABOUT_BELIEFS.map(
-    (b) => `<div class="about-belief">
-      <dt>${escapeHtml(b.title)}</dt>
-      <dd>${b.body}</dd>
-    </div>`,
-  ).join("")}</dl>`;
-}
-
 function flowHtml(): string {
   if (!ABOUT_STEPS.length) return "";
   return `<ol class="about-flow">${ABOUT_STEPS.map(
@@ -67,16 +35,21 @@ function flowHtml(): string {
   ).join("")}</ol>`;
 }
 
-function paramsHtml(): string {
-  return `<dl class="about-params">${ABOUT_PARAM_LABELS.map(
-    (p) => `<div class="about-param">
+function feesHtml(): string {
+  const want = new Set(["Platform fee", "Submission fee", "Opens for builders"]);
+  const rows = ABOUT_PARAM_LABELS.filter((p) => want.has(p.label));
+  if (!rows.length) return "";
+  return `<dl class="about-params about-params-short">${rows
+    .map(
+      (p) => `<div class="about-param">
       <dt>${escapeHtml(p.label)}</dt>
       <dd>
         <span class="about-param-value">${escapeHtml(p.value)}</span>
         <span class="about-param-hint">${escapeHtml(p.hint)}</span>
       </dd>
     </div>`,
-  ).join("")}</dl>`;
+    )
+    .join("")}</dl>`;
 }
 
 function networkNoteHtml(): string {
@@ -84,9 +57,8 @@ function networkNoteHtml(): string {
   return `<div class="about-network-badge" role="status">
     <span class="about-network-badge-dot" aria-hidden="true"></span>
     <span>
-      <strong>Signet</strong> (test coins only) · Mainnet uses independent keyholders
-      · <a href="#keyholders">Keyholders</a>
-      · Faucets: ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
+      <strong>Signet</strong> · test coins only.
+      Faucets: ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
     </span>
   </div>`;
 }
@@ -115,11 +87,12 @@ export function keyholdersHtml(live: {
   min_seats?: number;
   target_seats?: number;
 }): string {
-  const n = live.seats ?? live.keyholders.length;
+  const seated = live.keyholders.filter((k) => k.github?.trim());
+  const n = seated.length;
   const min = live.min_seats ?? KEYHOLDER_MIN_SEATS;
   const target = live.target_seats ?? KEYHOLDER_TARGET_SEATS;
-  const liveQuorum = n >= min ? keyholderQuorumLabel(n) : null;
   const targetQuorum = keyholderQuorumLabel(target);
+  const liveQuorum = n >= min ? keyholderQuorumLabel(n) : null;
   const lede = liveQuorum
     ? `Live <strong>${escapeHtml(liveQuorum)}</strong>. Target ${escapeHtml(targetQuorum)}.`
     : `Target <strong>${escapeHtml(targetQuorum)}</strong>.`;
@@ -127,16 +100,15 @@ export function keyholdersHtml(live: {
     n < min
       ? `<p class="about-keyholders-status" role="status">Need ${min} seats (${n} live). <a href="${href("/keyholders")}">Apply</a>.</p>`
       : "";
-  const liveBody = n
+  const liveBody = seated.length
     ? `<div class="about-keyholders-table-wrap">
         <table class="about-keyholders-table">
-          <thead><tr><th>Handle</th><th>Fingerprint</th><th>xpub</th></tr></thead>
-          <tbody>${live.keyholders
+          <thead><tr><th>Handle</th><th>Fingerprint</th></tr></thead>
+          <tbody>${seated
             .map(
               (k) => `<tr>
             <td>${escapeHtml(k.github)}</td>
             <td class="mono">${escapeHtml(k.fingerprint || "—")}</td>
-            <td class="mono about-kh-xpub">${escapeHtml(k.xpub || "—")}</td>
           </tr>`,
             )
             .join("")}</tbody>
@@ -151,7 +123,7 @@ export function keyholdersHtml(live: {
     ${status}
     <div class="about-keyholders-roster">
       ${liveBody}
-      <p class="muted"><a href="${href("/keyholders")}">Apply</a> · <a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a> · <a href="${href("/terms")}">Terms</a> · <a href="${href("/parameters")}">Parameters</a></p>
+      <p class="muted"><a href="${href("/keyholders")}">Apply</a> · <a href="${href("/keyholder-responsibilities")}">Responsibilities</a> · <a href="${href("/terms")}">Terms</a></p>
     </div>
   </section>`;
 }
@@ -188,22 +160,16 @@ function teamSectionHtml(org: PublicOrg | null): string {
   const members = org?.public_members ?? [];
   const body = org
     ? aboutTeamMembersHtml(members)
-    : `<p class="muted">Couldn’t load the <a href="${escapeHtml(ghLink)}" target="_blank" rel="noreferrer">@${escapeHtml(PLEBLY_ORG_LOGIN)}</a> roster right now. Try the <a href="${orgLink}">org page</a>.</p>`;
+    : `<p class="muted"><a href="${orgLink}">Org page</a> · <a href="${escapeHtml(ghLink)}" target="_blank" rel="noreferrer">GitHub</a></p>`;
 
   return `<section class="about-section" id="team">
     <h2>Team</h2>
-    <p class="about-section-lede">
-      <a href="${escapeHtml(ghLink)}" target="_blank" rel="noreferrer">@${escapeHtml(org?.login || PLEBLY_ORG_LOGIN)}</a>
-      members.
-    </p>
     ${body}
-    <p class="about-section-foot">
-      <a href="${orgLink}">Org page →</a>
-    </p>
+    <p class="about-section-foot"><a href="${orgLink}">Org page →</a></p>
   </section>`;
 }
 
-/** Scroll-spy TOC + soft section reveal. Safe to call after each about render. */
+/** Scroll-spy TOC. Safe to call after each about render. */
 export function bindAboutPage(root: ParentNode = document): () => void {
   const page = root.querySelector<HTMLElement>(".about-page");
   if (!page) return () => {};
@@ -214,11 +180,7 @@ export function bindAboutPage(root: ParentNode = document): () => void {
   const links = [
     ...page.querySelectorAll<HTMLAnchorElement>(".about-toc-link"),
   ];
-  if (!sections.length) return () => {};
-
-  const reduceMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
+  if (!sections.length || !links.length) return () => {};
 
   const setActive = (id: string) => {
     for (const link of links) {
@@ -249,7 +211,6 @@ export function bindAboutPage(root: ParentNode = document): () => void {
       if (bestId) setActive(bestId);
     },
     {
-      // Bias toward the section near the sticky TOC / upper viewport.
       rootMargin: "-20% 0px -55% 0px",
       threshold: [0, 0.15, 0.35, 0.55, 0.75],
     },
@@ -257,33 +218,12 @@ export function bindAboutPage(root: ParentNode = document): () => void {
 
   for (const section of sections) tocObserver.observe(section);
 
-  let revealObserver: IntersectionObserver | null = null;
-  if (!reduceMotion) {
-    for (const section of sections) {
-      section.classList.add("about-section-pending");
-    }
-    revealObserver = new IntersectionObserver(
-      (entries, obs) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          entry.target.classList.add("about-section-in");
-          entry.target.classList.remove("about-section-pending");
-          obs.unobserve(entry.target);
-        }
-      },
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
-    );
-    for (const section of sections) revealObserver.observe(section);
-  }
-
-  // Initial active state before any scroll.
   const hashId = location.hash.replace(/^#/, "");
   if (hashId && sections.some((s) => s.id === hashId)) setActive(hashId);
   else if (sections[0]) setActive(sections[0].id);
 
   return () => {
     tocObserver.disconnect();
-    revealObserver?.disconnect();
   };
 }
 
@@ -338,27 +278,9 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
     target_seats: khLive?.target_seats,
   };
 
-  const details = [
-    ABOUT_BUILDERS_HTML
-      ? `<div class="about-detail">
-          <h3>For builders</h3>
-          <div class="prose-rich">${ABOUT_BUILDERS_HTML}</div>
-        </div>`
-      : "",
-    ABOUT_LIGHTNING_HTML
-      ? `<div class="about-detail">
-          <h3>Lightning</h3>
-          <div class="prose-rich">${ABOUT_LIGHTNING_HTML}</div>
-        </div>`
-      : "",
-    `<div class="about-detail">
-      <h3>Reviewers</h3>
-      <p>Reviewers check finished work. You earn a seat by completing a bounty. Funders can vote to remove a reviewer.</p>
-      <p class="about-detail-link"><a href="${href("/reviewers")}">Reviewer governance →</a> · <a href="${href("/terms")}">Terms</a></p>
-    </div>`,
-  ]
-    .filter(Boolean)
-    .join("");
+  const lightning = ABOUT_LIGHTNING_HTML
+    ? `<div class="about-prose prose-rich">${ABOUT_LIGHTNING_HTML}</div>`
+    : "";
 
   app.innerHTML = shell(`
     <section class="wrap-wide detail about-page">
@@ -372,55 +294,27 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
         ${networkNoteHtml()}
       </header>
 
-      ${aboutNavHtml()}
-
-      <section class="about-section" id="beliefs">
-        <h2>What we believe</h2>
-        ${beliefsHtml()}
-      </section>
-
       <section class="about-section" id="how-it-works">
         <h2>How it works</h2>
-        <p class="about-section-lede">Four steps. Funds stay on Bitcoin.</p>
+        <p class="about-section-lede">Four steps. Funds stay on Bitcoin. Plebly never holds a spending key.</p>
         ${flowHtml()}
         <p class="about-section-foot">
-          <a href="${projectsHref()}">Browse open projects</a>
-          or
-          <a href="${href("/propose")}">start a project</a>.
+          Reviewers confirm bounty work. A listed AI Reviewer, powered by BTCDecoded Intelligence, may analyze a deliverable against its spec. That analysis does not vote and never releases funds.
+          <a href="${href("/reviewer-responsibilities")}">Reviewer rules</a>
+          ·
+          <a href="${href("/reviewers")}">Roster</a>
         </p>
       </section>
-
-      ${
-        ABOUT_TRUST_HTML
-          ? `<section class="about-section" id="trust">
-        <h2>Trust</h2>
-        <div class="about-prose prose-rich">${ABOUT_TRUST_HTML}</div>
-      </section>`
-          : ""
-      }
 
       ${teamSectionHtml(org)}
 
       ${keyholdersHtml(liveKh)}
 
       <section class="about-section" id="parameters">
-        <h2>Key parameters</h2>
-        <p class="about-section-lede"><a href="${href("/parameters")}">Live parameters</a>.</p>
-        ${paramsHtml()}
-      </section>
-
-      <section class="about-section about-section-details" id="details">
-        <h2>Details</h2>
-        <div class="about-details">${details}</div>
-      </section>
-
-      <section class="about-section about-close" id="involve">
-        <h2>Get involved</h2>
-        <div class="about-cta about-close-cta">
-          <a class="btn" href="${href("/propose")}">Start a project</a>
-          <a class="btn ghost" href="${projectsHref()}">Browse projects</a>
-        </div>
-        <div class="about-close-links">${pleblySocialAccountsHtml()}</div>
+        <h2>Fees</h2>
+        <p class="about-section-lede">Taken when a project is paid, not when you donate. <a href="${href("/parameters")}">All parameters</a> · <a href="${href("/terms")}">Terms</a>.</p>
+        ${feesHtml()}
+        ${lightning}
       </section>
     </section>
   `);

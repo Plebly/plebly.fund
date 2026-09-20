@@ -39,7 +39,9 @@ import {
   type ReviewerMe,
   type ReviewerPublic,
   type ReviewerRoster,
+  type OfficialAiReviewer,
 } from "./reviewers";
+import { aiReviewCardHtml } from "./review-panel";
 import { href, projectsHref, proposalHref } from "./router";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
@@ -71,7 +73,7 @@ function initialGovTab(): GovTab {
   if (hash === "roster" || hash === "decisions" || hash === "removals" || hash === "reports" || hash === "keyholders") {
     return hash;
   }
-  return "decisions";
+  return "roster";
 }
 
 export function reportsInboxHtml(
@@ -357,6 +359,42 @@ function closesLabel(iso: string): string {
   });
 }
 
+const FALLBACK_AI_REVIEWERS: OfficialAiReviewer[] = [
+  {
+    id: "ai-reviewer-btcdecoded-intelligence",
+    name: "AI Reviewer",
+    attribution: "Powered by BTCDecoded Intelligence",
+    kind: "ai",
+    voting: false,
+    provider: "btcdecoded-intelligence",
+  },
+];
+
+export function aiReviewersSectionHtml(
+  roster: ReviewerRoster | null,
+): string {
+  const seats =
+    roster?.ai_reviewers && roster.ai_reviewers.length
+      ? roster.ai_reviewers
+      : FALLBACK_AI_REVIEWERS;
+  const rows = seats
+    .map(
+      (s) => `<li class="gov-roster-row" data-ai-reviewer="${escapeHtml(s.id)}">
+    <div class="gov-roster-main">
+      <span class="gov-user">${escapeHtml(s.name)}</span>
+      <span class="pill">AI</span>
+      <span class="muted">${escapeHtml(s.attribution)}</span>
+    </div>
+    <span class="muted">Does not vote</span>
+  </li>`,
+    )
+    .join("");
+  return `<div class="gov-ai-reviewers">
+    <p class="muted gov-block-lede">Listed AI Reviewers analyze bounty work against the spec. They do not vote and never release funds.</p>
+    <ul class="gov-roster" id="gov-ai-roster">${rows}</ul>
+  </div>`;
+}
+
 export function rosterSectionHtml(
   roster: ReviewerRoster | null,
   opts?: { selectable?: boolean },
@@ -447,6 +485,11 @@ export function decisionCardHtml(
       ${d.round === 2 ? `<span class="pill">Round 2</span>` : ""}
     </div>
     <p class="next-card-sentence">${escapeHtml(inboxDecisionSentence(d.kind))}</p>
+    ${
+      d.ai_review
+        ? aiReviewCardHtml(d.ai_review, { compact: true })
+        : ""
+    }
     ${
       d.rebuttal?.reasoning
         ? `<p class="review-dissent-text">${escapeHtml(d.rebuttal.reasoning)}</p>`
@@ -574,6 +617,14 @@ type KhApplicationView = {
 
 const govApi = () => WORKERS_API.replace(/\/$/, "");
 
+export function governanceFootHtml(): string {
+  return `<p class="gov-foot muted">
+        <a href="${href("/reviewer-responsibilities")}">Reviewer rules</a>
+        · <a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a>
+        · <a href="${projectsHref()}">Browse projects</a>
+      </p>`;
+}
+
 export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
   if (!loggedIn) {
     return `<div class="gov-form-panel">
@@ -596,7 +647,7 @@ export function khApplyFormHtml(loggedIn: boolean, canApply: boolean): string {
     <input id="kh-apply-handle" class="donate-amount" maxlength="64" />
     <label class="donate-amount-label" for="kh-apply-statement">Statement</label>
     <textarea id="kh-apply-statement" class="comment-input" rows="4" required maxlength="2000" placeholder="Why you can stay reachable and sign monthly releases…"></textarea>
-    <label class="muted"><input type="checkbox" id="kh-apply-ack" required /> I have read the <a href="${href("/docs/keyholder-responsibilities.md")}">keyholder responsibilities</a>, including that the operator can spend the keyholder pool on the fee address until cash-out.</label>
+    <label class="muted"><input type="checkbox" id="kh-apply-ack" required /> I have read the <a href="${href("/keyholder-responsibilities")}" target="_blank" rel="noopener noreferrer">keyholder responsibilities</a>, including that the operator can spend the keyholder pool on the fee address until cash-out.</label>
     ${tosCheckboxHtml("kh-apply-tos")}
     <div class="form-actions"><button type="submit" class="btn">Apply</button></div>
     <p class="builder-msg" id="kh-apply-msg" hidden></p>
@@ -769,6 +820,8 @@ export async function renderGovernance(
       </header>
 
       <section class="gov-block account-pane" data-gov-pane="roster" id="roster" ${tab === "roster" ? "" : "hidden"}>
+        <h2 class="gov-block-title">AI Reviewers</h2>
+        ${aiReviewersSectionHtml(roster)}
         <h2 class="gov-block-title">Active roster</h2>
         <p class="muted gov-block-lede">A decision passes with two-thirds yes from the active roster, and at least five yes-or-no votes.${funderEligible ? " Select an earned seat to prefill a removal." : ""}</p>
         ${rosterSectionHtml(roster, { selectable: funderEligible })}
@@ -811,13 +864,7 @@ export async function renderGovernance(
         </div>
       </section>
 
-      <p class="gov-foot muted">
-        Rules live in
-        <a href="https://github.com/Plebly/proposals/blob/main/REVIEWERS.md" target="_blank" rel="noreferrer">REVIEWERS.md</a>.
-        <a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder responsibilities</a>.
-        Project-level review UI stays on each project page.
-        <a href="${projectsHref()}">Browse projects</a>.
-      </p>
+      ${governanceFootHtml()}
     </section>
   `);
 

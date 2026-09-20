@@ -22,6 +22,8 @@ export function tagInputHtml(opts: {
   vocabulary?: readonly string[];
   /** Quick-pick chips; defaults to vocabulary. Pass [] to hide. */
   presets?: readonly string[];
+  /** Hide preset chips behind a disclosure so the field stays calm. */
+  presetsCollapsed?: boolean;
   hint?: string;
 }): string {
   const id = opts.id;
@@ -67,11 +69,25 @@ export function tagInputHtml(opts: {
       <ul class="tag-input-suggest" id="${escapeHtml(id)}-suggest" role="listbox" hidden></ul>
     </div>
     <input type="hidden" name="${escapeHtml(opts.name)}" id="${escapeHtml(id)}-value" value="${escapeHtml(tags.join(", "))}" />
-    <div class="tag-input-presets" id="${escapeHtml(id)}-presets" aria-label="Suggested tags" ${presetSource.length ? "" : "hidden"}>
-      ${presets}
-    </div>
+    ${presetBlockHtml(id, presets, presetSource.length > 0, Boolean(opts.presetsCollapsed))}
     <p class="field-hint tag-input-hint">${escapeHtml(hint)}</p>
   </div>`;
+}
+
+function presetBlockHtml(
+  id: string,
+  presets: string,
+  hasPresets: boolean,
+  collapsed: boolean,
+): string {
+  const inner = `<div class="tag-input-presets" id="${escapeHtml(id)}-presets" aria-label="Suggested tags" ${hasPresets ? "" : "hidden"}>
+      ${presets}
+    </div>`;
+  if (!collapsed || !hasPresets) return inner;
+  return `<details class="tag-input-more">
+      <summary>Suggested skills</summary>
+      ${inner}
+    </details>`;
 }
 
 export function bindTagInput(

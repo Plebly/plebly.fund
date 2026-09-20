@@ -98,4 +98,20 @@ describe("tag input control", () => {
     expect(suggest.hidden).toBe(false);
     expect(suggest.textContent).toContain("security");
   });
+
+  it("keeps presets bindable when collapsed behind a disclosure", () => {
+    document.body.innerHTML = tagInputHtml({
+      id: "skills-tags",
+      name: "skills_tags",
+      presets: ["lightning", "rust"],
+      presetsCollapsed: true,
+    });
+    expect(document.querySelector(".tag-input-more")).toBeTruthy();
+    const handle = bindTagInput(document, "skills-tags", {
+      vocabulary: ["lightning", "rust"],
+    });
+    expect(handle).toBeTruthy();
+    document.querySelector<HTMLButtonElement>('[data-add-tag="lightning"]')!.click();
+    expect(handle!.getTags()).toEqual(["lightning"]);
+  });
 });

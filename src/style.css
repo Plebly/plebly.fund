@@ -89,6 +89,9 @@ a.tos-doc-link {
 #main-content {
   min-width: 0;
   width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Shared page rail — matches header + footer. Prefer wrap-wide in markup. */
@@ -192,10 +195,6 @@ html.pwa-standalone body {
   gap: 0.75rem;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.header-end .social-links {
-  padding-left: 0.25rem;
 }
 
 .brand {
@@ -1125,7 +1124,7 @@ body.modal-open {
 
 .account-tabs {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.25rem;
   margin: 0 0 1.25rem;
   padding: 0.2rem;
@@ -1187,12 +1186,122 @@ body.modal-open {
   margin-bottom: 1rem;
 }
 
-.account-head h1 {
+.account-head h1,
+.account-page.detail .account-head h1 {
   margin: 0;
+}
+
+.account-head .eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.account-head-meta {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 
 .account-head .lede {
   margin: 0.35rem 0 0;
+}
+
+.account-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16.5rem, 20.5rem);
+  gap: 1.25rem 1.5rem;
+  align-items: start;
+}
+
+.account-profile-main,
+.account-profile-side {
+  display: grid;
+  gap: 1.15rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.account-card {
+  display: grid;
+  gap: 0.95rem;
+  margin: 0;
+  padding: 1.1rem 1.15rem 1.2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.account-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.account-card-lede {
+  margin: -0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.account-card-sub {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.account-card .form-block legend {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.account-card .funder-credit-options {
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.account-connected-identities {
+  margin-bottom: 0;
+}
+
+.account-card .account-orgs {
+  padding-top: 0.85rem;
+  margin-top: 0.15rem;
+}
+
+.account-card-quiet {
+  padding: 0.85rem 1.1rem;
+}
+
+.account-card.account-danger {
+  margin-top: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.account-profile-main .form-actions {
+  align-items: center;
+  padding-top: 0.15rem;
+}
+
+.account-profile-main .form-actions .form-msg {
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .account-profile-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .discover-toolbar {
@@ -2129,7 +2238,7 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .landing-bottom-cta {
-  padding: 0 0 4rem;
+  padding: 2.5rem 0 4rem;
 }
 
 .landing-bottom-inner {
@@ -2367,39 +2476,8 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .about-section {
-  margin-bottom: 3rem;
+  margin-bottom: 2.25rem;
   scroll-margin-top: 3.5rem;
-}
-
-.about-section-pending {
-  opacity: 0;
-  transform: translateY(12px);
-}
-
-.about-section-in {
-  animation: about-section-in 0.45s ease forwards;
-}
-
-@keyframes about-section-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .about-section-pending {
-    opacity: 1;
-    transform: none;
-  }
-
-  .about-section-in {
-    animation: none;
-  }
 }
 
 .about-section > h2 {
@@ -2523,6 +2601,10 @@ a.project-card-by:hover .project-card-by-text {
   margin: 0;
   display: flex;
   flex-direction: column;
+}
+
+.about-params-short {
+  margin-bottom: 1.25rem;
 }
 
 .about-param {
@@ -3218,6 +3300,14 @@ a.project-card-by:hover .project-card-by-text {
   opacity: 0.55;
 }
 
+#featured-rail:empty,
+#campaigns-rail:empty,
+#wanted-rail:empty,
+#completed-rail:empty,
+#donations-live-mount:empty {
+  display: none;
+}
+
 .error {
   color: var(--bad);
   padding: 2rem 0;
@@ -3483,8 +3573,10 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .prose-rich h2 {
-  font-size: 1.0625rem;
-  margin: 1.75rem 0 0.625rem;
+  font-size: 1.125rem;
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .prose-rich h3 {
@@ -3498,7 +3590,7 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .prose-rich p {
-  margin: 0 0 1rem;
+  margin: 0 0 1.15rem;
 }
 
 .prose-rich strong {
@@ -5457,16 +5549,12 @@ a.claim-app-bond:hover {
   border-color: rgba(var(--good-rgb), 0.4);
 }
 
-.account-block-connected {
-  max-width: 42rem;
-}
-
 .account-connected-identities {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1rem;
-  margin: 0 0 1rem;
+  margin: 0;
 }
 
 .account-orgs {
@@ -5554,7 +5642,7 @@ a.claim-app-bond:hover {
 }
 
 .account-orgs .btn,
-.account-block-connected .btn-compact,
+.account-connected .btn-compact,
 .account-org-actions .btn {
   width: auto;
   justify-self: start;
@@ -7384,6 +7472,92 @@ a.claim-app-bond:hover {
   margin-left: auto;
 }
 
+.propose-tos-card,
+.propose-wizard-nav.propose-tos-card {
+  display: grid;
+  gap: 0.9rem;
+  align-items: stretch;
+  justify-content: stretch;
+  margin-top: 0.75rem;
+  padding: 1.1rem 1.2rem 1.15rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  box-shadow: 0 -10px 28px rgba(8, 7, 12, 0.28);
+}
+
+.propose-tos-card-copy {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.propose-tos-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.propose-tos-card-lede {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.propose-tos-ack {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.7rem;
+  align-items: start;
+  margin: 0.15rem 0 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 550;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.propose-tos-ack:focus-within {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.propose-tos-ack:has(input:checked) {
+  border-color: var(--accent-border);
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), transparent 70%),
+    var(--bg);
+}
+
+.propose-tos-ack input {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-width: 1.15rem;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+
+.propose-tos-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.propose-tos-card-actions .btn {
+  min-height: 2.5rem;
+}
+
 .propose-wizard-cancel {
   margin: 0;
 }
@@ -7503,9 +7677,11 @@ a.claim-app-bond:hover {
     grid-template-columns: 1fr;
   }
 
-  .propose-wizard-nav {
+  .propose-wizard-nav,
+  .propose-tos-card {
     position: static;
-    background: none;
+    background: var(--bg-elevated);
+    box-shadow: none;
   }
 }
 
@@ -7585,27 +7761,18 @@ a.claim-app-bond:hover {
   margin-bottom: 0.375rem;
 }
 
-/* Account profile: use page width; keep short-control sections compact */
-.account-form {
+/* Account profile: cards own the width; links stay a 2+1 row on desktop */
+.account-profile-main .link-row {
+  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.account-profile-main .link-row .link-label,
+.account-profile-main .link-row .link-url {
+  min-width: 0;
   width: 100%;
-  max-width: none;
-  margin-top: 1.25rem;
-}
-
-.account-form .account-block-narrow {
-  max-width: 28rem;
-}
-
-.account-form .account-block-bio {
-  max-width: 42rem;
-}
-
-.account-form .account-block-payout {
-  max-width: 42rem;
-}
-
-.account-block-links .hint {
-  margin-bottom: 0.15rem;
 }
 
 .account-links {
@@ -7616,19 +7783,6 @@ a.claim-app-bond:hover {
 .account-links-list {
   display: grid;
   gap: 0.5rem;
-}
-
-.account-form .link-row {
-  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr) auto;
-  gap: 0.65rem;
-  align-items: center;
-  margin-bottom: 0;
-}
-
-.account-form .link-row .link-label,
-.account-form .link-row .link-url {
-  min-width: 0;
-  width: 100%;
 }
 
 .account-links-foot {
@@ -7823,15 +7977,27 @@ a.claim-app-bond:hover {
 /* profile link Remove uses .editor-remove */
 
 @media (max-width: 640px) {
-  .header-end {
-    width: 100%;
-    justify-content: flex-end;
+  .site-header {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
   }
-  .header-end .social-links {
+  .header-end {
+    width: auto;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+  .header-end::-webkit-scrollbar {
     display: none;
   }
+  .nav {
+    flex-wrap: nowrap;
+  }
   .link-row,
-  .account-form .link-row {
+  .account-profile-main .link-row {
     grid-template-columns: 1fr;
   }
   .path-grid,
@@ -8069,6 +8235,29 @@ a.claim-app-bond:hover {
   flex-direction: column;
   gap: 0.75rem;
   margin: 0.5rem 0 0;
+}
+
+.auth-gate {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  padding: 1.5rem 0 2.5rem;
+}
+
+.auth-gate-card {
+  width: min(28rem, 100%);
+  padding: 1.5rem 1.5rem 1.35rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.auth-gate-card h1 {
+  margin: 0 0 0.5rem;
+}
+
+.auth-gate-card .lede {
+  margin: 0 0 1rem;
 }
 
 .login-choices-prompt {
@@ -8865,6 +9054,30 @@ a.proposal-comment-author:hover {
   gap: 0.4rem;
 }
 
+.tag-input-more {
+  margin: 0;
+}
+
+.tag-input-more summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  list-style: none;
+}
+
+.tag-input-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.tag-input-more[open] summary {
+  margin-bottom: 0.45rem;
+  color: var(--ink-secondary);
+}
+
+.tag-input-more .tag-input-presets {
+  margin-top: 0.15rem;
+}
+
 .tag-preset {
   appearance: none;
   font: inherit;
@@ -9153,6 +9366,14 @@ a.proposal-comment-author:hover {
   font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--ink);
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+.ai-attr {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .ai-fail-list {

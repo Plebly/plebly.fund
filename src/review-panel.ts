@@ -9,7 +9,6 @@ import {
   publishDissent,
   submitRebuttal,
   voteReviewDecision,
-  type AiReviewView,
   type ReviewDecisionView,
 } from "./reviewers";
 import { escapeHtml } from "./util";
@@ -17,6 +16,8 @@ import { escapeHtml } from "./util";
 export function aiOutcomeLabel(outcome: string): string {
   if (outcome === "pass") return "Clear pass";
   if (outcome === "fail") return "Clear fail";
+  if (outcome === "bypass") return "Skipped";
+  if (outcome === "unavailable") return "Unavailable";
   return "Needs human review";
 }
 
@@ -26,8 +27,16 @@ export function aiOutcomeClass(outcome: string): string {
   return "ai-ambiguous";
 }
 
-/** Compact AI result card (deliverable submit response or decision attachment). */
-export function aiReviewCardHtml(ai: AiReviewView, opts?: { compact?: boolean }): string {
+/** Compact AI Reviewer card (deliverable submit, flag window, or decision). */
+export function aiReviewCardHtml(
+  ai: {
+    outcome: string;
+    reasoning?: string;
+    failing_criteria?: string[];
+    attribution?: string;
+  },
+  opts?: { compact?: boolean },
+): string {
   const failList =
     ai.failing_criteria?.length
       ? `<ul class="ai-fail-list">${ai.failing_criteria
@@ -35,15 +44,24 @@ export function aiReviewCardHtml(ai: AiReviewView, opts?: { compact?: boolean })
           .join("")}</ul>`
       : "";
   const next =
-    ai.outcome === "fail"
-      ? `<p class="ai-next">Revise and resubmit.</p>`
-      : `<p class="ai-next">The proposer can mark this done.</p>`;
+    ai.outcome === "unavailable"
+      ? `<p class="ai-next">Intelligence was unavailable. Review continues without this analysis.</p>`
+      : ai.outcome === "bypass"
+        ? `<p class="ai-next">This listing is outside the AI Reviewer's competence.</p>`
+        : `<p class="ai-next">Advisory. The proposer can mark this done. Fail does not block review.</p>`;
+  const attribution = escapeHtml(
+    ai.attribution || "Powered by BTCDecoded Intelligence",
+  );
+  const cites = ai.reasoning
+    ? `<pre class="ai-reasoning">${escapeHtml(ai.reasoning)}</pre>`
+    : "";
   return `<div class="ai-review-card ${aiOutcomeClass(ai.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
     <div class="ai-review-head">
-      <span class="ai-k">AI first-pass</span>
+      <span class="ai-k">AI Reviewer</span>
       <span class="pill ${aiOutcomeClass(ai.outcome)}">${escapeHtml(aiOutcomeLabel(ai.outcome))}</span>
     </div>
-    ${ai.reasoning ? `<p class="ai-reasoning">${escapeHtml(ai.reasoning)}</p>` : ""}
+    <p class="ai-attr">${attribution}</p>
+    ${cites}
     ${failList}
     ${next}
   </div>`;
@@ -53,6 +71,7 @@ export function reviewPanelHtml(proposalId: string): string {
   return `<div class="review-panel" id="review-panel" data-proposal-id="${escapeHtml(proposalId)}">
     <h3 class="review-panel-title">Reviewer decision</h3>
     <p class="muted" id="review-status">Loading…</p>
+    <div id="review-ai"></div>
     <div id="review-counts" class="review-counts" hidden></div>
     <div id="review-actions" class="review-actions" hidden>
       <button type="button" class="btn" data-rev-vote="yes">${btnWithIcon("check", "Approve")}</button>
@@ -146,6 +165,10 @@ function renderDecision(
 
   if (statusEl) {
     statusEl.textContent = reviewDecisionStatusLine(d);
+  }
+  const aiSlot = root.querySelector<HTMLElement>("#review-ai");
+  if (aiSlot) {
+    aiSlot.innerHTML = d.ai_review ? aiReviewCardHtml(d.ai_review, { compact: true }) : "";
   }
   if (counts) {
     counts.hidden = false;

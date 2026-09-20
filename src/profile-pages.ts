@@ -147,12 +147,12 @@ function keyholderKeysCardHtml(kh: {
       : kh.status === "invited"
         ? `<p class="muted">Submit fingerprint + xpub in the console.</p>`
         : "";
-  return `<div class="form-panel" id="account-keyholder-card">
-    <h2 class="proposal-block-title">Keyholder keys</h2>
-    <p><span class="pill">${escapeHtml(kh.status)}</span></p>
+  return `<section class="account-card" id="account-keyholder-card">
+    <h2 class="account-card-title">Keyholder keys</h2>
+    <p class="account-card-lede"><span class="pill">${escapeHtml(kh.status)}</span></p>
     ${fp}${xpub}${wait}
-    <p><a class="btn ghost" href="${href("/keyholders")}">Open keyholders console</a></p>
-  </div>`;
+    <p><a class="btn ghost btn-compact" href="${href("/keyholders")}">Keyholders console</a></p>
+  </section>`;
 }
 
 function claimsPaneHtml(
@@ -351,26 +351,24 @@ export function connectedAccountsHtml(user: AuthUser): string {
   let orgBlock: string;
   if (!githubSession) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <h2 class="section-title account-orgs-heading">${orgHeading}</h2>
-      <p class="hint">Sign in with GitHub to view and link organizations you own. Then you can apply for claims or propose projects as that org.</p>
+      <h3 class="account-card-sub">${orgHeading}</h3>
+      <p class="account-card-lede">Sign in with GitHub to link organizations you own, then apply or propose as that org.</p>
     </div>`;
   } else if (rows) {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <h2 class="section-title account-orgs-heading">${orgHeading}</h2>
-      <p class="hint">Orgs you own on GitHub. Use them to apply or propose as that organization.</p>
+      <h3 class="account-card-sub">${orgHeading}</h3>
       <ul class="account-org-grid" aria-label="Linked GitHub organizations">${rows}</ul>
       <div class="account-org-actions">
         <a class="btn btn-compact" id="add-org-grant-link" href="#" rel="noreferrer noopener">Add organization</a>
         <button type="button" class="btn ghost btn-compact" id="sync-github-orgs-btn">Sync from GitHub</button>
       </div>
       <div id="org-pick-panel" class="account-org-pick" hidden></div>
-      <p class="hint" id="org-access-hint">Add organization opens GitHub so you can grant this app access to another org you own. Then Sync from GitHub to link it here.</p>
+      <p class="hint" id="org-access-hint">Grant this app access to another org you own, then sync.</p>
       <p class="form-msg" id="org-link-msg" hidden></p>
     </div>`;
   } else {
     orgBlock = `<div class="account-orgs" id="account-orgs">
-      <h2 class="section-title account-orgs-heading">${orgHeading}</h2>
-      <p class="hint">No organizations linked yet. Link orgs you <strong>own</strong> to apply or propose as that organization.</p>
+      <h3 class="account-card-sub">${orgHeading}</h3>
       <div class="account-org-actions">
         <button type="button" class="btn btn-compact" id="link-github-orgs-btn">Add organization</button>
       </div>
@@ -380,11 +378,102 @@ export function connectedAccountsHtml(user: AuthUser): string {
     </div>`;
   }
 
-  return `<fieldset class="form-block account-block-connected">
-    <legend>Connected accounts</legend>
+  return `<section class="account-card account-connected">
+    <h2 class="account-card-title">Connected accounts</h2>
+    <p class="account-card-lede">Logins on this session. GitHub orgs you own can apply or propose.</p>
     ${identities}
     ${orgBlock}
-  </fieldset>`;
+  </section>`;
+}
+
+type AccountKeyholder = {
+  status: string;
+  fingerprint?: string | null;
+  xpub?: string | null;
+} | null;
+
+export function accountProfilePaneHtml(
+  user: AuthUser,
+  keyholder: AccountKeyholder,
+): string {
+  const usernameHint = user.username
+    ? "Public URL. This cannot be changed."
+    : "3–32 characters · lowercase letters, numbers, hyphens";
+  return `<div class="account-profile-layout">
+      <form id="account-form" class="account-profile-main">
+        <section class="account-card">
+          <h2 class="account-card-title">Public profile</h2>
+          <p class="account-card-lede">What people see on your public page.</p>
+          <fieldset class="form-block">
+            <legend>Username</legend>
+            <div class="field-row">
+              <span class="field-prefix">plebly.bitcoin/u/</span>
+              <input id="username-input" type="text" value="${escapeHtml(user.username || "")}" placeholder="yourname" pattern="[a-z0-9-]+" minlength="3" maxlength="32" ${user.username ? "readonly" : ""} />
+              ${user.username ? "" : `<button type="button" class="btn" id="claim-username-btn">Claim</button>`}
+            </div>
+            <p class="hint" id="username-hint">${usernameHint}</p>
+          </fieldset>
+          <fieldset class="form-block">
+            <legend>Bio</legend>
+            <textarea id="bio-input" rows="4" maxlength="500" placeholder="What you work on, Bitcoin interests…">${escapeHtml(user.bio || "")}</textarea>
+          </fieldset>
+          <fieldset class="form-block">
+            <legend>Skills &amp; interests</legend>
+            ${tagInputHtml({
+              id: "skills-tags",
+              name: "skills_tags",
+              tags: user.skills_tags || [],
+              max: MAX_SKILLS_TAGS,
+              vocabulary: SUGGESTED_SKILLS_TAGS,
+              presets: SKILLS_PRESET_TAGS,
+              presetsCollapsed: true,
+              placeholder: "Type a skill, then Enter",
+              hint: "Matching listed projects may notify you. Up to 20.",
+            })}
+          </fieldset>
+          <fieldset class="form-block">
+            <legend>Links</legend>
+            <div class="account-links">
+              <div id="links-list" class="account-links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
+              <div class="account-links-foot">
+                <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
+              </div>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="account-card">
+          <h2 class="account-card-title">Payout &amp; donations</h2>
+          <p class="account-card-lede">Default destination for refunds and claim payouts, and how you appear on funder lists.</p>
+          <fieldset class="form-block">
+            <legend>Payout destination</legend>
+            <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… / tb1… or you@host" maxlength="120" />
+            <p class="hint">On-chain bech32 or Lightning Address.</p>
+          </fieldset>
+          <fieldset class="form-block account-funder-credit">
+            <legend>Funder list</legend>
+            <p class="hint">Amounts stay private unless you opt in.</p>
+            ${creditPreferenceFieldsHtml({
+              idPrefix: "account-credit",
+              legend: false,
+            })}
+          </fieldset>
+          <div class="form-actions">
+            <button type="submit" class="btn">Save profile</button>
+            <p class="form-msg" id="account-msg" hidden></p>
+          </div>
+        </section>
+      </form>
+
+      <aside class="account-profile-side">
+        ${keyholderKeysCardHtml(keyholder)}
+        ${connectedAccountsHtml(user)}
+        <div class="account-card account-card-quiet account-danger">
+          <button type="button" class="btn-text-danger" id="delete-account-btn">Delete account</button>
+          <p class="form-msg" id="delete-account-msg" hidden></p>
+        </div>
+      </aside>
+    </div>`;
 }
 
 export async function renderAccount(
@@ -395,10 +484,12 @@ export async function renderAccount(
   const loginReturn = "/account";
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
-      <section class="wrap-wide detail">
-        <h1>Account</h1>
-        <p class="lede">Sign in to watch projects, apply for funded work, and manage your profile.</p>
-        ${loginChoicesHtml(undefined, loginReturn)}
+      <section class="wrap-wide detail auth-gate">
+        <div class="auth-gate-card">
+          <h1>Account</h1>
+          <p class="lede">Sign in to watch projects, apply for funded work, and manage your profile.</p>
+          ${loginChoicesHtml(undefined, loginReturn)}
+        </div>
       </section>
     `);
     return;
@@ -470,19 +561,19 @@ export async function renderAccount(
     <section class="wrap-wide detail account-page">
       <div class="account-head">
         <div>
+          <p class="eyebrow">Account</p>
           <h1>${escapeHtml(accountNavLabel(user))}</h1>
           ${
             reviewerMe?.active
-              ? `<p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} seat</span> <a href="${href("/reviewers")}">Open governance</a>${
+              ? `<p class="account-head-meta muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} reviewer · <a href="${href("/reviewers")}">Governance</a>${
                   (reviewerMe.reviewer?.completed_proposal_ids?.length || 0) >= 1
                     ? ` · <a href="${href("/keyholders")}">Apply as keyholder</a>`
                     : ""
                 }</p>`
               : reviewerMe?.funder_eligible
-                ? `<p class="reviewer-badge"><span class="pill status-good">Eligible funder</span> <a href="${href("/reviewers")}#removals">Removal ballots</a></p>`
-                : `<p class="reviewer-badge muted"><a href="${href("/reviewers")}">Reviewer governance</a></p>`
+                ? `<p class="account-head-meta muted">Funder eligible · <a href="${href("/reviewers")}#removals">Removal ballots</a></p>`
+                : ""
           }
-          ${user.username ? "" : `<p class="lede">Claim a username for your public profile URL.</p>`}
         </div>
         ${
           user.username
@@ -512,72 +603,7 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="profile" ${tab === "profile" ? "" : "hidden"}>
-      ${keyholderKeysCardHtml(keyholderMe.keyholder)}
-      <form id="account-form" class="form-panel form-panel-wide account-form">
-        <fieldset class="form-block account-block-narrow">
-          <legend>Username</legend>
-          <div class="field-row">
-            <span class="field-prefix">plebly.fund/u/</span>
-            <input id="username-input" type="text" value="${escapeHtml(user.username || "")}" placeholder="yourname" pattern="[a-z0-9-]+" minlength="3" maxlength="32" ${user.username ? "readonly" : ""} />
-            ${user.username ? "" : `<button type="button" class="btn" id="claim-username-btn">Claim</button>`}
-          </div>
-          <p class="hint" id="username-hint">3-32 characters · lowercase letters, numbers, hyphens</p>
-        </fieldset>
-
-        <fieldset class="form-block account-block-bio">
-          <legend>Bio</legend>
-          <textarea id="bio-input" rows="4" maxlength="500" placeholder="What you work on, Bitcoin interests…">${escapeHtml(user.bio || "")}</textarea>
-        </fieldset>
-
-        <fieldset class="form-block account-block-skills">
-          <legend>Skills &amp; interests</legend>
-          ${tagInputHtml({
-            id: "skills-tags",
-            name: "skills_tags",
-            tags: user.skills_tags || [],
-            max: MAX_SKILLS_TAGS,
-            vocabulary: SUGGESTED_SKILLS_TAGS,
-            presets: SKILLS_PRESET_TAGS,
-            placeholder: "Type a skill, then Enter",
-            hint: "Add skills and interests. Matching listed projects may notify you. Up to 20; freeform tags are fine.",
-          })}
-        </fieldset>
-
-        <fieldset class="form-block account-block-payout">
-          <legend>Payout destination</legend>
-          <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… / tb1… or you@host" maxlength="120" />
-          <p class="hint">Default for bond refunds and claim escrow payouts — on-chain bech32 or Lightning Address.</p>
-        </fieldset>
-
-        <fieldset class="form-block account-block-links">
-          <legend>Links</legend>
-          <p class="hint">Optional profile links. Label is required for non-social URLs.</p>
-          <div class="account-links">
-            <div id="links-list" class="account-links-list">${linkRowHtml(user.links?.length ? user.links : [{ label: "", url: "" }])}</div>
-            <div class="account-links-foot">
-              <button type="button" class="btn ghost" id="add-link-btn">Add link</button>
-            </div>
-          </div>
-        </fieldset>
-
-        ${connectedAccountsHtml(user)}
-
-        <fieldset class="form-block account-funder-credit account-block-narrow">
-          <legend>Funder appearance</legend>
-          <p class="hint">How you show up on project funder lists after a donation is linked to your account. Amounts stay private unless you opt in.</p>
-          ${creditPreferenceFieldsHtml({ idPrefix: "account-credit" })}
-        </fieldset>
-
-        <div class="form-actions">
-          <button type="submit" class="btn">Save profile</button>
-        </div>
-        <p class="form-msg" id="account-msg" hidden></p>
-      </form>
-
-      <div class="account-danger">
-        <button type="button" class="btn-text-danger" id="delete-account-btn">Delete account</button>
-        <p class="form-msg" id="delete-account-msg" hidden></p>
-      </div>
+        ${accountProfilePaneHtml(user, keyholderMe.keyholder)}
       </div>
 
       <div class="account-pane" data-pane="watching" ${tab === "watching" ? "" : "hidden"}>

@@ -28,13 +28,18 @@ describe("review panel UI helpers", () => {
     expect(html).toContain("Clear fail");
     expect(html).toContain("Missing tests");
     expect(html).toContain("Acceptance criteria");
-    expect(html).toContain("Revise and resubmit.");
+    expect(html).toContain("Advisory");
+    expect(html).toContain("AI Reviewer");
+    expect(html).toContain("Powered by BTCDecoded Intelligence");
+    expect(html).not.toContain("Revise and resubmit.");
+    expect(html).not.toContain("AI first-pass");
     expect(html).not.toContain("No reviewer ballot");
     expect(html).not.toContain("v1");
     expect(html).not.toContain("claude-sonnet");
+    expect(html).not.toMatch(/\bBDI\b/);
   });
 
-  it("pass and ambiguous cards tell the proposer they can mark this done", () => {
+  it("pass and ambiguous cards stay advisory", () => {
     const pass = aiReviewCardHtml({
       outcome: "pass",
       reasoning: "Looks good",
@@ -55,6 +60,7 @@ describe("review panel UI helpers", () => {
     const review = reviewPanelHtml("demo-id");
     expect(review).toContain('id="review-panel"');
     expect(review).toContain('id="review-actions"');
+    expect(review).toContain('id="review-ai"');
     expect(review).toContain('data-proposal-id="demo-id"');
     expect(review).toContain('data-rev-vote="yes"');
     expect(review).toContain("dissent-submit");

@@ -13,16 +13,18 @@ const BARE_URL_RE = /(https?:\/\/[^\s<]+)/gi;
  * Safe for notes / labels / comments that are otherwise plain text.
  */
 export function linkifyText(text: string): string {
-  return escapeHtml(text).replace(BARE_URL_RE, (raw) => {
-    let url = raw;
-    let trail = "";
-    while (/[.,;:!?)\]}'"]$/u.test(url)) {
-      trail = `${url.slice(-1)}${trail}`;
-      url = url.slice(0, -1);
-    }
-    if (!/^https?:\/\//i.test(url)) return raw;
-    return `<a href="${url}" target="_blank" rel="noreferrer noopener">${url}</a>${trail}`;
-  });
+  return escapeHtml(text)
+    .replace(BARE_URL_RE, (raw) => {
+      let url = raw;
+      let trail = "";
+      while (/[.,;:!?)\]}'"]$/u.test(url)) {
+        trail = `${url.slice(-1)}${trail}`;
+        url = url.slice(0, -1);
+      }
+      if (!/^https?:\/\//i.test(url)) return raw;
+      return `<a href="${url}" target="_blank" rel="noreferrer noopener">${url}</a>${trail}`;
+    })
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
 /** QR module colors from live CSS theme tokens. */

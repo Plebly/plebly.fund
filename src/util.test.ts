@@ -58,6 +58,9 @@ describe("linkifyText", () => {
 
   it("leaves non-url text alone", () => {
     expect(linkifyText("no links here")).toBe("no links here");
+    expect(linkifyText("see **secsovereign** here")).toBe(
+      "see <strong>secsovereign</strong> here",
+    );
     expect(linkifyText("ftp://not-supported.example")).toBe(
       "ftp://not-supported.example",
     );

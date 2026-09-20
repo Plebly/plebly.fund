@@ -1,6 +1,6 @@
 # Plebly: full context for LLMs
 
-Plebly (https://plebly.fund) is a public funding platform for Bitcoin development and research.
+Plebly (https://plebly.bitcoin) is a public funding platform for Bitcoin development and research.
 
 ## What it is
 
@@ -8,7 +8,7 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 - Connects donors and builders without a custodian that can freeze or redirect escrow.
 - Listings live on the site (Worker catalog). Published fees and keyholder rules are in git.
 - On-chain escrow history is independent of the website.
-- Curated agent index: https://plebly.fund/llms.txt (https://llmstxt.org/)
+- Curated agent index: https://plebly.bitcoin/llms.txt (https://llmstxt.org/)
 
 ## Core beliefs
 
@@ -37,14 +37,16 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. OpenNo
 
 ## Important URLs
 
-- Site home: https://plebly.fund/
-- About: https://plebly.fund/about
-- Propose: https://plebly.fund/propose
-- Stats: https://plebly.fund/stats
-- Reviewers: https://plebly.fund/reviewers
-- Project pages: https://plebly.fund/p/{id} (stable lowercase id)
-- llms.txt: https://plebly.fund/llms.txt
-- Sitemap: https://plebly.fund/sitemap.xml
+- Site home: https://plebly.bitcoin/
+- About: https://plebly.bitcoin/about
+- Propose: https://plebly.bitcoin/propose
+- Stats: https://plebly.bitcoin/stats
+- Reviewers: https://plebly.bitcoin/reviewers
+- Reviewer rules: https://plebly.bitcoin/reviewer-responsibilities
+- Keyholder responsibilities: https://plebly.bitcoin/keyholder-responsibilities
+- Project pages: https://plebly.bitcoin/p/{id} (stable lowercase id)
+- llms.txt: https://plebly.bitcoin/llms.txt
+- Sitemap: https://plebly.bitcoin/sitemap.xml
 - PARAMETERS.md: https://github.com/Plebly/proposals/blob/main/PARAMETERS.md
 - KEYHOLDERS.md: https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md
 - Workers API (runtime): https://plebly-api.securesovereigns.workers.dev

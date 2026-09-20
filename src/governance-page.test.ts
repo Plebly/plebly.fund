@@ -11,6 +11,8 @@ import {
   reviewerRowHtml,
   rosterSectionHtml,
   khApplyFormHtml,
+  governanceFootHtml,
+  aiReviewersSectionHtml,
 } from "./governance-page";
 import {
   decisionKindLabel,
@@ -190,6 +192,30 @@ describe("governance UI helpers", () => {
     expect(html).toContain("Platform completions 4");
   });
 
+  it("AI Reviewers section is always visible with Intelligence attribution", () => {
+    const empty = aiReviewersSectionHtml(null);
+    expect(empty).toContain("AI Reviewer");
+    expect(empty).toContain("Powered by BTCDecoded Intelligence");
+    expect(empty).toContain("Does not vote");
+    expect(empty).not.toMatch(/\bBDI\b/);
+    const withSeat = aiReviewersSectionHtml({
+      active: [],
+      reviewers: [],
+      count: 0,
+      platform_completions: 0,
+      ai_reviewers: [
+        {
+          id: "ai-reviewer-btcdecoded-intelligence",
+          name: "AI Reviewer",
+          attribution: "Powered by BTCDecoded Intelligence",
+          kind: "ai",
+          voting: false,
+        },
+      ],
+    });
+    expect(withSeat).toContain("AI Reviewer");
+  });
+
   it("decision cards expose vote controls for reviewers", () => {
     const d = {
       id: "dec-1",
@@ -308,5 +334,15 @@ describe("governance UI helpers", () => {
     expect(form).toContain("kh-apply-form");
     expect(form).toContain("operator can spend");
     expect(form).toContain("Terms");
+  });
+
+  it("points the reviewers footer at site pages, not a markdown filename", () => {
+    const html = governanceFootHtml();
+    expect(html).toContain("/reviewer-responsibilities");
+    expect(html).toContain("Reviewer rules");
+    expect(html).toContain("/keyholder-responsibilities");
+    expect(html).toContain("/#projects");
+    expect(html).not.toContain("REVIEWERS.md");
+    expect(html).not.toContain("github.com");
   });
 });

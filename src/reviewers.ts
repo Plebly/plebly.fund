@@ -14,11 +14,15 @@ function authHeaders(): HeadersInit {
 }
 
 export type AiReviewView = {
-  outcome: "pass" | "fail" | "ambiguous";
+  outcome: "pass" | "fail" | "ambiguous" | "bypass" | "unavailable";
   reasoning?: string;
   failing_criteria?: string[];
   prompt_version: string;
   model: string;
+  trigger?: string;
+  reviewer_name?: string;
+  attribution?: string;
+  at?: string;
 };
 
 export type ReviewDecisionView = {
@@ -78,6 +82,16 @@ export type ReviewerRoster = {
   reviewers: ReviewerPublic[];
   count: number;
   platform_completions: number;
+  ai_reviewers?: OfficialAiReviewer[];
+};
+
+export type OfficialAiReviewer = {
+  id: string;
+  name: string;
+  attribution: string;
+  kind: "ai";
+  voting: false;
+  provider?: string;
 };
 
 export async function fetchReviewerRoster(): Promise<ReviewerRoster | null> {

@@ -102,11 +102,16 @@ export function readCreditPreferences(
 export function creditPreferenceFieldsHtml(opts?: {
   idPrefix?: string;
   nested?: boolean;
+  legend?: string | false;
 }): string {
   const prefix = opts?.idPrefix ?? "credit";
   const nestedClass = opts?.nested === false ? "" : " funder-credit-check-nested";
+  const legend =
+    opts?.legend === false
+      ? ""
+      : `<legend class="donate-amount-label">${opts?.legend ?? "Display"}</legend>`;
   return `<fieldset class="funder-credit-options">
-    <legend class="donate-amount-label">Display</legend>
+    ${legend}
     <label class="funder-credit-check">
       <input type="checkbox" id="${prefix}-public" checked />
       <span>Show my identity on the funder list</span>

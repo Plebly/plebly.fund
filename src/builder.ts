@@ -84,6 +84,17 @@ export type ClaimStatus = {
   release_blocked_seats?: number[] | null;
   rebuttal_expires_at?: string | null;
   rebuttal_reasoning?: string | null;
+  ai_review?: {
+    outcome: string;
+    reasoning?: string;
+    failing_criteria?: string[];
+    prompt_version: string;
+    model: string;
+    trigger?: string;
+    reviewer_name?: string;
+    attribution?: string;
+    at?: string;
+  } | null;
   psbt?: {
     psbt_kind?: "single" | "milestone";
     structured_state?: string;
@@ -386,6 +397,7 @@ export function applyClaimStatusToProposal(
       status.rebuttal_expires_at ?? proposal.rebuttal_expires_at,
     rebuttal_reasoning:
       status.rebuttal_reasoning ?? proposal.rebuttal_reasoning,
+    ai_review: status.ai_review ?? proposal.ai_review,
   };
 }
 
@@ -393,11 +405,16 @@ export async function fetchClaimStatus(
   proposalPath: string,
 ): Promise<ClaimStatus | null> {
   if (!WORKERS_API) return null;
-  const res = await authFetch(
-    `${API()}/claims/${encodeURIComponent(proposalPath)}`,
-  );
-  if (!res.ok) return null;
-  return (await res.json()) as ClaimStatus;
+  try {
+    const res = await authFetch(
+      `${API()}/claims/${encodeURIComponent(proposalPath)}`,
+      { signal: AbortSignal.timeout(8_000) },
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as ClaimStatus;
+  } catch {
+    return null;
+  }
 }
 
 export type PayoutStatusState =
@@ -798,11 +815,14 @@ export type DeliverableResult = {
   pr_url?: string;
   decision_id?: string;
   ai_review?: {
-    outcome: "pass" | "fail" | "ambiguous";
+    outcome: "pass" | "fail" | "ambiguous" | "bypass" | "unavailable";
     reasoning: string;
     failing_criteria?: string[];
     prompt_version: string;
     model: string;
+    trigger?: string;
+    reviewer_name?: string;
+    attribution?: string;
   };
 };
 

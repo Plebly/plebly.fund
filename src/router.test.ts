@@ -13,7 +13,10 @@ describe("router governance paths", () => {
   it("links Projects nav to the home open-projects section", () => {
     expect(projectsHref()).toBe("/#projects");
     expect(projectsHref("?for=builders")).toBe("/?for=builders#projects");
-    expect(campaignsHref()).toBe("/#campaigns");
+    expect(campaignsHref()).toBe("/?type=direct#projects");
+    expect(campaignsHref("?for=builders")).toBe(
+      "/?for=builders&type=direct#projects",
+    );
   });
 
   it("parses /reviewers and /governance", () => {
@@ -54,6 +57,24 @@ describe("router governance paths", () => {
     expect(parseLocation("/stats", "")).toEqual({ name: "stats" });
     expect(parseLocation("/terms", "")).toEqual({ name: "terms" });
     expect(seoForRoute({ name: "terms" }).path).toBe("/terms");
+    expect(parseLocation("/keyholder-responsibilities", "")).toEqual({
+      name: "khDuties",
+    });
+    expect(
+      parseLocation("/docs/keyholder-responsibilities.md", ""),
+    ).toEqual({ name: "khDuties" });
+    expect(seoForRoute({ name: "khDuties" }).path).toBe(
+      "/keyholder-responsibilities",
+    );
+    expect(parseLocation("/reviewer-responsibilities", "")).toEqual({
+      name: "reviewerDuties",
+    });
+    expect(parseLocation("/reviewer-rules", "")).toEqual({
+      name: "reviewerDuties",
+    });
+    expect(seoForRoute({ name: "reviewerDuties" }).path).toBe(
+      "/reviewer-responsibilities",
+    );
     expect(parseLocation("/archive", "")).toEqual({
       name: "archive",
       tab: "completed",
@@ -102,7 +123,7 @@ describe("router governance paths", () => {
 
   it("does not treat /docs and static files as SPA routes", () => {
     expect(isStaticDocumentPath("/docs/keyholder-responsibilities.md")).toBe(
-      true,
+      false,
     );
     expect(isStaticDocumentPath("/docs/TOS.md")).toBe(true);
     expect(isStaticDocumentPath("/docs/dispute-resolution.md")).toBe(true);

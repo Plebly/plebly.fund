@@ -48,9 +48,13 @@ export function projectsHref(search = ""): string {
   return href("/", search, "#projects");
 }
 
-/** Home page direct campaigns / charities rail. */
+/** Home listing filtered to direct campaigns. */
 export function campaignsHref(search = ""): string {
-  return href("/", search, "#campaigns");
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  params.set("type", "direct");
+  return href("/", `?${params.toString()}`, "#projects");
 }
 
 /** Smooth-scroll to a location.hash target (ignores auth hash fragments). */
@@ -100,12 +104,22 @@ export function parseLocation(
   }
   if (path === "donations") return { name: "donations" };
   if (path === "keyholders") return { name: "keyholders" };
+  if (
+    path === "keyholder-responsibilities" ||
+    path === "docs/keyholder-responsibilities" ||
+    path === "docs/keyholder-responsibilities.md"
+  ) {
+    return { name: "khDuties" };
+  }
   if (path === "parameters") return { name: "params" };
   if (path === "terms") return { name: "terms" };
   if (path === "account") return { name: "account" };
   if (path === "work") return { name: "work" };
   if (path === "propose" || path === "submit") return { name: "propose" };
   if (path === "reviewers" || path === "governance") return { name: "reviewers" };
+  if (path === "reviewer-responsibilities" || path === "reviewer-rules") {
+    return { name: "reviewerDuties" };
+  }
   if (path === "wanted") return { name: "wanted" };
   if (path === "endowment") return { name: "endowment" };
   if (path === "admin" || path.startsWith("admin/")) return { name: "admin" };
@@ -187,6 +201,7 @@ export function migrateHashRoute(): boolean {
 
 /** Markdown, llms, sitemap, and /docs/ must load as real files — not SPA routes. */
 export function isStaticDocumentPath(pathname: string): boolean {
+  if (/keyholder-responsibilities(\.md)?$/i.test(pathname)) return false;
   return (
     /\.(md|txt|xml|json|webmanifest)$/i.test(pathname) ||
     /\/docs\//.test(pathname)
@@ -535,6 +550,13 @@ export function seoForRoute(
           "Sparrow cosign console for escrow releases.",
         path: "/keyholders",
       };
+    case "khDuties":
+      return {
+        title: "Keyholder responsibilities",
+        description:
+          "What a Plebly keyholder does, how they are paid, and what happens if they stall.",
+        path: "/keyholder-responsibilities",
+      };
     case "propose":
       return {
         title: "Start a project",
@@ -548,6 +570,13 @@ export function seoForRoute(
         description:
           "Active reviewer roster, open decisions, and funder removal ballots on Plebly.",
         path: "/reviewers",
+      };
+    case "reviewerDuties":
+      return {
+        title: "Reviewer rules",
+        description:
+          "Who can review Plebly work, how a vote passes, and what stays on the project page.",
+        path: "/reviewer-responsibilities",
       };
     case "account":
       return {

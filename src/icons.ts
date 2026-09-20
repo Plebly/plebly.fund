@@ -73,13 +73,6 @@ export function nostrAccountLink(pubkey: string, label: string): string {
   return `<a class="social-account" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${nostrIcon()}<span>${escapeHtml(label)}</span></a>`;
 }
 
-export function pleblySocialLinksHtml(): string {
-  return `<span class="social-links">
-    ${iconLink("github", PLEBLY_GITHUB_URL, "Plebly on GitHub")}
-    ${iconLink("x-twitter", PLEBLY_X_URL, "Plebly on X (@joinplebly)")}
-  </span>`;
-}
-
 export function pleblySocialAccountsHtml(): string {
   return `<span class="social-accounts">
     ${socialAccountLink("github", PLEBLY_GITHUB_URL, "Plebly")}

@@ -1,6 +1,7 @@
 import { formatSats, escapeHtml } from "./util";
 import type { DependsOnEntry, RelatedWorkEntry } from "./types";
 import type { MilestoneDraft } from "./propose-milestones";
+import { tosAckCardHtml } from "./tos-modal";
 
 export type ProposeWizardStepId =
   | "basics"
@@ -96,6 +97,13 @@ export function proposeWizardNavHtml(opts: {
     : opts.isBridge
       ? "Pay fee & list"
       : "List project";
+  if (isLast) {
+    return tosAckCardHtml({
+      checkboxId: "propose-tos-ack",
+      heading: opts.isEdit ? "Before you save" : "Before you list",
+      submitLabel,
+    });
+  }
   return `<div class="propose-wizard-nav" id="propose-wizard-nav">
     <button type="button" class="btn ghost" id="propose-wizard-back" ${isFirst ? "hidden" : ""}>Back</button>
     <div class="propose-wizard-nav-end">
@@ -104,11 +112,7 @@ export function proposeWizardNavHtml(opts: {
           ? `<button type="button" class="btn ghost" id="propose-wizard-skip">Skip</button>`
           : ""
       }
-      ${
-        isLast
-          ? `<button type="submit" class="btn" id="propose-wizard-submit">${escapeHtml(submitLabel)}</button>`
-          : `<button type="button" class="btn" id="propose-wizard-next">Continue</button>`
-      }
+      <button type="button" class="btn" id="propose-wizard-next">Continue</button>
     </div>
   </div>`;
 }

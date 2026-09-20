@@ -44,6 +44,24 @@ const STATIC_ROUTES = [
     description:
       "Active reviewer roster, open decisions, and funder removal ballots on Plebly.",
   },
+  {
+    path: "/keyholder-responsibilities",
+    title: "Keyholder responsibilities",
+    description:
+      "What a Plebly keyholder does, how they are paid, and what happens if they stall.",
+  },
+  {
+    path: "/reviewer-responsibilities",
+    title: "Reviewer rules",
+    description:
+      "Who can review Plebly work, how a vote passes, and what stays on the project page.",
+  },
+  {
+    path: "/terms",
+    title: "Terms",
+    description:
+      "Coordinator terms for proposing and claiming on Plebly. Not legal advice.",
+  },
 ];
 
 function escapeHtml(value) {

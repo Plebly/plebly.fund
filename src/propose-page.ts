@@ -70,7 +70,6 @@ import {
 import { avatarImgHtml } from "./media";
 import { href, orgHref, projectsHref, proposalHref } from "./router";
 import { showApplicationWindow } from "./claim-mode-ui";
-import { tosCheckboxHtml } from "./tos-modal";
 import {
   clearProposeDraft,
   loadProposeDraft,
@@ -218,10 +217,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
 
   if (!ctx.user) {
     app.innerHTML = ctx.shell(`
-      <section class="wrap-wide detail propose-page">
-        <h1>${editParam ? "Edit proposal" : "Start a project"}</h1>
-        <p class="lede">Sign in to ${editParam ? "edit this listing" : "list a project"}.</p>
-        ${loginChoicesHtml(undefined, returnPath)}
+      <section class="wrap-wide detail propose-page auth-gate">
+        <div class="auth-gate-card">
+          <h1>${editParam ? "Edit proposal" : "Start a project"}</h1>
+          <p class="lede">Sign in to ${editParam ? "edit this listing" : "list a project"}.</p>
+          ${loginChoicesHtml(undefined, returnPath)}
+        </div>
       </section>
     `);
     return;
@@ -572,10 +573,6 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             })}
           </fieldset>`
           }
-          <fieldset class="form-block">
-            <legend>Terms</legend>
-            ${tosCheckboxHtml("propose-tos-ack")}
-          </fieldset>
         </section>
 
         <p class="form-msg" id="propose-msg" hidden></p>
@@ -1668,6 +1665,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       )?.checked;
       if (!tosAck) {
         showWizardMsg("Accept the Terms to submit.", "error");
+        const box = document.getElementById("propose-tos-ack") as HTMLInputElement | null;
+        box?.focus();
+        box?.closest(".propose-tos-ack")?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
         return;
       }
       showWizardMsg("Listing project…");
@@ -1712,6 +1715,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     )?.checked;
     if (!tosAck) {
       showWizardMsg("Accept the Terms to amend.", "error");
+      const box = document.getElementById("propose-tos-ack") as HTMLInputElement | null;
+      box?.focus();
+      box?.closest(".propose-tos-ack")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
       return;
     }
     showWizardMsg("Saving amend…");

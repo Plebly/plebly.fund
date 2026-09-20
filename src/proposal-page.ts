@@ -1,9 +1,6 @@
 import {
-  applyClaimStatusToProposal,
-  fetchClaimStatus,
   fetchWatches,
   isOpenToClaim,
-  type ClaimStatus,
 } from "./builder";
 import { bindBuilderPanel, builderPanelHtml } from "./builder-panel";
 import {
@@ -60,6 +57,7 @@ import {
 import {
   bindRebuttalPanel,
   bindReviewPanel,
+  aiReviewCardHtml,
   rebuttalPanelHtml,
   reviewPanelHtml,
 } from "./review-panel";
@@ -507,21 +505,15 @@ export async function renderProposalPage(
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
     const proposalId = match.id;
-    let claimStatus: ClaimStatus | null = null;
-    if (proposalId && WORKERS_API) {
-      try {
-        claimStatus = await fetchClaimStatus(match.path);
-        if (claimStatus) match = applyClaimStatusToProposal(match, claimStatus);
-      } catch {
-        /* git catalog stays until Worker overlay loads */
-      }
-    }
-
-    let balance: number | undefined =
-      claimStatus?.confirmed_balance_sats ?? match.balance_sats;
+    let balance: number | undefined = match.balance_sats;
     if (balance == null && match.escrow_address) {
       try {
-        balance = await addressBalanceSats(match.escrow_address);
+        balance = await Promise.race([
+          addressBalanceSats(match.escrow_address),
+          new Promise<undefined>((resolve) => {
+            setTimeout(() => resolve(undefined), 2500);
+          }),
+        ]);
       } catch {
         /* ignore */
       }
@@ -617,7 +609,7 @@ export async function renderProposalPage(
           <div class="proposal-hero-meta">
             ${byline}
             ${metaChipsHtml(match)}
-            ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" aria-live="polite">Views: -</span>` : ""}
+            ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" hidden aria-live="polite"></span>` : ""}
           </div>
         </header>
 
@@ -664,6 +656,11 @@ export async function renderProposalPage(
             <div class="proposal-actions">
               <div id="next-card" class="next-card">
               ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching, user)}
+              ${
+                match.ai_review
+                  ? aiReviewCardHtml(match.ai_review)
+                  : ""
+              }
               ${
                 status === "in_review" &&
                 match.id &&
@@ -814,7 +811,7 @@ export async function renderProposalPage(
         balance,
         user,
         watching,
-        initialStatus: claimStatus,
+        initialStatus: null,
       }),
       donateReady,
     ]);
@@ -843,7 +840,10 @@ export async function renderProposalPage(
     if (match.id) {
       void recordProposalView(match.id).then((count) => {
         const el = app.querySelector("#proposal-view-count");
-        if (el && count != null) el.textContent = `Views: ${count.toLocaleString()}`;
+        if (el instanceof HTMLElement && count != null) {
+          el.hidden = false;
+          el.textContent = `Views: ${count.toLocaleString()}`;
+        }
       });
     }
     if (String(match.status) === "in_review" && match.id) {

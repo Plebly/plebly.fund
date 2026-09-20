@@ -26,6 +26,7 @@ const INTERNAL_PATTERNS = [
   /MEDIA R2/i,
   /HOOK_SECRET/i,
   /ANTHROPIC_API_KEY/i,
+  /BTCDECODED_MCP_KEY/i,
   /SUBMISSION_FEE_ADDRESS/i,
   /operate this site/i,
   /Set GITHUB_APP/i,

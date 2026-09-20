@@ -10,8 +10,10 @@ Listings and escrow balances are on the site at https://plebly.fund. Published f
 - [About](https://plebly.fund/about): Beliefs, how it works, fees, and network status
 - [Start a project](https://plebly.fund/propose): List a bounty or campaign (login; on-chain fee required)
 - [Funding stats](https://plebly.fund/stats): Public funding and completion totals
-- [Reviewers](https://plebly.fund/reviewers): Reviewer roster and open decisions
-- [Full context for LLMs](https://plebly.fund/llms-full.txt): Longer plain-text overview of product rules and flows
+- [Reviewers](https://plebly.bitcoin/reviewers): Reviewer roster and open decisions
+- [Reviewer rules](https://plebly.bitcoin/reviewer-responsibilities): Who can review and how a vote passes
+- [Keyholder responsibilities](https://plebly.bitcoin/keyholder-responsibilities): What a keyholder does and how they are paid
+- [Full context for LLMs](https://plebly.bitcoin/llms-full.txt): Longer plain-text overview of product rules and flows
 
 ## Projects
 

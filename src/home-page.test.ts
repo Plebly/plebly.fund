@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFloorShortfall } from "./builder";
-import { landingMarketingHtml, listingsShareEscrow, partitionListings, proposalCardHtml, sharedEscrowNoteHtml } from "./home-page";
+import { landingMarketingHtml, listingsShareEscrow, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList } from "./home-page";
 import type { Proposal } from "./types";
 
 function proposal(
@@ -73,6 +73,17 @@ describe("partitionListings", () => {
     ]);
     expect(bounties.map((p) => p.id)).toEqual(["b1", "b2"]);
     expect(campaigns.map((p) => p.id)).toEqual(["c1"]);
+  });
+});
+
+describe("featuredDuplicatesOpenList", () => {
+  it("hides featured when it is the whole open bounty list", () => {
+    const open = [
+      proposal({ status: "listed", id: "a" }),
+      proposal({ status: "listed", id: "b" }),
+    ];
+    expect(featuredDuplicatesOpenList(open, open)).toBe(true);
+    expect(featuredDuplicatesOpenList(open.slice(0, 1), open)).toBe(false);
   });
 });
 

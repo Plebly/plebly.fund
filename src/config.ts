@@ -7,10 +7,18 @@ export const PROPOSALS_REPO = "Plebly/proposals";
 export const PROPOSALS_RAW = `https://raw.githubusercontent.com/${PROPOSALS_REPO}/main`;
 export const PROPOSALS_API = `https://api.github.com/repos/${PROPOSALS_REPO}/contents/proposals`;
 
-/** Cloudflare Workers API */
+const LIVE_WORKERS_API = "https://plebly-api.securesovereigns.workers.dev";
+
+/**
+ * Cloudflare Workers API.
+ * Vite dev proxies `/workers-api` so localhost can call the live Worker
+ * without CORS (production CORS does not allow 127.0.0.1).
+ */
 export const WORKERS_API =
   import.meta.env.VITE_WORKERS_API ||
-  "https://plebly-api.securesovereigns.workers.dev";
+  (import.meta.env.DEV && import.meta.env.MODE !== "test"
+    ? "/workers-api"
+    : LIVE_WORKERS_API);
 
 /** signet while testing; mainnet at launch */
 export const BITCOIN_NETWORK =

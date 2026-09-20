@@ -170,6 +170,17 @@ export type Proposal = {
   rebuttal_reasoning?: string | null;
   donor_review_status?: "window_open" | "flagged" | "auto_completed" | null;
   donor_review_expires_at?: string | null;
+  ai_review?: {
+    outcome: string;
+    reasoning?: string;
+    failing_criteria?: string[];
+    prompt_version: string;
+    model: string;
+    trigger?: string;
+    reviewer_name?: string;
+    attribution?: string;
+    at?: string;
+  } | null;
   view_count?: number;
   /** Catalog enrich: rescue stall signal (optional). */
   rescue?: boolean;
@@ -196,12 +207,14 @@ export type Route =
   | { name: "archive"; tab: "completed" | "declined" }
   | { name: "donations" }
   | { name: "keyholders" }
+  | { name: "khDuties" }
   | { name: "params" }
   | { name: "terms" }
   | { name: "account" }
   | { name: "work" }
   | { name: "propose" }
   | { name: "reviewers" }
+  | { name: "reviewerDuties" }
   | { name: "wanted" }
   | { name: "endowment" }
   | { name: "admin" }

@@ -21,7 +21,7 @@ Reviewer votes, dissent, keyholder signing, and keyholder election votes require
 
 ## 3. Review is final
 
-Donors funded a published process, not a veto. Reviewers decide whether a deliverable meets the proposal. Keyholders do not re-try quality. A hosted model may triage a deliverable; it never releases funds.
+Donors funded a published process, not a veto. Reviewers decide whether a deliverable meets the proposal. Keyholders do not re-try quality. A listed AI Reviewer, powered by BTCDecoded Intelligence, may analyze a deliverable against its spec. That analysis is advisory, does not vote, and never releases funds.
 
 Standard `deliverable_confirm` votes are unpaid. The reviewer seat is earned by completing a bounty; that seat’s ordinary confirmations are unpaid duty. Dispute ballots (`second_review`, `listing_challenge`, `claim_extension`) are specified at 10,000 sats per yes/no vote from forfeited-bond accounting. That payout is **not live**.
 

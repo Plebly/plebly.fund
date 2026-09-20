@@ -4,6 +4,8 @@ import "@fortawesome/fontawesome-free/css/brands.min.css";
 import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
 import { renderParameters } from "./parameters-page";
+import { renderKeyholderDuties } from "./keyholder-duties-page";
+import { renderReviewerRules } from "./reviewer-rules-page";
 import { renderTerms } from "./terms-page";
 import { fetchAdminMe, renderAdmin } from "./admin-page";
 import { renderArchive } from "./archive-page";
@@ -36,10 +38,11 @@ import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
 import { renderWanted } from "./wanted-page";
 import { syncStoredCreditPreferencesFromProfile } from "./funder-credit";
-import { pleblySocialAccountsHtml, pleblySocialLinksHtml } from "./icons";
+import { pleblySocialAccountsHtml } from "./icons";
 import { findListedProposalById } from "./github";
 import {
   applySeo,
+  appPathname,
   bindSpaNavigation,
   href,
   migrateHashRoute,
@@ -109,8 +112,16 @@ function authNavHtml(): string {
     ${loginMenuHtml(currentReturnPath())}`;
 }
 
+function listingNav(): { bounties: boolean; campaigns: boolean } {
+  const home = route().name === "home";
+  const campaigns =
+    home && new URLSearchParams(location.search).get("type") === "direct";
+  return { bounties: home && !campaigns, campaigns };
+}
+
 function siteFooterHtml(routeName: string): string {
   const fa = (name: string) => (routeName === name ? ' class="active"' : "");
+  const listing = listingNav();
   return `<footer class="site-footer">
     <div class="wrap-wide footer-inner">
       <div class="footer-brand">
@@ -120,8 +131,8 @@ function siteFooterHtml(routeName: string): string {
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
           <h2 class="footer-col-title">Browse</h2>
-          <a href="${projectsHref()}"${fa("home")}>Bounties</a>
-          <a href="${campaignsHref()}">Campaigns</a>
+          <a href="${projectsHref()}"${listing.bounties ? ' class="active"' : ""}>Bounties</a>
+          <a href="${campaignsHref()}"${listing.campaigns ? ' class="active"' : ""}>Campaigns</a>
           <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
           <a href="${href("/endowment")}"${fa("endowment")}>Endowment</a>
           <a href="${href("/donations")}"${fa("donations")}>Donations</a>
@@ -131,8 +142,9 @@ function siteFooterHtml(routeName: string): string {
           <h2 class="footer-col-title">Contribute</h2>
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
+          <a href="${href("/reviewer-responsibilities")}"${fa("reviewerDuties")}>Reviewer rules</a>
           <a href="${href("/keyholders")}">Apply as keyholder</a>
-          <a href="${href("/docs/keyholder-responsibilities.md")}">Keyholder duties</a>
+          <a href="${href("/keyholder-responsibilities")}"${fa("khDuties")}>Keyholder duties</a>
         </div>
         <div class="footer-col">
           <h2 class="footer-col-title">About</h2>
@@ -155,6 +167,7 @@ function shell(inner: string): string {
   const active = (name: string) => (r.name === name ? "active" : "");
   const current = (name: string) =>
     r.name === name ? ' aria-current="page"' : "";
+  const listing = listingNav();
   return `
     <a class="skip-link" href="#main-content">Skip to content</a>
     ${signetSiteBannerHtml()}
@@ -165,14 +178,13 @@ function shell(inner: string): string {
       </a>
       <div class="header-end">
         <nav class="nav" aria-label="Primary">
-          <a href="${projectsHref()}" class="${active("home")}"${current("home")}>Bounties</a>
-          <a href="${campaignsHref()}">Campaigns</a>
+          <a href="${projectsHref()}" class="${listing.bounties ? "active" : ""}"${listing.bounties ? ' aria-current="page"' : ""}>Bounties</a>
+          <a href="${campaignsHref()}" class="${listing.campaigns ? "active" : ""}"${listing.campaigns ? ' aria-current="page"' : ""}>Campaigns</a>
           <a href="${href("/endowment")}" class="${active("endowment")}"${current("endowment")}>Endowment</a>
           <a href="${href("/propose")}" class="${active("propose")}"${current("propose")}>Start a project</a>
           <a href="${href("/about")}" class="${active("about")}"${current("about")}>About</a>
           ${authNavHtml()}
         </nav>
-        ${pleblySocialLinksHtml()}
       </div>
     </header>
     <main id="main-content">${inner}</main>
@@ -323,9 +335,29 @@ async function render() {
     scrollToHashTarget();
     return;
   }
+  if (r.name === "khDuties") {
+    applySeo(seoForRoute(r));
+    if (appPathname() !== "/keyholder-responsibilities") {
+      history.replaceState(null, "", href("/keyholder-responsibilities"));
+    }
+    renderKeyholderDuties(shell);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
   if (r.name === "reviewers") {
     applySeo(seoForRoute(r));
     await renderGovernance(shell, currentUser);
+    bindAuthHandlers();
+    scrollToHashTarget();
+    return;
+  }
+  if (r.name === "reviewerDuties") {
+    applySeo(seoForRoute(r));
+    if (appPathname() !== "/reviewer-responsibilities") {
+      history.replaceState(null, "", href("/reviewer-responsibilities"));
+    }
+    renderReviewerRules(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

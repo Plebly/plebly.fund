@@ -63,6 +63,8 @@ Listings and escrow balances are on the site at ${SITE}. Published fees and keyh
 - [Start a project](${SITE}/propose): List a bounty or campaign (login; on-chain fee required)
 - [Funding stats](${SITE}/stats): Public funding and completion totals
 - [Reviewers](${SITE}/reviewers): Reviewer roster and open decisions
+- [Reviewer rules](${SITE}/reviewer-responsibilities): Who can review and how a vote passes
+- [Keyholder responsibilities](${SITE}/keyholder-responsibilities): What a keyholder does and how they are paid
 - [Full context for LLMs](${SITE}/llms-full.txt): Longer plain-text overview of product rules and flows
 
 ## Projects

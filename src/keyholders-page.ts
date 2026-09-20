@@ -2,7 +2,7 @@ import { authFetch, currentReturnPath, loginChoicesHtml, type AuthUser } from ".
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
 import { bindKhApplyForm, khApplyFormHtml } from "./governance-page";
-import { href, projectsHref } from "./router";
+import { href } from "./router";
 import { authFetchWithTos } from "./tos-modal";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { escapeHtml, formatSats } from "./util";
@@ -559,7 +559,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
     return `<div class="form-panel kh-onboard-card">
       <p class="next-card-sentence">Sign in to continue.</p>
       ${loginChoicesHtml(undefined, currentReturnPath())}
-      <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+      <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
     </div>`;
   }
   if (phase === "earn_reviewer") {
@@ -571,7 +571,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
       }</p>
       <p><a class="btn" href="${href("/reviewers")}">Reviewers</a>
       <a class="btn ghost" href="${href("/wanted")}">Most wanted</a></p>
-      <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+      <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
     </div>`;
   }
   if (phase === "election") {
@@ -628,7 +628,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
   }
   return `<div class="form-panel kh-onboard-card">
     <p class="next-card-sentence">You are seated.</p>
-    <p class="muted"><a href="${href("/docs/keyholder-responsibilities.md")}">Responsibilities</a></p>
+    <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
   </div>`;
 }
 
@@ -715,7 +715,6 @@ export async function renderKeyholders(
     app.innerHTML = shell(`
       <section class="wrap-wide detail keyholders-page">
         <header class="declined-head">
-          <p class="eyebrow"><a href="${projectsHref()}">Projects</a></p>
           <h1>Keyholders</h1>
           <p class="lede">${escapeHtml(coldStartLede("sign_in", activeSeats))}</p>
         </header>
@@ -749,7 +748,6 @@ export async function renderKeyholders(
     app.innerHTML = shell(`
       <section class="wrap-wide detail keyholders-page">
         <header class="declined-head">
-          <p class="eyebrow"><a href="${projectsHref()}">Projects</a></p>
           <h1>Keyholders</h1>
           <p class="lede">${escapeHtml(coldStartLede(phase, activeSeats))}</p>
         </header>
@@ -764,7 +762,7 @@ export async function renderKeyholders(
   app.innerHTML = shell(`
     <section class="wrap-wide detail keyholders-page">
       <header class="declined-head">
-        <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ops</p>
+        <p class="eyebrow">Keyholders · Ops</p>
         <h1>Keyholders</h1>
         <p class="lede">${escapeHtml(keyholderOnboardLede("active"))}</p>
         <p class="kh-earnings">Accrued: <strong>${formatSats(earnings)}</strong></p>

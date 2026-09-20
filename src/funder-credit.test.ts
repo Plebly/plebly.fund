@@ -89,6 +89,15 @@ describe("creditPreferenceFieldsHtml", () => {
     expect(html).toContain('id="donate-credit-amount"');
     expect(html).toContain("Show my identity");
   });
+
+  it("can omit the inner Display legend", () => {
+    const html = creditPreferenceFieldsHtml({
+      idPrefix: "account-credit",
+      legend: false,
+    });
+    expect(html).toContain('id="account-credit-public"');
+    expect(html).not.toContain("Display");
+  });
 });
 
 describe("readCreditPreferences + gates", () => {

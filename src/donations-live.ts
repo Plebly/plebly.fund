@@ -68,10 +68,7 @@ export async function bindDonationsLive(root: ParentNode): Promise<void> {
       }, 900);
     } catch {
       if (initial) {
-        mount.innerHTML = `<section class="wrap-wide donations-live" id="donations-live">
-          <div class="rail-head"><div><h2>Recent donations</h2><p class="muted">Could not load live gifts.</p></div>
-          <a href="${href("/donations")}">Full ledger →</a></div>
-        </section>`;
+        mount.innerHTML = "";
       }
     }
   };
