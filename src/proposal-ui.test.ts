@@ -516,12 +516,18 @@ describe("proposal UI critical render helpers", () => {
     expect(claimed).toContain("Claimed");
     expect(claimed).not.toContain("Open to apply");
     expect(claimed).not.toContain("claimable");
+    expect(claimed).not.toContain("to open");
+    expect(claimed).toContain("50,000 sats / 10,000 sats floor");
+    expect(claimed).not.toContain("Opens for builders");
+    expect(claimed).toContain("Claim floor 10,000 sats, reached");
 
     const claimableOpen = fundingProgressHtml(50_000, 10_000, 100_000, [], {
       status: "claimable",
       proposal_type: "bounty",
     });
     expect(claimableOpen).toContain("Open to apply");
+    expect(claimableOpen).toContain("to open");
+    expect(claimableOpen).toContain("Opens for builders");
 
     const withClaimer = fundingProgressHtml(50_000, 10_000, null, [], {
       status: "claimable",
@@ -529,6 +535,18 @@ describe("proposal UI critical render helpers", () => {
     });
     expect(withClaimer).not.toContain("Open to apply");
     expect(withClaimer).toContain("Applications closed");
+    expect(withClaimer).not.toContain("to open");
+    expect(withClaimer).toContain("floor ·");
+  });
+
+  it("keeps to-open goal copy while still funding toward the floor", () => {
+    const funding = fundingProgressHtml(5_000, 10_000, null, [], {
+      status: "listed",
+      proposal_type: "bounty",
+    });
+    expect(funding).toContain("5,000 sats to open");
+    expect(funding).toContain("5,000 sats / 10,000 sats to open");
+    expect(funding).toContain("Opens for builders");
   });
 
   it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {

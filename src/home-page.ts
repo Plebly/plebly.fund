@@ -325,13 +325,19 @@ function progressHtml(p: Proposal, floor: number): string {
     : open || (isDirect && bal >= campaignGoal)
       ? "claimable"
       : "";
+  const taken = isTakenStatus(String(p.status)) || Boolean(p.claimer);
+  const openCopy = !taken && (open || bal < floor);
   const satsLine = isDirect
     ? target
       ? `${formatSats(bal)} / ${formatSats(target)} goal`
       : formatSats(bal)
     : target
-      ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
-      : `${formatSats(bal)} / ${formatSats(floor)} to open`;
+      ? openCopy
+        ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
+        : `${formatSats(bal)} · floor ${formatSats(floor)} · goal ${formatSats(target)}`
+      : openCopy
+        ? `${formatSats(bal)} / ${formatSats(floor)} to open`
+        : `${formatSats(bal)} / ${formatSats(floor)} floor`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>

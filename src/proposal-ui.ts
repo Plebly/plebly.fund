@@ -551,6 +551,8 @@ function fundingDetailTrackHtml(
   floor: number,
   scale: number,
   markers: FundingBarMarker[],
+  /** When false, claimed/closed listings avoid "Opens for builders" / open-floor wording. */
+  openCopy = true,
 ): string {
   const safeScale = Math.max(1, scale);
   const fillPct = Math.min(100, (funded / safeScale) * 100);
@@ -570,7 +572,9 @@ function fundingDetailTrackHtml(
       const kind = m.kind === "floor" ? "floor" : "threshold";
       const label =
         m.kind === "floor"
-          ? `Opens for builders at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
+          ? openCopy
+            ? `Opens for builders at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
+            : `Claim floor ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
           : `Milestone ${m.label || m.id || ""} ${m.sats.toLocaleString()} sats, ${unlocked ? "unlocked" : "locked"}`;
       return `<span class="funding-marker funding-marker-${kind} ${state}" style="left:${left}%" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${lock}<span class="funding-marker-tick"></span></span>`;
     })
@@ -692,15 +696,18 @@ export function fundingProgressHtml(
       ? " claimable"
       : "";
   // Always name the claim floor — never let target_sats look like the floor.
+  // Only say "to open" while still funding toward / open for apply; claimed etc. use "floor".
+  const openCopy = !taken && (open || !pastFloor);
+  const floorWord = openCopy ? "to open" : "floor";
   const goalLine = hasTarget
-    ? `${formatSats(funded)} / ${formatSats(floor)} to open (${floorPct}%) · goal ${formatSats(target!)} (${targetPct}%)`
-    : `${formatSats(funded)} / ${formatSats(floor)} to open · ${floorPct}%`;
+    ? `${formatSats(funded)} / ${formatSats(floor)} ${floorWord} (${floorPct}%) · goal ${formatSats(target!)} (${targetPct}%)`
+    : `${formatSats(funded)} / ${formatSats(floor)} ${floorWord} · ${floorPct}%`;
   return `<div class="funding-meter" data-funding-scale="${scale}">
       <div class="funding-meter-top">
         <span class="funding-meter-label${labelClass}">${label}</span>
         <span class="funding-meter-goal sats">${goalLine}</span>
       </div>
-      ${fundingDetailTrackHtml(funded, floor, scale, markers)}
+      ${fundingDetailTrackHtml(funded, floor, scale, markers, openCopy)}
     </div>`;
 }
 
