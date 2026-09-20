@@ -50,5 +50,14 @@ export function sessionMatchesPendingClaim(
   pendingUserId?: string | null,
 ): boolean {
   if (!user?.id || !pendingUserId) return false;
-  return user.id === pendingUserId;
+  return user.id.toLowerCase() === pendingUserId.toLowerCase();
+}
+
+/** Full fulfiller id from Workers claim status (claimer_user_id or pending). */
+export function claimerFullUserId(claim?: {
+  claimer_user_id?: string | null;
+  pending?: { user_id?: string | null } | null;
+} | null): string | null {
+  const id = claim?.claimer_user_id || claim?.pending?.user_id || null;
+  return id && id.trim() ? id.trim() : null;
 }

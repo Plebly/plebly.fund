@@ -110,6 +110,29 @@ export function sessionIsClaimer(
   return sessionMatchesClaimer(user, claimer, claimerType, claimAgent);
 }
 
+/** Prefer Workers claimer_user_id / pending.user_id when deciding fulfiller UI. */
+export function sessionIsClaimStatusFulfiller(
+  user: AuthUser | null,
+  status: {
+    claimer?: string | null;
+    claimer_user_id?: string | null;
+    claimer_type?: string | null;
+    claim_agent?: string | null;
+    pending?: { user_id?: string | null } | null;
+  } | null | undefined,
+): boolean {
+  if (!status) return false;
+  const full =
+    status.claimer_user_id || status.pending?.user_id || null;
+  return sessionIsClaimer(
+    user,
+    status.claimer,
+    status.claimer_type,
+    status.claim_agent,
+    full,
+  );
+}
+
 function deliverableFormHtml(): string {
   return `<div id="deliverable-form" class="deliverable-form">
     <label class="donate-amount-label" for="deliv-url">Deliverable URL</label>
@@ -667,13 +690,7 @@ function renderStatusBody(
   reviewerActive = false,
 ): void {
   const proposalPath = proposal.path;
-  const isYou = sessionIsClaimer(
-        user,
-        status.claimer,
-        status.claimer_type,
-        status.claim_agent,
-        status.pending?.user_id,
-      );
+  const isYou = sessionIsClaimStatusFulfiller(user, status);
   const action = resolveNextAction({
     proposal,
     claim: status,
@@ -1433,13 +1450,7 @@ export async function bindBuilderPanel(
         opts.proposal.proposer,
         opts.proposal.proposer_type,
       );
-      const asFulfiller = sessionIsClaimer(
-        opts.user,
-        status.claimer,
-        status.claimer_type,
-        status.claim_agent,
-        status.pending?.user_id,
-      );
+      const asFulfiller = sessionIsClaimStatusFulfiller(opts.user, status);
       void bindPayoutCard(asFulfiller);
       renderStatusBody(
         body,
@@ -1511,13 +1522,7 @@ export async function bindBuilderPanel(
         }
       }
       if (apps && (status.state === "claimed" || status.state === "in_review")) {
-        const isYou = sessionIsClaimer(
-        opts.user,
-        status.claimer,
-        status.claimer_type,
-        status.claim_agent,
-        status.pending?.user_id,
-      );
+        const isYou = sessionIsClaimStatusFulfiller(opts.user, status);
         await bindCollaboratorUi(apps, isYou);
       }
       const awareness = panel.querySelector("#claim-modal-awareness");

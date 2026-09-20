@@ -2,7 +2,7 @@ import type { AuthUser } from "./auth";
 import type { ClaimApplicationsResponse, ClaimStatus } from "./builder";
 import { CLAIM_FLOOR_SATS, isFundableStatus } from "./config";
 import { btnWithIcon } from "./icons";
-import { sessionMatchesClaimer } from "./claimer-match";
+import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import { userMatchesProposer } from "./proposal-ui";
 import type { Proposal } from "./types";
 import { escapeHtml } from "./util";
@@ -110,10 +110,9 @@ function roles(input: NextActionInput): {
       input.claim?.claimer_type ?? input.proposal.claimer_type,
       input.claim?.claim_agent ?? input.proposal.claim_agent,
     ) ||
-      Boolean(
-        user?.id &&
-          input.claim?.pending?.user_id &&
-          user.id === input.claim.pending.user_id,
+      sessionMatchesPendingClaim(
+        user,
+        input.claim?.claimer_user_id ?? input.claim?.pending?.user_id,
       ));
   return { isProposer, isBuilder, user };
 }
