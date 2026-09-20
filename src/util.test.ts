@@ -5,6 +5,7 @@ import {
   formatTimeAgo,
   formatTimeAhead,
   linkifyText,
+  claimsProposalPath,
   proposalRepoPath,
   proposalSlug,
   proposalStablePath,
@@ -76,6 +77,24 @@ describe("proposal path helpers", () => {
   it("emits lowercase stable proposal URLs", () => {
     expect(proposalStablePath("PLEBLY-42")).toBe("/p/plebly-42");
     expect(proposalStablePath("  Mixed-Case-Id  ")).toBe("/p/mixed-case-id");
+  });
+
+  it("maps claim fetches to listed path with frontmatter casing", () => {
+    expect(
+      claimsProposalPath({
+        id: "PLEBLY-2026-001",
+        path: "proposals/claimed/plebly-2026-001.md",
+      }),
+    ).toBe("proposals/listed/PLEBLY-2026-001.md");
+    expect(
+      claimsProposalPath({ path: "proposals/claimed/PLEBLY-2026-001.md" }),
+    ).toBe("proposals/listed/PLEBLY-2026-001.md");
+    expect(
+      claimsProposalPath({ path: "proposals/listed/PLEBLY-2026-001.md" }),
+    ).toBe("proposals/listed/PLEBLY-2026-001.md");
+    expect(claimsProposalPath({ id: "  PLEBLY-42  " })).toBe(
+      "proposals/listed/PLEBLY-42.md",
+    );
   });
 });
 
