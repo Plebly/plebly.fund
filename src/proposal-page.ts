@@ -15,6 +15,7 @@ import {
   WORKERS_API,
   escrowAddressMatchesNetwork,
   isFundableStatus,
+  isDonateChromeStatus,
 } from "./config";
 import { promptText } from "./confirm-modal";
 import { findListedProposalById, proposalFromMarkdown } from "./github";
@@ -561,7 +562,7 @@ export async function renderProposalPage(
     const escrowOk =
       Boolean(match.escrow_address) &&
       escrowAddressMatchesNetwork(String(match.escrow_address)) &&
-      isFundableStatus(String(match.status));
+      isDonateChromeStatus(String(match.status));
     const wantsDonate =
       escrowOk &&
       (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
@@ -684,7 +685,9 @@ export async function renderProposalPage(
                         user,
                       }).button === "donate"
                     ? `<div class="proposal-donate-slot" hidden></div>`
-                    : `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>`
+                    : isFundableStatus(String(match.status))
+                      ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>`
+                      : `<div class="proposal-donate-slot" hidden></div>`
                   : ""
               }
               ${shareSlotHtml(match.title, match.path, match.id)}

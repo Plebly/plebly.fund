@@ -1902,7 +1902,12 @@ export function bindDonateModal(
 
   const open = (ev?: Event) => {
     if (!modal) return;
-    if (ev?.currentTarget instanceof HTMLButtonElement) {
+    const from =
+      ev?.target instanceof Element
+        ? ev.target.closest<HTMLButtonElement>("[data-open-donate], #donate-open")
+        : null;
+    if (from) lastOpener = from;
+    else if (ev?.currentTarget instanceof HTMLButtonElement) {
       lastOpener = ev.currentTarget;
     }
     modal.hidden = false;
@@ -1926,7 +1931,19 @@ export function bindDonateModal(
     if (e.key === "Escape" && modal && !modal.hidden) close();
   };
 
-  for (const btn of openBtns) btn.addEventListener("click", open);
+  // Delegate: next-action / donate-slot re-renders after claim status still open the modal.
+  const onOpenClick = (ev: Event) => {
+    const t = ev.target;
+    if (!(t instanceof Element)) return;
+    const btn = t.closest<HTMLButtonElement>("[data-open-donate], #donate-open");
+    if (!btn || (root instanceof Node && !root.contains(btn))) return;
+    open(ev);
+  };
+  if (root instanceof Document || root instanceof Element) {
+    root.addEventListener("click", onOpenClick);
+  } else {
+    for (const btn of openBtns) btn.addEventListener("click", open);
+  }
   closeBtn?.addEventListener("click", close);
   backdrop?.addEventListener("click", close);
 

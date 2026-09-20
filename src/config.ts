@@ -91,6 +91,15 @@ export function isFundableStatus(status: string): boolean {
   return FUNDABLE_STATUSES.has(String(status || "").trim());
 }
 
+/** Claimed / in_review may still accept sats while structured funding pools. */
+export const POOLING_DONATE_STATUSES = new Set(["claimed", "in_review"]);
+
+/** Mount Donate chrome when fundable or still pooling (escrow already allocated). */
+export function isDonateChromeStatus(status: string): boolean {
+  const s = String(status || "").trim();
+  return FUNDABLE_STATUSES.has(s) || POOLING_DONATE_STATUSES.has(s);
+}
+
 export {
   CLAIM_FLOOR_SATS,
   CLAIM_BOND_SATS,

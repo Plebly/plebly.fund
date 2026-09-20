@@ -43,6 +43,7 @@ import {
   lightningUiAllowed,
   mempoolWeb,
   networkLabel,
+  isFundableStatus,
 } from "./config";
 import { authFetch, loginChoicesHtml, updateProfile } from "./auth";
 import type { AuthUser } from "./auth";
@@ -1485,14 +1486,22 @@ export async function bindBuilderPanel(
       });
       const donateSlot = root.querySelector<HTMLElement>(".proposal-donate-slot");
       if (donateSlot) {
+        const structured = String(status.psbt?.structured_state || "");
+        const sideDonateOk =
+          next.button !== "donate" &&
+          (isFundableStatus(String(opts.proposal.status || "")) ||
+            structured === "awaiting_funds");
         if (next.button === "donate") {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
-        } else {
+        } else if (sideDonateOk) {
           donateSlot.hidden = false;
           if (!donateSlot.querySelector("[data-open-donate]")) {
             donateSlot.innerHTML = donateTriggerHtml();
           }
+        } else {
+          donateSlot.hidden = true;
+          donateSlot.innerHTML = "";
         }
       }
       body.querySelector("#next-rebuttal")?.addEventListener("click", () => {
