@@ -22,3 +22,23 @@ jobs:
           VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://plebly-api.securesovereigns.workers.dev' }}
           VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
+
+  # Donate / claim-chrome smoke (Playwright). Blocks merge when #donate-modal
+  # does not open on click — intentional until Donate is fixed on the target URL.
+  # Override PLEBLY_BASE_URL (repo var or PR env) to hit a preview with a fix.
+  e2e:
+    runs-on: plebly
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+      - name: Donate modal smoke
+        run: npm run test:e2e
+        env:
+          PLEBLY_BASE_URL: ${{ vars.PLEBLY_BASE_URL || 'https://plebly.fund' }}

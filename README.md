@@ -30,3 +30,22 @@ LLM / agent discovery: [`/llms.txt`](https://plebly.fund/llms.txt) (curated inde
 ### Custom domain (`plebly.fund`)
 
 Cloudflare DNS should point `@` and `www` CNAME records at `plebly.github.io`. **Set proxy status to DNS only (grey cloud)** — orange cloud breaks GitHub Pages routing and blocks TLS certificate issuance.
+
+## E2E (Playwright)
+
+Donate / claim-chrome smoke against a live or preview URL:
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+Defaults to `PLEBLY_BASE_URL=https://plebly.fund` (listing `PLEBLY-2026-001` → `/p/plebly-2026-001`). Point at a preview to verify a fix before production catches up:
+
+```bash
+PLEBLY_BASE_URL=https://your-preview.example npm run test:e2e
+```
+
+CI runs this smoke on every PR and **fails the job** if `#donate-modal` does not open after clicking Donate (documents expected behavior from Donate #15–#18).
+
