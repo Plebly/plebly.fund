@@ -182,3 +182,26 @@ export function proposalRepoPath(slug: string): string {
   }
   return `${PROPOSALS_PREFIX}${path.endsWith(".md") ? path : `${path}.md`}`;
 }
+
+/**
+ * Stable Workers claim-status key.
+ * Claim records stay keyed under proposals/listed/{id}.md with frontmatter casing.
+ * Do not rewrite to status folders (claimed/completed/…) or lowercase URL ids —
+ * those resolve as state:unavailable after listings left git status folders.
+ */
+export function claimsProposalPath(input: {
+  id?: string | null;
+  path?: string | null;
+}): string {
+  const id = input.id?.trim();
+  if (id) return `${PROPOSALS_PREFIX}listed/${id}.md`;
+
+  let path = (input.path || "").trim().replace(/^\/+/, "");
+  if (!path) return "";
+  if (!path.startsWith(PROPOSALS_PREFIX)) path = `${PROPOSALS_PREFIX}${path}`;
+  if (!path.endsWith(".md")) path = `${path}.md`;
+  return path.replace(
+    /^proposals\/(?:claimed|completed|declined|unindexed)\//,
+    `${PROPOSALS_PREFIX}listed/`,
+  );
+}

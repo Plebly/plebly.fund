@@ -6,6 +6,7 @@ import {
   WORKERS_API,
 } from "./config";
 import type { Proposal } from "./types";
+import { claimsProposalPath } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
 
@@ -403,11 +404,14 @@ export function applyClaimStatusToProposal(
 
 export async function fetchClaimStatus(
   proposalPath: string,
+  proposalId?: string | null,
 ): Promise<ClaimStatus | null> {
   if (!WORKERS_API) return null;
+  const key = claimsProposalPath({ id: proposalId, path: proposalPath });
+  if (!key) return null;
   try {
     const res = await authFetch(
-      `${API()}/claims/${encodeURIComponent(proposalPath)}`,
+      `${API()}/claims/${encodeURIComponent(key)}`,
       { signal: AbortSignal.timeout(8_000) },
     );
     if (!res.ok) return null;
@@ -564,10 +568,13 @@ export async function fetchMyPendingClaims(): Promise<
 
 export async function fetchClaimApplications(
   proposalPath: string,
+  proposalId?: string | null,
 ): Promise<ClaimApplicationsResponse | null> {
   if (!WORKERS_API) return null;
+  const key = claimsProposalPath({ id: proposalId, path: proposalPath });
+  if (!key) return null;
   const res = await fetch(
-    `${API()}/claims/applications?proposal_path=${encodeURIComponent(proposalPath)}`,
+    `${API()}/claims/applications?proposal_path=${encodeURIComponent(key)}`,
     { headers: authHeaders(), credentials: "include" },
   );
   if (!res.ok) return null;
