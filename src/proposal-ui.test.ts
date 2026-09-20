@@ -27,6 +27,7 @@ import {
   userMatchesProposer,
 } from "./proposal-ui";
 import type { Proposal, ProposalMilestone } from "./types";
+import { applyClaimStatusToProposal, type ClaimStatus } from "./builder";
 
 const locationState = {
   origin: "https://plebly.fund",
@@ -208,6 +209,39 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain("seat 4");
     expect(html).not.toContain("on-chain");
     expect(html).not.toContain("forced");
+  });
+
+  it("stepper uses claimed after applyClaimStatusToProposal overlays listed", () => {
+    const listed = {
+      id: "PLEBLY-2026-001",
+      path: "proposals/listed/PLEBLY-2026-001.md",
+      title: "Demo",
+      status: "listed",
+      target_sats: null,
+      escrow_address: "tb1qtest",
+      submission_fee_txid: null,
+      created_at: null,
+      escrow_index: null,
+      milestones: [],
+      body: "",
+      balance_sats: 15_000,
+      claimer: null,
+    } as Proposal;
+    expect(proposalCurrentStep(listed)).toBe("Fund");
+    const claim: ClaimStatus = {
+      proposal_id: "PLEBLY-2026-001",
+      proposal_path: listed.path,
+      state: "claimed",
+      status: "listed",
+      confirmed_balance_sats: 15_000,
+      claim_floor_sats: 10_000,
+      claimer:
+        "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+    };
+    const merged = applyClaimStatusToProposal(listed, claim);
+    expect(proposalCurrentStep(merged)).toBe("Build");
+    expect(proposalStepperHtml(merged)).toContain(">Build</li>");
+    expect(proposalStepperHtml(merged)).toContain('aria-current="step"');
   });
 
   it("stepper marks in_review as Review", () => {

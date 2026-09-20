@@ -397,3 +397,43 @@ describe("sessionIsClaimer", () => {
     ).toBe(true);
   });
 });
+
+describe("sessionIsClaimStatusFulfiller + applyClaimStatus", () => {
+  it("matching nostr claimer_user_id is fulfiller while catalog still listed", async () => {
+    const { sessionIsClaimStatusFulfiller } = await import("./builder-panel");
+    const { applyClaimStatusToProposal } = await import("./builder");
+    const { resolveNextAction } = await import("./next-action");
+    const { proposalCurrentStep } = await import("./proposal-ui");
+    const full =
+      "5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6";
+    const user = {
+      id: `nostr:${full}`,
+      nostr: full,
+      username: "npub12f2m7",
+    };
+    const status = {
+      proposal_id: "demo",
+      proposal_path: "proposals/listed/demo.md",
+      state: "claimed" as const,
+      status: "listed",
+      confirmed_balance_sats: 15_000,
+      claim_floor_sats: 10_000,
+      claimer: `nostr:${full}`,
+      claimer_user_id: `nostr:${full}`,
+      psbt: { structured_state: "awaiting_funds" },
+    };
+    expect(sessionIsClaimStatusFulfiller(user as never, status)).toBe(true);
+    const merged = applyClaimStatusToProposal(proposal({ status: "listed" }), status);
+    expect(merged.status).toBe("claimed");
+    expect(proposalCurrentStep(merged)).toBe("Build");
+    const action = resolveNextAction({
+      proposal: merged,
+      claim: status,
+      user: user as never,
+      isBuilder: sessionIsClaimStatusFulfiller(user as never, status),
+    });
+    expect(action.button).toBe("deliverable");
+    expect(action.sentence).toContain("Submit the work when it is done");
+    expect(action.sentence).toContain("pooling");
+  });
+});
