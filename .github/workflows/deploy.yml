@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, Linux, X64, plebly]
+    runs-on: plebly
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
