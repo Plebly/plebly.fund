@@ -607,7 +607,107 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     );
     expect(donateBtn).toBeTruthy();
     donateBtn!.click();
-    expect(modal.hidden).toBe(false);
+    await vi.waitFor(() => {
+      expect(modal.hidden).toBe(false);
+      expect(document.body.classList.contains("modal-open")).toBe(true);
+    });
+  });
+
+  it("opens modal when Donate is clicked before claim escrow arrives", async () => {
+    vi.resetModules();
+    const escrow = "tb1qclickbeforeclaimxxxxxxxxxxxxxxxxx";
+    let resolveClaim!: (v: unknown) => void;
+    const claimGate = new Promise((r) => {
+      resolveClaim = r;
+    });
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => {
+          await claimGate;
+          return {
+            proposal_id: "demo",
+            proposal_path: "proposals/listed/demo.md",
+            state: "in_review" as const,
+            status: "in_review",
+            confirmed_balance_sats: 15_000,
+            claim_floor_sats: 10_000,
+            claimer: "alice",
+            escrow_address: escrow,
+            psbt: { structured_state: "awaiting_funds" },
+          };
+        }),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+    vi.doMock("./reviewers", () => ({
+      fetchReviewerMe: vi.fn(async () => null),
+    }));
+    vi.doMock("./lightning", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./lightning")>();
+      return {
+        ...actual,
+        fetchLightningStatus: vi.fn(async () => ({
+          enabled: false,
+          reason: "test",
+        })),
+      };
+    });
+
+    const { bindBuilderPanel, builderPanelHtml } = await import("./builder-panel");
+    const { proposalStepperHtml } = await import("./proposal-ui");
+
+    const p = proposal({
+      status: "listed",
+      balance_sats: 15_000,
+      claimer: null,
+      escrow_address: null,
+    });
+
+    document.body.innerHTML = `<div id="app">
+      <article class="proposal-page">
+        <header class="proposal-hero">
+          <div class="proposal-hero-top"><h1>Demo</h1></div>
+        </header>
+        ${proposalStepperHtml(p)}
+        <div id="panel-root">${builderPanelHtml(p, 15_000, false, null)}</div>
+      </article>
+    </div>`;
+
+    expect(document.querySelector("#donate-modal")).toBeNull();
+    const donateBtn = document.querySelector<HTMLButtonElement>(
+      "[data-open-donate], #donate-open",
+    );
+    expect(donateBtn).toBeTruthy();
+
+    // Start bind (claim fetch hanging) then click Donate immediately.
+    const bound = bindBuilderPanel(document.querySelector("#app")!, {
+      proposal: { ...p },
+      balance: 15_000,
+      user: null,
+      watching: false,
+    });
+    donateBtn!.click();
+    expect(document.querySelector("#donate-modal")).toBeNull();
+
+    resolveClaim(undefined);
+    await bound;
+    await vi.waitFor(() => {
+      const modal = document.querySelector<HTMLElement>("#donate-modal");
+      expect(modal).toBeTruthy();
+      expect(modal!.hidden).toBe(false);
+    });
     expect(document.body.classList.contains("modal-open")).toBe(true);
+    expect(document.querySelector("#donate-address")?.textContent).toBe(escrow);
   });
 });
