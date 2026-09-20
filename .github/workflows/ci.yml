@@ -37,7 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Donate modal smoke
         run: npm run test:e2e
         env:
