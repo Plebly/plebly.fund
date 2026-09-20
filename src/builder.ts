@@ -405,6 +405,9 @@ export function applyClaimStatusToProposal(
   };
 }
 
+/** Public /claims cold path often samples ~20s; SPA must wait longer. */
+export const CLAIM_STATUS_FETCH_TIMEOUT_MS = 45_000;
+
 export async function fetchClaimStatus(
   proposalPath: string,
   proposalId?: string | null,
@@ -418,7 +421,7 @@ export async function fetchClaimStatus(
     // intermittently stall (~19s) so authFetch aborted → null → sidebar
     // "Couldn't load claim status" and applyClaimStatusToProposal never ran.
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15_000);
+    const timer = setTimeout(() => ctrl.abort(), CLAIM_STATUS_FETCH_TIMEOUT_MS);
     const res = await fetch(`${API()}/claims/${encodeURIComponent(key)}`, {
       credentials: "omit",
       signal: ctrl.signal,

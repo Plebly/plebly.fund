@@ -68,6 +68,7 @@ import { avatarImgHtml } from "./media";
 import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
+  claimStructuredState,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
@@ -1503,7 +1504,7 @@ export async function bindBuilderPanel(
       });
       const donateSlot = root.querySelector<HTMLElement>(".proposal-donate-slot");
       if (donateSlot) {
-        const structured = String(status.psbt?.structured_state || "");
+        const structured = String(claimStructuredState(status) || "");
         const sideDonateOk =
           next.button !== "donate" &&
           (isFundableStatus(String(opts.proposal.status || "")) ||

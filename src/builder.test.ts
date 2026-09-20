@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CLAIM_STATUS_FETCH_TIMEOUT_MS,
   applyClaimStatusToProposal,
   claimFloorShortfall,
   claimWindowDaysLeft,
@@ -256,5 +257,9 @@ describe("fetchClaimStatus", () => {
     expect(
       await fetchClaimStatus("proposals/listed/demo.md", "demo"),
     ).toBeNull();
+  });
+
+  it("waits at least 45s for cold /claims before aborting", () => {
+    expect(CLAIM_STATUS_FETCH_TIMEOUT_MS).toBeGreaterThanOrEqual(45_000);
   });
 });

@@ -58,9 +58,23 @@ function isDirect(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
 }
 
-function structuredState(claim?: ClaimStatus | null): string | null {
+/**
+ * Prefer Workers psbt.structured_state. Slow/partial /claims payloads often
+ * omit `psbt` while state is already claimed|in_review; treat that as still
+ * pooling so Donate stays reachable (full payloads with other states win).
+ */
+export function claimStructuredState(claim?: ClaimStatus | null): string | null {
   const state = claim?.psbt?.structured_state;
-  return state ? String(state) : null;
+  if (state) return String(state);
+  const lifecycle = claim?.state;
+  if (lifecycle === "claimed" || lifecycle === "in_review") {
+    return "awaiting_funds";
+  }
+  return null;
+}
+
+function structuredState(claim?: ClaimStatus | null): string | null {
+  return claimStructuredState(claim);
 }
 
 function selectedBranchesSettled(claim?: ClaimStatus | null): boolean {
