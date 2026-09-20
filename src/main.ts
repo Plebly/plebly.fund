@@ -32,6 +32,7 @@ import {
   type AuthUser,
 } from "./auth";
 import { renderMissingProposal, renderProposalPage } from "./proposal-page";
+import { installDonateClickCapture } from "./proposal-ui";
 import { renderPropose } from "./propose-page";
 import { renderPublicOrgProfile } from "./org-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
@@ -63,6 +64,9 @@ import { syncWebPushIfEnabled } from "./web-push";
 document.documentElement.classList.add("app-ready");
 applyStandaloneClass();
 void registerPwaServiceWorker();
+// Capture Donate clicks before any route finishes — modal mount must not wait
+// on builder-panel /claims.
+installDonateClickCapture();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 

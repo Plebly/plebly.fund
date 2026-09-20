@@ -95,6 +95,9 @@ describe("proposal path helpers", () => {
     expect(claimsProposalPath({ id: "  PLEBLY-42  " })).toBe(
       "proposals/listed/PLEBLY-42.md",
     );
+    expect(claimsProposalPath({ id: "plebly-2026-001" })).toBe(
+      "proposals/listed/PLEBLY-2026-001.md",
+    );
   });
 });
 
