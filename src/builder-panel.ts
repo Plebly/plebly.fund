@@ -70,6 +70,7 @@ import {
   nextActionMoreHtml,
   resolveNextAction,
 } from "./next-action";
+import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import { donateTriggerHtml, userMatchesProposer } from "./proposal-ui";
 import type { Proposal } from "./types";
 import { sanitizePublicError } from "./public-errors";
@@ -103,23 +104,10 @@ export function sessionIsClaimer(
   claimer: string | null | undefined,
   claimerType?: string | null,
   claimAgent?: string | null,
+  pendingUserId?: string | null,
 ): boolean {
-  if (!user || !claimer) return false;
-  if (
-    claimer === user.username ||
-    claimer === user.github ||
-    claimer === user.id
-  ) {
-    return true;
-  }
-  if (claimerType === "org") {
-    const agent = (claimAgent || "").replace(/^@/, "").trim().toLowerCase();
-    if (!agent) return false;
-    const gh = (user.github || "").replace(/^@/, "").trim().toLowerCase();
-    const un = (user.username || "").replace(/^@/, "").trim().toLowerCase();
-    return agent === gh || agent === un;
-  }
-  return false;
+  if (sessionMatchesPendingClaim(user, pendingUserId)) return true;
+  return sessionMatchesClaimer(user, claimer, claimerType, claimAgent);
 }
 
 function deliverableFormHtml(): string {
@@ -680,11 +668,12 @@ function renderStatusBody(
 ): void {
   const proposalPath = proposal.path;
   const isYou = sessionIsClaimer(
-    user,
-    status.claimer,
-    status.claimer_type,
-    status.claim_agent,
-  );
+        user,
+        status.claimer,
+        status.claimer_type,
+        status.claim_agent,
+        status.pending?.user_id,
+      );
   const action = resolveNextAction({
     proposal,
     claim: status,
@@ -1449,6 +1438,7 @@ export async function bindBuilderPanel(
         status.claimer,
         status.claimer_type,
         status.claim_agent,
+        status.pending?.user_id,
       );
       void bindPayoutCard(asFulfiller);
       renderStatusBody(
@@ -1522,11 +1512,12 @@ export async function bindBuilderPanel(
       }
       if (apps && (status.state === "claimed" || status.state === "in_review")) {
         const isYou = sessionIsClaimer(
-          opts.user,
-          status.claimer,
-          status.claimer_type,
-          status.claim_agent,
-        );
+        opts.user,
+        status.claimer,
+        status.claimer_type,
+        status.claim_agent,
+        status.pending?.user_id,
+      );
         await bindCollaboratorUi(apps, isYou);
       }
       const awareness = panel.querySelector("#claim-modal-awareness");

@@ -373,4 +373,27 @@ describe("sessionIsClaimer", () => {
     ).toBe(false);
     expect(sessionIsClaimer(coAdmin as never, "acme", "org")).toBe(false);
   });
+
+  it("matches truncated nostr claimer and pending user_id", async () => {
+    const { sessionIsClaimer } = await import("./builder-panel");
+    const full =
+      "5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6";
+    const user = {
+      id: `nostr:${full}`,
+      nostr: full,
+      username: "npub12f2m7",
+    } as const;
+    expect(
+      sessionIsClaimer(user as never, `nostr:${full.slice(0, 12)}`, "individual"),
+    ).toBe(true);
+    expect(
+      sessionIsClaimer(
+        user as never,
+        "someone-else",
+        "individual",
+        null,
+        `nostr:${full}`,
+      ),
+    ).toBe(true);
+  });
 });

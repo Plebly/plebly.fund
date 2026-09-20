@@ -339,6 +339,33 @@ describe("resolveNextAction", () => {
       button: "donate",
     },
     {
+      name: "claimed nostr builder truncated claimer still submits",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "nostr:5255bf327a89",
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "nostr:5255bf327a89",
+          pending: {
+            user_id:
+              "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+            payout_address: "tb1qtest",
+            created_at: "2026-09-19T21:21:08.656Z",
+          },
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+        user: {
+          id: "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+          nostr: "5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+          username: "npub12f2m7",
+        } as never,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+    },
+    {
       name: "claimed structured ready",
       input: {
         proposal: proposal({ status: "claimed", claimer: "bob" }),
