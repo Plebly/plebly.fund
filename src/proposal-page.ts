@@ -24,11 +24,11 @@ import { addressBalanceSats } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
   bindDonateModal,
-  bindDonatePanel,
+  mountDonateChromeWhenEscrowKnown,
+  setDonateChromeContext,
   updateProposalFundingBar,
   bindProposalCopyButtons,
   bindShareButtons,
-  donateModalHtml,
   donateMobileCtaHtml,
   donateTriggerHtml,
   shareSlotHtml,
@@ -710,7 +710,6 @@ export async function renderProposalPage(
           </aside>
         </div>
         ${escrowOk ? donateMobileCtaHtml() : ""}
-        ${escrowOk ? donateModalHtml(match, { signedIn: Boolean(user) }) : ""}
       </article>
     `);
 
@@ -718,70 +717,75 @@ export async function renderProposalPage(
     if (match.id) bindStructuredFunding(app, match.id);
     bindShareButtons(app);
     let reloadEngagement: (() => Promise<void>) | null = null;
-    // Open Donate before claim/lightning network work so guests are not stuck waiting.
-    if (escrowOk) {
-      bindDonateModal(app, {
-        open: wantsDonate,
-        rail: wantsLnRail ? "lightning" : undefined,
-      });
-    }
+    // Register Donate click context immediately (even without markdown escrow)
+    // so first-paint CTAs work before bindBuilderPanel fills claimStatusPromise.
+    const donatePanelOpts = {
+      address: String(match.escrow_address || ""),
+      proposalId: match.id,
+      proposalPath: match.path,
+      proposalTitle: match.title,
+      signedIn: Boolean(user),
+      initialBalance: balance ?? 0,
+      claimFloorSats: CLAIM_FLOOR_SATS,
+      targetSats: match.target_sats,
+      creditPrefs: user?.funder_credit
+        ? {
+            public_credit: user.funder_credit.public_credit !== false,
+            anonymous: user.funder_credit.public_credit === false,
+            show_amount: Boolean(user.funder_credit.show_amount),
+          }
+        : null,
+      onAuthed,
+      onCreditLinked: () => {
+        void reloadEngagement?.();
+      },
+      onBalanceUpdate: (next: number) => {
+        const fundingCtx = {
+          status: match.status,
+          claimer: match.claimer,
+          proposal_type: match.proposal_type,
+        };
+        updateProposalFundingBar(
+          app,
+          next,
+          CLAIM_FLOOR_SATS,
+          match.target_sats,
+          match.milestones,
+          fundingCtx,
+        );
+        const needEl = app.querySelector(".builder-status.muted");
+        if (
+          needEl &&
+          /more to open for builders/i.test(needEl.textContent || "")
+        ) {
+          const need = Math.max(0, CLAIM_FLOOR_SATS - next);
+          const open = isOpenToClaim(
+            { ...match, balance_sats: next },
+            CLAIM_FLOOR_SATS,
+          );
+          needEl.textContent =
+            need > 0
+              ? `Needs ${formatSats(need)} more to open for builders.`
+              : open
+                ? "Open for builders. Refresh if Apply does not appear."
+                : "Applications closed.";
+        }
+      },
+    };
+    setDonateChromeContext({
+      root: app,
+      proposal: match,
+      panelOpts: donatePanelOpts,
+    });
+    bindDonateModal(document, {
+      open: wantsDonate && escrowOk,
+      rail: wantsLnRail ? "lightning" : undefined,
+    });
+    // Body-mounted modal (not under .proposal-page) so claimer/builder DOM
+    // refreshes cannot wipe #donate-modal.
     const donateReady = escrowOk
-      ? bindDonatePanel(app, {
-          address: String(match.escrow_address),
-          proposalId: match.id,
-          proposalPath: match.path,
-          proposalTitle: match.title,
-          signedIn: Boolean(user),
-          initialBalance: balance ?? 0,
-          claimFloorSats: CLAIM_FLOOR_SATS,
-          targetSats: match.target_sats,
-          creditPrefs: user?.funder_credit
-            ? {
-                public_credit: user.funder_credit.public_credit !== false,
-                anonymous: user.funder_credit.public_credit === false,
-                show_amount: Boolean(user.funder_credit.show_amount),
-              }
-            : null,
-          onAuthed,
-          onCreditLinked: () => {
-            void reloadEngagement?.();
-          },
-          onBalanceUpdate: (next) => {
-            const fundingCtx = {
-              status: match.status,
-              claimer: match.claimer,
-              proposal_type: match.proposal_type,
-            };
-            updateProposalFundingBar(
-              app,
-              next,
-              CLAIM_FLOOR_SATS,
-              match.target_sats,
-              match.milestones,
-              fundingCtx,
-            );
-            const needEl = app.querySelector(".builder-status.muted");
-            if (
-              needEl &&
-              /more to open for builders/i.test(
-                needEl.textContent || "",
-              )
-            ) {
-              const need = Math.max(0, CLAIM_FLOOR_SATS - next);
-              const open = isOpenToClaim(
-                { ...match, balance_sats: next },
-                CLAIM_FLOOR_SATS,
-              );
-              needEl.textContent =
-                need > 0
-                  ? `Needs ${formatSats(need)} more to open for builders.`
-                  : open
-                    ? "Open for builders. Refresh if Apply does not appear."
-                    : "Applications closed.";
-            }
-          },
-        })
-      : Promise.resolve();
+      ? mountDonateChromeWhenEscrowKnown(app, match, donatePanelOpts)
+      : Promise.resolve(false);
     // Comments must not wait on builder/claim network (placeholder is already
     // "Loading comments…" in the HTML). Start engagement alongside builder work.
     const reviewerMePromise = user
