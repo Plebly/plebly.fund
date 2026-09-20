@@ -62,3 +62,15 @@ describe("assertParametersNetwork", () => {
     expect(mempoolWeb("mainnet")).toBe("https://mempool.space");
   });
 });
+
+describe("isDonateChromeStatus", () => {
+  it("includes fundable and pooling statuses", async () => {
+    const { isDonateChromeStatus, isFundableStatus } = await import("./config");
+    expect(isFundableStatus("listed")).toBe(true);
+    expect(isFundableStatus("in_review")).toBe(false);
+    expect(isDonateChromeStatus("listed")).toBe(true);
+    expect(isDonateChromeStatus("claimed")).toBe(true);
+    expect(isDonateChromeStatus("in_review")).toBe(true);
+    expect(isDonateChromeStatus("completed")).toBe(false);
+  });
+});

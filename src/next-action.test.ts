@@ -207,6 +207,49 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
+      name: "in_review + awaiting_funds donor → donate",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+        user: donor,
+      },
+      sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+      button: "donate",
+    },
+    {
+      name: "in_review + awaiting_funds claimer → donate",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+        user: builder,
+      },
+      sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+      button: "donate",
+    },
+    {
+      name: "in_review + awaiting_funds proposer stays done",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
       name: "window open donor",
       input: {
         proposal: proposal({
@@ -605,6 +648,49 @@ describe("nextActionCardHtml", () => {
   });
 });
 
+
+describe("in_review pooling donate", () => {
+  it("keeps Donate reachable for donors while structured funding awaits funds", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "in_review", claimer: "bob" }),
+      claim: claim({
+        state: "in_review",
+        claimer: "bob",
+        psbt: { structured_state: "awaiting_funds" },
+      }),
+      user: donor,
+    });
+    expect(action.button).toBe("donate");
+    expect(nextActionPrimaryHtml(action)).toContain("data-open-donate");
+  });
+
+  it("stays review-focused without awaiting_funds", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "in_review", claimer: "bob" }),
+      claim: claim({ state: "in_review", claimer: "bob" }),
+      user: donor,
+    });
+    expect(action.button).toBeNull();
+    expect(action.sentence).toBe("Waiting on the proposer.");
+    expect(nextActionPrimaryHtml(action)).not.toContain("data-open-donate");
+  });
+
+  it("keeps proposer primary as done even while awaiting_funds", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "in_review", claimer: "bob" }),
+      claim: claim({
+        state: "in_review",
+        claimer: "bob",
+        can_mark_done: true,
+        psbt: { structured_state: "awaiting_funds" },
+      }),
+      user: proposer,
+    });
+    expect(action.button).toBe("done");
+    expect(nextActionPrimaryHtml(action)).not.toContain("data-open-donate");
+  });
+});
+
 describe("project-page chrome contracts", () => {
   const src = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), "proposal-page.ts"),
@@ -623,5 +709,10 @@ describe("project-page chrome contracts", () => {
   it("omits donate-open from the slot when the card owns Donate", () => {
     expect(src).toContain("proposal-donate-slot");
     expect(src).toMatch(/proposal-donate-slot" hidden/);
+  });
+
+  it("mounts donate chrome for claimed/in_review pooling statuses", () => {
+    expect(src).toContain("isDonateChromeStatus");
+    expect(src).toContain("isFundableStatus(String(match.status))");
   });
 });

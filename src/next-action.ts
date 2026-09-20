@@ -291,6 +291,14 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         doneAllocations: pendingDoneAllocations(claim),
       };
     }
+    const structured = structuredState(claim);
+    if (structured === "awaiting_funds") {
+      return {
+        sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+        button: "donate",
+        moreIds,
+      };
+    }
     return { sentence: "Waiting on the proposer.", button: null, moreIds };
   }
 
