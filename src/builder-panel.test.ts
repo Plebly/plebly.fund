@@ -699,20 +699,24 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
       watching: false,
     });
     donateBtn!.click();
-    expect(document.querySelector("#donate-modal")).toBeNull();
+    // Sync shell on body immediately — must not wait for /claims.
+    const shell = document.querySelector<HTMLElement>("#donate-modal");
+    expect(shell).toBeTruthy();
+    expect(shell!.parentElement).toBe(document.body);
+    expect(shell!.hidden).toBe(false);
+    expect(document.body.classList.contains("modal-open")).toBe(true);
 
     resolveClaim(undefined);
     await bound;
     await vi.waitFor(() => {
+      expect(document.querySelector("#donate-address")?.textContent).toBe(
+        escrow,
+      );
       const modal = document.querySelector<HTMLElement>("#donate-modal");
       expect(modal).toBeTruthy();
       expect(modal!.hidden).toBe(false);
+      expect(modal!.parentElement).toBe(document.body);
     });
-    expect(document.body.classList.contains("modal-open")).toBe(true);
-    expect(document.querySelector("#donate-address")?.textContent).toBe(escrow);
-    expect(document.querySelector("#donate-modal")?.parentElement).toBe(
-      document.body,
-    );
   });
 
   it("keeps #donate-modal on body after .proposal-page innerHTML churn", async () => {
@@ -887,16 +891,126 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     bindDonateModal(document);
 
     document.querySelector<HTMLButtonElement>("#donate-open")!.click();
+    // Shell appears sync; escrow fills after mocked /claims.
+    expect(document.querySelector("#donate-modal")?.parentElement).toBe(
+      document.body,
+    );
+    expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(
+      false,
+    );
     await vi.waitFor(() => {
+      expect(document.querySelector("#donate-address")?.textContent).toBe(
+        escrow,
+      );
       const modal = document.querySelector<HTMLElement>("#donate-modal");
       expect(modal).toBeTruthy();
       expect(modal!.hidden).toBe(false);
       expect(modal!.parentElement).toBe(document.body);
     });
-    expect(document.querySelector("#donate-address")?.textContent).toBe(escrow);
 
     // ensure helper remains queryable via document
     const again = await ensureDonateModalMounted(document);
     expect(again?.id).toBe("donate-modal");
+  });
+
+  it("sync-inserts #donate-modal on click before claim escrow resolves", async () => {
+    const escrow = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";
+    let resolveClaim!: (v: unknown) => void;
+    const claimPromise = new Promise((resolve) => {
+      resolveClaim = resolve;
+    });
+
+    vi.resetModules();
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => claimPromise),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+    vi.doMock("./lightning", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./lightning")>();
+      return {
+        ...actual,
+        fetchLightningStatus: vi.fn(async () => ({
+          enabled: false,
+          reason: "test",
+        })),
+      };
+    });
+
+    const {
+      setDonateChromeContext,
+      installDonateClickCapture,
+    } = await import("./proposal-ui");
+
+    const p = proposal({
+      status: "listed",
+      balance_sats: 15_000,
+      claimer: null,
+      escrow_address: null,
+    });
+
+    document.body.innerHTML = `<div id="app">
+      <article class="proposal-page">
+        <button type="button" data-open-donate id="donate-open">Donate</button>
+      </article>
+    </div>`;
+
+    // No escrow on proposal; capture installed like main.ts (no builder bind).
+    setDonateChromeContext({
+      root: document,
+      proposal: p,
+      panelOpts: {
+        address: "",
+        proposalId: p.id,
+        proposalPath: p.path,
+        proposalTitle: p.title,
+        signedIn: false,
+      },
+      claimStatusPromise: null,
+    });
+    installDonateClickCapture();
+
+    expect(document.querySelector("#donate-modal")).toBeNull();
+    document.querySelector<HTMLButtonElement>("#donate-open")!.click();
+
+    // Sync: modal is on body and visible before /claims resolves.
+    const shell = document.querySelector<HTMLElement>("#donate-modal");
+    expect(shell).toBeTruthy();
+    expect(shell!.parentElement).toBe(document.body);
+    expect(shell!.hidden).toBe(false);
+
+    resolveClaim({
+      proposal_id: p.id,
+      proposal_path: p.path,
+      state: "in_review",
+      status: "in_review",
+      confirmed_balance_sats: 15_000,
+      claim_floor_sats: 10_000,
+      claimer: "alice",
+      escrow_address: escrow,
+      title: p.title,
+    });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector("#donate-address")?.textContent).toBe(
+        escrow,
+      );
+      const modal = document.querySelector<HTMLElement>("#donate-modal");
+      expect(modal).toBeTruthy();
+      expect(modal!.hidden).toBe(false);
+      expect(modal!.parentElement).toBe(document.body);
+    });
   });
 });

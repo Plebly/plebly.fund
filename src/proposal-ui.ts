@@ -1952,6 +1952,84 @@ function findDonateModal(root: ParentNode): HTMLElement | null {
   );
 }
 
+function currentDonateEscrowAddress(): string {
+  return String(
+    donateChromeContext?.proposal.escrow_address ||
+      donateChromeContext?.panelOpts.address ||
+      "",
+  ).trim();
+}
+
+/** /p/{id} or /proposal/... → claim fetch keys when chrome context is missing. */
+function proposalKeysFromLocation(): { path: string; id: string | null } {
+  const pathName = String(location.pathname || "");
+  const stable = pathName.match(/\/p\/([^/]+)\/?$/i);
+  if (stable) {
+    const raw = decodeURIComponent(stable[1]).replace(/\.md$/i, "");
+    return { path: "", id: raw };
+  }
+  const nested = pathName.match(/\/proposal\/(.+?)\/?$/i);
+  if (nested) {
+    let slug = decodeURIComponent(nested[1]).replace(/\.md$/i, "");
+    if (!slug.startsWith("proposals/")) slug = `proposals/${slug}`;
+    const id = slug.split("/").pop() || null;
+    return { path: `${slug}.md`, id };
+  }
+  return { path: "", id: null };
+}
+
+/**
+ * Sync body host for Donate clicks — must not wait on builder-panel /claims.
+ * Full chrome is filled by ensureDonateModalMounted once escrow is known.
+ */
+function insertDonateModalShell(address = ""): HTMLElement {
+  const existing = findDonateModal(document);
+  if (existing) return existing;
+  const addr = address.trim();
+  if (addr && escrowAddressMatchesNetwork(addr)) {
+    const signedIn = Boolean(donateChromeContext?.panelOpts.signedIn);
+    const html = donateModalHtml(
+      {
+        ...(donateChromeContext?.proposal || ({ id: "", path: "", title: "", status: "listed" } as Proposal)),
+        escrow_address: addr,
+      },
+      { signedIn },
+    );
+    if (html) {
+      document.body.insertAdjacentHTML("beforeend", html);
+      const modal = findDonateModal(document);
+      if (modal) return modal;
+    }
+  }
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `<div class="site-modal donate-modal" id="donate-modal" data-donate-shell="1">
+    <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
+    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-pay-title">
+      <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
+      <div class="donate-panel" id="donate" data-donate-step="pay">
+        <section class="donate-step" data-donate-step="pay" id="donate-step-pay">
+          <div class="donate-panel-head">
+            <h2 class="donate-title" id="donate-pay-title">Donate</h2>
+            <p class="muted" id="donate-escrow-pending">Loading escrow address…</p>
+          </div>
+          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+          <button type="button" class="btn ghost" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy</button>
+          <a class="btn" id="donate-wallet" href="#">Open wallet</a>
+          <a class="donate-explorer-link" href="#" target="_blank" rel="noopener">Explorer</a>
+        </section>
+      </div>
+    </div>
+  </div>`,
+  );
+  return findDonateModal(document)!;
+}
+
+/** Capture-phase Donate open — call from main so SPA route churn cannot miss it. */
+export function installDonateClickCapture(): void {
+  bindDonateModal(document);
+}
+
 /**
  * Mount #donate-modal if missing, waiting on claim-status escrow when needed.
  * Used by Donate clicks that fire before /claims finishes (first-paint CTA).
@@ -1962,30 +2040,71 @@ export async function ensureDonateModalMounted(
   root: ParentNode = document,
 ): Promise<HTMLElement | null> {
   let modal = findDonateModal(root);
-  if (modal) return modal;
+  const shellOnly = Boolean(
+    modal?.hasAttribute("data-donate-shell") &&
+      !String(modal.querySelector("#donate-address")?.textContent || "").trim(),
+  );
+  if (modal && !shellOnly) {
+    const shown = String(
+      modal.querySelector("#donate-address")?.textContent || "",
+    ).trim();
+    if (shown && escrowAddressMatchesNetwork(shown)) return modal;
+  }
 
-  const ctx = donateChromeContext;
-  if (!ctx) return null;
+  let ctx = donateChromeContext;
+  const locKeys = proposalKeysFromLocation();
 
-  const applyClaimEscrow = (status: {
-    escrow_address?: string | null;
-    state?: string | null;
-    status?: string | null;
-  } | null) => {
+  const applyClaimEscrow = (
+    target: DonateChromeContext,
+    status: {
+      escrow_address?: string | null;
+      state?: string | null;
+      status?: string | null;
+    } | null,
+  ) => {
     if (!status?.escrow_address) return;
     const nextStatus =
       status.state === "claimed" ||
       status.state === "in_review" ||
       status.state === "completed"
         ? status.state
-        : status.status || ctx.proposal.status;
-    ctx.proposal.escrow_address = status.escrow_address;
-    if (nextStatus) ctx.proposal.status = nextStatus;
-    ctx.panelOpts.address = String(status.escrow_address);
+        : status.status || target.proposal.status;
+    target.proposal.escrow_address = status.escrow_address;
+    if (nextStatus) target.proposal.status = nextStatus;
+    target.panelOpts.address = String(status.escrow_address);
   };
 
+  if (!ctx) {
+    const path = locKeys.path;
+    const id = locKeys.id;
+    if (!path && !id) return modal;
+    const status = await fetchClaimStatus(path, id).catch(() => null);
+    if (!status?.escrow_address) return modal;
+    const addr0 = String(status.escrow_address).trim();
+    if (!escrowAddressMatchesNetwork(addr0)) return modal;
+    const synthetic: DonateChromeContext = {
+      root: document,
+      proposal: {
+        id: status.proposal_id || id || "",
+        path: status.proposal_path || path || "",
+        title: status.title || "Project",
+        status: status.state || status.status || "listed",
+        escrow_address: addr0,
+      } as Proposal,
+      panelOpts: {
+        address: addr0,
+        proposalId: status.proposal_id || id,
+        proposalPath: status.proposal_path || path,
+        proposalTitle: status.title || "Project",
+        signedIn: false,
+      },
+    };
+    setDonateChromeContext(synthetic);
+    ctx = synthetic;
+  }
+
   if (ctx.claimStatusPromise) {
-    applyClaimEscrow(await ctx.claimStatusPromise.catch(() => null));
+    applyClaimEscrow(ctx, await ctx.claimStatusPromise.catch(() => null));
   }
 
   let addr = String(
@@ -1995,10 +2114,11 @@ export async function ensureDonateModalMounted(
   // Click-path fallback: in-flight promise missing/stale — fetch by proposal id.
   if (!addr) {
     const path =
-      String(ctx.proposal.path || ctx.panelOpts.proposalPath || "").trim();
-    const id = ctx.proposal.id || ctx.panelOpts.proposalId || null;
+      String(ctx.proposal.path || ctx.panelOpts.proposalPath || locKeys.path || "").trim();
+    const id = ctx.proposal.id || ctx.panelOpts.proposalId || locKeys.id || null;
     if (path || id) {
       applyClaimEscrow(
+        ctx,
         await fetchClaimStatus(path, id).catch(() => null),
       );
       addr = String(
@@ -2007,7 +2127,13 @@ export async function ensureDonateModalMounted(
     }
   }
 
-  if (!addr || !escrowAddressMatchesNetwork(addr)) return null;
+  if (!addr || !escrowAddressMatchesNetwork(addr)) return modal;
+
+  // Replace empty shell with full chrome before bind.
+  if (modal?.hasAttribute("data-donate-shell")) {
+    modal.remove();
+    modal = null;
+  }
 
   await mountDonateChromeWhenEscrowKnown(
     ctx.root,
@@ -2065,18 +2191,30 @@ export function bindDonateModal(
     window.addEventListener("keydown", onEscape);
   };
 
-  // Sync when modal already in DOM; async ensure-mount when first-paint CTA
-  // fired before /claims supplied escrow.
+  // Sync body insert on every Donate click — never depend on builder-panel
+  // finishing /claims first. Async ensure fills escrow + full chrome.
   const open = (ev?: Event) => {
-    const existing = findDonateModal(bindRoot);
-    if (existing) {
-      reveal(existing, ev);
-      return;
-    }
+    const known = currentDonateEscrowAddress();
+    const modal = insertDonateModalShell(
+      known && escrowAddressMatchesNetwork(known) ? known : "",
+    );
+    reveal(modal, ev);
     void (async () => {
-      const modal = await ensureDonateModalMounted(bindRoot);
-      if (!modal) return;
-      reveal(modal, ev);
+      const ensured = await ensureDonateModalMounted(bindRoot);
+      if (!ensured) return;
+      const addr = currentDonateEscrowAddress();
+      if (addr) syncDonateModalEscrow(addr, bindRoot);
+      reveal(ensured, ev);
+      try {
+        if (donateChromeContext) {
+          await bindDonatePanel(document, {
+            ...donateChromeContext.panelOpts,
+            address: addr || donateChromeContext.panelOpts.address,
+          });
+        }
+      } catch {
+        /* Address reveal must not depend on panel bind. */
+      }
     })();
   };
 

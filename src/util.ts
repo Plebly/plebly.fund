@@ -193,7 +193,10 @@ export function claimsProposalPath(input: {
   id?: string | null;
   path?: string | null;
 }): string {
-  const id = input.id?.trim();
+  let id = input.id?.trim() || "";
+  // URL slugs are lowercase (/p/plebly-…); Workers keys keep frontmatter casing.
+  const plebly = id.match(/^(plebly-)(\d{4}-\d+)$/i);
+  if (plebly) id = `PLEBLY-${plebly[2]}`;
   if (id) return `${PROPOSALS_PREFIX}listed/${id}.md`;
 
   let path = (input.path || "").trim().replace(/^\/+/, "");
