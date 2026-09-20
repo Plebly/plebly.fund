@@ -6,6 +6,7 @@ import {
 } from "./auth";
 import { fetchClaimParams, fetchPayIntent } from "./builder";
 import {
+  CLAIM_FLOOR_SATS,
   PROPOSALS_RAW,
   SUBMISSION_FEE_SATS,
   WORKERS_API,
@@ -64,6 +65,7 @@ import {
   readNamedValue,
   setControlFieldError,
   validateBasicsDraft,
+  validateFundingTargetDraft,
   validateScopeDraft,
   type ProposeWizardStepId,
 } from "./propose-wizard";
@@ -544,8 +546,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           <fieldset class="form-block">
             <label class="field">
               <span>Target funding <em class="optional">(optional)</em></span>
-              <input name="target_sats" id="propose-target-sats" type="number" min="0" step="1" placeholder="e.g. 5000000" value="${prefill?.target_sats != null ? escapeHtml(String(prefill.target_sats)) : ""}" />
-              <span class="field-hint">Targets ≥ 1,000,000 sats require at least one milestone.</span>
+              <input name="target_sats" id="propose-target-sats" type="number" min="${CLAIM_FLOOR_SATS}" step="1" placeholder="e.g. 5000000" value="${prefill?.target_sats != null ? escapeHtml(String(prefill.target_sats)) : ""}" />
+              <span class="field-hint">Optional. If set, minimum is ${CLAIM_FLOOR_SATS.toLocaleString("en-US")} sats (claim floor). Targets ≥ 1,000,000 sats require at least one milestone.</span>
             </label>
           </fieldset>
           ${milestoneEditorSectionHtml()}
@@ -960,6 +962,11 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     if (currentStep === "funding") {
       const targetRaw = readNamedValue(form, "target_sats");
       const target_sats = targetRaw.length ? Number(targetRaw) : null;
+      const targetOk = validateFundingTargetDraft(
+        { target_sats },
+        CLAIM_FLOOR_SATS,
+      );
+      if (!targetOk.ok) return showNamedFieldErrors(targetOk.errors);
       const drafts = collectMilestoneDrafts(milestonesList);
       return showMilestoneValidation(
         validateMilestoneDrafts(
@@ -1566,8 +1573,20 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const targetRaw = fd.get("target_sats");
     const target_sats =
       targetRaw && String(targetRaw).length ? Number(targetRaw) : null;
+    const targetOk = validateFundingTargetDraft(
+      { target_sats },
+      CLAIM_FLOOR_SATS,
+    );
+    if (!targetOk.ok) {
+      setWizardStep("funding");
+      showNamedFieldErrors(targetOk.errors);
+      return;
+    }
     const drafts = collectMilestoneDrafts(milestonesList);
-    const checked = validateMilestoneDrafts(drafts, target_sats);
+    const checked = validateMilestoneDrafts(
+      drafts,
+      Number.isFinite(target_sats as number) ? target_sats : null,
+    );
     if (!checked.ok) {
       setWizardStep("funding");
       showMilestoneValidation(checked);

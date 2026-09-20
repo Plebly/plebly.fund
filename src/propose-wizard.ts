@@ -1,4 +1,5 @@
 import { formatSats, escapeHtml } from "./util";
+import { CLAIM_FLOOR_SATS } from "./config";
 import type { DependsOnEntry, RelatedWorkEntry } from "./types";
 import type { MilestoneDraft } from "./propose-milestones";
 import { tosAckCardHtml } from "./tos-modal";
@@ -220,6 +221,40 @@ export function validateScopeDraft(
     });
   }
   return errors.length ? failNamed(errors) : { ok: true };
+}
+
+export type FundingTargetDraft = {
+  /** Parsed target; null/empty means open / unspecified. */
+  target_sats: number | null;
+};
+
+/**
+ * Optional target must meet the network claim floor when set.
+ * Blank / null stays open funding.
+ */
+export function validateFundingTargetDraft(
+  draft: FundingTargetDraft,
+  claimFloorSats: number = CLAIM_FLOOR_SATS,
+): { ok: true } | DraftValidationFail {
+  const t = draft.target_sats;
+  if (t == null) return { ok: true };
+  if (!Number.isFinite(t)) {
+    return failNamed([
+      {
+        field: "target_sats",
+        message: "Enter a valid target in sats, or leave blank.",
+      },
+    ]);
+  }
+  if (t > 0 && t < claimFloorSats) {
+    return failNamed([
+      {
+        field: "target_sats",
+        message: `Target must be at least ${formatSats(claimFloorSats)} (claim floor), or leave blank for open funding.`,
+      },
+    ]);
+  }
+  return { ok: true };
 }
 
 export function clearProposeFieldErrors(root: ParentNode): void {
