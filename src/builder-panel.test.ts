@@ -518,3 +518,96 @@ describe("bindBuilderPanel stepper refresh", () => {
     ).toMatch(/claim/);
   });
 });
+
+describe("bindBuilderPanel donate modal after claim escrow", () => {
+  it("inserts #donate-modal and opens it when claim status supplies escrow", async () => {
+    vi.resetModules();
+    const escrow = "tb1qdonateescrowxxxxxxxxxxxxxxxxxxxx";
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => ({
+          proposal_id: "demo",
+          proposal_path: "proposals/listed/demo.md",
+          state: "claimed" as const,
+          status: "listed",
+          confirmed_balance_sats: 15_000,
+          claim_floor_sats: 10_000,
+          claimer: "alice",
+          escrow_address: escrow,
+          psbt: { structured_state: "awaiting_funds" },
+        })),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+    vi.doMock("./reviewers", () => ({
+      fetchReviewerMe: vi.fn(async () => null),
+    }));
+    vi.doMock("./lightning", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./lightning")>();
+      return {
+        ...actual,
+        fetchLightningStatus: vi.fn(async () => ({
+          enabled: false,
+          reason: "test",
+        })),
+      };
+    });
+
+    const { bindBuilderPanel, builderPanelHtml } = await import("./builder-panel");
+    const { proposalStepperHtml } = await import("./proposal-ui");
+
+    // First paint: no escrow → no #donate-modal (mirrors escrowOk=false path).
+    const p = proposal({
+      status: "listed",
+      balance_sats: 15_000,
+      claimer: null,
+      escrow_address: null,
+    });
+
+    document.body.innerHTML = `<div id="app">
+      <article class="proposal-page">
+        <header class="proposal-hero">
+          <div class="proposal-hero-top"><h1>Demo</h1></div>
+        </header>
+        ${proposalStepperHtml(p)}
+        <div id="panel-root">${builderPanelHtml(p, 15_000, false, null)}</div>
+      </article>
+    </div>`;
+
+    expect(document.querySelector("#donate-modal")).toBeNull();
+
+    await bindBuilderPanel(document.querySelector("#app")!, {
+      proposal: { ...p },
+      balance: 15_000,
+      user: null,
+      watching: false,
+    });
+
+    // Allow void mountDonateChromeWhenEscrowKnown to settle.
+    await vi.waitFor(() => {
+      expect(document.querySelector("#donate-modal")).toBeTruthy();
+    });
+
+    const modal = document.querySelector<HTMLElement>("#donate-modal")!;
+    expect(modal.hidden).toBe(true);
+
+    const donateBtn = document.querySelector<HTMLButtonElement>(
+      "[data-open-donate], #donate-open",
+    );
+    expect(donateBtn).toBeTruthy();
+    donateBtn!.click();
+    expect(modal.hidden).toBe(false);
+    expect(document.body.classList.contains("modal-open")).toBe(true);
+  });
+});
