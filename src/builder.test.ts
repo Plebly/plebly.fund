@@ -117,6 +117,24 @@ describe("claim floor helpers", () => {
 });
 
 describe("applyClaimStatusToProposal", () => {
+  it("prefers state=claimed over catalog status=listed for stepper", () => {
+    const base = proposal({ status: "listed", claimer: null });
+    const merged = applyClaimStatusToProposal(base, {
+      proposal_id: "demo",
+      proposal_path: base.path,
+      state: "claimed",
+      status: "listed",
+      confirmed_balance_sats: 15_000,
+      claim_floor_sats: 10_000,
+      claimer: "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+      claimer_user_id:
+        "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+      claimed_at: "2026-09-19T21:21:08.656Z",
+    });
+    expect(merged.status).toBe("claimed");
+    expect(merged.claimer).toContain("5255bf327a89");
+  });
+
   it("overlays claimed / in_review / declined from Worker status", () => {
     const base = proposal({ status: "listed", claimer: null });
     const claimed: ClaimStatus = {

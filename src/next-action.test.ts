@@ -339,6 +339,33 @@ describe("resolveNextAction", () => {
       button: "donate",
     },
     {
+      name: "listed catalog + claim claimed awaiting_funds matching nostr → deliverable",
+      input: {
+        proposal: proposal({
+          status: "listed",
+          claimer: null,
+        }),
+        claim: claim({
+          state: "claimed",
+          status: "listed",
+          claimer:
+            "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+          claimer_user_id:
+            "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+          confirmed_balance_sats: 15_000,
+          claim_floor_sats: 10_000,
+          psbt: { structured_state: "awaiting_funds" },
+        }),
+        user: {
+          id: "nostr:5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+          nostr: "5255bf327a891ac325e8d4be7f1ecf42915336092b8ef134974afd2b28a508e6",
+          username: "npub12f2m7",
+        } as never,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+    },
+    {
       name: "claimed nostr builder truncated claimer still submits",
       input: {
         proposal: proposal({

@@ -358,13 +358,14 @@ export function applyClaimStatusToProposal(
   proposal: Proposal,
   status: ClaimStatus,
 ): Proposal {
+  // Workers may still report frontmatter status=listed while state=claimed
+  // (file not moved yet). Prefer operational state for lifecycle UI.
   const nextStatus =
-    status.status ||
-    (status.state === "claimed" ||
+    status.state === "claimed" ||
     status.state === "in_review" ||
     status.state === "completed"
       ? status.state
-      : proposal.status);
+      : status.status || proposal.status;
   return {
     ...proposal,
     status: nextStatus,

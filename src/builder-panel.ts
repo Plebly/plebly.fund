@@ -2,6 +2,7 @@ import {
   acceptClaimApplication,
   acceptClaimCollaboratorInvite,
   addWatch,
+  applyClaimStatusToProposal,
   claimWindowDaysLeft,
   fetchClaimApplications,
   fetchClaimParams,
@@ -71,7 +72,11 @@ import {
   resolveNextAction,
 } from "./next-action";
 import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
-import { donateTriggerHtml, userMatchesProposer } from "./proposal-ui";
+import {
+  donateTriggerHtml,
+  proposalStepperHtml,
+  userMatchesProposer,
+} from "./proposal-ui";
 import type { Proposal } from "./types";
 import { sanitizePublicError } from "./public-errors";
 import { escapeHtml, formatSats } from "./util";
@@ -1444,6 +1449,12 @@ export async function bindBuilderPanel(
       }
       if (!status.claim_agent && opts.proposal.claim_agent) {
         status.claim_agent = opts.proposal.claim_agent;
+      }
+      const mergedProposal = applyClaimStatusToProposal(opts.proposal, status);
+      Object.assign(opts.proposal, mergedProposal);
+      const stepper = root.querySelector(".proposal-stepper");
+      if (stepper) {
+        stepper.outerHTML = proposalStepperHtml(opts.proposal);
       }
       const isProposer = userMatchesProposer(
         opts.user,
