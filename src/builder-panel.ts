@@ -77,6 +77,8 @@ import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-mat
 import {
   donateTriggerHtml,
   mountDonateChromeWhenEscrowKnown,
+  setDonateChromeContext,
+  bindDonateModal,
   proposalStepperHtml,
   statusPillHtml,
   userMatchesProposer,
@@ -791,6 +793,39 @@ export async function bindBuilderPanel(
   const finalize = panel.querySelector<HTMLElement>("#claim-finalize");
   const claimConfirm = panel.querySelector<HTMLButtonElement>("#claim-confirm");
 
+  // Register Donate click context before any await so first-paint Donate works.
+  let seededStatus = opts.initialStatus ?? null;
+  let claimStatusPromise: Promise<Awaited<ReturnType<typeof fetchClaimStatus>>> | null =
+    seededStatus
+      ? Promise.resolve(seededStatus)
+      : fetchClaimStatus(opts.proposal.path, opts.proposal.id);
+  {
+    const earlyOpts = {
+      address: String(opts.proposal.escrow_address || ""),
+      proposalId: opts.proposal.id,
+      proposalPath: opts.proposal.path,
+      proposalTitle: opts.proposal.title,
+      signedIn: Boolean(opts.user),
+      initialBalance: opts.balance ?? opts.proposal.balance_sats ?? 0,
+      claimFloorSats: CLAIM_FLOOR_SATS,
+      targetSats: opts.proposal.target_sats,
+      creditPrefs: opts.user?.funder_credit
+        ? {
+            public_credit: opts.user.funder_credit.public_credit !== false,
+            anonymous: opts.user.funder_credit.public_credit === false,
+            show_amount: Boolean(opts.user.funder_credit.show_amount),
+          }
+        : null,
+    };
+    setDonateChromeContext({
+      root,
+      proposal: opts.proposal,
+      panelOpts: earlyOpts,
+      claimStatusPromise,
+    });
+    bindDonateModal(document);
+  }
+
   const requireLogin = (reason: string) => {
     if (msg) {
       msg.hidden = false;
@@ -1424,14 +1459,17 @@ export async function bindBuilderPanel(
     });
   };
 
-  let seededStatus = opts.initialStatus ?? null;
   const refreshStatus = async () => {
     const seeded = seededStatus;
     seededStatus = null;
+    const firstClaim = claimStatusPromise;
+    claimStatusPromise = null;
     const [status, apps, reviewerMe] = await Promise.all([
       seeded
         ? Promise.resolve(seeded)
-        : fetchClaimStatus(opts.proposal.path, opts.proposal.id),
+        : firstClaim
+          ? firstClaim
+          : fetchClaimStatus(opts.proposal.path, opts.proposal.id),
       fetchClaimApplications(opts.proposal.path, opts.proposal.id).catch(
         () => null,
       ),
@@ -1458,9 +1496,7 @@ export async function bindBuilderPanel(
       }
       const mergedProposal = applyClaimStatusToProposal(opts.proposal, status);
       Object.assign(opts.proposal, mergedProposal);
-      // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
-      // so #donate-open / [data-open-donate] from next-action actually open it.
-      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, {
+      const donatePanelOpts = {
         address: String(opts.proposal.escrow_address || ""),
         proposalId: opts.proposal.id,
         proposalPath: opts.proposal.path,
@@ -1476,7 +1512,15 @@ export async function bindBuilderPanel(
               show_amount: Boolean(opts.user.funder_credit.show_amount),
             }
           : null,
+      };
+      setDonateChromeContext({
+        root,
+        proposal: opts.proposal,
+        panelOpts: donatePanelOpts,
       });
+      // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
+      // so #donate-open / [data-open-donate] from next-action actually open it.
+      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts);
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const refreshStepper = () => {

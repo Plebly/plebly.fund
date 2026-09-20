@@ -1891,8 +1891,103 @@ export async function bindDonatePanel(
   bindLightningDonate(panel, normalized, status);
 }
 
-/** Roots that already have delegated Donate open/close listeners. */
+/** Document (or other roots) that already have delegated Donate listeners. */
 const donateModalBoundRoots = new WeakSet<object>();
+
+/** Latest proposal/page opts so a Donate click can mount chrome before open. */
+export type DonateChromeContext = {
+  root: ParentNode;
+  proposal: Proposal;
+  panelOpts: DonateBindOpts;
+  /** In-flight /claims that may supply escrow when markdown omitted it. */
+  claimStatusPromise?: Promise<{
+    escrow_address?: string | null;
+    state?: string | null;
+    status?: string | null;
+  } | null> | null;
+};
+
+let donateChromeContext: DonateChromeContext | null = null;
+
+export function setDonateChromeContext(
+  ctx: DonateChromeContext | null,
+): void {
+  donateChromeContext = ctx;
+}
+
+/** Keep address / copy / wallet / explorer in sync after late escrow arrives. */
+export function syncDonateModalEscrow(
+  address: string,
+  scope: ParentNode = document,
+): void {
+  const addr = address.trim();
+  if (!addr) return;
+  const root =
+    scope instanceof Document || scope instanceof Element ? scope : document;
+  const code = root.querySelector<HTMLElement>("#donate-address");
+  if (code) {
+    code.textContent = addr;
+    code.setAttribute("title", addr);
+  }
+  const copy = root.querySelector<HTMLElement>("#donate-copy");
+  if (copy) copy.setAttribute("data-copy", addr);
+  const wallet = root.querySelector<HTMLAnchorElement>("#donate-wallet");
+  if (wallet) wallet.href = bitcoinUri(addr);
+  const explorer = root.querySelector<HTMLAnchorElement>(".donate-explorer-link");
+  if (explorer) {
+    explorer.href = `${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`;
+  }
+}
+
+function findDonateModal(root: ParentNode): HTMLElement | null {
+  return (
+    (root instanceof Document || root instanceof Element
+      ? root.querySelector<HTMLElement>("#donate-modal")
+      : null) || document.querySelector<HTMLElement>("#donate-modal")
+  );
+}
+
+/**
+ * Mount #donate-modal if missing, waiting on claim-status escrow when needed.
+ * Used by Donate clicks that fire before /claims finishes (first-paint CTA).
+ */
+export async function ensureDonateModalMounted(
+  root: ParentNode = document,
+): Promise<HTMLElement | null> {
+  let modal = findDonateModal(root);
+  if (modal) return modal;
+
+  const ctx = donateChromeContext;
+  if (!ctx) return null;
+
+  if (ctx.claimStatusPromise) {
+    const status = await ctx.claimStatusPromise.catch(() => null);
+    if (status?.escrow_address) {
+      const nextStatus =
+        status.state === "claimed" ||
+        status.state === "in_review" ||
+        status.state === "completed"
+          ? status.state
+          : status.status || ctx.proposal.status;
+      ctx.proposal.escrow_address = status.escrow_address;
+      if (nextStatus) ctx.proposal.status = nextStatus;
+      ctx.panelOpts.address = String(status.escrow_address);
+    }
+  }
+
+  const addr = String(
+    ctx.proposal.escrow_address || ctx.panelOpts.address || "",
+  ).trim();
+  if (!addr) return null;
+
+  await mountDonateChromeWhenEscrowKnown(ctx.root, ctx.proposal, {
+    ...ctx.panelOpts,
+    address: addr,
+  });
+  modal = findDonateModal(root);
+  if (modal) syncDonateModalEscrow(addr, ctx.root);
+  return modal;
+}
 
 export function bindDonateModal(
   root: ParentNode,
@@ -1905,31 +2000,54 @@ export function bindDonateModal(
   ];
   let lastOpener: HTMLButtonElement | null = openBtns[0] || null;
 
-  // Re-query #donate-modal on each open/close so late insert after claim status works
-  // even if bind ran before the modal existed (or was rebound after insert).
-  const open = (ev?: Event) => {
-    const modal = root.querySelector<HTMLElement>("#donate-modal");
-    if (!modal) return;
+  // Prefer document delegation so SPA re-renders / late mount never miss clicks.
+  const bindRoot: Document | Element =
+    root instanceof Document ? root : document;
+
+  const reveal = (modal: HTMLElement, ev?: Event) => {
     const from =
       ev?.target instanceof Element
-        ? ev.target.closest<HTMLButtonElement>("[data-open-donate], #donate-open")
+        ? ev.target.closest<HTMLButtonElement>(
+            "[data-open-donate], #donate-open",
+          )
         : null;
     if (from) lastOpener = from;
     else if (ev?.currentTarget instanceof HTMLButtonElement) {
       lastOpener = ev.currentTarget;
     }
+    const addr = String(
+      donateChromeContext?.proposal.escrow_address ||
+        donateChromeContext?.panelOpts.address ||
+        "",
+    ).trim();
+    if (addr) syncDonateModalEscrow(addr, bindRoot);
     modal.hidden = false;
     document.body.classList.add("modal-open");
-    const panel = root.querySelector("#donate");
+    const panel = bindRoot.querySelector("#donate");
     if (opts?.rail === "lightning" && panel) {
       selectDonateRail(panel, "lightning");
     }
-    root.querySelector<HTMLButtonElement>("#donate-close")?.focus();
+    bindRoot.querySelector<HTMLButtonElement>("#donate-close")?.focus();
     window.addEventListener("keydown", onEscape);
   };
 
+  // Sync when modal already in DOM; async ensure-mount when first-paint CTA
+  // fired before /claims supplied escrow.
+  const open = (ev?: Event) => {
+    const existing = findDonateModal(bindRoot);
+    if (existing) {
+      reveal(existing, ev);
+      return;
+    }
+    void (async () => {
+      const modal = await ensureDonateModalMounted(bindRoot);
+      if (!modal) return;
+      reveal(modal, ev);
+    })();
+  };
+
   const close = () => {
-    const modal = root.querySelector<HTMLElement>("#donate-modal");
+    const modal = findDonateModal(bindRoot);
     if (!modal) return;
     modal.hidden = true;
     document.body.classList.remove("modal-open");
@@ -1938,37 +2056,26 @@ export function bindDonateModal(
   };
 
   const onEscape = (e: KeyboardEvent) => {
-    const modal = root.querySelector<HTMLElement>("#donate-modal");
+    const modal = findDonateModal(bindRoot);
     if (e.key === "Escape" && modal && !modal.hidden) close();
   };
 
-  // Delegate open + close: next-action / donate-slot re-renders and late-mounted
-  // #donate-modal (claim status escrow) still work without per-button rebinding.
   const onDelegateClick = (ev: Event) => {
     const t = ev.target;
     if (!(t instanceof Element)) return;
-    if (!(root instanceof Node) || !root.contains(t)) return;
     if (t.closest("#donate-close, [data-close-donate]")) {
       close();
       return;
     }
-    const btn = t.closest<HTMLButtonElement>("[data-open-donate], #donate-open");
+    const btn = t.closest<HTMLButtonElement>(
+      "[data-open-donate], #donate-open",
+    );
     if (!btn) return;
     open(ev);
   };
-  if (root instanceof Document || root instanceof Element) {
-    if (!donateModalBoundRoots.has(root)) {
-      donateModalBoundRoots.add(root);
-      root.addEventListener("click", onDelegateClick);
-    }
-  } else {
-    for (const btn of openBtns) btn.addEventListener("click", open);
-    root
-      .querySelector<HTMLButtonElement>("#donate-close")
-      ?.addEventListener("click", close);
-    root
-      .querySelector<HTMLElement>("[data-close-donate]")
-      ?.addEventListener("click", close);
+  if (!donateModalBoundRoots.has(bindRoot)) {
+    donateModalBoundRoots.add(bindRoot);
+    bindRoot.addEventListener("click", onDelegateClick);
   }
 
   if (opts?.open) open();
@@ -1988,6 +2095,8 @@ export async function mountDonateChromeWhenEscrowKnown(
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
   if (!isDonateChromeStatus(String(proposal.status || ""))) return false;
 
+  setDonateChromeContext({ root, proposal, panelOpts });
+
   const page =
     (root instanceof Document || root instanceof Element
       ? root.querySelector(".proposal-page")
@@ -1998,7 +2107,11 @@ export async function mountDonateChromeWhenEscrowKnown(
       : null) ||
     page?.querySelector("#donate-modal") ||
     document.querySelector("#donate-modal");
-  if (existing) return false;
+  if (existing) {
+    syncDonateModalEscrow(addr, root);
+    bindDonateModal(document);
+    return false;
+  }
 
   const html = donateModalHtml(
     { ...proposal, escrow_address: addr },
@@ -2009,10 +2122,9 @@ export async function mountDonateChromeWhenEscrowKnown(
   const host = page || (root instanceof Element ? root : document.body);
   host.insertAdjacentHTML("beforeend", html);
 
-  const bindRoot: ParentNode =
-    root instanceof Document || root instanceof Element ? root : document;
-  bindDonateModal(bindRoot);
-  await bindDonatePanel(bindRoot, { ...panelOpts, address: addr });
+  bindDonateModal(document);
+  await bindDonatePanel(document, { ...panelOpts, address: addr });
+  syncDonateModalEscrow(addr, document);
   return true;
 }
 
