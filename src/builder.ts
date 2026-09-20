@@ -37,6 +37,8 @@ export type ClaimStatus = {
     created_at: string;
   } | null;
   claimer?: string | null;
+  /** Full fulfiller session id from Workers (prefer over truncated claimer label). */
+  claimer_user_id?: string | null;
   claimer_type?: "individual" | "org" | string | null;
   claim_agent?: string | null;
   claimed_at?: string | null;
