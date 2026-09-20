@@ -298,9 +298,12 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (isProposer) {
+      // Claim status is fetched public (credentials omit) so can_mark_done is
+      // always false in the SPA; isProposer is computed locally. POST /claims/done
+      // still enforces proposer session + deliverable + in_review.
       return {
         sentence: "Mark it done if the work is finished.",
-        button: claim?.can_mark_done ? "done" : null,
+        button: "done",
         moreIds: isBuilder ? ["extension"] : moreIds,
         doneAllocations: pendingDoneAllocations(claim),
       };
