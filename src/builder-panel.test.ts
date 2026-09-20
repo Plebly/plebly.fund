@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   applicationsPanelHtml,
   builderPanelHtml,
@@ -435,5 +435,86 @@ describe("sessionIsClaimStatusFulfiller + applyClaimStatus", () => {
     expect(action.button).toBe("deliverable");
     expect(action.sentence).toContain("Submit the work when it is done");
     expect(action.sentence).toContain("pooling");
+  });
+});
+
+describe("bindBuilderPanel stepper refresh", () => {
+  it("advances Fund→Build via document-scoped stepper even if root misses it", async () => {
+    vi.resetModules();
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => ({
+          proposal_id: "demo",
+          proposal_path: "proposals/listed/demo.md",
+          state: "claimed" as const,
+          status: "listed",
+          confirmed_balance_sats: 15_000,
+          claim_floor_sats: 10_000,
+          claimer: "nostr:abc",
+          claimer_user_id: "nostr:abc",
+          psbt: { structured_state: "awaiting_funds" },
+        })),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+    vi.doMock("./reviewers", () => ({
+      fetchReviewerMe: vi.fn(async () => null),
+    }));
+
+    const { bindBuilderPanel, builderPanelHtml } = await import("./builder-panel");
+    const { proposalStepperHtml } = await import("./proposal-ui");
+
+    const p = proposal({
+      status: "listed",
+      balance_sats: 15_000,
+      claimer: null,
+    });
+    const user = {
+      id: "nostr:abc",
+      nostr: "abc",
+      username: "npub1",
+    } as never;
+
+    // Stepper is under .proposal-page; pass a root that does not contain it so
+    // root.querySelector(".proposal-stepper") misses — document scope must win.
+    document.body.innerHTML = `<div id="app">
+      <article class="proposal-page">
+        <header class="proposal-hero">
+          <div class="proposal-hero-top"><h1>Demo</h1></div>
+        </header>
+        ${proposalStepperHtml(p)}
+        <div id="panel-root">${builderPanelHtml(p, 15_000, false, user)}</div>
+      </article>
+    </div>`;
+
+    expect(
+      document.querySelector(".proposal-step-current")?.textContent,
+    ).toBe("Fund");
+
+    await bindBuilderPanel(document.querySelector("#panel-root")!, {
+      proposal: { ...p },
+      balance: 15_000,
+      user,
+      watching: false,
+    });
+
+    const current = document.querySelector(".proposal-step-current");
+    expect(current?.textContent).toBe("Build");
+    expect(current?.getAttribute("aria-current")).toBe("step");
+    expect(document.body.innerHTML).toMatch(/Submit deliverable/);
+    expect(
+      document.querySelector(".pill-status")?.textContent?.toLowerCase(),
+    ).toMatch(/claim/);
   });
 });

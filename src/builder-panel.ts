@@ -76,6 +76,7 @@ import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-mat
 import {
   donateTriggerHtml,
   proposalStepperHtml,
+  statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
@@ -1435,8 +1436,8 @@ export async function bindBuilderPanel(
       opts.user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
     ]);
     const reviewerActive = Boolean(reviewerMe?.active);
-    syncHeroClaimChip(apps);
     if (!status && body) {
+      syncHeroClaimChip(apps);
       body.innerHTML = `<p class="builder-status muted">Couldn’t load claim status.</p>
         <button type="button" class="btn ghost" id="builder-status-retry">Retry</button>`;
       body
@@ -1455,10 +1456,26 @@ export async function bindBuilderPanel(
       }
       const mergedProposal = applyClaimStatusToProposal(opts.proposal, status);
       Object.assign(opts.proposal, mergedProposal);
-      const stepper = root.querySelector(".proposal-stepper");
-      if (stepper) {
-        stepper.outerHTML = proposalStepperHtml(opts.proposal);
-      }
+      // Prefer document scope: root may be stale after a concurrent SPA re-render,
+      // while the visible stepper always lives under .proposal-page.
+      const refreshStepper = () => {
+        const stepper =
+          document.querySelector(".proposal-page .proposal-stepper") ||
+          root.querySelector(".proposal-stepper");
+        if (stepper) {
+          stepper.outerHTML = proposalStepperHtml(mergedProposal);
+        }
+        const pillHost = document.querySelector(".proposal-hero-top");
+        if (pillHost) {
+          const prev = pillHost.querySelector(".pill-status");
+          const next = statusPillHtml(String(mergedProposal.status || ""));
+          if (prev && next) prev.outerHTML = next;
+          else if (prev && !next) prev.remove();
+          else if (!prev && next) pillHost.insertAdjacentHTML("beforeend", next);
+        }
+      };
+      refreshStepper();
+      syncHeroClaimChip(apps);
       const isProposer = userMatchesProposer(
         opts.user,
         opts.proposal.proposer,
@@ -1560,6 +1577,9 @@ export async function bindBuilderPanel(
           apps.claim_mode === "first_bonded" ? "first bonded wins" : "proposer picks"
         } · ${apps.summary.bonded} bonded${phaseBit}. Continue?`;
       }
+      // Re-apply after awaits — a concurrent navigate can replace #app mid-flight;
+      // document-scoped refresh still hits the visible stepper.
+      refreshStepper();
       bindClaimButton();
       bindDeliverable(refreshStatus);
       bindCheckpoint();
