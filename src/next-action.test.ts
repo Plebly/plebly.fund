@@ -197,6 +197,17 @@ describe("resolveNextAction", () => {
       button: "done",
     },
     {
+      name: "in_review proposer done without session can_mark_done",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        // Public /claims fetch omits credentials → can_mark_done stays false.
+        claim: claim({ state: "in_review", claimer: "bob", can_mark_done: false }),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
       name: "in_review other",
       input: {
         proposal: proposal({ status: "in_review", claimer: "bob" }),
