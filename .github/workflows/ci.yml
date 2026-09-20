@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: [self-hosted, Linux, X64, plebly]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        env:
+          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
+      - run: npm run build
+        env:
+          VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://plebly-api.securesovereigns.workers.dev' }}
+          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
