@@ -76,6 +76,7 @@ import {
 import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import {
   donateTriggerHtml,
+  mountDonateChromeWhenEscrowKnown,
   proposalStepperHtml,
   statusPillHtml,
   userMatchesProposer,
@@ -1457,6 +1458,25 @@ export async function bindBuilderPanel(
       }
       const mergedProposal = applyClaimStatusToProposal(opts.proposal, status);
       Object.assign(opts.proposal, mergedProposal);
+      // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
+      // so #donate-open / [data-open-donate] from next-action actually open it.
+      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, {
+        address: String(opts.proposal.escrow_address || ""),
+        proposalId: opts.proposal.id,
+        proposalPath: opts.proposal.path,
+        proposalTitle: opts.proposal.title,
+        signedIn: Boolean(opts.user),
+        initialBalance: opts.balance ?? opts.proposal.balance_sats ?? 0,
+        claimFloorSats: CLAIM_FLOOR_SATS,
+        targetSats: opts.proposal.target_sats,
+        creditPrefs: opts.user?.funder_credit
+          ? {
+              public_credit: opts.user.funder_credit.public_credit !== false,
+              anonymous: opts.user.funder_credit.public_credit === false,
+              show_amount: Boolean(opts.user.funder_credit.show_amount),
+            }
+          : null,
+      });
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const refreshStepper = () => {

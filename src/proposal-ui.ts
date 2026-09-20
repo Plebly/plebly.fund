@@ -22,7 +22,13 @@ import {
   type CreditPreferences,
 } from "./funder-credit";
 import { btnWithIcon, solidIcon } from "./icons";
-import { BITCOIN_NETWORK, WORKERS_API, lightningUiAllowed } from "./config";
+import {
+  BITCOIN_NETWORK,
+  WORKERS_API,
+  escrowAddressMatchesNetwork,
+  isDonateChromeStatus,
+  lightningUiAllowed,
+} from "./config";
 import { signetPayNoteHtml } from "./signet";
 import { openShareMenu, prefersNativeShare } from "./share-menu";
 import {
@@ -1885,22 +1891,24 @@ export async function bindDonatePanel(
   bindLightningDonate(panel, normalized, status);
 }
 
+/** Roots that already have delegated Donate open/close listeners. */
+const donateModalBoundRoots = new WeakSet<object>();
+
 export function bindDonateModal(
   root: ParentNode,
   opts?: { open?: boolean; rail?: "onchain" | "lightning" },
 ): void {
-  const modal = root.querySelector<HTMLElement>("#donate-modal");
   const openBtns = [
     ...root.querySelectorAll<HTMLButtonElement>(
       "[data-open-donate], #donate-open",
     ),
   ];
-  const closeBtn = root.querySelector<HTMLButtonElement>("#donate-close");
-  const backdrop = root.querySelector<HTMLElement>("[data-close-donate]");
-  const panel = root.querySelector("#donate");
   let lastOpener: HTMLButtonElement | null = openBtns[0] || null;
 
+  // Re-query #donate-modal on each open/close so late insert after claim status works
+  // even if bind ran before the modal existed (or was rebound after insert).
   const open = (ev?: Event) => {
+    const modal = root.querySelector<HTMLElement>("#donate-modal");
     if (!modal) return;
     const from =
       ev?.target instanceof Element
@@ -1912,14 +1920,16 @@ export function bindDonateModal(
     }
     modal.hidden = false;
     document.body.classList.add("modal-open");
+    const panel = root.querySelector("#donate");
     if (opts?.rail === "lightning" && panel) {
       selectDonateRail(panel, "lightning");
     }
-    closeBtn?.focus();
+    root.querySelector<HTMLButtonElement>("#donate-close")?.focus();
     window.addEventListener("keydown", onEscape);
   };
 
   const close = () => {
+    const modal = root.querySelector<HTMLElement>("#donate-modal");
     if (!modal) return;
     modal.hidden = true;
     document.body.classList.remove("modal-open");
@@ -1928,26 +1938,82 @@ export function bindDonateModal(
   };
 
   const onEscape = (e: KeyboardEvent) => {
+    const modal = root.querySelector<HTMLElement>("#donate-modal");
     if (e.key === "Escape" && modal && !modal.hidden) close();
   };
 
-  // Delegate: next-action / donate-slot re-renders after claim status still open the modal.
-  const onOpenClick = (ev: Event) => {
+  // Delegate open + close: next-action / donate-slot re-renders and late-mounted
+  // #donate-modal (claim status escrow) still work without per-button rebinding.
+  const onDelegateClick = (ev: Event) => {
     const t = ev.target;
     if (!(t instanceof Element)) return;
+    if (!(root instanceof Node) || !root.contains(t)) return;
+    if (t.closest("#donate-close, [data-close-donate]")) {
+      close();
+      return;
+    }
     const btn = t.closest<HTMLButtonElement>("[data-open-donate], #donate-open");
-    if (!btn || (root instanceof Node && !root.contains(btn))) return;
+    if (!btn) return;
     open(ev);
   };
   if (root instanceof Document || root instanceof Element) {
-    root.addEventListener("click", onOpenClick);
+    if (!donateModalBoundRoots.has(root)) {
+      donateModalBoundRoots.add(root);
+      root.addEventListener("click", onDelegateClick);
+    }
   } else {
     for (const btn of openBtns) btn.addEventListener("click", open);
+    root
+      .querySelector<HTMLButtonElement>("#donate-close")
+      ?.addEventListener("click", close);
+    root
+      .querySelector<HTMLElement>("[data-close-donate]")
+      ?.addEventListener("click", close);
   }
-  closeBtn?.addEventListener("click", close);
-  backdrop?.addEventListener("click", close);
 
   if (opts?.open) open();
+}
+
+/**
+ * When markdown lacked escrow at first paint, claim status may supply
+ * escrow_address. Insert #donate-modal (and bind) so Donate clicks open it.
+ * No-op when modal already exists (first-paint path) or address/status invalid.
+ */
+export async function mountDonateChromeWhenEscrowKnown(
+  root: ParentNode,
+  proposal: Proposal,
+  panelOpts: DonateBindOpts,
+): Promise<boolean> {
+  const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
+  if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
+  if (!isDonateChromeStatus(String(proposal.status || ""))) return false;
+
+  const page =
+    (root instanceof Document || root instanceof Element
+      ? root.querySelector(".proposal-page")
+      : null) || document.querySelector(".proposal-page");
+  const existing =
+    (root instanceof Document || root instanceof Element
+      ? root.querySelector("#donate-modal")
+      : null) ||
+    page?.querySelector("#donate-modal") ||
+    document.querySelector("#donate-modal");
+  if (existing) return false;
+
+  const html = donateModalHtml(
+    { ...proposal, escrow_address: addr },
+    { signedIn: Boolean(panelOpts.signedIn) },
+  );
+  if (!html) return false;
+
+  const host = page || (root instanceof Element ? root : document.body);
+  host.insertAdjacentHTML("beforeend", html);
+
+  const bindRoot: ParentNode =
+    root instanceof Document || root instanceof Element ? root : document;
+  bindDonateModal(bindRoot);
+  await bindDonatePanel(bindRoot, { ...panelOpts, address: addr });
+  return true;
 }
 
 export function onChainPanelHtml(p: Proposal): string {
