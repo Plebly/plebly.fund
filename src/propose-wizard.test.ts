@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CLAIM_FLOOR_SATS } from "./config";
 import {
   applyNamedFieldErrors,
   clearProposeFieldErrors,
@@ -8,6 +9,7 @@ import {
   proposeWizardStepIndex,
   PROPOSE_WIZARD_STEPS,
   validateBasicsDraft,
+  validateFundingTargetDraft,
   validateScopeDraft,
 } from "./propose-wizard";
 
@@ -139,6 +141,34 @@ describe("propose wizard validation", () => {
         verification: "x".repeat(40),
         out_of_scope: "not included",
       }),
+    ).toEqual({ ok: true });
+  });
+
+  it("rejects target_sats below the claim floor", () => {
+    const bad = validateFundingTargetDraft({ target_sats: 1 }, CLAIM_FLOOR_SATS);
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.focus).toBe("target_sats");
+      expect(bad.error).toContain("claim floor");
+      expect(bad.error).toContain(CLAIM_FLOOR_SATS.toLocaleString("en-US"));
+    }
+    expect(
+      validateFundingTargetDraft(
+        { target_sats: CLAIM_FLOOR_SATS - 1 },
+        CLAIM_FLOOR_SATS,
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("allows blank / null target and targets at or above the claim floor", () => {
+    expect(validateFundingTargetDraft({ target_sats: null })).toEqual({
+      ok: true,
+    });
+    expect(
+      validateFundingTargetDraft({ target_sats: CLAIM_FLOOR_SATS }),
+    ).toEqual({ ok: true });
+    expect(
+      validateFundingTargetDraft({ target_sats: CLAIM_FLOOR_SATS + 1 }),
     ).toEqual({ ok: true });
   });
 });
