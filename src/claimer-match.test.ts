@@ -44,4 +44,10 @@ describe("sessionMatchesPendingClaim", () => {
       sessionMatchesPendingClaim(user as never, `nostr:${truncated}`),
     ).toBe(false);
   });
+
+  it("matches pending via user.nostr when id is missing", () => {
+    expect(
+      sessionMatchesPendingClaim({ nostr: full } as never, `nostr:${full}`),
+    ).toBe(true);
+  });
 });

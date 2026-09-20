@@ -44,13 +44,24 @@ export function sessionMatchesClaimer(
   return false;
 }
 
-/** True when session owns the pending claim row (full user id). */
+function nostrHex(value: string): string {
+  const v = value.trim().toLowerCase();
+  return v.startsWith("nostr:") ? v.slice("nostr:".length) : v;
+}
+
+/** True when session owns the pending/full claimer user id. */
 export function sessionMatchesPendingClaim(
   user: AuthUser | null,
   pendingUserId?: string | null,
 ): boolean {
-  if (!user?.id || !pendingUserId) return false;
-  return user.id.toLowerCase() === pendingUserId.toLowerCase();
+  if (!user || !pendingUserId) return false;
+  const pending = pendingUserId.trim().toLowerCase();
+  if (user.id && user.id.toLowerCase() === pending) return true;
+  const nostr = (user.nostr || "").trim();
+  if (!nostr) return false;
+  const pendingHex = nostrHex(pending);
+  const userHex = nostrHex(nostr);
+  return Boolean(pendingHex && userHex && pendingHex === userHex);
 }
 
 /** Full fulfiller id from Workers claim status (claimer_user_id or pending). */
