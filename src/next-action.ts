@@ -2,6 +2,7 @@ import type { AuthUser } from "./auth";
 import type { ClaimApplicationsResponse, ClaimStatus } from "./builder";
 import { CLAIM_FLOOR_SATS, isFundableStatus } from "./config";
 import { btnWithIcon } from "./icons";
+import { sessionMatchesClaimer } from "./claimer-match";
 import { userMatchesProposer } from "./proposal-ui";
 import type { Proposal } from "./types";
 import { escapeHtml } from "./util";
@@ -92,30 +93,6 @@ function claimMode(p: Proposal, apps?: NextActionInput["apps"]): string {
   return String(apps?.claim_mode || p.claim_mode || "proposer_select");
 }
 
-function matchesClaimer(
-  user: AuthUser | null,
-  claimer?: string | null,
-  claimerType?: string | null,
-  claimAgent?: string | null,
-): boolean {
-  if (!user || !claimer) return false;
-  if (
-    claimer === user.username ||
-    claimer === user.github ||
-    claimer === user.id
-  ) {
-    return true;
-  }
-  if (claimerType === "org") {
-    const agent = (claimAgent || "").replace(/^@/, "").trim().toLowerCase();
-    if (!agent) return false;
-    const gh = (user.github || "").replace(/^@/, "").trim().toLowerCase();
-    const un = (user.username || "").replace(/^@/, "").trim().toLowerCase();
-    return agent === gh || agent === un;
-  }
-  return false;
-}
-
 function roles(input: NextActionInput): {
   isProposer: boolean;
   isBuilder: boolean;
@@ -127,12 +104,17 @@ function roles(input: NextActionInput): {
     userMatchesProposer(user, input.proposal.proposer, input.proposal.proposer_type);
   const isBuilder =
     input.isBuilder ??
-    matchesClaimer(
+    (sessionMatchesClaimer(
       user,
       input.claim?.claimer ?? input.proposal.claimer,
       input.claim?.claimer_type ?? input.proposal.claimer_type,
       input.claim?.claim_agent ?? input.proposal.claim_agent,
-    );
+    ) ||
+      Boolean(
+        user?.id &&
+          input.claim?.pending?.user_id &&
+          user.id === input.claim.pending.user_id,
+      ));
   return { isProposer, isBuilder, user };
 }
 
