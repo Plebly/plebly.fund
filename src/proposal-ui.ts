@@ -1979,13 +1979,59 @@ function proposalKeysFromLocation(): { path: string; id: string | null } {
 }
 
 /**
+ * Append HTML that contains #donate-modal, then drop any prior host.
+ * Never remove the existing node first — a failed parse must leave a popup.
+ */
+function replaceDonateModalHtml(html: string, opts?: { reveal?: boolean }): HTMLElement | null {
+  const prev = findDonateModal(document);
+  const wasOpen = prev ? !prev.hidden : Boolean(opts?.reveal);
+  const wrap = document.createElement("div");
+  wrap.innerHTML = html.trim();
+  const next =
+    wrap.querySelector<HTMLElement>("#donate-modal") ||
+    (wrap.firstElementChild as HTMLElement | null);
+  if (!next) return prev;
+  document.body.appendChild(next);
+  if (prev && prev !== next) prev.remove();
+  if (wasOpen || opts?.reveal) next.hidden = false;
+  return next;
+}
+
+function donateShellHtml(address = ""): string {
+  const addr = address.trim();
+  return `<div class="site-modal donate-modal" id="donate-modal" data-donate-shell="1">
+    <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
+    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-pay-title">
+      <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
+      <div class="donate-panel" id="donate" data-donate-step="pay">
+        <section class="donate-step" data-donate-step="pay" id="donate-step-pay">
+          <div class="donate-panel-head">
+            <h2 class="donate-title" id="donate-pay-title">Donate</h2>
+            <p class="muted" id="donate-escrow-pending">${addr ? "" : "Loading escrow address…"}</p>
+          </div>
+          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+          <button type="button" class="btn ghost" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy</button>
+          <a class="btn" id="donate-wallet" href="#">Open wallet</a>
+          <a class="donate-explorer-link" href="#" target="_blank" rel="noopener">Explorer</a>
+        </section>
+      </div>
+    </div>
+  </div>`;
+}
+
+/**
  * Sync body host for Donate clicks — must not wait on builder-panel /claims.
  * Full chrome is filled by ensureDonateModalMounted once escrow is known.
  */
 function insertDonateModalShell(address = ""): HTMLElement {
   const existing = findDonateModal(document);
-  if (existing) return existing;
   const addr = address.trim();
+  if (existing) {
+    if (addr && escrowAddressMatchesNetwork(addr)) {
+      syncDonateModalEscrow(addr, document);
+    }
+    return existing;
+  }
   if (addr && escrowAddressMatchesNetwork(addr)) {
     const signedIn = Boolean(donateChromeContext?.panelOpts.signedIn);
     const html = donateModalHtml(
@@ -1995,34 +2041,17 @@ function insertDonateModalShell(address = ""): HTMLElement {
       },
       { signedIn },
     );
-    if (html) {
-      document.body.insertAdjacentHTML("beforeend", html);
-      const modal = findDonateModal(document);
-      if (modal) return modal;
-    }
+    const modal = html ? replaceDonateModalHtml(html, { reveal: true }) : null;
+    if (modal) return modal;
   }
-  document.body.insertAdjacentHTML(
-    "beforeend",
-    `<div class="site-modal donate-modal" id="donate-modal" data-donate-shell="1">
-    <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
-    <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-pay-title">
-      <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
-      <div class="donate-panel" id="donate" data-donate-step="pay">
-        <section class="donate-step" data-donate-step="pay" id="donate-step-pay">
-          <div class="donate-panel-head">
-            <h2 class="donate-title" id="donate-pay-title">Donate</h2>
-            <p class="muted" id="donate-escrow-pending">Loading escrow address…</p>
-          </div>
-          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
-          <button type="button" class="btn ghost" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy</button>
-          <a class="btn" id="donate-wallet" href="#">Open wallet</a>
-          <a class="donate-explorer-link" href="#" target="_blank" rel="noopener">Explorer</a>
-        </section>
-      </div>
-    </div>
-  </div>`,
-  );
-  return findDonateModal(document)!;
+  const modal = replaceDonateModalHtml(donateShellHtml(addr), { reveal: true });
+  if (modal) return modal;
+  const fallback = document.createElement("div");
+  fallback.id = "donate-modal";
+  fallback.className = "site-modal donate-modal";
+  fallback.setAttribute("data-donate-shell", "1");
+  document.body.appendChild(fallback);
+  return fallback;
 }
 
 /** Capture-phase Donate open — call from main so SPA route churn cannot miss it. */
@@ -2129,12 +2158,6 @@ export async function ensureDonateModalMounted(
 
   if (!addr || !escrowAddressMatchesNetwork(addr)) return modal;
 
-  // Replace empty shell with full chrome before bind.
-  if (modal?.hasAttribute("data-donate-shell")) {
-    modal.remove();
-    modal = null;
-  }
-
   await mountDonateChromeWhenEscrowKnown(
     ctx.root,
     ctx.proposal,
@@ -2144,7 +2167,7 @@ export async function ensureDonateModalMounted(
     },
     { ignoreStatusGate: true },
   );
-  modal = findDonateModal(root);
+  modal = findDonateModal(document) || modal;
   if (modal) syncDonateModalEscrow(addr, document);
   return modal;
 }
@@ -2194,18 +2217,33 @@ export function bindDonateModal(
   // Sync body insert on every Donate click — never depend on builder-panel
   // finishing /claims first. Async ensure fills escrow + full chrome.
   const open = (ev?: Event) => {
-    const known = currentDonateEscrowAddress();
-    const modal = insertDonateModalShell(
-      known && escrowAddressMatchesNetwork(known) ? known : "",
-    );
-    reveal(modal, ev);
-    void (async () => {
-      const ensured = await ensureDonateModalMounted(bindRoot);
-      if (!ensured) return;
-      const addr = currentDonateEscrowAddress();
-      if (addr) syncDonateModalEscrow(addr, bindRoot);
-      reveal(ensured, ev);
+    let modal: HTMLElement | null = null;
+    try {
+      const known = currentDonateEscrowAddress();
+      modal = insertDonateModalShell(
+        known && escrowAddressMatchesNetwork(known) ? known : "",
+      );
+      reveal(modal, ev);
+    } catch {
+      modal = insertDonateModalShell("");
       try {
+        reveal(modal, ev);
+      } catch {
+        /* Stub is on the body even if focus/reveal throws. */
+      }
+    }
+    void (async () => {
+      try {
+        const ensured = await ensureDonateModalMounted(bindRoot);
+        const host = ensured || findDonateModal(document);
+        if (!host) {
+          const stub = insertDonateModalShell(currentDonateEscrowAddress());
+          reveal(stub, ev);
+          return;
+        }
+        const addr = currentDonateEscrowAddress();
+        if (addr) syncDonateModalEscrow(addr, bindRoot);
+        reveal(host, ev);
         if (donateChromeContext) {
           await bindDonatePanel(document, {
             ...donateChromeContext.panelOpts,
@@ -2213,7 +2251,12 @@ export function bindDonateModal(
           });
         }
       } catch {
-        /* Address reveal must not depend on panel bind. */
+        const host = findDonateModal(document) || insertDonateModalShell("");
+        try {
+          reveal(host, ev);
+        } catch {
+          /* Address reveal must not depend on panel bind. */
+        }
       }
     })();
   };
@@ -2296,7 +2339,7 @@ export async function mountDonateChromeWhenEscrowKnown(
   });
 
   const existing = findDonateModal(root);
-  if (existing) {
+  if (existing && !existing.hasAttribute("data-donate-shell")) {
     // Prefer body host: move out of .proposal-page if a prior path nested it.
     if (existing.parentElement !== document.body) {
       document.body.appendChild(existing);
@@ -2310,10 +2353,22 @@ export async function mountDonateChromeWhenEscrowKnown(
     { ...proposal, escrow_address: addr },
     { signedIn: Boolean(panelOpts.signedIn) },
   );
-  if (!html) return false;
+  if (!html) {
+    if (existing) {
+      syncDonateModalEscrow(addr, document);
+      bindDonateModal(document);
+      return true;
+    }
+    return false;
+  }
 
-  // Body host: later SPA updates that replace .proposal-page must not wipe modal.
-  document.body.insertAdjacentHTML("beforeend", html);
+  const mounted = replaceDonateModalHtml(html, {
+    reveal: Boolean(existing && !existing.hidden),
+  });
+  if (!mounted) {
+    if (existing) syncDonateModalEscrow(addr, document);
+    return Boolean(existing);
+  }
 
   bindDonateModal(document);
   try {
