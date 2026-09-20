@@ -410,9 +410,10 @@ export async function fetchClaimStatus(
   const key = claimsProposalPath({ id: proposalId, path: proposalPath });
   if (!key) return null;
   try {
+    // Rely on authFetch's FETCH_TIMEOUT_MS (40s). A nested 8s abort made
+    // intermittent slow /claims responses look like "Couldn't load claim status."
     const res = await authFetch(
       `${API()}/claims/${encodeURIComponent(key)}`,
-      { signal: AbortSignal.timeout(8_000) },
     );
     if (!res.ok) return null;
     return (await res.json()) as ClaimStatus;
