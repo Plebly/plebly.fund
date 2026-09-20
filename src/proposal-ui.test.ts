@@ -240,8 +240,13 @@ describe("proposal UI critical render helpers", () => {
     };
     const merged = applyClaimStatusToProposal(listed, claim);
     expect(proposalCurrentStep(merged)).toBe("Build");
-    expect(proposalStepperHtml(merged)).toContain(">Build</li>");
-    expect(proposalStepperHtml(merged)).toContain('aria-current="step"');
+    const html = proposalStepperHtml(merged);
+    expect(html).toMatch(
+      /proposal-step-current"[^>]*>Build<\/li>/,
+    );
+    expect(html).not.toMatch(
+      /proposal-step-current"[^>]*>Fund<\/li>/,
+    );
   });
 
   it("stepper marks in_review as Review", () => {
