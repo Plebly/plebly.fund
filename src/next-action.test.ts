@@ -157,7 +157,7 @@ describe("resolveNextAction", () => {
         claim: claim({ state: "claimed", claimer: "bob" }),
         user: builder,
       },
-      sentence: "Submit the work when it is done.",
+      sentence: "Submit the work when it is done. The pot is still pooling.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -168,8 +168,8 @@ describe("resolveNextAction", () => {
         claim: claim({ state: "claimed", claimer: "bob" }),
         user: proposer,
       },
-      sentence: "Waiting on the builder.",
-      button: null,
+      sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+      button: "donate",
     },
     {
       name: "claimed donor can challenge",
@@ -182,8 +182,8 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Waiting on the builder.",
-      button: null,
+      sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+      button: "donate",
       more: ["challenge"],
     },
     {
@@ -203,8 +203,8 @@ describe("resolveNextAction", () => {
         claim: claim({ state: "in_review", claimer: "bob" }),
         user: donor,
       },
-      sentence: "Waiting on the proposer.",
-      button: null,
+      sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
+      button: "donate",
     },
     {
       name: "in_review + awaiting_funds donor → donate",
@@ -553,7 +553,7 @@ describe("resolveNextAction", () => {
         claim: claim({ state: "claimed", claimer: "alice" }),
         user: proposer,
       },
-      sentence: "Submit the work when it is done.",
+      sentence: "Submit the work when it is done. The pot is still pooling.",
       button: "deliverable",
     },
     {
@@ -664,10 +664,25 @@ describe("in_review pooling donate", () => {
     expect(nextActionPrimaryHtml(action)).toContain("data-open-donate");
   });
 
-  it("stays review-focused without awaiting_funds", () => {
+  it("slow-path in_review without psbt still offers donate", () => {
     const action = resolveNextAction({
       proposal: proposal({ status: "in_review", claimer: "bob" }),
       claim: claim({ state: "in_review", claimer: "bob" }),
+      user: donor,
+    });
+    expect(action.button).toBe("donate");
+    expect(action.sentence).toContain("still pooling");
+    expect(nextActionPrimaryHtml(action)).toContain("data-open-donate");
+  });
+
+  it("stays review-focused when structured_state is explicitly not pooling", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "in_review", claimer: "bob" }),
+      claim: claim({
+        state: "in_review",
+        claimer: "bob",
+        psbt: { structured_state: "psbt_ready" },
+      }),
       user: donor,
     });
     expect(action.button).toBeNull();
