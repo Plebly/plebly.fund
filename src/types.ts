@@ -63,7 +63,7 @@ export type PublicProfile = Pick<
   funder_streak?: number;
   funder_streak_best?: number;
   reviewer_active?: boolean;
-  reviewer_kind?: "bootstrap" | "earned";
+  reviewer_kind?: "bootstrap" | "earned" | "ai";
   /** Public GitHub orgs where this user's linked GitHub is a public member. */
   public_orgs?: { login: string; avatar_url: string; name: string | null }[];
 };

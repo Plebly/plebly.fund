@@ -1577,7 +1577,11 @@ export async function renderPublicProfile(
           ${
             profile.reviewer_active
               ? `<div class="profile-hero-details">
-                  <p class="reviewer-badge"><span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(profile.reviewer_kind || "earned")} · <a href="${href("/reviewers")}">roster</a></span></p>
+                  <p class="reviewer-badge">${
+                    profile.reviewer_kind === "ai"
+                      ? `<span class="pill">AI</span> <span class="muted">Reviewer · never releases funds · <a href="${href("/reviewers")}">roster</a></span>`
+                      : `<span class="pill status-good">Active reviewer</span> <span class="muted">${escapeHtml(profile.reviewer_kind || "earned")} · <a href="${href("/reviewers")}">roster</a></span>`
+                  }</p>
                 </div>`
               : ""
           }

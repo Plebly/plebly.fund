@@ -87,6 +87,21 @@ describe("commentsHtml", () => {
     expect(html).toContain("comment-login-msg");
     expect(html).not.toContain("proposal-workboard-input");
   });
+  it("shows AI badge and profile link for AI reviewer comments", () => {
+    const html = commentsListHtml([
+      {
+        id: "c-ai",
+        author: "AI Reviewer",
+        username: "ai-reviewer",
+        body: "Outcome: **PASS**",
+        created_at: "2026-09-21T12:00:00.000Z",
+        user_id: "ai-reviewer-btcdecoded-intelligence",
+      },
+    ]);
+    expect(html).toContain('href="/u/ai-reviewer"');
+    expect(html).toContain('<span class="pill">AI</span>');
+    expect(html).not.toContain(">anonymous<");
+  });
 });
 
 describe("workboardListHtml", () => {

@@ -14,6 +14,7 @@ import { safeHrefAttr } from "./social-links";
 import { avatarImgHtml } from "./media";
 import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
 import { hydrateAvatarSlots } from "./profile-avatars";
+import { AI_REVIEWER_USERNAME, isAiReviewerAuthor } from "./reviewers";
 
 type PublicContribution = {
   identity: string | null;
@@ -216,15 +217,23 @@ function commentAvatarHtml(comment: ProposalComment): string {
   return `<span class="user-avatar-fallback proposal-comment-avatar" aria-hidden="true"></span>`;
 }
 
+function commentAiBadgeHtml(comment: ProposalComment): string {
+  if (!isAiReviewerAuthor(comment)) return "";
+  return ` <span class="pill">AI</span>`;
+}
+
 function commentNameHtml(comment: ProposalComment): string {
   const label = escapeHtml(commentAuthorLabel(comment));
+  const badge = commentAiBadgeHtml(comment);
   const href =
     profileUrlForIdentity(comment.username || null) ||
-    profileUrlForIdentity(comment.author);
+    profileUrlForIdentity(
+      isAiReviewerAuthor(comment) ? AI_REVIEWER_USERNAME : comment.author,
+    );
   if (href) {
-    return `<a class="proposal-comment-author" href="${escapeHtml(href)}">${label}</a>`;
+    return `<a class="proposal-comment-author" href="${escapeHtml(href)}">${label}</a>${badge}`;
   }
-  return `<strong class="proposal-comment-author">${label}</strong>`;
+  return `<strong class="proposal-comment-author">${label}</strong>${badge}`;
 }
 
 /** Pure comment list HTML (exported for tests). */
