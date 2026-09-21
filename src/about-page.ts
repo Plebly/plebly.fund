@@ -299,7 +299,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
         <p class="about-section-lede">Four steps. Funds stay on Bitcoin. Plebly never holds a spending key.</p>
         ${flowHtml()}
         <p class="about-section-foot">
-          Reviewers confirm bounty work. A listed AI Reviewer, powered by BTCDecoded Intelligence, may analyze a deliverable against its spec. That analysis does not vote and never releases funds.
+          Reviewers confirm bounty work. A listed AI Reviewer, powered by BTCDecoded Intelligence, may analyze a deliverable against its spec. When confident it casts a decisive pass/fail vote; humans take over on escalate. It never releases funds.
           <a href="${href("/reviewer-responsibilities")}">Reviewer rules</a>
           ·
           <a href="${href("/reviewers")}">Roster</a>

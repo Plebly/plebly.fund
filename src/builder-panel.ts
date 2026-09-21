@@ -691,6 +691,56 @@ async function bindWorkboardSettings(
   });
 }
 
+/**
+ * After claim-status merges, keep AI card + #review-panel on #next-card.
+ * Catalog first-paint often lacks ai_review / in_review flags.
+ */
+async function syncHybridReviewUi(
+  root: ParentNode,
+  proposal: Proposal,
+  status: ClaimStatus,
+  user: AuthUser | null,
+): Promise<void> {
+  const nextCard =
+    (root instanceof Element ? root.closest("#next-card") : null) ||
+    root.querySelector("#next-card") ||
+    document.querySelector("#next-card");
+  if (!nextCard || !proposal.id) return;
+
+  const { aiReviewCardHtml, reviewPanelHtml, bindReviewPanel } = await import(
+    "./review-panel"
+  );
+  const ai = status.ai_review || proposal.ai_review;
+  if (ai) {
+    const html = aiReviewCardHtml(ai);
+    const existing = nextCard.querySelector(".ai-review-card");
+    if (existing) existing.outerHTML = html;
+    else {
+      const builder = nextCard.querySelector("#builder");
+      if (builder) builder.insertAdjacentHTML("afterend", html);
+      else nextCard.insertAdjacentHTML("beforeend", html);
+    }
+  }
+
+  const st = String(status.state || proposal.status || "");
+  const donor =
+    status.donor_review_status ?? proposal.donor_review_status ?? null;
+  const wantPanel =
+    st === "in_review" && Boolean(proposal.id) && donor !== "window_open";
+  let panel = nextCard.querySelector<HTMLElement>("#review-panel");
+  if (wantPanel && !panel) {
+    const after =
+      nextCard.querySelector(".ai-review-card") ||
+      nextCard.querySelector("#builder");
+    if (after) after.insertAdjacentHTML("afterend", reviewPanelHtml(proposal.id));
+    else nextCard.insertAdjacentHTML("beforeend", reviewPanelHtml(proposal.id));
+    panel = nextCard.querySelector<HTMLElement>("#review-panel");
+  }
+  if (wantPanel && panel) {
+    await bindReviewPanel(nextCard, { proposalId: proposal.id, user });
+  }
+}
+
 function renderStatusBody(
   body: HTMLElement,
   status: ClaimStatus,
@@ -1557,6 +1607,7 @@ export async function bindBuilderPanel(
         apps,
         reviewerActive,
       );
+      await syncHybridReviewUi(root, opts.proposal, status, opts.user);
       const next = resolveNextAction({
         proposal: opts.proposal,
         claim: status,

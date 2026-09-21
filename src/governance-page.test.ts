@@ -13,6 +13,7 @@ import {
   khApplyFormHtml,
   governanceFootHtml,
   aiReviewersSectionHtml,
+  aiVoteLabel,
 } from "./governance-page";
 import {
   decisionKindLabel,
@@ -196,7 +197,9 @@ describe("governance UI helpers", () => {
     const empty = aiReviewersSectionHtml(null);
     expect(empty).toContain("AI Reviewer");
     expect(empty).toContain("Powered by BTCDecoded Intelligence");
-    expect(empty).toContain("Does not vote");
+    expect(empty).toContain("Votes when confident");
+    expect(empty).toContain("humans take over on escalate");
+    expect(empty).not.toContain("Does not vote");
     expect(empty).not.toMatch(/\bBDI\b/);
     const withSeat = aiReviewersSectionHtml({
       active: [],
@@ -209,11 +212,35 @@ describe("governance UI helpers", () => {
           name: "AI Reviewer",
           attribution: "Powered by BTCDecoded Intelligence",
           kind: "ai",
-          voting: false,
+          voting: true,
         },
       ],
     });
     expect(withSeat).toContain("AI Reviewer");
+    expect(withSeat).toContain("Votes when confident");
+  });
+
+  it("respects ai_reviewers[].voting for hybrid vs advisory copy", () => {
+    expect(aiVoteLabel(true)).toBe("Votes when confident");
+    expect(aiVoteLabel(false)).toBe("Does not vote");
+    const advisory = aiReviewersSectionHtml({
+      active: [],
+      reviewers: [],
+      count: 0,
+      platform_completions: 0,
+      ai_reviewers: [
+        {
+          id: "ai-legacy",
+          name: "Legacy AI",
+          attribution: "Powered by BTCDecoded Intelligence",
+          kind: "ai",
+          voting: false,
+        },
+      ],
+    });
+    expect(advisory).toContain("Does not vote");
+    expect(advisory).toContain("They do not vote and never release funds");
+    expect(advisory).not.toContain("Votes when confident");
   });
 
   it("decision cards expose vote controls for reviewers", () => {
