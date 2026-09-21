@@ -29,17 +29,26 @@ export function aiOutcomeClass(outcome: string): string {
 }
 
 
-/** Open deliverable_confirm / second_review that has not been escalated yet. */
+/**
+ * Challenge AI when the ballot is still open, or when a closed/tallied
+ * deliverable_confirm / second_review was AI-decisive and has not actually
+ * been challenged or escalated. Matches status-line "AI decisive" Closed.
+ */
 export function isAiChallengeableDecision(d: ReviewDecisionView): boolean {
-  const openOrAiDecisive =
-    d.status === "open" ||
-    (d.status === "tallied" && Boolean(d.ai_decisive));
-  if (!openOrAiDecisive) return false;
   if (d.kind !== "deliverable_confirm" && d.kind !== "second_review") {
     return false;
   }
-  if (d.escalated || d.ai_challenged_at) return false;
-  return true;
+  // Only hide when challenged or escalated for real — not when merely tallied.
+  if (d.ai_challenged_at || d.escalated) return false;
+  if (d.status === "open") return true;
+  // Any non-open status with ai_decisive (tallied/closed/…) stays challengeable.
+  return Boolean(d.ai_decisive);
+}
+
+/** Button copy for the Challenge AI control — never lie "Challenged". */
+export function challengeAiButtonLabel(d: ReviewDecisionView): string {
+  if (d.ai_challenged_at) return "Challenged";
+  return "Challenge AI";
 }
 
 /** Compact AI Reviewer card (deliverable submit, flag window, or decision). */
@@ -69,8 +78,14 @@ export function aiReviewCardHtml(
   const attribution = escapeHtml(
     ai.attribution || "Powered by BTCDecoded Intelligence",
   );
-  const cites = ai.reasoning
-    ? `<pre class="ai-reasoning">${escapeHtml(ai.reasoning)}</pre>`
+  const rawReason = ai.reasoning || "";
+  const compactLimit = 280;
+  const truncated =
+    Boolean(opts?.compact) && rawReason.length > compactLimit
+      ? `${rawReason.slice(0, compactLimit).trimEnd()}…`
+      : rawReason;
+  const cites = truncated
+    ? `<pre class="ai-reasoning${opts?.compact ? " is-compact" : ""}">${escapeHtml(truncated)}</pre>`
     : "";
   return `<div class="ai-review-card ${aiOutcomeClass(ai.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
     <div class="ai-review-head">
@@ -88,6 +103,12 @@ export function reviewPanelHtml(proposalId: string): string {
   return `<div class="review-panel" id="review-panel" data-proposal-id="${escapeHtml(proposalId)}">
     <h3 class="review-panel-title">Reviewer decision</h3>
     <p class="muted" id="review-status">Loading…</p>
+    <div id="review-challenge-ai" class="review-challenge-ai" hidden>
+      <label class="donate-amount-label" for="challenge-ai-reason">Challenge AI</label>
+      <p class="muted review-challenge-ai-lede">Escalate the AI result to human reviewers. Optional short reason.</p>
+      <textarea id="challenge-ai-reason" class="donate-amount" rows="2" maxlength="2000" placeholder="Why escalate to humans…"></textarea>
+      <button type="button" class="btn ghost" id="challenge-ai-submit">Challenge AI</button>
+    </div>
     <div id="review-ai"></div>
     <div id="review-counts" class="review-counts" hidden></div>
     <div id="review-actions" class="review-actions" hidden>
@@ -100,12 +121,6 @@ export function reviewPanelHtml(proposalId: string): string {
       <label class="donate-amount-label" for="dissent-text">Publish dissent</label>
       <textarea id="dissent-text" class="donate-amount" rows="3" placeholder="Why this does not meet the project…"></textarea>
       <button type="button" class="btn ghost" id="dissent-submit">Publish dissent</button>
-    </div>
-    <div id="review-challenge-ai" class="review-challenge-ai" hidden>
-      <label class="donate-amount-label" for="challenge-ai-reason">Challenge AI</label>
-      <p class="muted review-challenge-ai-lede">Escalate the AI result to human reviewers. Optional short reason.</p>
-      <textarea id="challenge-ai-reason" class="donate-amount" rows="2" maxlength="2000" placeholder="Why escalate to humans…"></textarea>
-      <button type="button" class="btn ghost" id="challenge-ai-submit">Challenge AI</button>
     </div>
     <p class="builder-msg" id="review-msg" hidden></p>
   </div>`;
@@ -217,7 +232,11 @@ function renderDecision(
     const btn = challenge.querySelector<HTMLButtonElement>("#challenge-ai-submit");
     if (btn) {
       btn.disabled = !show;
-      btn.textContent = show ? "Challenge AI" : "Challenged";
+      // "Challenged" only when actually challenged; otherwise keep default copy
+      // while the slot stays hidden so we never lie about challenge state.
+      if (show || d.ai_challenged_at) {
+        btn.textContent = challengeAiButtonLabel(d);
+      }
     }
   }
 }
@@ -231,10 +250,24 @@ export async function bindReviewPanel(
   const msg = panel.querySelector<HTMLElement>("#review-msg");
   const statusEl = panel.querySelector<HTMLElement>("#review-status");
 
-  let me = opts.user ? await fetchReviewerMe().catch(() => null) : null;
+  // Generation guard: claim-refresh / proposal-page may call bind twice.
+  // Signed-in paths await fetchReviewerMe first and can lose a race to a
+  // later bind — only the latest generation may paint.
+  const gen = Number(panel.dataset.reviewBindGen || "0") + 1;
+  panel.dataset.reviewBindGen = String(gen);
+  const stillCurrent = () => panel.dataset.reviewBindGen === String(gen);
+
+  // Fetch decision in parallel with reviewer me so signed-in users paint as
+  // fast as guests (guest skips me). Stale generations bail before paint.
+  const decisionPromise = fetchOpenReviewDecision(opts.proposalId);
+  const mePromise = opts.user
+    ? fetchReviewerMe().catch(() => null)
+    : Promise.resolve(null);
+  const [decision, me] = await Promise.all([decisionPromise, mePromise]);
+  if (!stillCurrent()) return;
+
   const isReviewer = Boolean(me?.active);
 
-  const decision = await fetchOpenReviewDecision(opts.proposalId);
   if (!decision) {
     if (statusEl) {
       statusEl.textContent = "No open reviewer decision yet.";
@@ -250,6 +283,9 @@ export async function bindReviewPanel(
   }
 
   renderDecision(panel, decision, isReviewer, opts.user?.id);
+  // Track last painted decision so tests / later sync can detect a good paint.
+  panel.dataset.reviewDecisionId = decision.id;
+  panel.dataset.reviewDecisionStatus = decision.status;
 
   if (!opts.user && decision.status === "open") {
     const actions = panel.querySelector<HTMLElement>("#review-actions");
@@ -259,13 +295,23 @@ export async function bindReviewPanel(
     }
   }
 
+  // Attach listeners once per panel mount. Re-binds from syncHybridReviewUi
+  // only refresh paint (above); stacking click handlers would double-POST
+  // challenge-ai and leave the slot painted Challenged after the first wins.
+  if (panel.dataset.reviewListeners === "1") return;
+  panel.dataset.reviewListeners = "1";
+
+  const liveDecision = () => panel.dataset.reviewDecisionId || decision.id;
+
   panel.querySelectorAll<HTMLButtonElement>("[data-rev-vote]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const vote = btn.dataset.revVote as "yes" | "no" | "abstain";
       setMsg(msg, "Recording vote…");
       try {
-        const next = await voteReviewDecision(decision.id, vote);
+        const next = await voteReviewDecision(liveDecision(), vote);
         renderDecision(panel, next, isReviewer, opts.user?.id);
+        panel.dataset.reviewDecisionId = next.id;
+        panel.dataset.reviewDecisionStatus = next.status;
         setMsg(msg, "Vote recorded.", "success");
       } catch (e) {
         if ((e as Error).message === "login_required") {
@@ -289,8 +335,10 @@ export async function bindReviewPanel(
     }
     setMsg(msg, "Publishing…");
     try {
-      const next = await publishDissent(decision.id, text);
+      const next = await publishDissent(liveDecision(), text);
       renderDecision(panel, next, isReviewer, opts.user?.id);
+      panel.dataset.reviewDecisionId = next.id;
+      panel.dataset.reviewDecisionStatus = next.status;
       setMsg(msg, "Dissent published.", "success");
     } catch (e) {
       if ((e as Error).message === "login_required") {
@@ -308,8 +356,13 @@ export async function bindReviewPanel(
     )?.value.trim();
     setMsg(msg, "Challenging AI…");
     try {
-      const next = await challengeAiReviewDecision(decision.id, reason || undefined);
+      const next = await challengeAiReviewDecision(
+        liveDecision(),
+        reason || undefined,
+      );
       renderDecision(panel, next, isReviewer, opts.user?.id);
+      panel.dataset.reviewDecisionId = next.id;
+      panel.dataset.reviewDecisionStatus = next.status;
       setMsg(msg, "AI challenged — escalated to humans.", "success");
     } catch (e) {
       if ((e as Error).message === "login_required") {
@@ -323,6 +376,7 @@ export async function bindReviewPanel(
     }
   });
 }
+
 
 export async function bindRebuttalPanel(
   root: ParentNode,

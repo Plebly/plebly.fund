@@ -5,6 +5,7 @@ import {
   aiReviewCardHtml,
   dissentListHtml,
   isAiChallengeableDecision,
+  challengeAiButtonLabel,
   reviewPanelHtml,
   rebuttalPanelHtml,
   reviewDecisionStatusLine,
@@ -176,7 +177,26 @@ describe("isAiChallengeableDecision", () => {
     ).toBe(true);
   });
 
-  it("hides when closed, wrong kind, or already escalated", () => {
+  it("allows closed/tallied ai_decisive (status-line Closed · AI decisive)", () => {
+    expect(
+      isAiChallengeableDecision({
+        ...base(),
+        status: "closed",
+        ai_decisive: true,
+        result: "reject",
+      }),
+    ).toBe(true);
+    expect(
+      isAiChallengeableDecision({
+        ...base(),
+        status: "tallied",
+        ai_decisive: true,
+        result: "reject",
+      }),
+    ).toBe(true);
+  });
+
+  it("hides when not ai_decisive closed, wrong kind, or already escalated/challenged", () => {
     expect(isAiChallengeableDecision({ ...base(), status: "closed" })).toBe(
       false,
     );
@@ -189,9 +209,72 @@ describe("isAiChallengeableDecision", () => {
     expect(
       isAiChallengeableDecision({
         ...base(),
+        status: "tallied",
+        ai_decisive: true,
+        escalated: true,
+      }),
+    ).toBe(false);
+    expect(
+      isAiChallengeableDecision({
+        ...base(),
         ai_challenged_at: new Date().toISOString(),
       }),
     ).toBe(false);
+  });
+});
+
+describe("challengeAiButtonLabel", () => {
+  it("says Challenged only when ai_challenged_at is set", () => {
+    expect(
+      challengeAiButtonLabel({
+        id: "d1",
+        proposal_id: "p1",
+        kind: "deliverable_confirm",
+        round: 1,
+        created_at: new Date().toISOString(),
+        closes_at: new Date().toISOString(),
+        status: "tallied",
+        counts: { yes: 0, no: 1, abstain: 0 },
+        vote_count: 1,
+        ai_decisive: true,
+      }),
+    ).toBe("Challenge AI");
+    expect(
+      challengeAiButtonLabel({
+        id: "d1",
+        proposal_id: "p1",
+        kind: "deliverable_confirm",
+        round: 1,
+        created_at: new Date().toISOString(),
+        closes_at: new Date().toISOString(),
+        status: "open",
+        counts: { yes: 0, no: 0, abstain: 0 },
+        vote_count: 0,
+        ai_challenged_at: new Date().toISOString(),
+      }),
+    ).toBe("Challenged");
+  });
+});
+
+describe("reviewPanelHtml challenge placement", () => {
+  it("places Challenge AI above the AI reasoning slot", () => {
+    const html = reviewPanelHtml("demo-id");
+    const chal = html.indexOf('id="review-challenge-ai"');
+    const ai = html.indexOf('id="review-ai"');
+    expect(chal).toBeGreaterThan(-1);
+    expect(ai).toBeGreaterThan(-1);
+    expect(chal).toBeLessThan(ai);
+  });
+
+  it("truncates compact AI reasoning so Challenge stays in viewport", () => {
+    const long = "x".repeat(500);
+    const html = aiReviewCardHtml(
+      { outcome: "fail", reasoning: long, prompt_version: "v1", model: "m" },
+      { compact: true },
+    );
+    expect(html).toContain("…");
+    expect(html).not.toContain(long);
+    expect(html).toContain("is-compact");
   });
 });
 

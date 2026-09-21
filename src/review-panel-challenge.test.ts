@@ -83,4 +83,43 @@ describe("bindReviewPanel Challenge AI click", () => {
       );
     });
   });
+
+  it("signed-in re-bind keeps Challenge AI enabled for tallied ai_decisive (C vs guest race)", async () => {
+    const tallied: ReviewDecisionView = {
+      ...decision,
+      status: "tallied",
+      ai_decisive: true,
+      result: "reject",
+      escalated: false,
+      ai_challenged_at: undefined,
+    };
+    const reviewers = await import("./reviewers");
+    vi.mocked(reviewers.fetchOpenReviewDecision).mockResolvedValue(tallied);
+    vi.mocked(reviewers.fetchReviewerMe).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve(null), 30);
+        }),
+    );
+
+    // Reset listeners flag so this case exercises parallel bind paint.
+    document.querySelector<HTMLElement>("#review-panel")!.dataset.reviewListeners =
+      "";
+
+    const { bindReviewPanel } = await import("./review-panel");
+    const user = { id: "nostr:abc", username: "contributor-c" };
+    await Promise.all([
+      bindReviewPanel(document.body, { proposalId: "p-chal", user }),
+      bindReviewPanel(document.body, { proposalId: "p-chal", user }),
+    ]);
+
+    const slot = document.querySelector<HTMLElement>("#review-challenge-ai");
+    const btn = document.querySelector<HTMLButtonElement>("#challenge-ai-submit");
+    expect(slot?.hidden).toBe(false);
+    expect(btn?.disabled).toBe(false);
+    expect(btn?.textContent).toBe("Challenge AI");
+    expect(document.querySelector("#review-status")?.textContent).toMatch(
+      /AI decisive/,
+    );
+  });
 });
