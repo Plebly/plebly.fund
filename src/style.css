@@ -1530,6 +1530,39 @@ body.modal-open {
   border-bottom: 1px solid var(--line-soft);
 }
 
+
+.donations-claim {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.donations-claim-btn {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+}
+
+.donations-claim-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.donations-claim-msg {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.donations-claim-msg.error {
+  color: var(--danger, #c44);
+}
+
+.donations-row .donations-claim {
+  flex-basis: 100%;
+  margin-top: 0.25rem;
+}
+
 .donations-live-row.is-new {
   animation: donations-live-enter 0.55s ease both;
 }
