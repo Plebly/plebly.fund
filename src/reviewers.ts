@@ -42,6 +42,8 @@ export type ReviewDecisionView = {
   need_yes?: number;
   ai_review?: AiReviewView;
   escalated?: boolean;
+  ai_challenged_by?: string;
+  ai_challenged_at?: string;
   ai_decisive?: boolean;
   dissent?: { user_id: string; at: string; reasoning: string; pr_url?: string }[];
   rebuttal?: { reasoning: string; at: string };
@@ -192,6 +194,34 @@ export async function publishDissent(
   if (res.status === 401) throw new Error("login_required");
   if (!res.ok || !data.decision) {
     throw new Error(data.error || `Dissent failed (${res.status})`);
+  }
+  return data.decision;
+}
+
+/** Donor or proposer escalates AI on an open deliverable_confirm / second_review. */
+export async function challengeAiReviewDecision(
+  decisionId: string,
+  reason?: string,
+): Promise<ReviewDecisionView> {
+  const body: { reason?: string } = {};
+  const trimmed = String(reason || "").trim();
+  if (trimmed) body.reason = trimmed.slice(0, 2000);
+  const res = await authFetchWithTos(
+    `${API()}/reviewers/decisions/${encodeURIComponent(decisionId)}/challenge-ai`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders() },
+      credentials: "include",
+      body: JSON.stringify(body),
+    },
+  );
+  const data = (await res.json()) as {
+    decision?: ReviewDecisionView;
+    error?: string;
+  };
+  if (res.status === 401) throw new Error("login_required");
+  if (!res.ok || !data.decision) {
+    throw new Error(data.error || `Challenge AI failed (${res.status})`);
   }
   return data.decision;
 }

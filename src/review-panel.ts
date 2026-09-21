@@ -3,6 +3,7 @@ import { loginChoicesHtml } from "./auth";
 import { btnWithIcon } from "./icons";
 import { daysLeftFrom } from "./next-action";
 import {
+  challengeAiReviewDecision,
   decisionKindLabel,
   fetchOpenReviewDecision,
   fetchReviewerMe,
@@ -25,6 +26,17 @@ export function aiOutcomeClass(outcome: string): string {
   if (outcome === "pass") return "ai-pass";
   if (outcome === "fail") return "ai-fail";
   return "ai-ambiguous";
+}
+
+
+/** Open deliverable_confirm / second_review that has not been escalated yet. */
+export function isAiChallengeableDecision(d: ReviewDecisionView): boolean {
+  if (d.status !== "open") return false;
+  if (d.kind !== "deliverable_confirm" && d.kind !== "second_review") {
+    return false;
+  }
+  if (d.escalated || d.ai_challenged_at) return false;
+  return true;
 }
 
 /** Compact AI Reviewer card (deliverable submit, flag window, or decision). */
@@ -85,6 +97,12 @@ export function reviewPanelHtml(proposalId: string): string {
       <label class="donate-amount-label" for="dissent-text">Publish dissent</label>
       <textarea id="dissent-text" class="donate-amount" rows="3" placeholder="Why this does not meet the project…"></textarea>
       <button type="button" class="btn ghost" id="dissent-submit">Publish dissent</button>
+    </div>
+    <div id="review-challenge-ai" class="review-challenge-ai" hidden>
+      <label class="donate-amount-label" for="challenge-ai-reason">Challenge AI</label>
+      <p class="muted review-challenge-ai-lede">Escalate the AI result to human reviewers. Optional short reason.</p>
+      <textarea id="challenge-ai-reason" class="donate-amount" rows="2" maxlength="2000" placeholder="Why escalate to humans…"></textarea>
+      <button type="button" class="btn ghost" id="challenge-ai-submit">Challenge AI</button>
     </div>
     <p class="builder-msg" id="review-msg" hidden></p>
   </div>`;
@@ -189,6 +207,16 @@ function renderDecision(
   }
   if (actions) actions.hidden = !(d.status === "open" && isReviewer);
   if (dissent) dissent.hidden = !(isReviewer && !mine);
+  const challenge = root.querySelector<HTMLElement>("#review-challenge-ai");
+  if (challenge) {
+    const show = isAiChallengeableDecision(d);
+    challenge.hidden = !show;
+    const btn = challenge.querySelector<HTMLButtonElement>("#challenge-ai-submit");
+    if (btn) {
+      btn.disabled = !show;
+      btn.textContent = show ? "Challenge AI" : "Challenged";
+    }
+  }
 }
 
 export async function bindReviewPanel(
@@ -266,6 +294,27 @@ export async function bindReviewPanel(
         if (msg) {
           msg.hidden = false;
           msg.innerHTML = loginChoicesHtml("Sign in to publish dissent.");
+        }
+      } else setMsg(msg, (e as Error).message, "error");
+    }
+  });
+
+  panel.querySelector("#challenge-ai-submit")?.addEventListener("click", async () => {
+    const reason = (
+      panel.querySelector("#challenge-ai-reason") as HTMLTextAreaElement | null
+    )?.value.trim();
+    setMsg(msg, "Challenging AI…");
+    try {
+      const next = await challengeAiReviewDecision(decision.id, reason || undefined);
+      renderDecision(panel, next, isReviewer, opts.user?.id);
+      setMsg(msg, "AI challenged — escalated to humans.", "success");
+    } catch (e) {
+      if ((e as Error).message === "login_required") {
+        if (msg) {
+          msg.hidden = false;
+          msg.innerHTML = loginChoicesHtml(
+            "Sign in as a donor or the proposer to challenge AI.",
+          );
         }
       } else setMsg(msg, (e as Error).message, "error");
     }

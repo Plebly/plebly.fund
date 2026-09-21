@@ -9296,6 +9296,17 @@ a.proposal-comment-author:hover {
   border-top: 1px solid var(--line-soft);
 }
 
+.review-challenge-ai {
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.review-challenge-ai-lede {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+}
+
 .review-dissent-list {
   list-style: none;
   margin: 0.75rem 0 0;
