@@ -4,10 +4,12 @@ import {
   aiOutcomeLabel,
   aiReviewCardHtml,
   dissentListHtml,
+  isAiChallengeableDecision,
   reviewPanelHtml,
   rebuttalPanelHtml,
   reviewDecisionStatusLine,
 } from "./review-panel";
+import type { ReviewDecisionView } from "./reviewers";
 
 describe("review panel UI helpers", () => {
   it("labels AI outcomes for people, not raw enums", () => {
@@ -64,6 +66,9 @@ describe("review panel UI helpers", () => {
     expect(review).toContain('id="review-panel"');
     expect(review).toContain('id="review-actions"');
     expect(review).toContain('id="review-ai"');
+    expect(review).toContain('id="review-challenge-ai"');
+    expect(review).toContain('id="challenge-ai-submit"');
+    expect(review).toContain("Challenge AI");
     expect(review).toContain('data-proposal-id="demo-id"');
     expect(review).toContain('data-rev-vote="yes"');
     expect(review).toContain("dissent-submit");
@@ -122,6 +127,61 @@ describe("reviewDecisionStatusLine", () => {
     expect(line).not.toContain("deliverable_confirm");
     expect(line).not.toContain("non-abstain");
   });
+
+  it("surfaces escalated to humans on open ballots", () => {
+    const line = reviewDecisionStatusLine({
+      id: "d1",
+      proposal_id: "p1",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: new Date().toISOString(),
+      closes_at: new Date(Date.now() + 86400_000).toISOString(),
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+      escalated: true,
+    });
+    expect(line).toContain("Escalated to humans");
+  });
+});
+
+describe("isAiChallengeableDecision", () => {
+  const base = (): ReviewDecisionView => ({
+    id: "d1",
+    proposal_id: "p1",
+    kind: "deliverable_confirm",
+    round: 1,
+    created_at: new Date().toISOString(),
+    closes_at: new Date(Date.now() + 86400_000).toISOString(),
+    status: "open",
+    counts: { yes: 0, no: 0, abstain: 0 },
+    vote_count: 0,
+  });
+
+  it("allows open deliverable_confirm / second_review before escalate", () => {
+    expect(isAiChallengeableDecision(base())).toBe(true);
+    expect(
+      isAiChallengeableDecision({ ...base(), kind: "second_review" }),
+    ).toBe(true);
+  });
+
+  it("hides when closed, wrong kind, or already escalated", () => {
+    expect(isAiChallengeableDecision({ ...base(), status: "closed" })).toBe(
+      false,
+    );
+    expect(
+      isAiChallengeableDecision({ ...base(), kind: "listing_challenge" }),
+    ).toBe(false);
+    expect(isAiChallengeableDecision({ ...base(), escalated: true })).toBe(
+      false,
+    );
+    expect(
+      isAiChallengeableDecision({
+        ...base(),
+        ai_challenged_at: new Date().toISOString(),
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("review kind pay copy", () => {
@@ -130,6 +190,8 @@ describe("review kind pay copy", () => {
     expect(decisionKindPayLine("deliverable_confirm")).toBe("Unpaid");
     expect(decisionKindPayLine("second_review")).toMatch(/10,000/);
     expect(decisionKindPayLine("listing_challenge")).toMatch(/not enabled/);
-    expect(decisionKindPayLine("second_review")).not.toMatch(/insurance|pool|live/i);
+    expect(decisionKindPayLine("second_review")).not.toMatch(
+      /insurance|pool|live/i,
+    );
   });
 });
