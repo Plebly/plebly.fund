@@ -25,6 +25,7 @@ import {
   type ModerationReportView,
 } from "./reports";
 import {
+  AI_REVIEWER_USERNAME,
   decisionKindLabel,
   fetchOpenRemovalBallots,
   fetchOpenReviewDecisions,
@@ -42,7 +43,7 @@ import {
   type OfficialAiReviewer,
 } from "./reviewers";
 import { aiReviewCardHtml } from "./review-panel";
-import { href, projectsHref, proposalHref } from "./router";
+import { href, profileHref, projectsHref, proposalHref } from "./router";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
 export type GovernanceShell = (inner: string) => string;
@@ -389,16 +390,17 @@ export function aiReviewersSectionHtml(
       : FALLBACK_AI_REVIEWERS;
   const anyVoting = seats.some((s) => s.voting);
   const rows = seats
-    .map(
-      (s) => `<li class="gov-roster-row" data-ai-reviewer="${escapeHtml(s.id)}">
+    .map((s) => {
+      const profileUrl = profileHref(AI_REVIEWER_USERNAME);
+      return `<li class="gov-roster-row" data-ai-reviewer="${escapeHtml(s.id)}" data-user-id="${escapeHtml(s.id)}">
     <div class="gov-roster-main">
-      <span class="gov-user">${escapeHtml(s.name)}</span>
+      <a class="gov-user" href="${escapeHtml(profileUrl)}">${escapeHtml(s.name)}</a>
       <span class="pill">AI</span>
       <span class="muted">${escapeHtml(s.attribution)}</span>
     </div>
     <span class="muted">${escapeHtml(aiVoteLabel(Boolean(s.voting)))}</span>
-  </li>`,
-    )
+  </li>`;
+    })
     .join("");
   return `<div class="gov-ai-reviewers">
     <p class="muted gov-block-lede">${escapeHtml(aiReviewersLede(anyVoting))}</p>

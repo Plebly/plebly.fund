@@ -87,6 +87,22 @@ export type ReviewerRoster = {
   ai_reviewers?: OfficialAiReviewer[];
 };
 
+/** Matches Workers `AI_REVIEWER_ID` — no invented github/nostr. */
+export const AI_REVIEWER_ID = "ai-reviewer-btcdecoded-intelligence";
+export const AI_REVIEWER_USERNAME = "ai-reviewer";
+export const AI_REVIEWER_NAME = "AI Reviewer";
+
+export function isAiReviewerAuthor(input: {
+  user_id?: string | null;
+  username?: string | null;
+  author?: string | null;
+}): boolean {
+  const uid = (input.user_id || "").trim();
+  if (uid === AI_REVIEWER_ID) return true;
+  const handle = (input.username || input.author || "").trim().toLowerCase();
+  return handle === AI_REVIEWER_USERNAME || handle === AI_REVIEWER_NAME.toLowerCase();
+}
+
 export type OfficialAiReviewer = {
   id: string;
   name: string;
@@ -293,6 +309,9 @@ export function decisionKindPayLine(kind: string): string {
 }
 
 export function shortUserId(userId: string): string {
+  if (userId === AI_REVIEWER_ID || userId === AI_REVIEWER_USERNAME) {
+    return AI_REVIEWER_NAME;
+  }
   if (userId.startsWith("github:")) return `gh:${userId.slice(7)}`;
   if (userId.startsWith("x:")) return `x:${userId.slice(2)}`;
   if (userId.length > 22) return `${userId.slice(0, 18)}…`;

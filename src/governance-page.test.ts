@@ -218,6 +218,9 @@ describe("governance UI helpers", () => {
     });
     expect(withSeat).toContain("AI Reviewer");
     expect(withSeat).toContain("Votes when confident");
+    expect(withSeat).toContain('href="/u/ai-reviewer"');
+    expect(withSeat).toContain('data-user-id="ai-reviewer-btcdecoded-intelligence"');
+    expect(withSeat).toContain('<span class="pill">AI</span>');
   });
 
   it("respects ai_reviewers[].voting for hybrid vs advisory copy", () => {
