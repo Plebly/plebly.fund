@@ -346,6 +346,29 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
+      name: "catalog/runtime in_review + flagged without claim → reviewers (not Still raising)",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "flagged",
+          claimer: "bob",
+        }),
+        user: donor,
+      },
+      sentence: "Reviewers are checking the work.",
+      button: null,
+    },
+    {
+      name: "in_review claim miss shape never Still raising",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: null,
+        user: donor,
+      },
+      sentence: "Waiting on the proposer.",
+      button: null,
+    },
+    {
       name: "rejected builder",
       input: {
         proposal: proposal({

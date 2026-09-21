@@ -165,6 +165,17 @@ describe("isAiChallengeableDecision", () => {
     ).toBe(true);
   });
 
+  it("allows tallied ai_decisive so Challenge AI can reopen after grace", () => {
+    expect(
+      isAiChallengeableDecision({
+        ...base(),
+        status: "tallied",
+        ai_decisive: true,
+        result: "reject",
+      }),
+    ).toBe(true);
+  });
+
   it("hides when closed, wrong kind, or already escalated", () => {
     expect(isAiChallengeableDecision({ ...base(), status: "closed" })).toBe(
       false,
