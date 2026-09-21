@@ -327,7 +327,7 @@ async function render() {
   }
   if (r.name === "donations") {
     applySeo(seoForRoute(r));
-    await renderDonations(shell);
+    await renderDonations(shell, { signedIn: Boolean(currentUser) });
     bindAuthHandlers();
     scrollToHashTarget();
     return;
@@ -403,7 +403,7 @@ async function render() {
     return;
   }
   applySeo(seoForRoute({ name: "home" }));
-  await renderHome(shell);
+  await renderHome(shell, { signedIn: Boolean(currentUser) });
   bindAuthHandlers();
   scrollToHashTarget();
 }

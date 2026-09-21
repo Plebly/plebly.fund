@@ -866,7 +866,10 @@ function wantedRailHtml(
   </section>`;
 }
 
-export async function renderHome(shell: HomeShell): Promise<void> {
+export async function renderHome(
+  shell: HomeShell,
+  opts?: { signedIn?: boolean },
+): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(`
     ${landingHeroHtml()}
@@ -993,7 +996,7 @@ export async function renderHome(shell: HomeShell): Promise<void> {
     const gapTicker = app.querySelector("#gap-ticker");
     if (gapTicker) gapTicker.innerHTML = gapTickerHtml(proposals, CLAIM_FLOOR_SATS);
     void bindActivityStrip(app);
-    void bindDonationsLive(app);
+    void bindDonationsLive(app, { signedIn: Boolean(opts?.signedIn) });
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
       const openBounties = bounties.filter(
