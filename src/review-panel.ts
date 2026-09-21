@@ -31,7 +31,10 @@ export function aiOutcomeClass(outcome: string): string {
 
 /** Open deliverable_confirm / second_review that has not been escalated yet. */
 export function isAiChallengeableDecision(d: ReviewDecisionView): boolean {
-  if (d.status !== "open") return false;
+  const openOrAiDecisive =
+    d.status === "open" ||
+    (d.status === "tallied" && Boolean(d.ai_decisive));
+  if (!openOrAiDecisive) return false;
   if (d.kind !== "deliverable_confirm" && d.kind !== "second_review") {
     return false;
   }

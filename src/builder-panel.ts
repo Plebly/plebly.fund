@@ -1528,8 +1528,35 @@ export async function bindBuilderPanel(
     const reviewerActive = Boolean(reviewerMe?.active);
     if (!status && body) {
       syncHeroClaimChip(apps);
-      body.innerHTML = `<p class="builder-status muted">Couldn’t load claim status.</p>
+      const runtimeStatus = String(opts.proposal.status || "");
+      // Catalog/runtime may already be in_review while /claims misses. Keep the
+      // in_review next-action (never fall back to Still raising / Fund).
+      if (
+        runtimeStatus === "in_review" ||
+        runtimeStatus === "claimed" ||
+        runtimeStatus === "completed" ||
+        runtimeStatus === "rejected"
+      ) {
+        const isProposer = userMatchesProposer(
+          opts.user,
+          opts.proposal.proposer,
+          opts.proposal.proposer_type,
+        );
+        const action = resolveNextAction({
+          proposal: opts.proposal,
+          claim: null,
+          apps,
+          user: opts.user,
+          reviewerActive,
+          isProposer,
+        });
+        body.innerHTML = `${nextActionCardHtml(action)}
+          <p class="builder-status muted">Claim status didn’t load — retry to refresh.</p>
+          <button type="button" class="btn ghost" id="builder-status-retry">Retry</button>`;
+      } else {
+        body.innerHTML = `<p class="builder-status muted">Couldn’t load claim status.</p>
         <button type="button" class="btn ghost" id="builder-status-retry">Retry</button>`;
+      }
       body
         .querySelector("#builder-status-retry")
         ?.addEventListener("click", () => {

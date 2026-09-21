@@ -198,6 +198,23 @@ describe("proposal UI critical render helpers", () => {
     expect(html).not.toContain("5 days left");
   });
 
+  it("in_review never Fund stepper (catalog/runtime overlay shape)", () => {
+    const p = {
+      id: "PLEBLY-2026-003",
+      path: "proposals/listed/PLEBLY-2026-003.md",
+      title: "Wave B",
+      status: "in_review",
+      claimer: "bob",
+      target_sats: null,
+      escrow_address: "tb1qtest",
+      milestones: [],
+    } as Proposal;
+    const html = proposalStepperHtml(p);
+    expect(html).toContain('aria-current="step"');
+    expect(html).toMatch(/proposal-step-current[^>]*>Review</);
+    expect(html).not.toMatch(/proposal-step-current[^>]*>Fund</);
+  });
+
   it("stall banner prints seat numbers and no forced exit", () => {
     const html = proposalLifecycleBannersHtml({
       status: "completed",

@@ -250,6 +250,88 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
   };
 }
 
+
+/** Lifecycle statuses the Worker catalog may know before git frontmatter moves. */
+const CATALOG_LIFECYCLE = new Set([
+  "claimable",
+  "claimed",
+  "in_review",
+  "completed",
+  "rejected",
+  "refunding",
+  "redirected",
+  "redirect_pending",
+  "abandoned_vote",
+  "underfunded",
+]);
+
+/**
+ * Markdown /proposals/doc often stays `listed` while catalog runtime is already
+ * claimed|in_review. Overlay catalog lifecycle so first paint never shows
+ * Still raising / Fund for an in_review listing (live 003).
+ */
+export function applyCatalogRuntimeToProposal(
+  doc: Proposal,
+  catalog: Proposal | null | undefined,
+): Proposal {
+  if (!catalog) return doc;
+  const catStatus = String(catalog.status || "");
+  const docStatus = String(doc.status || "");
+  if (!CATALOG_LIFECYCLE.has(catStatus) || catStatus === docStatus) {
+    // Still pick up claimer / escrow when catalog is ahead on those alone.
+    if (
+      !doc.claimer &&
+      catalog.claimer &&
+      (docStatus === "listed" || docStatus === "funding" || docStatus === "claimable")
+    ) {
+      return {
+        ...doc,
+        claimer: catalog.claimer,
+        claimer_type: catalog.claimer_type ?? doc.claimer_type,
+        claim_agent: catalog.claim_agent ?? doc.claim_agent,
+        escrow_address: catalog.escrow_address || doc.escrow_address,
+        balance_sats: catalog.balance_sats ?? doc.balance_sats,
+      };
+    }
+    return doc;
+  }
+  return {
+    ...doc,
+    status: catStatus as Proposal["status"],
+    claimer: catalog.claimer ?? doc.claimer,
+    claimer_type: catalog.claimer_type ?? doc.claimer_type,
+    claim_agent: catalog.claim_agent ?? doc.claim_agent,
+    escrow_address: catalog.escrow_address || doc.escrow_address,
+    balance_sats: catalog.balance_sats ?? doc.balance_sats,
+    funding_window_ends_at:
+      catalog.funding_window_ends_at ?? doc.funding_window_ends_at,
+    delivery_window_ends_at:
+      catalog.delivery_window_ends_at ?? doc.delivery_window_ends_at,
+    claim_mode: catalog.claim_mode ?? doc.claim_mode,
+    claim_window_ends_at: catalog.claim_window_ends_at ?? doc.claim_window_ends_at,
+    claim_decision_ends_at:
+      catalog.claim_decision_ends_at ?? doc.claim_decision_ends_at,
+    claim_phase: catalog.claim_phase ?? doc.claim_phase,
+  };
+}
+
+async function catalogEntryById(id: string): Promise<Proposal | null> {
+  const needle = id.trim().toLowerCase();
+  if (!needle) return null;
+  try {
+    const proposals = await listListedProposals();
+    return (
+      proposals.find(
+        (p) =>
+          p.id?.toLowerCase() === needle ||
+          p.path.toLowerCase().includes(`/${needle}.md`),
+      ) || null
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function fetchWorkerCatalog(
   scope: "listed" | "all",
 ): Promise<Proposal[] | null> {
@@ -330,7 +412,10 @@ export async function findListedProposalById(
   if (!normalized) return null;
 
   const fromDoc = await loadProposalDocFromWorker(normalized);
-  if (fromDoc) return fromDoc;
+  if (fromDoc) {
+    const catalog = await catalogEntryById(normalized);
+    return applyCatalogRuntimeToProposal(fromDoc, catalog);
+  }
 
   // Prefer Worker id→path index (O(1)); fall back to GitHub directory walk.
   // Lookup returns 200 with path:null when missing (avoids console 404 noise).
@@ -346,7 +431,10 @@ export async function findListedProposalById(
         };
         if (data.path) {
           const hit = await loadProposalByPath(data.path);
-          if (hit) return hit;
+          if (hit) {
+            const catalog = await catalogEntryById(normalized);
+            return applyCatalogRuntimeToProposal(hit, catalog);
+          }
         }
       }
     } catch {
