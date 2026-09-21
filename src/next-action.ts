@@ -280,7 +280,10 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (donor === "window_open") {
-      if (claim?.can_flag_close) {
+      // Public /claims omits credentials → can_flag_close stays false in the SPA.
+      // Show Flag for any signed-in user; POST /claims/flag still enforces
+      // confirmed-donor (mirrors Mark Done + local isProposer).
+      if (claim?.can_flag_close || Boolean(input.user)) {
         return {
           sentence: `Flag if the work is not finished.${clock(donorExp)}`,
           button: "flag",

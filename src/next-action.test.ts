@@ -280,7 +280,7 @@ describe("resolveNextAction", () => {
       button: "flag",
     },
     {
-      name: "window open other",
+      name: "window open signed-in without can_flag_close",
       input: {
         proposal: proposal({
           status: "in_review",
@@ -293,6 +293,23 @@ describe("resolveNextAction", () => {
           donor_review_expires_at: new Date(Date.now() + 2 * 86400_000).toISOString(),
         }),
         user: builder,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "window open guest",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 2 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 2 * 86400_000).toISOString(),
+        }),
       },
       sentence: /Donors have 2 days to flag\./,
       button: null,
