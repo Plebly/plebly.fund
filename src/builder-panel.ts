@@ -713,7 +713,11 @@ async function syncHybridReviewUi(
   const ai = status.ai_review || proposal.ai_review;
   if (ai) {
     const html = aiReviewCardHtml(ai);
-    const existing = nextCard.querySelector(".ai-review-card");
+    // Prefer a direct sibling of #builder — never replace the compact card
+    // inside #review-panel (that clobber race can desync challenge UI).
+    const existing =
+      nextCard.querySelector<HTMLElement>(":scope > .ai-review-card") ||
+      nextCard.querySelector<HTMLElement>("#builder + .ai-review-card");
     if (existing) existing.outerHTML = html;
     else {
       const builder = nextCard.querySelector("#builder");

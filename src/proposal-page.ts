@@ -854,7 +854,13 @@ export async function renderProposalPage(
       });
     }
     if (String(match.status) === "in_review" && match.id) {
-      await bindReviewPanel(app, { proposalId: match.id, user });
+      const panel = app.querySelector<HTMLElement>("#review-panel");
+      // bindBuilderPanel → syncHybridReviewUi usually already painted the
+      // decision. Re-binding signed-in C races fetchReviewerMe and used to
+      // overwrite a good Challenge AI paint — only bind if still unloaded.
+      if (!panel?.dataset.reviewDecisionId) {
+        await bindReviewPanel(app, { proposalId: match.id, user });
+      }
     }
     if (String(match.status) === "rejected" && match.id) {
       const isDirect =
