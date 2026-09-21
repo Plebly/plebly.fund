@@ -45,10 +45,12 @@ export function aiReviewCardHtml(
       : "";
   const next =
     ai.outcome === "unavailable"
-      ? `<p class="ai-next">Intelligence was unavailable. Review continues without this analysis.</p>`
+      ? `<p class="ai-next">Intelligence was unavailable. Humans continue the review.</p>`
       : ai.outcome === "bypass"
-        ? `<p class="ai-next">This listing is outside the AI Reviewer's competence.</p>`
-        : `<p class="ai-next">Advisory. The proposer can mark this done. Fail does not block review.</p>`;
+        ? `<p class="ai-next">This listing is outside the AI Reviewer's competence. Humans continue.</p>`
+        : ai.outcome === "ambiguous"
+          ? `<p class="ai-next">Needs humans. Escalate keeps the ballot open for reviewers.</p>`
+          : `<p class="ai-next">Hybrid seat: confident pass/fail is a decisive vote. Challenge AI to escalate to humans. Never releases funds.</p>`;
   const attribution = escapeHtml(
     ai.attribution || "Powered by BTCDecoded Intelligence",
   );
@@ -141,11 +143,13 @@ export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
   const kind = decisionKindLabel(d.kind);
   if (d.status !== "open") {
     const result = d.result || d.status;
-    return `${kind} · Closed · ${result}${d.passed ? " (passed)" : ""}`;
+    const aiBit = d.ai_decisive ? " · AI decisive" : "";
+    return `${kind} · Closed · ${result}${d.passed ? " (passed)" : ""}${aiBit}`;
   }
   const closes = new Date(d.closes_at).toLocaleDateString();
   const second = d.round === 2 ? " · Second look" : "";
-  return `${kind}${second} · ${d.vote_count} vote(s) · closes ${closes}.`;
+  const esc = d.escalated ? " · Escalated to humans" : "";
+  return `${kind}${second}${esc} · ${d.vote_count} vote(s) · closes ${closes}.`;
 }
 
 function renderDecision(

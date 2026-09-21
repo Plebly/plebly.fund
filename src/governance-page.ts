@@ -365,10 +365,20 @@ const FALLBACK_AI_REVIEWERS: OfficialAiReviewer[] = [
     name: "AI Reviewer",
     attribution: "Powered by BTCDecoded Intelligence",
     kind: "ai",
-    voting: false,
+    voting: true,
     provider: "btcdecoded-intelligence",
   },
 ];
+
+export function aiVoteLabel(voting: boolean): string {
+  return voting ? "Votes when confident" : "Does not vote";
+}
+
+export function aiReviewersLede(votingSeats: boolean): string {
+  return votingSeats
+    ? "Listed AI Reviewers analyze bounty work against the spec. When confident they cast a decisive pass/fail vote; humans take over on escalate. They never release funds."
+    : "Listed AI Reviewers analyze bounty work against the spec. They do not vote and never release funds.";
+}
 
 export function aiReviewersSectionHtml(
   roster: ReviewerRoster | null,
@@ -377,6 +387,7 @@ export function aiReviewersSectionHtml(
     roster?.ai_reviewers && roster.ai_reviewers.length
       ? roster.ai_reviewers
       : FALLBACK_AI_REVIEWERS;
+  const anyVoting = seats.some((s) => s.voting);
   const rows = seats
     .map(
       (s) => `<li class="gov-roster-row" data-ai-reviewer="${escapeHtml(s.id)}">
@@ -385,12 +396,12 @@ export function aiReviewersSectionHtml(
       <span class="pill">AI</span>
       <span class="muted">${escapeHtml(s.attribution)}</span>
     </div>
-    <span class="muted">Does not vote</span>
+    <span class="muted">${escapeHtml(aiVoteLabel(Boolean(s.voting)))}</span>
   </li>`,
     )
     .join("");
   return `<div class="gov-ai-reviewers">
-    <p class="muted gov-block-lede">Listed AI Reviewers analyze bounty work against the spec. They do not vote and never release funds.</p>
+    <p class="muted gov-block-lede">${escapeHtml(aiReviewersLede(anyVoting))}</p>
     <ul class="gov-roster" id="gov-ai-roster">${rows}</ul>
   </div>`;
 }

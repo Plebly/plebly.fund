@@ -41,6 +41,8 @@ export type ReviewDecisionView = {
   roster_size?: number;
   need_yes?: number;
   ai_review?: AiReviewView;
+  escalated?: boolean;
+  ai_decisive?: boolean;
   dissent?: { user_id: string; at: string; reasoning: string; pr_url?: string }[];
   rebuttal?: { reasoning: string; at: string };
 };
@@ -90,7 +92,8 @@ export type OfficialAiReviewer = {
   name: string;
   attribution: string;
   kind: "ai";
-  voting: false;
+  /** Hybrid: true when Intelligence casts decisive pass/fail on disputes. */
+  voting: boolean;
   provider?: string;
 };
 

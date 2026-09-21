@@ -17,7 +17,7 @@ describe("review panel UI helpers", () => {
     expect(aiOutcomeClass("pass")).toBe("ai-pass");
   });
 
-  it("renders AI card with failing criteria and no-ballot copy on fail", () => {
+  it("renders AI card with failing criteria and hybrid vote copy on fail", () => {
     const html = aiReviewCardHtml({
       outcome: "fail",
       reasoning: "Missing tests",
@@ -28,9 +28,10 @@ describe("review panel UI helpers", () => {
     expect(html).toContain("Clear fail");
     expect(html).toContain("Missing tests");
     expect(html).toContain("Acceptance criteria");
-    expect(html).toContain("Advisory");
+    expect(html).toContain("decisive vote");
     expect(html).toContain("AI Reviewer");
     expect(html).toContain("Powered by BTCDecoded Intelligence");
+    expect(html).not.toContain("Advisory");
     expect(html).not.toContain("Revise and resubmit.");
     expect(html).not.toContain("AI first-pass");
     expect(html).not.toContain("No reviewer ballot");
@@ -39,21 +40,23 @@ describe("review panel UI helpers", () => {
     expect(html).not.toMatch(/\bBDI\b/);
   });
 
-  it("pass and ambiguous cards stay advisory", () => {
+  it("pass is hybrid decisive; ambiguous escalates to humans", () => {
     const pass = aiReviewCardHtml({
       outcome: "pass",
       reasoning: "Looks good",
       prompt_version: "v1",
       model: "m",
     });
-    expect(pass).toContain("The proposer can mark this done.");
+    expect(pass).toContain("decisive vote");
+    expect(pass).not.toContain("Advisory");
     const amb = aiReviewCardHtml({
       outcome: "ambiguous",
       reasoning: "Unclear",
       prompt_version: "v1",
       model: "m",
     });
-    expect(amb).toContain("The proposer can mark this done.");
+    expect(amb).toContain("Needs humans");
+    expect(amb).toContain("Escalate");
   });
 
   it("review and rebuttal panels expose required controls", () => {
