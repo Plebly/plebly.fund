@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const authFetch = vi.fn();
+vi.mock("./auth", () => ({
+  authFetch: (...args: unknown[]) => authFetch(...args),
+}));
+
 import {
   CLAIM_STATUS_FETCH_TIMEOUT_MS,
   applyClaimStatusToProposal,
   claimFloorShortfall,
   claimWindowDaysLeft,
   fetchClaimStatus,
+  fetchPayIntent,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
@@ -261,5 +268,56 @@ describe("fetchClaimStatus", () => {
 
   it("waits at least 45s for cold /claims before aborting", () => {
     expect(CLAIM_STATUS_FETCH_TIMEOUT_MS).toBeGreaterThanOrEqual(45_000);
+  });
+});
+
+describe("fetchPayIntent", () => {
+  afterEach(() => {
+    authFetch.mockReset();
+  });
+
+  it("returns unique address and required_sats", async () => {
+    authFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          purpose: "submission_fee",
+          mode: "unique",
+          required_sats: 10_000,
+          unique: true,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await expect(fetchPayIntent("submission_fee")).resolves.toEqual({
+      address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+      purpose: "submission_fee",
+      mode: "unique",
+      required_sats: 10_000,
+      unique: true,
+    });
+    expect(authFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/payments\/intent$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ purpose: "submission_fee" }),
+      }),
+    );
+  });
+
+  it("throws on 401", async () => {
+    authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
+    );
+    await expect(fetchPayIntent("claim_bond")).rejects.toThrow(/unauthorized/);
+  });
+
+  it("throws when the body has no address", async () => {
+    authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ mode: "unique" }), { status: 200 }),
+    );
+    await expect(fetchPayIntent("submission_fee")).rejects.toThrow(
+      /Could not issue a fee address/,
+    );
   });
 });

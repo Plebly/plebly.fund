@@ -608,7 +608,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           : null;
       block.innerHTML = `<legend>Submission fee</legend>${feePayHtml({
         id: "propose-fee",
-        amountSats: SUBMISSION_FEE_SATS,
+        amountSats: intent.required_sats,
         address: addr,
         txidName: "submission_fee_txid",
         assigned: Boolean(addr),

@@ -1029,7 +1029,7 @@ export async function bindBuilderPanel(
       }
       bondSlot.innerHTML = feePayHtml({
         id: "claim-bond",
-        amountSats: bondSats,
+        amountSats: intent.required_sats || bondSats,
         address: feeAddr,
         kind: "bond",
         assigned: true,
