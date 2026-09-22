@@ -1044,6 +1044,15 @@ export async function bindBuilderPanel(
   } catch {
     /* defaults */
   }
+  // Prefer session-scoped claim_bond_sats from /claims (abuse escalation).
+  try {
+    const st = await (claimStatusPromise ?? fetchClaimStatus(opts.proposal.path, opts.proposal.id));
+    if (st && typeof st.claim_bond_sats === "number" && st.claim_bond_sats > 0) {
+      params = { ...params, claim_bond_sats: st.claim_bond_sats };
+    }
+  } catch {
+    /* keep params */
+  }
 
   let feePay: FeePayBinding | null = null;
   type ClaimWizardStep = "who" | "refund" | "bond" | "submit";
@@ -1067,9 +1076,9 @@ export async function bindBuilderPanel(
     if (!bondSlot) return;
     feePay?.stop();
     feePay = null;
+    // Prefer claims status / pay-intent amount (abuse may escalate above base).
     const bondSats =
-      typeof params.claim_bond_sats === "number" &&
-      params.claim_bond_sats === CLAIM_BOND_SATS
+      typeof params.claim_bond_sats === "number" && params.claim_bond_sats > 0
         ? params.claim_bond_sats
         : CLAIM_BOND_SATS;
     bondSlot.innerHTML = `<p class="muted">Issuing your bond address…</p>`;
