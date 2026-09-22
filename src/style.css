@@ -225,7 +225,12 @@ html.pwa-standalone body {
 }
 
 .nav a,
-.nav .link-btn {
+.nav .link-btn,
+.login-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  margin: 0;
   color: var(--muted);
   font-size: 0.8125rem;
   font-weight: 500;
@@ -235,7 +240,8 @@ html.pwa-standalone body {
 }
 
 .nav a:hover,
-.nav a.active {
+.nav a.active,
+.login-menu > summary:hover {
   color: var(--ink);
   background: var(--bg-hover);
 }
@@ -311,6 +317,7 @@ html.pwa-standalone body {
 }
 
 .link-btn {
+  appearance: none;
   background: none;
   border: none;
   cursor: pointer;
@@ -8100,7 +8107,8 @@ a.claim-app-bond:hover {
     gap: 0.5rem 0.75rem;
   }
   .nav a,
-  .nav .link-btn {
+  .nav .link-btn,
+  .login-menu > summary {
     padding: 0.55rem 0.6rem;
     font-size: 0.8125rem;
     min-height: 44px;
@@ -8190,13 +8198,13 @@ a.claim-app-bond:hover {
 /* —— Review / AI / login (resolution layer) —— */
 .login-menu {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .login-menu > summary {
   list-style: none;
   cursor: pointer;
-  font: inherit;
-  color: inherit;
 }
 
 .login-menu > summary::-webkit-details-marker {
