@@ -15,10 +15,11 @@ Live paths only. Plebly is a coordinator: review + PSBT routing, 3% platform + 2
 | Builder | Bond back | 10k refunded via KH batch | `completed` |
 | Builder | Bond gone | Ledger `forfeited` — sats already sat at the fee address at bond verify | Window expiry, checkpoint abandon, rebuttal expiry, final reject, fraud |
 | Reviewer | Flag ballot (`deliverable_confirm`) + human listing merge | 0 sats | Duty of the earned seat |
-| Reviewer | Dispute vote cast (yes or no) | 10,000 sats from the insurance pool | `second_review`, `listing_challenge`, `claim_extension` |
+| Reviewer | Finished deliverable review (yes or no) | Equal share of the 2% reviewer reserve, or the reserve refunds to the donor pool | `deliverable_confirm` after it is final, `second_review` |
+| Reviewer | Listing challenge, claim extension, AI-only tally | 0 sats | `listing_challenge` and `claim_extension` stay unpaid. An unchallenged AI tally holds the reserve. |
 | AI | Ops budget from the 3% | Vendor invoice | First-pass; never billed to proposer/builder |
 
-**Insurance pool:** there is no separate address. Bond verify spends 10k to the submission-fee address. Forfeit is a KV flag. Those sats are mixed with submission fees. Reviewer payouts are **not live**.
+**Insurance pool:** there is no separate address. Bond verify spends 10k to the submission-fee address. Forfeit is a KV flag. Those sats are mixed with submission fees. The 10,000 sat vote is not paid. A finished human deliverable review can instead be paid from the 2% reviewer reserve.
 
 Not paid: funder removal, contributor ballots (including funding `extend`), KH election, ops-role votes, dissent-without-vote, AI fail, listing merge. Abstain and no-vote pay 0.
 

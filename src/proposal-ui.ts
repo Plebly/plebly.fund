@@ -2682,6 +2682,20 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
   return rows.join("");
 }
 
+/** One line. Names only for public credit. No sitewide leaderboard. */
+export function funderConcentrationLine(c: {
+  top_share_bps?: number;
+  unattributed_bps?: number;
+  funder_count?: number;
+  top_name?: string;
+}): string {
+  if (!c.funder_count) return "";
+  const top = Math.round((c.top_share_bps || 0) / 100);
+  const anon = Math.round((c.unattributed_bps || 0) / 100);
+  const who = c.top_name || "Largest funder";
+  return `${who} ${top}% · unattributed ${anon}% · ${c.funder_count} funders`;
+}
+
 /** Quiet meta line: created date, id, type, claim mode, and tags (status/byline live elsewhere). */
 export function metaChipsHtml(p: Proposal): string {
   const bits: string[] = [];

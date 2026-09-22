@@ -281,11 +281,13 @@ describe("reviewPanelHtml challenge placement", () => {
 describe("review kind pay copy", () => {
   it("labels standard vs dispute", async () => {
     const { decisionKindPayLine } = await import("./reviewers");
-    expect(decisionKindPayLine("deliverable_confirm")).toBe("Unpaid");
-    expect(decisionKindPayLine("second_review")).toMatch(/10,000/);
-    expect(decisionKindPayLine("listing_challenge")).toMatch(/not enabled/);
-    expect(decisionKindPayLine("second_review")).not.toMatch(
-      /insurance|pool|live/i,
+    expect(decisionKindPayLine("deliverable_confirm")).toBe(
+      "Share of the 2% reviewer reserve when the review finishes",
     );
+    expect(decisionKindPayLine("second_review")).toBe(
+      "Share of the 2% reviewer reserve when the review finishes",
+    );
+    expect(decisionKindPayLine("listing_challenge")).toMatch(/not enabled/);
+    expect(decisionKindPayLine("claim_extension")).toMatch(/not enabled/);
   });
 });

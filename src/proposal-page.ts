@@ -35,6 +35,7 @@ import {
   ballotPanelHtml,
   canEditProposal,
   deliverableChipHtml,
+  funderConcentrationLine,
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
@@ -611,6 +612,7 @@ export async function renderProposalPage(
             ${byline}
             ${metaChipsHtml(match)}
             ${match.id ? `<span class="proposal-view-count" id="proposal-view-count" hidden aria-live="polite"></span>` : ""}
+            ${match.id ? `<span class="funder-concentration" id="funder-concentration" hidden></span>` : ""}
           </div>
         </header>
 
@@ -852,6 +854,26 @@ export async function renderProposalPage(
           el.textContent = `Views: ${count.toLocaleString()}`;
         }
       });
+      void fetch(
+        `${WORKERS_API.replace(/\/$/, "")}/contributions/${encodeURIComponent(match.id)}`,
+      )
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: {
+          concentration?: {
+            top_share_bps?: number;
+            unattributed_bps?: number;
+            funder_count?: number;
+            top_name?: string;
+          };
+        } | null) => {
+          const el = app.querySelector("#funder-concentration");
+          const c = data?.concentration;
+          const line = c ? funderConcentrationLine(c) : "";
+          if (!(el instanceof HTMLElement) || !line) return;
+          el.hidden = false;
+          el.textContent = line;
+        })
+        .catch(() => undefined);
     }
     if (String(match.status) === "in_review" && match.id) {
       const panel = app.querySelector<HTMLElement>("#review-panel");

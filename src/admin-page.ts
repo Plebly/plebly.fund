@@ -405,6 +405,14 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
         admin_note?: string;
         configured?: boolean;
         contributions?: EndowmentContribution[];
+        ranked_proposals?: Array<{
+          id: string;
+          title: string;
+          score: number;
+          weighted: number;
+          comments: number;
+          views: number;
+        }>;
       };
       if (!adminRes.ok) throw new Error(data.error || `HTTP ${adminRes.status}`);
       const funded = new Set(data.funded_proposal_ids || []);
@@ -455,6 +463,23 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               </label>
             </section>
 
+            <section class="admin-endowment-block" aria-labelledby="endowment-rank-heading">
+              <h3 id="endowment-rank-heading">Community interest</h3>
+              <p class="muted">Advisory only. Grants stay manual. Score is 3× weighted watches + 2× comments + views.</p>
+              <table class="admin-rank">
+                <thead><tr><th>Project</th><th>Score</th><th>Watches</th><th>Comments</th><th>Views</th></tr></thead>
+                <tbody>
+                  ${(data.ranked_proposals || [])
+                    .slice(0, 20)
+                    .map(
+                      (r) =>
+                        `<tr><td>${escapeHtml(r.title || r.id)}</td><td class="mono">${r.score}</td><td class="mono">${r.weighted}</td><td class="mono">${r.comments}</td><td class="mono">${r.views}</td></tr>`,
+                    )
+                    .join("") || `<tr><td colspan="5">No listed projects.</td></tr>`}
+                </tbody>
+              </table>
+            </section>
+
             <section class="admin-endowment-block" aria-labelledby="endowment-grant-heading">
               <h3 id="endowment-grant-heading">Record contribution</h3>
               <div class="admin-row-edit admin-address-edit">
@@ -464,13 +489,14 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
                 <input id="endowment-grant-amount" type="number" min="1" step="1" placeholder="Amount (sats)" />
                 <input id="endowment-grant-txid" class="mono" placeholder="txid (optional)" autocomplete="off" spellcheck="false" />
                 <input id="endowment-grant-note" placeholder="Note (optional)" />
-                <button type="button" class="btn" id="endowment-grant-save" disabled>Add contribution</button>
+                <button type="button" class="btn" id="endowment-grant-save" disabled>Signed monthly grant</button>
               </div>
               <div id="endowment-grant-list" class="admin-grant-list muted">Loading…</div>
             </section>
 
             <section class="admin-endowment-block" aria-labelledby="endowment-funded-heading">
               <h3 id="endowment-funded-heading">Funded projects</h3>
+              <p class="muted">The monthly grant badges the winner. This list cannot be rewritten here.</p>
               <div class="admin-funded-list" id="endowment-funded-list">
                 <p class="muted">Loading catalog…</p>
               </div>
@@ -569,8 +595,8 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           grantSelect.innerHTML =
             `<option value="">Select project…</option>${opts}` ||
             `<option value="">No catalog projects</option>`;
-          grantSelect.disabled = !opts;
-          if (grantSaveBtn) grantSaveBtn.disabled = !opts;
+          grantSelect.disabled = true;
+          if (grantSaveBtn) grantSaveBtn.disabled = true;
         }
         if (fundedList) {
           const checks = listed
@@ -578,7 +604,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
             .map((p) => {
               const id = p.id!;
               return `<label class="admin-funded-row">
-              <input type="checkbox" data-funded-id="${escapeHtml(id)}" ${
+              <input type="checkbox" disabled data-funded-id="${escapeHtml(id)}" ${
                 funded.has(id) ? "checked" : ""
               } />
               <span>${escapeHtml(p.title || id)}</span>
@@ -589,7 +615,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
           fundedList.innerHTML =
             checks || `<p class="muted">No catalog projects.</p>`;
         }
-        if (saveFundedBtn) saveFundedBtn.disabled = false;
+        if (saveFundedBtn) saveFundedBtn.disabled = true;
         renderGrantList();
       })();
 

@@ -23,8 +23,13 @@ describe("tosStatus", () => {
 
 describe("reviewKindPayLabel", () => {
   it("stays human", () => {
-    expect(reviewKindPayLabel("deliverable_confirm")).toBe("Unpaid");
+    expect(reviewKindPayLabel("deliverable_confirm")).toBe(
+      "Share of the 2% reviewer reserve when the review finishes",
+    );
     expect(reviewKindPayLabel("second_review")).toBe(
+      "Share of the 2% reviewer reserve when the review finishes",
+    );
+    expect(reviewKindPayLabel("listing_challenge")).toBe(
       "10,000 sats · payment not enabled yet",
     );
   });

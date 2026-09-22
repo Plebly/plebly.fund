@@ -113,6 +113,8 @@ type Prefill = {
   status: string;
   proposer_type: "individual" | "org";
   proposer_org_login: string | null;
+  term_months?: number | null;
+  cycle_sats?: number | null;
 };
 
 async function loadPrefill(editPath: string): Promise<Prefill | null> {
@@ -175,6 +177,8 @@ async function loadPrefill(editPath: string): Promise<Prefill | null> {
       const gh = (p as { github?: unknown }).github;
       return typeof gh === "string" && gh.trim() ? gh.trim() : null;
     })(),
+    term_months: typeof data.term_months === "number" ? data.term_months : null,
+    cycle_sats: typeof data.cycle_sats === "number" ? data.cycle_sats : null,
   };
 }
 
@@ -456,6 +460,16 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: builders apply with a bond and get paid after review</span></label>
               <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Campaign</strong>: charity or cause — you receive donations, no builder claim</span></label>
             </fieldset>
+            <fieldset class="field propose-direct-term" data-direct-term hidden>
+              <span>Recurring payout <em class="optional">(optional)</em></span>
+              <p class="field-hint">Leave both empty to pay the balance each month. Set both to pay one cycle per month.</p>
+              <label>Months
+                <input name="term_months" type="number" min="1" max="36" step="1" inputmode="numeric" value="${escapeHtml(String(prefill?.term_months || ""))}" />
+              </label>
+              <label>Sats each cycle
+                <input name="cycle_sats" type="number" min="574" step="1" inputmode="numeric" value="${escapeHtml(String(prefill?.cycle_sats || ""))}" />
+              </label>
+            </fieldset>
             <fieldset class="field propose-claim-mode" data-claim-mode-fields>
               <span>Who gets the claim</span>
               <label class="radio-row"><input type="radio" name="claim_mode" value="proposer_select"${
@@ -698,6 +712,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const modeFields = form.querySelector<HTMLElement>("[data-claim-mode-fields]");
     const presets = form.querySelector<HTMLElement>("[data-claim-window-presets]");
     if (modeFields) modeFields.hidden = !bounty;
+    const termFields = form.querySelector<HTMLElement>("[data-direct-term]");
+    if (termFields) termFields.hidden = bounty;
     const showWindow = showApplicationWindow(
       readNamedValue(form, "proposal_type") || "bounty",
       readNamedValue(form, "claim_mode") || "proposer_select",
@@ -1648,6 +1664,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           ? claimWindowPresets.includes(claim_window_raw)
             ? claim_window_raw
             : 7
+          : undefined,
+      term_months:
+        proposal_type === "direct"
+          ? String(fd.get("term_months") || "").trim()
+            ? Number(fd.get("term_months"))
+            : null
+          : undefined,
+      cycle_sats:
+        proposal_type === "direct"
+          ? String(fd.get("cycle_sats") || "").trim()
+            ? Number(fd.get("cycle_sats"))
+            : null
           : undefined,
       proposer_type: isEdit ? undefined : proposer_type,
       proposer_org_login:

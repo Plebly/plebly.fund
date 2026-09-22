@@ -35,7 +35,9 @@ export function isPaidDisputeKind(kind: string): boolean {
 }
 
 export function reviewKindPayLabel(kind: string): string {
-  if (kind === "deliverable_confirm") return "Unpaid";
+  if (kind === "deliverable_confirm" || kind === "second_review") {
+    return "Share of the 2% reviewer reserve when the review finishes";
+  }
   if (isPaidDisputeKind(kind)) {
     return "10,000 sats · payment not enabled yet";
   }
