@@ -241,9 +241,20 @@ html.pwa-standalone body {
 
 .nav a:hover,
 .nav a.active,
-.login-menu > summary:hover {
+.login-menu > summary:hover,
+.login-menu > summary.active {
   color: var(--ink);
   background: var(--bg-hover);
+}
+
+.nav-ops > summary::after {
+  content: "";
+  width: 0.35rem;
+  height: 0.35rem;
+  margin-left: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-0.12em) rotate(45deg);
 }
 
 .nav-account-wrap {
@@ -3010,10 +3021,11 @@ a.project-card-by:hover .project-card-by-text {
 }
 .proposal-step:not(:last-child)::after {
   content: "→";
+  display: inline-block;
   margin: 0 0.55rem;
-  font-weight: 400;
-  color: var(--muted);
-  opacity: 0.45;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  text-decoration: none;
 }
 .proposal-step-done {
   color: inherit;
@@ -8211,6 +8223,10 @@ a.claim-app-bond:hover {
   display: none;
 }
 
+.login-menu:not([open]) > .login-menu-panel {
+  display: none;
+}
+
 .login-menu-panel {
   position: absolute;
   right: 0;
@@ -8251,8 +8267,10 @@ a.claim-app-bond:hover {
 }
 
 .login-menu-panel a:hover,
+.login-menu-panel a.active,
 .login-menu-panel .login-menu-item:hover {
   background: var(--bg-hover);
+  color: var(--ink);
 }
 
 .login-menu-panel .login-menu-item:disabled {
@@ -9492,6 +9510,10 @@ a.proposal-comment-author:hover {
   margin: 0 0 0.35rem;
   font-size: 1.125rem;
   letter-spacing: -0.02em;
+}
+
+.gov-ai-reviewers + .gov-block-title {
+  margin-top: 2.25rem;
 }
 
 .gov-subhead {

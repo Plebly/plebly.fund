@@ -90,22 +90,35 @@ async function refreshPlatformAdminNav(): Promise<void> {
   }
 }
 
+function opsNavHtml(): string {
+  const here = route().name;
+  const items: { name: string; href: string; label: string }[] = [
+    { name: "reviewers", href: href("/reviewers"), label: "Reviewers" },
+    { name: "keyholders", href: href("/keyholders"), label: "Keyholders" },
+  ];
+  if (platformAdminNav) {
+    items.push({ name: "admin", href: href("/admin"), label: "Admin" });
+  }
+  const links = items
+    .map((item) => {
+      const on = item.name === here;
+      return `<a href="${item.href}"${on ? ' class="active" aria-current="page"' : ""}>${item.label}</a>`;
+    })
+    .join("");
+  const openHere = items.some((item) => item.name === here);
+  return `<details class="login-menu nav-ops">
+      <summary${openHere ? ' class="active"' : ""}>Ops</summary>
+      <div class="login-menu-panel">${links}</div>
+    </details>`;
+}
+
 function authNavHtml(): string {
   if (!WORKERS_API) return "";
   if (currentUser) {
     const label = accountNavLabel(currentUser);
     const badge = notificationNavBadgeHtml(unreadNotifications);
-    const kh = `<a href="${href("/keyholders")}" class="${route().name === "keyholders" ? "active" : ""}"${
-      route().name === "keyholders" ? ' aria-current="page"' : ""
-    }>Keyholders</a>`;
-    const adm = platformAdminNav
-      ? `<a href="${href("/admin")}" class="${route().name === "admin" ? "active" : ""}"${
-          route().name === "admin" ? ' aria-current="page"' : ""
-        }>Admin</a>`
-      : "";
     return `<span class="nav-divider" aria-hidden="true"></span>
-      ${kh}
-      ${adm}
+      ${opsNavHtml()}
       <span class="nav-account-wrap" data-nav-account-wrap>
         <a href="${href("/account")}" data-nav-account class="nav-account ${route().name === "account" ? "active" : ""}">${escapeHtml(label)}</a>
         ${badge}
