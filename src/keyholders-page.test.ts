@@ -147,6 +147,18 @@ describe("keyholderPackageSentence", () => {
     expect(src).toContain("kh-branch-sign");
   });
 
+  it("hash-gates Upload signature until signed partial is non-empty", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "keyholders-page.ts"),
+      "utf8",
+    );
+    // Branch desk: #kh-branch-sign requires #kh-branch-partial
+    expect(src).toContain('alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-partial")');
+    // Settle desk: #kh-sign requires #kh-psbt-partial
+    expect(src).toContain('alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt-partial")');
+    expect(src).toContain('alsoRequireEmptyReason: "Paste a signed partial to enable"');
+  });
+
   it("branch desk hash-gates sign and does not offer broadcast", () => {
     const html = branchSignDeskHtml({
       proposal_id: "p1",

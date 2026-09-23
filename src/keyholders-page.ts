@@ -1399,6 +1399,11 @@ export async function renderKeyholders(
       publishedHash: item.published_sha256,
       action: detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign"),
       enableActionWithoutHash: false,
+      alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-partial"),
+      alsoRequireEmptyReason: "Paste a signed partial to enable",
+      disabledReason:
+        "Paste a matching unsigned Release PSBT (base64) to enable — not a settle txid",
+      enabledReason: "Hash matches and signed partial ready — upload signature",
     });
     detailEl.querySelector("#kh-branch-dl")?.addEventListener("click", () => {
       if (!item.psbt_base64) return;
@@ -1592,6 +1597,11 @@ export async function renderKeyholders(
       publishedHash,
       action: detailEl.querySelector<HTMLButtonElement>("#kh-sign"),
       enableActionWithoutHash: canPartial,
+      alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt-partial"),
+      alsoRequireEmptyReason: "Paste a signed partial to enable",
+      disabledReason:
+        "Paste a matching unsigned PSBT (base64) to enable — not a settle txid",
+      enabledReason: "Hash matches and signed partial ready — upload signature",
     });
 
     const setMsg = (t: string) => {

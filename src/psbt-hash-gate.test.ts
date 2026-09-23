@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   challengeWindowDays,
+  hashGateActionEnabled,
   hashGateHtml,
   hashGateState,
   sha256HexOfPsbtBase64,
@@ -55,5 +56,72 @@ describe("hashGateState", () => {
     expect(html).toContain("Release PSBT (base64) — not a settle txid");
     expect(html).toContain("Paste unsigned Release PSBT to verify SHA-256");
     expect(html).not.toContain(SAMPLE);
+  });
+});
+
+describe("hashGateActionEnabled", () => {
+  it("stays disabled on hash match when extra (signed partial) is empty", () => {
+    expect(
+      hashGateActionEnabled({
+        state: "match",
+        hasPublishedHash: true,
+        extraOk: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("enables on hash match when extra (signed partial) is non-empty", () => {
+    expect(
+      hashGateActionEnabled({
+        state: "match",
+        hasPublishedHash: true,
+        extraOk: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores extra when not provided (copy-for-Sparrow style gates)", () => {
+    expect(
+      hashGateActionEnabled({
+        state: "match",
+        hasPublishedHash: true,
+      }),
+    ).toBe(true);
+    expect(
+      hashGateActionEnabled({
+        state: "mismatch",
+        hasPublishedHash: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("requires extra even when enableActionWithoutHash allows no published hash", () => {
+    expect(
+      hashGateActionEnabled({
+        state: "empty",
+        hasPublishedHash: false,
+        enableActionWithoutHash: true,
+        extraOk: false,
+      }),
+    ).toBe(false);
+    expect(
+      hashGateActionEnabled({
+        state: "empty",
+        hasPublishedHash: false,
+        enableActionWithoutHash: true,
+        extraOk: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("stays disabled without published hash when enableActionWithoutHash is false", () => {
+    expect(
+      hashGateActionEnabled({
+        state: "empty",
+        hasPublishedHash: false,
+        enableActionWithoutHash: false,
+        extraOk: true,
+      }),
+    ).toBe(false);
   });
 });

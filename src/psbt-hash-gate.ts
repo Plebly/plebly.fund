@@ -94,12 +94,35 @@ export function hashGateHtml(opts: {
   </div>`;
 }
 
+/** Pure enable predicate for hash-gated actions (+ optional signed-partial). */
+export function hashGateActionEnabled(opts: {
+  state: HashGateState;
+  hasPublishedHash: boolean;
+  enableActionWithoutHash?: boolean;
+  /** When set, must be true (e.g. signed-partial.trim() non-empty). */
+  extraOk?: boolean;
+}): boolean {
+  const hashOk = !opts.hasPublishedHash
+    ? opts.enableActionWithoutHash !== false
+    : opts.state === "match";
+  if (!hashOk) return false;
+  if (opts.extraOk === false) return false;
+  return true;
+}
+
 export function bindHashGate(opts: {
   input: HTMLTextAreaElement | null;
   status: HTMLElement | null;
   publishedHash?: string | null;
   action?: HTMLButtonElement | null;
   enableActionWithoutHash?: boolean;
+  /**
+   * When set, action stays disabled until this field is non-empty
+   * (in addition to the hash match). Used for Upload signature + signed partial.
+   */
+  alsoRequire?: HTMLTextAreaElement | null;
+  /** Title/aria when hash matches but alsoRequire is empty. */
+  alsoRequireEmptyReason?: string;
   /** Title/aria when the gated action is disabled (idiot-proof why). */
   disabledReason?: string;
   /** Title/aria when the gated action is enabled. */
@@ -108,30 +131,53 @@ export function bindHashGate(opts: {
   const { input, status, action } = opts;
   if (!input) return;
   const published = (opts.publishedHash || "").trim();
+  const alsoRequire = opts.alsoRequire ?? null;
   const disabledReason =
     opts.disabledReason?.trim() ||
     "Paste a matching unsigned PSBT (base64) to enable — not a settle txid";
   const enabledReason =
     opts.enabledReason?.trim() || "Hash matches — ready to copy for Sparrow";
+  const alsoRequireEmptyReason =
+    opts.alsoRequireEmptyReason?.trim() ||
+    "Paste a signed partial to enable";
   const sync = async () => {
     const state = await hashGateState(input.value, published);
     if (status) status.textContent = hashGateLabel(state);
     if (!action) return;
-    if (!published) {
-      action.disabled = opts.enableActionWithoutHash === false;
-      const why = action.disabled
-        ? "No published hash to compare yet"
-        : enabledReason;
-      action.title = why;
-      action.setAttribute("aria-label", why);
-      return;
+    const extraOk = alsoRequire
+      ? alsoRequire.value.trim().length > 0
+      : undefined;
+    const enabled = hashGateActionEnabled({
+      state,
+      hasPublishedHash: Boolean(published),
+      enableActionWithoutHash: opts.enableActionWithoutHash,
+      extraOk,
+    });
+    action.disabled = !enabled;
+    let why: string;
+    if (enabled) {
+      why = enabledReason;
+    } else {
+      const hashWouldEnable = hashGateActionEnabled({
+        state,
+        hasPublishedHash: Boolean(published),
+        enableActionWithoutHash: opts.enableActionWithoutHash,
+      });
+      if (hashWouldEnable && alsoRequire && extraOk === false) {
+        why = alsoRequireEmptyReason;
+      } else if (!published) {
+        why = "No published hash to compare yet";
+      } else {
+        why = disabledReason;
+      }
     }
-    action.disabled = state !== "match";
-    const why = action.disabled ? disabledReason : enabledReason;
     action.title = why;
     action.setAttribute("aria-label", why);
   };
   input.addEventListener("input", () => {
+    void sync();
+  });
+  alsoRequire?.addEventListener("input", () => {
     void sync();
   });
   void sync();
