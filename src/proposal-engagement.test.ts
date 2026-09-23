@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bindProposalEngagement,
+  collapseAnonymousFunders,
   commentsHtml,
   commentsListHtml,
   funderCreditHtml,
@@ -196,6 +197,35 @@ describe("commentsListHtml", () => {
   });
 });
 
+describe("collapseAnonymousFunders", () => {
+  it("leaves a single Anonymous as count 1", () => {
+    const rows = collapseAnonymousFunders([
+      { identity: "alice", anonymous: false },
+      { identity: null, anonymous: true },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1].count).toBe(1);
+  });
+
+  it("collapses identical Anonymous labels and keeps named order", () => {
+    const rows = collapseAnonymousFunders([
+      { identity: null, anonymous: true },
+      { identity: "alice", anonymous: false },
+      { identity: null, anonymous: true },
+      { identity: "bob", anonymous: false },
+      { identity: "Anonymous", anonymous: true },
+      { identity: null, anonymous: true },
+      { identity: null, anonymous: true },
+      { identity: null, anonymous: true },
+    ]);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({ count: 6 });
+    expect(rows[1].contribution.identity).toBe("alice");
+    expect(rows[1].count).toBe(1);
+    expect(rows[2].contribution.identity).toBe("bob");
+  });
+});
+
 describe("fundersListHtml", () => {
   it("returns empty string when there are no funders", () => {
     expect(fundersListHtml([])).toBe("");
@@ -214,6 +244,25 @@ describe("fundersListHtml", () => {
     expect(html).toContain("funder-chip-static");
     expect(html).toContain("funder-badge-notable");
     expect(html).toContain("Notable");
+  });
+
+  it("collapses repeated Anonymous into one counted chip", () => {
+    const html = fundersListHtml([
+      { identity: "alice", anonymous: false, amount_sats: 21_000 },
+      { identity: null, anonymous: true },
+      { identity: null, anonymous: true },
+      { identity: "bob", anonymous: false },
+      { identity: null, anonymous: true },
+      { identity: null, anonymous: true },
+      { identity: null, anonymous: true },
+      { identity: null, anonymous: true },
+    ]);
+    expect(html).toContain("6 Anonymous");
+    expect(html).toContain("alice");
+    expect(html).toContain("bob");
+    expect(html).toContain("6 anonymous funders");
+    expect(html.match(/Anonymous/g)?.length).toBe(1);
+    expect(html).not.toMatch(/>Anonymous</);
   });
 
   it("escapes identity HTML", () => {

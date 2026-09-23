@@ -147,7 +147,51 @@ export function profileUrlForIdentity(identity: string | null): string | null {
   return profileHref(handle);
 }
 
-function funderTooltip(contribution: PublicContribution): string {
+function funderDisplayName(contribution: PublicContribution): string {
+  const raw = (contribution.identity || "").trim();
+  return raw || "Anonymous";
+}
+
+function isAnonymousFunderLabel(contribution: PublicContribution): boolean {
+  return funderDisplayName(contribution).toLowerCase() === "anonymous";
+}
+
+export type FunderListEntry = {
+  contribution: PublicContribution;
+  count: number;
+};
+
+/**
+ * Collapse identical Anonymous display names into one row with a count.
+ * Named funders stay as-is; chronological order is preserved (collapsed
+ * Anonymous sits where the first Anonymous appeared).
+ */
+export function collapseAnonymousFunders(
+  contributions: PublicContribution[],
+): FunderListEntry[] {
+  const anonCount = contributions.filter(isAnonymousFunderLabel).length;
+  if (anonCount <= 1) {
+    return contributions.map((contribution) => ({ contribution, count: 1 }));
+  }
+  const out: FunderListEntry[] = [];
+  let emittedAnon = false;
+  for (const contribution of contributions) {
+    if (isAnonymousFunderLabel(contribution)) {
+      if (!emittedAnon) {
+        out.push({ contribution, count: anonCount });
+        emittedAnon = true;
+      }
+    } else {
+      out.push({ contribution, count: 1 });
+    }
+  }
+  return out;
+}
+
+function funderTooltip(contribution: PublicContribution, count = 1): string {
+  if (count > 1) {
+    return `${count} anonymous funders`;
+  }
   const bits = [
     contribution.identity || "Anonymous funder",
     contribution.anonymous ? "anonymous credit" : "public credit",
@@ -171,12 +215,13 @@ function badgeHtml(contribution: PublicContribution): string {
 /** Pure HTML for the public funder chips (exported for tests). */
 export function fundersListHtml(contributions: PublicContribution[]): string {
   if (!contributions.length) return "";
-  return `<div class="funder-chips">${contributions
-    .map((contribution) => {
-      const name = contribution.identity || "Anonymous";
-      const tip = escapeHtml(funderTooltip(contribution));
+  return `<div class="funder-chips">${collapseAnonymousFunders(contributions)
+    .map(({ contribution, count }) => {
+      const baseName = funderDisplayName(contribution);
+      const name = count > 1 ? `${count} ${baseName}` : baseName;
+      const tip = escapeHtml(funderTooltip(contribution, count));
       const label = escapeHtml(name);
-      const badge = badgeHtml(contribution);
+      const badge = count > 1 ? "" : badgeHtml(contribution);
       const href = profileUrlForIdentity(contribution.identity);
       if (href) {
         return `<a class="funder-chip" href="${escapeHtml(href)}" title="${tip}">${label}${badge}</a>`;
