@@ -833,9 +833,17 @@ function renderStatusBody(
   });
 
   switch (status.state) {
-    case "open":
-      body.innerHTML = `${head}${track}<div id="claim-apps-host"></div>`;
+    case "open": {
+      // state=open can mean shared-escrow ≥ floor while frontmatter stays listed.
+      // Keep Donate-only listed chrome — no applicants / Apply host — until claimable.
+      const listedStill =
+        ["listed", "funding"].includes(String(proposal.status || "")) ||
+        ["listed", "funding"].includes(String(status.status || ""));
+      body.innerHTML = listedStill
+        ? head
+        : `${head}${track}<div id="claim-apps-host"></div>`;
       break;
+    }
     case "below_floor":
       body.innerHTML = head;
       break;

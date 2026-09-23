@@ -375,7 +375,47 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     return { sentence: "Claim pending.", button: null, moreIds };
   }
 
-  if (status === "claimable" || claim?.state === "open") {
+  // Prefer Workers/catalog frontmatter status over balance-derived claim.state.
+  // Shared Signet escrow can report state=open (≥ floor) while status stays listed.
+  const frontmatter = String(claim?.status || status);
+  const listedStillRaising =
+    status === "listed" ||
+    status === "funding" ||
+    frontmatter === "listed" ||
+    frontmatter === "funding";
+  if (
+    listedStillRaising &&
+    status !== "claimable" &&
+    frontmatter !== "claimable"
+  ) {
+    if (claim?.state === "below_floor") {
+      const structured = structuredState(claim);
+      if (structured === "psbt_ready") {
+        return {
+          sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
+          button: null,
+          moreIds,
+        };
+      }
+      if (structured === "awaiting_funds") {
+        return {
+          sentence:
+            "Donate until the frozen allocation, reserve, and miner fee are met.",
+          button: "donate",
+          moreIds,
+        };
+      }
+    }
+    return {
+      sentence: "Listed — still raising",
+      detail:
+        "Donations are open; applications open when this listing becomes claimable.",
+      button: "donate",
+      moreIds,
+    };
+  }
+
+  if (status === "claimable" || frontmatter === "claimable") {
     const mode = claimMode(p, input.apps);
     if (isProposer) {
       return {
@@ -394,36 +434,6 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       return { sentence: "Apply with a bond.", button: "apply", moreIds };
     }
     return { sentence: "Open for builders.", button: "donate", moreIds };
-  }
-
-  if (
-    status === "listed" ||
-    status === "funding" ||
-    claim?.state === "below_floor"
-  ) {
-    const structured = structuredState(claim);
-    if (structured === "psbt_ready") {
-      return {
-        sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
-        button: null,
-        moreIds,
-      };
-    }
-    if (structured === "awaiting_funds") {
-      return {
-        sentence:
-          "Donate until the frozen allocation, reserve, and miner fee are met.",
-        button: "donate",
-        moreIds,
-      };
-    }
-    return {
-      sentence: "Listed — still raising",
-      detail:
-        "Donations are open; applications open when this listing becomes claimable.",
-      button: "donate",
-      moreIds,
-    };
   }
 
   return {
