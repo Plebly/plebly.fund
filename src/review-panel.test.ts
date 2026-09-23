@@ -43,6 +43,21 @@ describe("review panel UI helpers", () => {
     expect(html).not.toMatch(/\bBDI\b/);
   });
 
+  it("shows an unscored cite pack as needing humans", () => {
+    const html = aiReviewCardHtml({
+      outcome: "fail",
+      reasoning:
+        "github · prs_raw.jsonl:35164:2026-07-24:musaHaruna\nmusaHaruna on #35164 thank you",
+      prompt_version: "intel-mcp-v1",
+      model: "jev-latest",
+    });
+    expect(html).toContain("Needs human review");
+    expect(html).toContain("did not score this work");
+    expect(html).not.toContain("musaHaruna");
+    expect(html).not.toContain("Clear fail");
+    expect(html).not.toContain("decisive vote");
+  });
+
   it("pass is hybrid decisive; ambiguous escalates to humans", () => {
     const pass = aiReviewCardHtml({
       outcome: "pass",
@@ -269,7 +284,7 @@ describe("reviewPanelHtml challenge placement", () => {
   it("truncates compact AI reasoning so Challenge stays in viewport", () => {
     const long = "x".repeat(500);
     const html = aiReviewCardHtml(
-      { outcome: "fail", reasoning: long, prompt_version: "v1", model: "m" },
+      { outcome: "fail", reasoning: long, failing_criteria: ["acceptance"], prompt_version: "v1", model: "m" },
       { compact: true },
     );
     expect(html).toContain("…");

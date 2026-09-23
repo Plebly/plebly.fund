@@ -51,34 +51,83 @@ export function challengeAiButtonLabel(d: ReviewDecisionView): string {
   return "Challenge AI";
 }
 
+const UNSCORED_AI_REASON =
+  "Intelligence did not score this work against the acceptance lines. Reviewers decide.";
+
+function scoresSupportLabel(ai: {
+  outcome: string;
+  failing_criteria?: string[];
+  acceptance_scored?: boolean;
+}): boolean {
+  if (ai.outcome === "fail") return (ai.failing_criteria || []).some((c) => c.trim());
+  if (ai.outcome === "pass") {
+    if (ai.acceptance_scored === true) return true;
+    const reasoning = (ai.reasoning || "").trim();
+    return Boolean(reasoning) && !retrievedPassage(reasoning);
+  }
+  return false;
+}
+
+function retrievedPassage(text: string): boolean {
+  return /(?:^|\n)[^\n]{0,120} · [^\n]+/.test(text.trim());
+}
+
+/** Hide a pass/fail that is only a retrieved passage, and never show those passages as the reason. */
+export function presentAiReviewCard<T extends {
+  outcome: string;
+  reasoning?: string;
+  failing_criteria?: string[];
+  acceptance_scored?: boolean;
+}>(ai: T): T {
+  if ((ai.outcome === "pass" || ai.outcome === "fail") && !scoresSupportLabel(ai)) {
+    return {
+      ...ai,
+      outcome: "ambiguous",
+      failing_criteria: [],
+      acceptance_scored: false,
+      reasoning: UNSCORED_AI_REASON,
+    };
+  }
+  if (!ai.reasoning || !retrievedPassage(ai.reasoning)) return ai;
+  const unmet = (ai.failing_criteria || []).map((c) => c.trim()).filter(Boolean);
+  return {
+    ...ai,
+    reasoning: unmet.length
+      ? "Scored acceptance lines were not met."
+      : "The scored acceptance lines were met.",
+  };
+}
+
 /** Compact AI Reviewer card (deliverable submit, flag window, or decision). */
 export function aiReviewCardHtml(
   ai: {
     outcome: string;
     reasoning?: string;
     failing_criteria?: string[];
+    acceptance_scored?: boolean;
     attribution?: string;
   },
   opts?: { compact?: boolean },
 ): string {
+  const shown = presentAiReviewCard(ai);
   const failList =
-    ai.failing_criteria?.length
-      ? `<ul class="ai-fail-list">${ai.failing_criteria
+    shown.failing_criteria?.length
+      ? `<ul class="ai-fail-list">${shown.failing_criteria
           .map((c) => `<li>${escapeHtml(c)}</li>`)
           .join("")}</ul>`
       : "";
   const next =
-    ai.outcome === "unavailable"
+    shown.outcome === "unavailable"
       ? `<p class="ai-next">Intelligence was unavailable. Humans continue the review.</p>`
-      : ai.outcome === "bypass"
+      : shown.outcome === "bypass"
         ? `<p class="ai-next">This listing is outside the AI Reviewer's competence. Humans continue.</p>`
-        : ai.outcome === "ambiguous"
+        : shown.outcome === "ambiguous"
           ? `<p class="ai-next">Needs humans. Escalate keeps the ballot open for reviewers.</p>`
           : `<p class="ai-next">Hybrid seat: confident pass/fail is a decisive vote. Challenge AI to escalate to humans. Never releases funds.</p>`;
   const attribution = escapeHtml(
     ai.attribution || "Powered by BTCDecoded Intelligence",
   );
-  const rawReason = ai.reasoning || "";
+  const rawReason = shown.reasoning || "";
   const compactLimit = 280;
   const truncated =
     Boolean(opts?.compact) && rawReason.length > compactLimit
@@ -87,10 +136,10 @@ export function aiReviewCardHtml(
   const cites = truncated
     ? `<pre class="ai-reasoning${opts?.compact ? " is-compact" : ""}">${escapeHtml(truncated)}</pre>`
     : "";
-  return `<div class="ai-review-card ${aiOutcomeClass(ai.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
+  return `<div class="ai-review-card ${aiOutcomeClass(shown.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
     <div class="ai-review-head">
       <span class="ai-k">AI Reviewer</span>
-      <span class="pill ${aiOutcomeClass(ai.outcome)}">${escapeHtml(aiOutcomeLabel(ai.outcome))}</span>
+      <span class="pill ${aiOutcomeClass(shown.outcome)}">${escapeHtml(aiOutcomeLabel(shown.outcome))}</span>
     </div>
     <p class="ai-attr">${attribution}</p>
     ${cites}
