@@ -172,6 +172,85 @@ describe("keyholderPackageSentence", () => {
     expect(html).not.toContain("cHNidP8");
   });
 
+  it("disables Propose settle while cosign threshold is unmet", () => {
+    const waiting01 = branchSignDeskHtml({
+      proposal_id: "PLEBLY-2026-007",
+      allocation_id: "reserve",
+      kind: "clean",
+      published_sha256: "aa".repeat(32),
+      signed: 0,
+      required_threshold: 1,
+      state: "open",
+      decode: {
+        outputs: [{ address: "tb1qout", amount_sats: 10_000, label: "reserve" }],
+      },
+    });
+    expect(waiting01).toMatch(/id="kh-branch-propose"\s+disabled\b/);
+    expect(waiting01).toContain(
+      "Waiting for 0/1 cosignatures before broadcast / settle",
+    );
+    expect(waiting01).toMatch(
+      /id="kh-branch-propose"[^>]*title="Waiting for 0\/1 cosignatures before broadcast \/ settle"/,
+    );
+    expect(waiting01).toMatch(
+      /id="kh-branch-propose"[^>]*aria-label="Waiting for 0\/1 cosignatures before broadcast \/ settle"/,
+    );
+    expect(waiting01).toMatch(/id="kh-branch-confirm"\s+disabled\b/);
+
+    const waiting03 = branchSignDeskHtml({
+      proposal_id: "p1",
+      allocation_id: "bounty",
+      kind: "clean",
+      published_sha256: "bb".repeat(32),
+      signed: 0,
+      required_threshold: 3,
+      state: "open",
+      decode: { outputs: [] },
+    });
+    expect(waiting03).toMatch(/id="kh-branch-propose"\s+disabled\b/);
+    expect(waiting03).toContain(
+      "Waiting for 0/3 cosignatures before broadcast / settle",
+    );
+
+    const ready = branchSignDeskHtml({
+      proposal_id: "p1",
+      allocation_id: "bounty",
+      kind: "clean",
+      published_sha256: "cc".repeat(32),
+      signed: 2,
+      required_threshold: 2,
+      state: "threshold_met",
+      decode: { outputs: [] },
+    });
+    expect(ready).toMatch(/id="kh-branch-propose"\s+title=/);
+    expect(ready).not.toMatch(/id="kh-branch-propose"\s+disabled\b/);
+    expect(ready).toContain(
+      "After you broadcast in Sparrow, paste the 64-character settle txid",
+    );
+    expect(ready).toMatch(/id="kh-branch-confirm"\s+disabled\b/);
+
+    const proposed = branchSignDeskHtml(
+      {
+        proposal_id: "p1",
+        allocation_id: "bounty",
+        kind: "clean",
+        published_sha256: "dd".repeat(32),
+        signed: 2,
+        required_threshold: 2,
+        state: "settle_proposed",
+        settle_txid: "ab".repeat(32),
+        settle_proposed_by: "github:1",
+        decode: { outputs: [] },
+      },
+      { userId: "github:2" },
+    );
+    expect(proposed).toMatch(/id="kh-branch-propose"\s+disabled\b/);
+    expect(proposed).toContain(
+      "Settle already proposed — waiting for another keyholder to confirm",
+    );
+    expect(proposed).not.toMatch(/id="kh-branch-confirm"\s+disabled\b/);
+  });
+
   it("downloads the unsigned branch transaction without embedding it", () => {
     const secret = "cHNidP8FAKEUNSIGNED";
     const html = branchSignDeskHtml({

@@ -220,8 +220,10 @@ export function branchSignDeskHtml(
             const thresholdMet =
               item.state === "threshold_met" ||
               (need > 0 && signed >= need);
-            const proposeDisabled = proposed;
-            const proposeWhy = proposeDisabled
+            // Idiot-proof: never enable Propose settle while cosign threshold unmet
+            // (title already says waiting — button must match).
+            const proposeDisabled = proposed || !thresholdMet;
+            const proposeWhy = proposed
               ? "Settle already proposed — waiting for another keyholder to confirm"
               : thresholdMet
                 ? "After you broadcast in Sparrow, paste the 64-character settle txid"
