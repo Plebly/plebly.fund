@@ -8582,12 +8582,33 @@ a.claim-app-bond:hover {
   line-height: 1.5;
 }
 
-.kh-session-steps {
-  margin: 0.35rem 0 0.5rem;
-  padding-left: 1.15rem;
-  color: var(--ink-secondary);
-  font-size: 0.875rem;
-  line-height: 1.45;
+.kh-wizard-progress {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kh-wizard-addr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.kh-wizard-addr {
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.kh-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
 }
 
 .kh-session-card .donate-amount-label {

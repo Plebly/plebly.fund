@@ -227,6 +227,65 @@ export function branchSignDeskHtml(
   </div>`;
 }
 
+/** Walk through the wallet-possession check. Uses the address saved with the xpub, not the Account payout. */
+export function keyholderProofWizardHtml(
+  authAddress: string,
+  payoutAddress = "",
+): string {
+  const addr = authAddress.trim();
+  const payout = payoutAddress.trim();
+  const payoutNote =
+    addr && payout && payout.toLowerCase() !== addr.toLowerCase()
+      ? `<p class="muted">Your Account payout destination is a different address. Pay out uses that. This check does not.</p>`
+      : "";
+  const shown = addr
+    ? `<p class="mono kh-wizard-addr">${escapeHtml(addr)}</p>`
+    : `<p class="muted">No receive address is saved on this seat. Save one from this wallet when the fingerprint and xpub are registered. The payout destination on your Account page is where funds are sent, and this check does not use it.</p>`;
+  const forSparrow = addr
+    ? `<div class="kh-wizard-addr-row">${shown}<button type="button" class="btn ghost" id="kh-auth-copy">Copy for Sparrow</button></div>`
+    : shown;
+  return `<p class="kh-wizard-progress" id="kh-wizard-progress">Step 1 of 3</p>
+    <div data-kh-wizard="why">
+      <p>You are about to upload a signature on a transaction. GitHub only tells the site which seat this is. It does not show that the wallet for this seat is in your hands.</p>
+      <p class="muted">This check is a signed message, not that transaction. You sign it in Sparrow. After it passes, this browser can upload signatures for 15 minutes.</p>
+      <div class="kh-wizard-actions">
+        <button type="button" class="btn" data-kh-wizard-go="address">Continue</button>
+      </div>
+    </div>
+    <div data-kh-wizard="address" hidden>
+      <p>The site uses the receive address already saved with this seat's wallet. You do not enter one here.</p>
+      <p class="muted">It was saved with the fingerprint and the xpub. It is not the project escrow.</p>
+      ${payoutNote}
+      ${shown}
+      <input id="kh-auth-addr" type="hidden" value="${escapeHtml(addr)}" />
+      <div class="kh-wizard-actions">
+        <button type="button" class="btn ghost" data-kh-wizard-go="why">Back</button>
+        ${
+          addr
+            ? `<button type="button" class="btn" data-kh-wizard-go="sign">Continue</button>`
+            : ""
+        }
+      </div>
+    </div>
+    <div data-kh-wizard="sign" hidden>
+      <p>In Sparrow, open Tools, then Sign/Verify Message. The site already chose this address:</p>
+      ${forSparrow}
+      <button type="button" class="btn" id="kh-challenge">Get a message to sign</button>
+      <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
+      <div id="kh-wizard-paste" hidden>
+        <button type="button" class="btn ghost" id="kh-challenge-copy">Copy message</button>
+        <p class="muted">Paste that message into Sparrow, sign it, then paste the signature here.</p>
+        <label class="donate-amount-label" for="kh-challenge-sig">Signature from Sparrow</label>
+        <textarea id="kh-challenge-sig" class="comment-input mono" rows="3" placeholder="Paste the compact signature"></textarea>
+        <button type="button" class="btn" id="kh-challenge-verify">Check signature</button>
+      </div>
+      <p class="builder-msg" id="kh-challenge-status" hidden role="status" aria-live="polite"></p>
+      <div class="kh-wizard-actions">
+        <button type="button" class="btn ghost" data-kh-wizard-go="address">Back</button>
+      </div>
+    </div>`;
+}
+
 export function cashoutDeskHtml(opts: {
   amount_sats: number;
   payout_address: string;
@@ -895,30 +954,15 @@ export async function renderKeyholders(
           : ""
       }
       <div class="kh-session-bar">
-        <p class="muted" id="kh-session-state">Prove your key before you upload a signature.</p>
-        <button type="button" class="btn ghost" id="kh-session-open">Prove your key</button>
+        <p class="muted" id="kh-session-state">Before an upload, confirm the wallet saved for this seat.</p>
+        <button type="button" class="btn ghost" id="kh-session-open">Start the check</button>
       </div>
       <div class="site-modal" id="kh-session" hidden>
         <div class="site-modal-backdrop" data-kh-session-close tabindex="-1" aria-hidden="true"></div>
         <div class="site-modal-card kh-session-card" role="dialog" aria-modal="true" aria-labelledby="kh-session-title">
           <button type="button" class="site-modal-close" data-kh-session-close aria-label="Close">${solidIcon("xmark")}</button>
-          <h2 id="kh-session-title" tabindex="-1">Prove you hold the key</h2>
-          <p class="muted">GitHub login names this seat. It does not prove the hardware key is still yours. Before an upload is accepted, sign a one-time message from the address registered on the seat.</p>
-          <p class="muted">That message is not the escrow or pool transaction. In Sparrow, sign the message with the address below, then paste the signature here. The message expires in a few minutes. After it checks out, this browser can upload signatures for 15 minutes.</p>
-          <ol class="kh-session-steps">
-            <li>Check the registered address.</li>
-            <li>Get a message and sign it in Sparrow.</li>
-            <li>Paste the signature and check it.</li>
-          </ol>
-          <label class="donate-amount-label" for="kh-auth-addr">Registered address</label>
-          <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" value="${escapeHtml(kh.auth_address || "")}" autocomplete="off" />
-          <button type="button" class="btn" id="kh-challenge">Get a message to sign</button>
-          <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
-          <button type="button" class="btn ghost" id="kh-challenge-copy" hidden>Copy message</button>
-          <label class="donate-amount-label" for="kh-challenge-sig">Signature from Sparrow</label>
-          <textarea id="kh-challenge-sig" class="comment-input mono" rows="2" placeholder="Paste the compact signature"></textarea>
-          <button type="button" class="btn" id="kh-challenge-verify">Check signature</button>
-          <p class="builder-msg" id="kh-challenge-status" hidden role="status" aria-live="polite"></p>
+          <h2 id="kh-session-title" tabindex="-1">Why this check exists</h2>
+          ${keyholderProofWizardHtml(kh.auth_address || "", user.payout_address || "")}
         </div>
       </div>
       <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
@@ -951,9 +995,26 @@ export async function renderKeyholders(
     }
     app.querySelector<HTMLButtonElement>("#kh-session-open")?.focus();
   };
+  const showProofStep = (step: string) => {
+    const titles: Record<string, string> = {
+      why: "Why this check exists",
+      address: "Your wallet address",
+      sign: "Sign a message in Sparrow",
+    };
+    const n = step === "address" ? 2 : step === "sign" ? 3 : 1;
+    app.querySelectorAll<HTMLElement>("[data-kh-wizard]").forEach((el) => {
+      el.hidden = el.dataset.khWizard !== step;
+    });
+    const progress = app.querySelector<HTMLElement>("#kh-wizard-progress");
+    if (progress) progress.textContent = `Step ${n} of 3`;
+    const title = app.querySelector<HTMLElement>("#kh-session-title");
+    if (title) title.textContent = titles[step] || titles.why;
+    title?.focus();
+  };
   const openSignSession = () => {
     const session = app.querySelector<HTMLElement>("#kh-session");
     if (!session) return;
+    showProofStep("why");
     session.hidden = false;
     if (!sessionKeyHandler) {
       sessionKeyHandler = (ev: KeyboardEvent) => {
@@ -970,7 +1031,7 @@ export async function renderKeyholders(
     const state = app.querySelector<HTMLElement>("#kh-session-state");
     if (state) {
       state.dataset.live = "needed";
-      state.textContent = "Prove your key, then try the upload again.";
+      state.textContent = "Confirm the wallet saved for this seat, then try the upload again.";
     }
     openSignSession();
   };
@@ -1552,6 +1613,8 @@ export async function renderKeyholders(
         : body.error || "Challenge failed";
     }
     if (copyBtn) copyBtn.hidden = !challengeMessage;
+    const paste = app.querySelector<HTMLElement>("#kh-wizard-paste");
+    if (paste) paste.hidden = !challengeMessage;
   });
   app.querySelector("#kh-challenge-copy")?.addEventListener("click", async () => {
     const ok = await copyText(challengeMessage);
@@ -1594,13 +1657,28 @@ export async function renderKeyholders(
       state.dataset.live = res.ok ? "active" : "";
       state.textContent = res.ok
         ? "This browser can upload signatures for 15 minutes."
-        : "Prove your key before you upload a signature.";
+        : "Before an upload, confirm the wallet saved for this seat.";
     }
     if (res.ok) closeSignSession();
   });
 
   app.querySelector("#kh-session-open")?.addEventListener("click", () => {
     openSignSession();
+  });
+  app.querySelector("#kh-auth-copy")?.addEventListener("click", async () => {
+    const addr =
+      app.querySelector<HTMLInputElement>("#kh-auth-addr")?.value.trim() || "";
+    const el = app.querySelector<HTMLElement>("#kh-challenge-status");
+    const ok = addr ? await copyText(addr) : false;
+    if (el) {
+      el.hidden = false;
+      el.textContent = ok ? "Address copied." : "Could not copy the address.";
+    }
+  });
+  app.querySelectorAll<HTMLButtonElement>("[data-kh-wizard-go]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      showProofStep(btn.dataset.khWizardGo || "why");
+    });
   });
   app.querySelectorAll("[data-kh-session-close]").forEach((el) => {
     el.addEventListener("click", () => closeSignSession());

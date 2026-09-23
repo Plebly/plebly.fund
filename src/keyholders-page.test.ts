@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   branchSignDeskHtml,
   cashoutDeskHtml,
+  keyholderProofWizardHtml,
   keyholderDeskHtml,
   keyholderDeskStep,
   keyholderColdStart,
@@ -217,6 +218,23 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("kh-cashout-settle");
     expect(html).not.toContain("cHNidP8");
     expect(html).not.toContain("PSBT");
+  });
+
+  it("walks through the saved wallet address before the message signature", () => {
+    const html = keyholderProofWizardHtml("tb1qwallet", "tb1qpay");
+    expect(html).toContain("Step 1 of 3");
+    expect(html).toContain("not that transaction");
+    expect(html).toContain("do not enter one here");
+    expect(html).toContain("tb1qwallet");
+    expect(html).toContain("Account payout destination");
+    expect(html).toContain("Copy for Sparrow");
+    expect(html).not.toContain("Registered address");
+    const same = keyholderProofWizardHtml("tb1qwallet", "tb1qwallet");
+    expect(same).not.toContain("Account payout destination");
+    const empty = keyholderProofWizardHtml("  ");
+    expect(empty).toContain("No receive address is saved");
+    expect(empty).toContain("this check does not use it");
+    expect(empty).not.toContain('data-kh-wizard-go="sign"');
   });
 });
 
