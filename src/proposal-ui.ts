@@ -768,6 +768,18 @@ function copyBtn(value: string, label: string): string {
   return `<button type="button" class="copy-btn" data-copy="${escapeHtml(value)}" title="Copy ${escapeHtml(label)}">Copy</button>`;
 }
 
+function shortMiddle(value: string): string {
+  const v = value.trim();
+  if (v.length <= 18) return v;
+  return `${v.slice(0, 8)}…${v.slice(-6)}`;
+}
+
+/** Truncated id plus an icon that copies the full value. */
+function idWithCopy(value: string, label: string): string {
+  const full = value.trim();
+  return `<span class="structured-id"><code class="mono" title="${escapeHtml(full)}">${escapeHtml(shortMiddle(full))}</code><button type="button" class="copy-btn copy-btn-icon" data-copy="${escapeHtml(full)}" title="Copy ${escapeHtml(label)}" aria-label="Copy ${escapeHtml(label)}">${solidIcon("copy")}</button></span>`;
+}
+
 function explorerLink(href: string, label: string): string {
   return `<a class="explorer-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label)}</a>`;
 }
@@ -2432,11 +2444,13 @@ export function onChainPanelHtml(p: Proposal): string {
 export function structuredFundingPanelHtml(p: Proposal): string {
   const type = String(p.proposal_type || "bounty").toLowerCase();
   if (type === "direct" || !p.escrow_address || !p.id) return "";
-  return `<section class="proposal-structured" id="structured-funding" hidden>
-    <h2 class="proposal-block-title">How this pays out</h2>
-    <p class="muted structured-funding-status" id="structured-funding-status"></p>
+  return `<details class="proposal-structured" id="structured-funding" hidden>
+    <summary>
+      <h2 class="proposal-block-title">How this pays out</h2>
+      <p class="muted structured-funding-status" id="structured-funding-status"></p>
+    </summary>
     <div id="structured-funding-body"></div>
-  </section>`;
+  </details>`;
 }
 
 type StructuredFundingView = {
@@ -2469,6 +2483,13 @@ export function bindStructuredFunding(
   const statusEl = root.querySelector<HTMLElement>("#structured-funding-status");
   const bodyEl = root.querySelector<HTMLElement>("#structured-funding-body");
   if (!panel || !statusEl || !bodyEl || !proposalId) return;
+  const jump = root.querySelector<HTMLAnchorElement>("#funding-side-link");
+  if (jump && jump.dataset.fundingJump !== "1") {
+    jump.dataset.fundingJump = "1";
+    jump.addEventListener("click", () => {
+      if (panel instanceof HTMLDetailsElement) panel.open = true;
+    });
+  }
   const api = WORKERS_API.replace(/\/$/, "");
   void (async () => {
     try {
@@ -2478,8 +2499,8 @@ export function bindStructuredFunding(
       if (!res.ok) return;
       const data = (await res.json()) as StructuredFundingView;
       panel.hidden = false;
+      if (panel instanceof HTMLDetailsElement) panel.open = false;
       const state = data.structured?.state || "awaiting_funds";
-      const jump = root.querySelector<HTMLAnchorElement>("#funding-side-link");
       if (jump) {
         jump.hidden = false;
         jump.textContent =
@@ -2587,34 +2608,30 @@ function branchListHtml(
       const so = pickedSignoff[b.allocation_id];
       const signLabel =
         isSel && so
-          ? ` · ${so.signed ?? 0}/${so.required_threshold ?? 0} signed${
-              so.state === "settled" && so.settle_txid
-                ? ` · settled ${so.settle_txid}`
-                : so.state
-                  ? ` · ${so.state}`
-                  : ""
-            }`
+          ? `${so.signed ?? 0}/${so.required_threshold ?? 0} signed${so.state ? ` · ${so.state}` : ""}`
           : "";
-      return `<tr${isSel ? ' class="is-selected"' : ""}>
-        <td>${escapeHtml(b.allocation_id)}</td>
-        <td>${escapeHtml(b.kind)}${isSel ? " · selected" : ""}${signLabel}</td>
-        <td class="mono">${escapeHtml(b.sha256)}</td>
-        <td>${escapeHtml(String(b.locktime))}</td>
-        <td>${copyBtn(b.sha256, "hash")}</td>
-      </tr>`;
+      const settled =
+        isSel && so?.state === "settled" && so.settle_txid
+          ? idWithCopy(so.settle_txid, "txid")
+          : "";
+      return `<div class="structured-branch${isSel ? " is-selected" : ""}">
+        <div class="structured-branch-main">
+          <span class="structured-branch-name">${escapeHtml(b.allocation_id)} · ${escapeHtml(b.kind)}${isSel ? " · selected" : ""}</span>
+          <span class="structured-branch-meta">${escapeHtml(String(b.locktime))} locktime${signLabel ? ` · ${escapeHtml(signLabel)}` : ""}${settled ? ` · ${settled}` : ""}</span>
+          ${idWithCopy(b.sha256, "hash")}
+        </div>
+      </div>`;
     })
     .join("");
   const published = selectedBranchHash({ selected, branches });
-  return `<div class="structured-decode">
+  return `<div class="structured-branches">
     <p class="onchain-label">Release branches (unsigned)</p>
-    <table>
-      <thead><tr><th>Output</th><th>Branch</th><th>SHA-256</th><th>Locktime</th><th></th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
+    ${rows}
     ${hashGateHtml({
       publishedHash: published,
       inputId: "branch-psbt-verify",
       statusId: "branch-hash-status",
+      compact: true,
     })}
     <button type="button" class="btn" id="branch-sign-ready" disabled>Hash matches — copy for Sparrow</button>
   </div>`;
@@ -2626,8 +2643,7 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
     rows.push(`<div class="onchain-row">
       <span class="onchain-label">Donor pool refund</span>
       <div class="onchain-value">
-        <code class="mono">${escapeHtml(data.pool_refund_address)}</code>
-        <span class="onchain-actions">${copyBtn(data.pool_refund_address, "address")}</span>
+        ${idWithCopy(data.pool_refund_address, "address")}
       </div>
     </div>`);
   }
@@ -2642,8 +2658,7 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
     rows.push(`<div class="onchain-row">
       <span class="onchain-label">PSBT SHA-256</span>
       <div class="onchain-value">
-        <code class="mono">${escapeHtml(hash)}</code>
-        <span class="onchain-actions">${copyBtn(hash, "hash")}</span>
+        ${idWithCopy(hash, "hash")}
       </div>
     </div>`);
   }
@@ -2656,20 +2671,15 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
     const io = [
       ...(decode.inputs || []).map(
         (i) =>
-          `<tr><td>in</td><td></td><td class="mono">${escapeHtml(i.address)}</td><td>${escapeHtml(formatSats(i.amount_sats))}</td></tr>`,
+          `<div class="structured-io-row"><span>in</span><span></span>${idWithCopy(i.address, "address")}<span class="structured-io-amt">${escapeHtml(formatSats(i.amount_sats))}</span></div>`,
       ),
       ...(decode.outputs || []).map(
         (o) =>
-          `<tr><td>out</td><td>${escapeHtml(o.label || "")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${escapeHtml(formatSats(o.amount_sats))}</td></tr>`,
+          `<div class="structured-io-row"><span>out</span><span class="structured-io-label">${escapeHtml(o.label || "")}</span>${idWithCopy(o.address, "address")}<span class="structured-io-amt">${escapeHtml(formatSats(o.amount_sats))}</span></div>`,
       ),
     ].join("");
     if (io) {
-      rows.push(`<div class="structured-decode">
-        <table>
-          <thead><tr><th></th><th>Label</th><th>Address</th><th>Amount</th></tr></thead>
-          <tbody>${io}</tbody>
-        </table>
-      </div>`);
+      rows.push(`<div class="structured-io">${io}</div>`);
     }
   }
   if (data.structured?.settle_txid) {
@@ -2677,10 +2687,9 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
     rows.push(`<div class="onchain-row">
       <span class="onchain-label">Structured funding tx</span>
       <div class="onchain-value">
-        <code class="mono">${escapeHtml(tx)}</code>
+        ${idWithCopy(tx, "txid")}
         <span class="onchain-actions">
           ${explorerLink(`${MEMPOOL_WEB}/tx/${tx}`, "Explorer")}
-          ${copyBtn(tx, "txid")}
         </span>
       </div>
     </div>`);
@@ -3114,6 +3123,16 @@ export function bindProposalCopyButtons(root: ParentNode): void {
       if (!value) return;
       try {
         await navigator.clipboard.writeText(value);
+        if (btn.classList.contains("copy-btn-icon")) {
+          const prev = btn.getAttribute("aria-label") || "";
+          btn.setAttribute("aria-label", "Copied");
+          btn.classList.add("is-copied");
+          setTimeout(() => {
+            btn.setAttribute("aria-label", prev);
+            btn.classList.remove("is-copied");
+          }, 1200);
+          return;
+        }
         const prev = btn.textContent;
         btn.textContent = "Copied";
         setTimeout(() => {

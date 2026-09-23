@@ -728,10 +728,18 @@ describe("proposal UI critical render helpers", () => {
     await vi.waitFor(() => {
       expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
     });
+    const panel = document.querySelector("#structured-funding");
+    expect(panel).toBeInstanceOf(HTMLDetailsElement);
+    expect((panel as HTMLDetailsElement).open).toBe(false);
     expect(document.querySelector("#structured-funding-status")?.textContent).toMatch(
       /Type 1/,
     );
     expect(document.querySelector("#branch-psbt-verify")).toBeTruthy();
+    expect(panel?.textContent || "").not.toContain("a".repeat(32));
+    expect(panel?.querySelector(".copy-btn-icon .fa-copy")).toBeTruthy();
+    expect(panel?.querySelector(".copy-btn-icon")?.getAttribute("data-copy")).toBe(
+      "aa".repeat(32),
+    );
     expect(document.body.innerHTML.toLowerCase()).not.toContain("broadcast");
     expect(document.body.innerHTML).not.toContain("cHNidP8");
     vi.unstubAllGlobals();

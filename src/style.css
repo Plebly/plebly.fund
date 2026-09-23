@@ -6367,6 +6367,56 @@ a.claim-app-bond:hover {
 .proposal-structured {
   margin: 0;
   min-width: 0;
+  padding: 0.85rem 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.proposal-structured > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 0.75rem;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.proposal-structured > summary::-webkit-details-marker {
+  display: none;
+}
+
+.proposal-structured > summary .proposal-block-title {
+  margin: 0;
+}
+
+.proposal-structured > summary::after {
+  content: "▸";
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.proposal-structured[open] > summary::after {
+  content: "▾";
+}
+
+.proposal-structured > summary .structured-funding-status {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.proposal-structured:not([open]) > :not(summary) {
+  display: none !important;
+}
+
+.proposal-structured[open] #structured-funding-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
+  min-width: 0;
 }
 
 .proposal-review {
@@ -6404,25 +6454,132 @@ a.claim-app-bond:hover {
   color: var(--accent-text);
 }
 
-.proposal-structured .structured-funding-status {
-  margin: 0.35rem 0 0.75rem;
+.structured-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
-.structured-decode {
-  overflow-x: auto;
-}
-
-.structured-decode table {
-  width: 100%;
-  border-collapse: collapse;
+.structured-id code {
+  white-space: nowrap;
   font-size: 0.8125rem;
 }
 
-.structured-decode th,
-.structured-decode td {
-  text-align: left;
-  padding: 0.25rem 0.35rem 0.25rem 0;
-  vertical-align: top;
+.structured-id-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.copy-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  line-height: 1;
+  flex: none;
+}
+
+.copy-btn-icon.is-copied {
+  color: var(--accent-text);
+}
+
+.structured-io,
+.structured-branches {
+  min-width: 0;
+}
+
+.structured-io-row,
+.structured-branch-main {
+  display: grid;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line-soft);
+  min-width: 0;
+}
+
+.structured-io-row {
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    "kind label amount"
+    "kind addr amount";
+}
+
+.structured-io-row > :nth-child(1) {
+  grid-area: kind;
+}
+
+.structured-io-row > :nth-child(2) {
+  grid-area: label;
+}
+
+.structured-io-row > :nth-child(3) {
+  grid-area: addr;
+}
+
+.structured-io-row > :nth-child(4) {
+  grid-area: amount;
+  align-self: center;
+}
+
+.structured-io-label {
+  min-width: 0;
+}
+
+.structured-io-amt {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.structured-branch-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.structured-branch-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.structured-branch-meta {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.structured-branch-main > .structured-id {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.structured-branch-meta .structured-id {
+  vertical-align: middle;
+}
+
+.structured-branch.is-selected .structured-branch-name {
+  color: var(--ink);
+}
+
+.proposal-structured .kh-hash-gate,
+.proposal-structured .kh-hash-gate textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.proposal-structured .kh-hash-gate textarea {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .structured-psbt {

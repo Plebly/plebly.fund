@@ -1,3 +1,4 @@
+import { solidIcon } from "./icons";
 import { escapeHtml } from "./util";
 
 export type HashGateState =
@@ -59,19 +60,27 @@ export function hashGateLabel(state: HashGateState): string {
   return "SHA-256 does not match the published hash.";
 }
 
+function shortMiddle(value: string): string {
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
 /** Hash of raw PSBT bytes (same as Worker sha256Hex), not the base64 string. */
 export function hashGateHtml(opts: {
   publishedHash?: string | null;
   inputId: string;
   statusId: string;
+  /** Truncate the published hash and offer an icon copy. */
+  compact?: boolean;
 }): string {
   const hash = (opts.publishedHash || "").trim();
+  const published = !hash
+    ? `<p class="muted">No published SHA-256 yet.</p>`
+    : opts.compact
+      ? `<p class="muted structured-id-line">Published SHA-256 <span class="structured-id"><code class="mono" title="${escapeHtml(hash)}">${escapeHtml(shortMiddle(hash))}</code><button type="button" class="copy-btn copy-btn-icon" data-copy="${escapeHtml(hash)}" title="Copy hash" aria-label="Copy hash">${solidIcon("copy")}</button></span></p>`
+      : `<p class="muted">Published SHA-256 <code class="mono">${escapeHtml(hash)}</code></p>`;
   return `<div class="kh-hash-gate">
-    ${
-      hash
-        ? `<p class="muted">Published SHA-256 <code class="mono">${escapeHtml(hash)}</code></p>`
-        : `<p class="muted">No published SHA-256 yet.</p>`
-    }
+    ${published}
     <label class="donate-amount-label" for="${escapeHtml(opts.inputId)}">Unsigned transaction you received (base64)</label>
     <textarea id="${escapeHtml(opts.inputId)}" class="comment-input mono" rows="3" placeholder="Paste to verify hash"></textarea>
     <p class="muted" id="${escapeHtml(opts.statusId)}" role="status">${escapeHtml(hashGateLabel("empty"))}</p>
