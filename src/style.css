@@ -6337,22 +6337,57 @@ a.claim-app-bond:hover {
 }
 
 .proposal-structured {
-  margin-top: 0.85rem;
-  padding: 0.75rem 0.85rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
+  margin: 0;
+  min-width: 0;
+}
+
+.proposal-review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.proposal-review .review-panel,
+.proposal-review .rebuttal-panel,
+.proposal-review .ballot-panel,
+.proposal-review .refund-panel,
+.proposal-review .ai-review-card {
+  margin-top: 0;
+}
+
+.proposal-side-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.proposal-side-links:not(:has(> a:not([hidden]))) {
+  display: none;
+}
+
+.proposal-side-link {
   font-size: 0.8125rem;
+  color: var(--ink-secondary);
+  text-decoration: none;
+}
+
+.proposal-side-link:hover {
+  color: var(--accent-text);
 }
 
 .proposal-structured .structured-funding-status {
   margin: 0.35rem 0 0.75rem;
 }
 
+.structured-decode {
+  overflow-x: auto;
+}
+
 .structured-decode table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .structured-decode th,

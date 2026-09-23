@@ -770,6 +770,20 @@ describe("project-page chrome contracts", () => {
     expect(src).toContain("ballotPanelHtml");
     expect(src).toContain("refundRegisterHtml");
     expect(src).toContain("builderPanelHtml");
+    const mainAt = src.indexOf('class="proposal-main"');
+    const fundingAt = src.indexOf("structuredFundingPanelHtml(match)");
+    const reviewAt = src.indexOf('id="proposal-review"');
+    const commentsAt = src.indexOf("commentsHtml(match.id");
+    const sideAt = src.indexOf('class="proposal-sidebar"');
+    expect(fundingAt).toBeGreaterThan(mainAt);
+    expect(reviewAt).toBeGreaterThan(fundingAt);
+    expect(commentsAt).toBeGreaterThan(reviewAt);
+    expect(sideAt).toBeGreaterThan(commentsAt);
+    const side = src.slice(sideAt);
+    expect(side).not.toContain("structuredFundingPanelHtml");
+    expect(side).not.toContain("reviewPanelHtml");
+    expect(side).toContain('id="funding-side-link"');
+    expect(side).toContain('id="review-side-link"');
   });
 
   it("omits donate-open from the slot when the card owns Donate", () => {

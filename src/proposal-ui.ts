@@ -2429,7 +2429,7 @@ export function structuredFundingPanelHtml(p: Proposal): string {
   const type = String(p.proposal_type || "bounty").toLowerCase();
   if (type === "direct" || !p.escrow_address || !p.id) return "";
   return `<section class="proposal-structured" id="structured-funding" hidden>
-    <h2 class="proposal-block-title">Structured funding</h2>
+    <h2 class="proposal-block-title">How this pays out</h2>
     <p class="muted structured-funding-status" id="structured-funding-status"></p>
     <div id="structured-funding-body"></div>
   </section>`;
@@ -2475,6 +2475,16 @@ export function bindStructuredFunding(
       const data = (await res.json()) as StructuredFundingView;
       panel.hidden = false;
       const state = data.structured?.state || "awaiting_funds";
+      const jump = root.querySelector<HTMLAnchorElement>("#funding-side-link");
+      if (jump) {
+        jump.hidden = false;
+        jump.textContent =
+          state === "awaiting_funds"
+            ? "Waiting for funds"
+            : state === "confirmed"
+              ? "Payout confirmed"
+              : "Ready for keyholders";
+      }
       const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
       statusEl.textContent =
         state === "awaiting_funds"
@@ -2586,7 +2596,7 @@ function branchListHtml(
         <td>${escapeHtml(b.kind)}${isSel ? " · selected" : ""}${signLabel}</td>
         <td class="mono">${escapeHtml(b.sha256)}</td>
         <td>${escapeHtml(String(b.locktime))}</td>
-        <td>${copyBtn(b.sha256, "hash")}${b.psbt_base64 ? copyBtn(b.psbt_base64, "PSBT") : ""}</td>
+        <td>${copyBtn(b.sha256, "hash")}</td>
       </tr>`;
     })
     .join("");
@@ -2657,14 +2667,6 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
         </table>
       </div>`);
     }
-  }
-  const b64 = data.structured?.psbt_base64;
-  if (b64) {
-    rows.push(`<details class="structured-psbt">
-      <summary>Unsigned PSBT (base64)</summary>
-      <code class="mono structured-psbt-b64">${escapeHtml(b64)}</code>
-      <p>${copyBtn(b64, "PSBT")}</p>
-    </details>`);
   }
   if (data.structured?.settle_txid) {
     const tx = data.structured.settle_txid;

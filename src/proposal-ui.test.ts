@@ -728,6 +728,7 @@ describe("proposal UI critical render helpers", () => {
     );
     expect(document.querySelector("#branch-psbt-verify")).toBeTruthy();
     expect(document.body.innerHTML.toLowerCase()).not.toContain("broadcast");
+    expect(document.body.innerHTML).not.toContain("cHNidP8");
     vi.unstubAllGlobals();
   });
 });

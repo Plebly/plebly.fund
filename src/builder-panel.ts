@@ -691,9 +691,29 @@ async function bindWorkboardSettings(
   });
 }
 
+function revealReviewHost(host: Element): void {
+  const has = host.querySelector(
+    ".ai-review-card, #review-panel, .rebuttal-panel, .refund-panel, .ballot-panel",
+  );
+  if (host instanceof HTMLElement) host.hidden = !has;
+  const jump = document.querySelector<HTMLAnchorElement>("#review-side-link");
+  if (!jump) return;
+  jump.hidden = !has;
+  if (!has) return;
+  jump.textContent = host.querySelector("#review-panel")
+    ? "Review is open"
+    : host.querySelector(".rebuttal-panel")
+      ? "Rebuttal"
+      : host.querySelector(".ballot-panel")
+        ? "Donor vote"
+        : host.querySelector(".refund-panel")
+          ? "Refund"
+          : "Review";
+}
+
 /**
- * After claim-status merges, keep AI card + #review-panel on #next-card.
- * Catalog first-paint often lacks ai_review / in_review flags.
+ * After claim-status merges, keep the AI card and #review-panel in the
+ * main-column review section. Catalog first-paint often lacks those flags.
  */
 async function syncHybridReviewUi(
   root: ParentNode,
@@ -701,11 +721,10 @@ async function syncHybridReviewUi(
   status: ClaimStatus,
   user: AuthUser | null,
 ): Promise<void> {
-  const nextCard =
-    (root instanceof Element ? root.closest("#next-card") : null) ||
-    root.querySelector("#next-card") ||
-    document.querySelector("#next-card");
-  if (!nextCard || !proposal.id) return;
+  const host =
+    root.querySelector("#proposal-review") ||
+    document.querySelector("#proposal-review");
+  if (!host || !proposal.id) return;
 
   const { aiReviewCardHtml, reviewPanelHtml, bindReviewPanel } = await import(
     "./review-panel"
@@ -713,16 +732,14 @@ async function syncHybridReviewUi(
   const ai = status.ai_review || proposal.ai_review;
   if (ai) {
     const html = aiReviewCardHtml(ai);
-    // Prefer a direct sibling of #builder — never replace the compact card
+    // Direct child of the review section. Never replace the compact card
     // inside #review-panel (that clobber race can desync challenge UI).
-    const existing =
-      nextCard.querySelector<HTMLElement>(":scope > .ai-review-card") ||
-      nextCard.querySelector<HTMLElement>("#builder + .ai-review-card");
+    const existing = host.querySelector<HTMLElement>(":scope > .ai-review-card");
     if (existing) existing.outerHTML = html;
     else {
-      const builder = nextCard.querySelector("#builder");
-      if (builder) builder.insertAdjacentHTML("afterend", html);
-      else nextCard.insertAdjacentHTML("beforeend", html);
+      const title = host.querySelector(".proposal-block-title");
+      if (title) title.insertAdjacentHTML("afterend", html);
+      else host.insertAdjacentHTML("afterbegin", html);
     }
   }
 
@@ -731,18 +748,19 @@ async function syncHybridReviewUi(
     status.donor_review_status ?? proposal.donor_review_status ?? null;
   const wantPanel =
     st === "in_review" && Boolean(proposal.id) && donor !== "window_open";
-  let panel = nextCard.querySelector<HTMLElement>("#review-panel");
+  let panel = host.querySelector<HTMLElement>("#review-panel");
   if (wantPanel && !panel) {
     const after =
-      nextCard.querySelector(".ai-review-card") ||
-      nextCard.querySelector("#builder");
+      host.querySelector(":scope > .ai-review-card") ||
+      host.querySelector(".proposal-block-title");
     if (after) after.insertAdjacentHTML("afterend", reviewPanelHtml(proposal.id));
-    else nextCard.insertAdjacentHTML("beforeend", reviewPanelHtml(proposal.id));
-    panel = nextCard.querySelector<HTMLElement>("#review-panel");
+    else host.insertAdjacentHTML("beforeend", reviewPanelHtml(proposal.id));
+    panel = host.querySelector<HTMLElement>("#review-panel");
   }
   if (wantPanel && panel) {
-    await bindReviewPanel(nextCard, { proposalId: proposal.id, user });
+    await bindReviewPanel(host, { proposalId: proposal.id, user });
   }
+  revealReviewHost(host);
 }
 
 function renderStatusBody(

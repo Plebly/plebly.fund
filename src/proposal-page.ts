@@ -592,6 +592,37 @@ export async function renderProposalPage(
       match.proposer_type,
     );
     const status = String(match.status);
+    const reviewParts = [
+      match.ai_review ? aiReviewCardHtml(match.ai_review) : "",
+      status === "in_review" &&
+      match.id &&
+      match.donor_review_status !== "window_open"
+        ? reviewPanelHtml(match.id)
+        : "",
+      status === "rejected" && match.id
+        ? rebuttalPanelHtml(match.rebuttal_expires_at, match.rebuttal_reasoning)
+        : "",
+      status === "refunding" ? refundRegisterHtml(match.id) : "",
+      status === "abandoned_vote" ||
+      (status === "underfunded" && (balance ?? 0) > 0)
+        ? ballotPanelHtml(match.id)
+        : "",
+    ]
+      .filter(Boolean)
+      .join("");
+    const reviewJump =
+      status === "in_review"
+        ? "Review is open"
+        : status === "rejected"
+          ? "Rebuttal"
+          : status === "refunding"
+            ? "Refund"
+            : status === "abandoned_vote" ||
+                (status === "underfunded" && (balance ?? 0) > 0)
+              ? "Donor vote"
+              : match.ai_review
+                ? "Review"
+                : "";
 
     app.innerHTML = shell(`
       <article class="wrap-wide detail proposal-page">
@@ -649,6 +680,11 @@ export async function renderProposalPage(
                 : ""
             }
             ${proposalContextHtml(match.depends_on || [], match.related_work || [])}
+            ${structuredFundingPanelHtml(match)}
+            <section class="proposal-review" id="proposal-review"${reviewParts ? "" : " hidden"}>
+              <h2 class="proposal-block-title">Review</h2>
+              ${reviewParts}
+            </section>
             ${funderCreditHtml(match.id)}
             ${commentsHtml(match.id, Boolean(user), {
               discussionClosed: discussionClosedForStatus(status),
@@ -659,26 +695,6 @@ export async function renderProposalPage(
             <div class="proposal-actions">
               <div id="next-card" class="next-card">
               ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching, user)}
-              ${
-                match.ai_review
-                  ? aiReviewCardHtml(match.ai_review)
-                  : ""
-              }
-              ${
-                status === "in_review" &&
-                match.id &&
-                match.donor_review_status !== "window_open"
-                  ? reviewPanelHtml(match.id)
-                  : ""
-              }
-              ${status === "rejected" && match.id ? rebuttalPanelHtml(match.rebuttal_expires_at, match.rebuttal_reasoning) : ""}
-              ${status === "refunding" ? refundRegisterHtml(match.id) : ""}
-              ${
-                status === "abandoned_vote" ||
-                (status === "underfunded" && (balance ?? 0) > 0)
-                  ? ballotPanelHtml(match.id)
-                  : ""
-              }
               </div>
               ${
                 escrowOk
@@ -694,6 +710,10 @@ export async function renderProposalPage(
               }
               ${shareSlotHtml(match.title, match.path, match.id)}
             </div>
+            <nav class="proposal-side-links" aria-label="On this page">
+              <a class="proposal-side-link" id="funding-side-link" href="#structured-funding" hidden>How this pays out</a>
+              <a class="proposal-side-link" id="review-side-link" href="#proposal-review"${reviewJump ? "" : " hidden"}>${escapeHtml(reviewJump || "Review")}</a>
+            </nav>
             ${deliverableChipHtml(match.deliverable_url)}
             ${
               canEdit || listingReportHtml
@@ -708,7 +728,6 @@ export async function renderProposalPage(
                 : ""
             }
             ${onChainPanelHtml(match)}
-            ${structuredFundingPanelHtml(match)}
           </aside>
         </div>
         ${escrowOk ? donateMobileCtaHtml() : ""}
