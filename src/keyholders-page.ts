@@ -1,4 +1,4 @@
-import { authFetch, currentReturnPath, loginChoicesHtml, type AuthUser } from "./auth";
+import { authFetch, currentReturnPath, loginChoicesHtml, updateProfile, type AuthUser } from "./auth";
 import { solidIcon } from "./icons";
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
@@ -7,6 +7,7 @@ import { href } from "./router";
 import { authFetchWithTos } from "./tos-modal";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { escapeHtml, formatSats } from "./util";
+import { payoutLooksValid } from "./payout-destination";
 
 export type KeyholdersShell = (inner: string) => string;
 
@@ -227,23 +228,19 @@ export function branchSignDeskHtml(
   </div>`;
 }
 
-/** Walk through the wallet-possession check. Uses the address saved with the xpub, not the Account payout. */
+/** Prefer the Account receive address when it is an on-chain address. */
+export function keyholderReceiveAddress(authAddress: string, payoutAddress = ""): string {
+  const payout = payoutAddress.trim();
+  if (payout && payoutLooksValid(payout, "onchain")) return payout;
+  return authAddress.trim();
+}
+
+/** Walk through setting the receive address, then signing a message from it. */
 export function keyholderProofWizardHtml(
   authAddress: string,
   payoutAddress = "",
 ): string {
-  const addr = authAddress.trim();
-  const payout = payoutAddress.trim();
-  const payoutNote =
-    addr && payout && payout.toLowerCase() !== addr.toLowerCase()
-      ? `<p class="muted">Your Account payout destination is a different address. Pay out uses that. This check does not.</p>`
-      : "";
-  const shown = addr
-    ? `<p class="mono kh-wizard-addr">${escapeHtml(addr)}</p>`
-    : `<p class="muted">No receive address is saved on this seat. Save one from this wallet when the fingerprint and xpub are registered. The payout destination on your Account page is where funds are sent, and this check does not use it.</p>`;
-  const forSparrow = addr
-    ? `<div class="kh-wizard-addr-row">${shown}<button type="button" class="btn ghost" id="kh-auth-copy">Copy for Sparrow</button></div>`
-    : shown;
+  const addr = keyholderReceiveAddress(authAddress, payoutAddress);
   return `<p class="kh-wizard-progress" id="kh-wizard-progress">Step 1 of 3</p>
     <div data-kh-wizard="why">
       <p>You are about to upload a signature on a transaction. GitHub only tells the site which seat this is. It does not show that the wallet for this seat is in your hands.</p>
@@ -253,23 +250,19 @@ export function keyholderProofWizardHtml(
       </div>
     </div>
     <div data-kh-wizard="address" hidden>
-      <p>The site uses the receive address already saved with this seat's wallet. You do not enter one here.</p>
-      <p class="muted">It was saved with the fingerprint and the xpub. It is not the project escrow.</p>
-      ${payoutNote}
-      ${shown}
-      <input id="kh-auth-addr" type="hidden" value="${escapeHtml(addr)}" />
+      <p>This is your receive address. It is filled from your Account when one is already saved.</p>
+      <p class="muted">Enter or change it here. Saving stores it on your Account, and the message in the next step is signed from this address. It is not the project escrow.</p>
+      <label class="donate-amount-label" for="kh-auth-addr">Receive address</label>
+      <input id="kh-auth-addr" class="donate-amount mono" value="${escapeHtml(addr)}" placeholder="tb1… / bc1…" autocomplete="off" />
+      <p class="builder-msg" id="kh-auth-msg" hidden role="status"></p>
       <div class="kh-wizard-actions">
         <button type="button" class="btn ghost" data-kh-wizard-go="why">Back</button>
-        ${
-          addr
-            ? `<button type="button" class="btn" data-kh-wizard-go="sign">Continue</button>`
-            : ""
-        }
+        <button type="button" class="btn" id="kh-wizard-save-addr">Save and continue</button>
       </div>
     </div>
     <div data-kh-wizard="sign" hidden>
-      <p>In Sparrow, open Tools, then Sign/Verify Message. The site already chose this address:</p>
-      ${forSparrow}
+      <p>In Sparrow, open Tools, then Sign/Verify Message. Sign with this receive address:</p>
+      <div class="kh-wizard-addr-row"><p class="mono kh-wizard-addr" id="kh-auth-shown">${escapeHtml(addr)}</p><button type="button" class="btn ghost" id="kh-auth-copy">Copy for Sparrow</button></div>
       <button type="button" class="btn" id="kh-challenge">Get a message to sign</button>
       <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
       <div id="kh-wizard-paste" hidden>
@@ -998,7 +991,7 @@ export async function renderKeyholders(
   const showProofStep = (step: string) => {
     const titles: Record<string, string> = {
       why: "Why this check exists",
-      address: "Your wallet address",
+      address: "Your receive address",
       sign: "Sign a message in Sparrow",
     };
     const n = step === "address" ? 2 : step === "sign" ? 3 : 1;
@@ -1664,6 +1657,57 @@ export async function renderKeyholders(
 
   app.querySelector("#kh-session-open")?.addEventListener("click", () => {
     openSignSession();
+  });
+  app.querySelector("#kh-wizard-save-addr")?.addEventListener("click", async () => {
+    const input = app.querySelector<HTMLInputElement>("#kh-auth-addr");
+    const msg = app.querySelector<HTMLElement>("#kh-auth-msg");
+    const say = (t: string) => {
+      if (!msg) return;
+      msg.hidden = !t;
+      msg.textContent = t;
+    };
+    const addr = input?.value.trim() || "";
+    if (!payoutLooksValid(addr, "onchain")) {
+      say("Enter an on-chain receive address (tb1… or bc1…).");
+      return;
+    }
+    const btn = app.querySelector<HTMLButtonElement>("#kh-wizard-save-addr");
+    if (btn) btn.disabled = true;
+    try {
+      if (addr !== (user.payout_address || "").trim()) {
+        await updateProfile({ payout_address: addr });
+        user.payout_address = addr;
+      }
+      if (addr.toLowerCase() !== (kh.auth_address || "").trim().toLowerCase()) {
+        if (!kh.fingerprint || !kh.xpub) {
+          say("Saved on your Account. This seat has no wallet keys yet, so the signature check cannot run.");
+          return;
+        }
+        const res = await authFetch(`${api()}/keyholders/me/keys`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fingerprint: kh.fingerprint,
+            xpub: kh.xpub,
+            auth_address: addr,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          say(body.error || "Saved on your Account, but the seat could not store this address.");
+          return;
+        }
+        kh.auth_address = addr;
+      }
+      const shown = app.querySelector<HTMLElement>("#kh-auth-shown");
+      if (shown) shown.textContent = addr;
+      say("");
+      showProofStep("sign");
+    } catch (err) {
+      say(err instanceof Error ? err.message : "Could not save the address.");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
   app.querySelector("#kh-auth-copy")?.addEventListener("click", async () => {
     const addr =

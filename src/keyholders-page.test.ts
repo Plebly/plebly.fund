@@ -6,6 +6,7 @@ import {
   branchSignDeskHtml,
   cashoutDeskHtml,
   keyholderProofWizardHtml,
+  keyholderReceiveAddress,
   keyholderDeskHtml,
   keyholderDeskStep,
   keyholderColdStart,
@@ -220,21 +221,21 @@ describe("keyholderPackageSentence", () => {
     expect(html).not.toContain("PSBT");
   });
 
-  it("walks through the saved wallet address before the message signature", () => {
-    const html = keyholderProofWizardHtml("tb1qwallet", "tb1qpay");
+  it("fills the receive address from Account and saves it from this step", () => {
+    const payout = "tb1q" + "p".repeat(30);
+    const seat = "tb1q" + "a".repeat(30);
+    expect(keyholderReceiveAddress(seat, payout)).toBe(payout);
+    expect(keyholderReceiveAddress(seat, "satoshi@example.com")).toBe(seat);
+    const html = keyholderProofWizardHtml(seat, payout);
     expect(html).toContain("Step 1 of 3");
-    expect(html).toContain("not that transaction");
-    expect(html).toContain("do not enter one here");
-    expect(html).toContain("tb1qwallet");
-    expect(html).toContain("Account payout destination");
-    expect(html).toContain("Copy for Sparrow");
+    expect(html).toContain("stores it on your Account");
+    expect(html).toContain(`value="${payout}"`);
+    expect(html).toContain("kh-wizard-save-addr");
+    expect(html).not.toContain("do not enter one here");
     expect(html).not.toContain("Registered address");
-    const same = keyholderProofWizardHtml("tb1qwallet", "tb1qwallet");
-    expect(same).not.toContain("Account payout destination");
     const empty = keyholderProofWizardHtml("  ");
-    expect(empty).toContain("No receive address is saved");
-    expect(empty).toContain("this check does not use it");
-    expect(empty).not.toContain('data-kh-wizard-go="sign"');
+    expect(empty).toContain('id="kh-auth-addr"');
+    expect(empty).toContain("Save and continue");
   });
 });
 
