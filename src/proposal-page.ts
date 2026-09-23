@@ -900,7 +900,23 @@ export async function renderProposalPage(
       // decision. Re-binding signed-in C races fetchReviewerMe and used to
       // overwrite a good Challenge AI paint — only bind if still unloaded.
       if (!panel?.dataset.reviewDecisionId) {
-        await bindReviewPanel(app, { proposalId: match.id, user });
+        const isDirect =
+          String(match.proposal_type || "bounty").toLowerCase() === "direct";
+        const isFulfiller = isDirect
+          ? userMatchesProposer(user, match.proposer, match.proposer_type)
+          : Boolean(
+              user &&
+                match.claimer &&
+                (match.claimer === user.username ||
+                  match.claimer === user.github ||
+                  match.claimer === user.x ||
+                  match.claimer === user.id),
+            );
+        await bindReviewPanel(app, {
+          proposalId: match.id,
+          user,
+          isFulfiller,
+        });
       }
     }
     if (String(match.status) === "rejected" && match.id) {

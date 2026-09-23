@@ -127,6 +127,9 @@ describe("proposal UI critical render helpers", () => {
 
   it("status helpers cover ballot/refund states", () => {
     expect(statusLabel("abandoned_vote")).toBe("abandoned vote");
+    expect(statusLabel("listed")).toBe("Listed — still raising");
+    expect(statusLabel("claimable")).toBe("Claimable");
+    expect(statusLabel("in_review")).toBe("In review");
     expect(statusClass("abandoned_vote")).toBe("status-active");
     expect(statusClass("refunding")).toBe("status-bad");
     expect(statusClass("underfunded")).toBe("status-active");
@@ -134,8 +137,10 @@ describe("proposal UI critical render helpers", () => {
     expect(statusClass("rejected")).toBe("status-bad");
   });
 
-  it("statusPillHtml hides listed", () => {
-    expect(statusPillHtml("listed")).toBe("");
+  it("statusPillHtml shows canonical labels including listed", () => {
+    expect(statusPillHtml("listed")).toContain("Listed — still raising");
+    expect(statusPillHtml("claimable")).toContain("Claimable");
+    expect(statusPillHtml("in_review")).toContain("In review");
     expect(statusPillHtml("funding")).toContain("funding");
     expect(statusPillHtml("funding")).toContain("pill-status");
   });

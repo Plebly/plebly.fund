@@ -26,6 +26,8 @@ export type NextMoreId =
 
 export type NextAction = {
   sentence: string;
+  /** Optional muted line under the sentence (e.g. listed-state explainer). */
+  detail?: string;
   button: NextButton;
   moreIds: NextMoreId[];
   doneAllocations?: { id: string; allocation_sats: number }[];
@@ -39,6 +41,10 @@ export type NextActionInput = {
   reviewerActive?: boolean;
   isProposer?: boolean;
   isBuilder?: boolean;
+  /** True when the latest deliverable_confirm ballot is already closed. */
+  reviewBallotClosed?: boolean;
+  /** Closed-ballot one-liner when Flag should not be the primary CTA. */
+  reviewBallotClosedSummary?: string;
 };
 
 export function daysLeftFrom(iso?: string | null): number | null {
@@ -280,6 +286,17 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (donor === "window_open") {
+      // Closed reviewer ballot is the sole primary state — do not leave an
+      // actionable Flag CTA competing with "Closed · approve (passed)".
+      if (input.reviewBallotClosed) {
+        return {
+          sentence:
+            input.reviewBallotClosedSummary ||
+            "Closed — decision recorded.",
+          button: null,
+          moreIds,
+        };
+      }
       // Public /claims omits credentials → can_flag_close stays false in the SPA.
       // Show Flag for any signed-in user; POST /claims/flag still enforces
       // confirmed-donor (mirrors Mark Done + local isProposer).
@@ -400,10 +417,22 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
-    return { sentence: "Still raising.", button: "donate", moreIds };
+    return {
+      sentence: "Listed — still raising",
+      detail:
+        "Donations are open; applications open when this listing becomes claimable.",
+      button: "donate",
+      moreIds,
+    };
   }
 
-  return { sentence: "Still raising.", button: isFundableStatus(status) ? "donate" : null, moreIds };
+  return {
+    sentence: "Listed — still raising",
+    detail:
+      "Donations are open; applications open when this listing becomes claimable.",
+    button: isFundableStatus(status) ? "donate" : null,
+    moreIds,
+  };
 }
 
 export function nextActionPrimaryHtml(action: NextAction): string {
@@ -442,7 +471,10 @@ export function nextActionPrimaryHtml(action: NextAction): string {
 }
 
 export function nextActionSentenceHtml(action: NextAction): string {
-  return `<p class="next-card-sentence" id="next-card-sentence">${escapeHtml(action.sentence)}</p>`;
+  const detail = action.detail
+    ? `<p class="next-card-detail muted" id="next-card-detail">${escapeHtml(action.detail)}</p>`
+    : "";
+  return `<p class="next-card-sentence" id="next-card-sentence">${escapeHtml(action.sentence)}</p>${detail}`;
 }
 
 export function nextActionMoreHtml(

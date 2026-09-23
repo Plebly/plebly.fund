@@ -726,9 +726,12 @@ async function syncHybridReviewUi(
     document.querySelector("#proposal-review");
   if (!host || !proposal.id) return;
 
-  const { aiReviewCardHtml, reviewPanelHtml, bindReviewPanel } = await import(
-    "./review-panel"
-  );
+  const {
+    aiReviewCardHtml,
+    reviewPanelHtml,
+    bindReviewPanel,
+    suppressFlagForClosedBallot,
+  } = await import("./review-panel");
   const ai = status.ai_review || proposal.ai_review;
   if (ai) {
     const html = aiReviewCardHtml(ai);
@@ -758,7 +761,21 @@ async function syncHybridReviewUi(
     panel = host.querySelector<HTMLElement>("#review-panel");
   }
   if (wantPanel && panel) {
-    await bindReviewPanel(host, { proposalId: proposal.id, user });
+    await bindReviewPanel(host, {
+      proposalId: proposal.id,
+      user,
+      isFulfiller: sessionIsClaimStatusFulfiller(user, status),
+    });
+  } else if (st === "in_review" && donor === "window_open") {
+    // Flag may have just painted for window_open while a closed ballot still
+    // sits in the main column (or is fetchable). Closed summary wins.
+    try {
+      const { fetchOpenReviewDecision } = await import("./reviewers");
+      const decision = await fetchOpenReviewDecision(proposal.id);
+      if (decision) suppressFlagForClosedBallot(root, decision);
+    } catch {
+      /* ignore */
+    }
   }
   revealReviewHost(host);
 }

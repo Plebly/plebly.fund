@@ -3,12 +3,15 @@ import {
   aiOutcomeClass,
   aiOutcomeLabel,
   aiReviewCardHtml,
+  closedBallotSummary,
   dissentListHtml,
+  FULFILLER_CANNOT_VOTE,
   isAiChallengeableDecision,
   challengeAiButtonLabel,
   reviewPanelHtml,
   rebuttalPanelHtml,
   reviewDecisionStatusLine,
+  suppressFlagForClosedBallot,
 } from "./review-panel";
 import type { ReviewDecisionView } from "./reviewers";
 
@@ -304,5 +307,54 @@ describe("review kind pay copy", () => {
     );
     expect(decisionKindPayLine("listing_challenge")).toMatch(/not enabled/);
     expect(decisionKindPayLine("claim_extension")).toMatch(/not enabled/);
+  });
+});
+
+
+describe("closed ballot / fulfiller copy", () => {
+  it("closedBallotSummary is the sole primary state line", () => {
+    expect(
+      closedBallotSummary({
+        id: "d1",
+        proposal_id: "p1",
+        kind: "deliverable_confirm",
+        round: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        closes_at: "2026-01-02T00:00:00Z",
+        status: "closed",
+        counts: { yes: 3, no: 0, abstain: 0 },
+        vote_count: 3,
+        passed: true,
+        result: "approve",
+      }),
+    ).toBe("Closed — approve (passed)");
+  });
+
+  it("suppressFlagForClosedBallot removes Flag CTA", () => {
+    document.body.innerHTML = `
+      <p id="next-card-sentence">Flag if the work is not finished. 7 days left.</p>
+      <div class="next-card-primary"><button type="button" class="btn" id="builder-flag">Flag this close</button></div>`;
+    suppressFlagForClosedBallot(document.body, {
+      id: "d1",
+      proposal_id: "p1",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-01-02T00:00:00Z",
+      status: "closed",
+      counts: { yes: 3, no: 0, abstain: 0 },
+      vote_count: 3,
+      passed: true,
+      result: "approve",
+    });
+    expect(document.querySelector("#builder-flag")).toBeNull();
+    expect(document.querySelector("#next-card-sentence")?.textContent).toBe(
+      "Closed — approve (passed)",
+    );
+  });
+
+  it("fulfiller cannot-vote copy is fixed", () => {
+    expect(FULFILLER_CANNOT_VOTE).toContain("fulfiller");
+    expect(FULFILLER_CANNOT_VOTE).toContain("cannot vote");
   });
 });

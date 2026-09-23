@@ -72,13 +72,13 @@ describe("resolveNextAction", () => {
     {
       name: "listed visitor",
       input: { proposal: proposal({ status: "listed" }) },
-      sentence: "Still raising.",
+      sentence: "Listed — still raising",
       button: "donate",
     },
     {
       name: "funding anyone",
       input: { proposal: proposal({ status: "funding" }), user: donor },
-      sentence: "Still raising.",
+      sentence: "Listed — still raising",
       button: "donate",
     },
     {
@@ -87,7 +87,7 @@ describe("resolveNextAction", () => {
         proposal: proposal({ status: "listed" }),
         claim: claim({ state: "below_floor", confirmed_balance_sats: 1 }),
       },
-      sentence: "Still raising.",
+      sentence: "Listed — still raising",
       button: "donate",
     },
     {
@@ -278,6 +278,27 @@ describe("resolveNextAction", () => {
       },
       sentence: /Flag if the work is not finished\.\s+3 days left\./,
       button: "flag",
+    },
+    {
+      name: "window open but ballot closed — no Flag",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          donor_review_status: "window_open",
+          can_flag_close: true,
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        user: donor,
+        reviewBallotClosed: true,
+        reviewBallotClosedSummary: "Closed — approve (passed)",
+      },
+      sentence: "Closed — approve (passed)",
+      button: null,
     },
     {
       name: "window open signed-in without can_flag_close",
@@ -648,13 +669,18 @@ describe("resolveNextAction", () => {
 describe("nextActionCardHtml", () => {
   it("uses bindable ids for donate, done, and flag", () => {
     const donate = nextActionCardHtml({
-      sentence: "Still raising.",
+      sentence: "Listed — still raising",
+      detail:
+        "Donations are open; applications open when this listing becomes claimable.",
       button: "donate",
       moreIds: [],
     });
     expect(donate).toContain('id="donate-open"');
     expect(donate).toContain("data-open-donate");
-    expect(donate).toContain("Still raising.");
+    expect(donate).toContain("Listed — still raising");
+    expect(donate).toContain(
+      "applications open when this listing becomes claimable",
+    );
     expect(donate.match(/class="btn"/g)?.length).toBe(1);
 
     const done = nextActionPrimaryHtml({

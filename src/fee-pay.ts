@@ -41,11 +41,22 @@ export function feePayHtml(opts: FeePayOpts): string {
     ? escapeHtml(opts.initialTxid)
     : "";
 
+  const bondHardLabel =
+    kind === "bond"
+      ? `<p class="fee-pay-bond-label" id="${escapeHtml(opts.id)}-bond-label">CLAIM BOND PAYMENT ADDRESS</p>
+      <p class="fee-pay-bond-contrast">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> here on <strong>${escapeHtml(net)}</strong>. Not your payout · not Donate/escrow.</p>`
+      : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong></p>`;
+  const bondHardLabelMissing =
+    kind === "bond"
+      ? `<p class="fee-pay-bond-label">CLAIM BOND PAYMENT ADDRESS</p>
+      <p class="fee-pay-bond-contrast">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> here on <strong>${escapeHtml(net)}</strong>. Not your payout · not Donate/escrow.</p>`
+      : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong>.</p>`;
+
   const payBody = hasAddr
     ? `<div class="fee-pay-qr-wrap">
         <img class="donate-qr" id="${escapeHtml(opts.id)}-qr" alt="QR code for ${escapeHtml(noun)} payment" width="168" height="168" />
       </div>
-      <p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong></p>
+      ${bondHardLabel}
       ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${escapeHtml(opts.note)}</p>` : ""}
       ${
@@ -64,7 +75,7 @@ export function feePayHtml(opts: FeePayOpts): string {
       <div class="fee-pay-nav">
         <button type="button" class="btn ghost" id="${escapeHtml(opts.id)}-manual">Enter txid manually</button>
       </div>`
-    : `<p class="fee-pay-amount-line">Send exactly <strong class="sats">${escapeHtml(amount)}</strong> on <strong>${escapeHtml(net)}</strong>.</p>
+    : `${bondHardLabelMissing}
       ${signetPayNoteHtml("fee")}
       ${opts.note ? `<p class="fee-pay-note">${escapeHtml(opts.note)}</p>` : ""}
       <p class="field-hint">${kind === "bond" ? "Bond" : "Fee"} address is not ready yet. Stay signed in and try again.</p>
