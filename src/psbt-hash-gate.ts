@@ -72,6 +72,10 @@ export function hashGateHtml(opts: {
   statusId: string;
   /** Truncate the published hash and offer an icon copy. */
   compact?: boolean;
+  /** Override paste-field label (distinguish PSBT vs settle txid). */
+  pasteLabel?: string;
+  /** Override textarea placeholder. */
+  placeholder?: string;
 }): string {
   const hash = (opts.publishedHash || "").trim();
   const published = !hash
@@ -79,10 +83,13 @@ export function hashGateHtml(opts: {
     : opts.compact
       ? `<p class="muted structured-id-line">Published SHA-256 <span class="structured-id"><code class="mono" title="${escapeHtml(hash)}">${escapeHtml(shortMiddle(hash))}</code><button type="button" class="copy-btn copy-btn-icon" data-copy="${escapeHtml(hash)}" title="Copy hash" aria-label="Copy hash">${solidIcon("copy")}</button></span></p>`
       : `<p class="muted">Published SHA-256 <code class="mono">${escapeHtml(hash)}</code></p>`;
+  const pasteLabel =
+    opts.pasteLabel?.trim() || "Unsigned transaction you received (base64)";
+  const placeholder = opts.placeholder?.trim() || "Paste to verify hash";
   return `<div class="kh-hash-gate">
     ${published}
-    <label class="donate-amount-label" for="${escapeHtml(opts.inputId)}">Unsigned transaction you received (base64)</label>
-    <textarea id="${escapeHtml(opts.inputId)}" class="comment-input mono" rows="3" placeholder="Paste to verify hash"></textarea>
+    <label class="donate-amount-label" for="${escapeHtml(opts.inputId)}">${escapeHtml(pasteLabel)}</label>
+    <textarea id="${escapeHtml(opts.inputId)}" class="comment-input mono" rows="3" placeholder="${escapeHtml(placeholder)}"></textarea>
     <p class="muted" id="${escapeHtml(opts.statusId)}" role="status">${escapeHtml(hashGateLabel("empty"))}</p>
   </div>`;
 }
@@ -93,19 +100,36 @@ export function bindHashGate(opts: {
   publishedHash?: string | null;
   action?: HTMLButtonElement | null;
   enableActionWithoutHash?: boolean;
+  /** Title/aria when the gated action is disabled (idiot-proof why). */
+  disabledReason?: string;
+  /** Title/aria when the gated action is enabled. */
+  enabledReason?: string;
 }): void {
   const { input, status, action } = opts;
   if (!input) return;
   const published = (opts.publishedHash || "").trim();
+  const disabledReason =
+    opts.disabledReason?.trim() ||
+    "Paste a matching unsigned PSBT (base64) to enable — not a settle txid";
+  const enabledReason =
+    opts.enabledReason?.trim() || "Hash matches — ready to copy for Sparrow";
   const sync = async () => {
     const state = await hashGateState(input.value, published);
     if (status) status.textContent = hashGateLabel(state);
     if (!action) return;
     if (!published) {
       action.disabled = opts.enableActionWithoutHash === false;
+      const why = action.disabled
+        ? "No published hash to compare yet"
+        : enabledReason;
+      action.title = why;
+      action.setAttribute("aria-label", why);
       return;
     }
     action.disabled = state !== "match";
+    const why = action.disabled ? disabledReason : enabledReason;
+    action.title = why;
+    action.setAttribute("aria-label", why);
   };
   input.addEventListener("input", () => {
     void sync();

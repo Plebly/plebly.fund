@@ -2463,7 +2463,7 @@ export function structuredFundingPanelHtml(p: Proposal): string {
   </details>`;
 }
 
-type StructuredFundingView = {
+export type StructuredFundingView = {
   psbt_kind?: string;
   allocations?: { id: string; allocation_sats: number }[];
   reviewer_reserve_percent?: number;
@@ -2515,18 +2515,13 @@ export function bindStructuredFunding(
         jump.hidden = false;
         jump.textContent =
           state === "awaiting_funds"
-            ? "Waiting for funds"
+            ? "Structure · waiting for funds"
             : state === "confirmed"
-              ? "Payout confirmed"
-              : "Ready for keyholders";
+              ? "Structure · confirmed"
+              : "Structure · ready for keyholders";
       }
       const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
-      statusEl.textContent =
-        state === "awaiting_funds"
-          ? `${kind} — waiting for confirmed funds to reach the frozen allocation, reviewer reserve, and miner fee.`
-          : state === "confirmed"
-            ? `${kind} — structured funding confirmed on-chain.`
-            : `${kind} — unsigned structured-funding PSBT ready for keyholder review.`;
+      statusEl.textContent = structuredFundingStageSentence(state, kind);
       bodyEl.innerHTML = structuredFundingBodyHtml(data);
       const branchRes = await fetch(
         `${api}/proposals/${encodeURIComponent(proposalId)}/branches`,
@@ -2587,6 +2582,9 @@ function bindBranchHashGate(root: ParentNode, view: BranchPublicView): void {
     publishedHash: published,
     action: root.querySelector<HTMLButtonElement>("#branch-sign-ready"),
     enableActionWithoutHash: false,
+    disabledReason:
+      "Paste a matching unsigned Release PSBT (base64) to enable — not a settle txid",
+    enabledReason: "Hash matches — copy Release PSBT for Sparrow cosign",
   });
   const btn = root.querySelector<HTMLButtonElement>("#branch-sign-ready");
   const input = root.querySelector<HTMLTextAreaElement>("#branch-psbt-verify");
@@ -2600,6 +2598,33 @@ function bindBranchHashGate(root: ParentNode, view: BranchPublicView): void {
   });
 }
 
+/** Cosign vs broadcast vs settle — public Release branch progress. */
+export function branchSignoffStageLabel(so: {
+  signed?: number;
+  required_threshold?: number;
+  state?: string;
+  settle_txid?: string;
+}): string {
+  const signed = so.signed ?? 0;
+  const need = so.required_threshold ?? 0;
+  const state = String(so.state || "");
+  if (state === "settled") {
+    return so.settle_txid
+      ? "Settled — broadcast already recorded (settle txid below)"
+      : "Settled — broadcast already recorded";
+  }
+  if (state === "settle_proposed") {
+    return "Settle proposed — waiting for a second keyholder to confirm txid";
+  }
+  if (state === "threshold_met" || (need > 0 && signed >= need)) {
+    return `${signed}/${need} signed — ready to broadcast in Sparrow (then paste settle txid)`;
+  }
+  if (need > 0) {
+    return `Needs ${signed}/${need} signatures (cosign — not broadcast yet)`;
+  }
+  return state ? `${signed} signed · ${state}` : `${signed} signed`;
+}
+
 function branchListHtml(
   branches?: BranchPublicView["branches"],
   selected?: BranchPublicView["selected"],
@@ -2607,7 +2632,7 @@ function branchListHtml(
 ): string {
   if (!branches) return "";
   if (branches.state !== "ready" || !branches.items?.length) {
-    return `<p class="muted structured-funding-status">Refund and timelock branches construct after structured funding confirms. Clean and disputed pay branches wait for an awarded on-chain payout.</p>`;
+    return `<p class="muted structured-funding-status">Release · waiting — refund and timelock branches construct after Structure confirms. Clean and disputed pay branches wait for an awarded on-chain payout.</p>`;
   }
   const picked = selected || {};
   const pickedSignoff = signoff || {};
@@ -2616,13 +2641,10 @@ function branchListHtml(
       const sel = picked[b.allocation_id];
       const isSel = sel?.kind === b.kind;
       const so = pickedSignoff[b.allocation_id];
-      const signLabel =
-        isSel && so
-          ? `${so.signed ?? 0}/${so.required_threshold ?? 0} signed${so.state ? ` · ${so.state}` : ""}`
-          : "";
+      const signLabel = isSel && so ? branchSignoffStageLabel(so) : "";
       const settled =
         isSel && so?.state === "settled" && so.settle_txid
-          ? idWithCopy(so.settle_txid, "txid")
+          ? `<span class="structured-settle-txid"><span class="onchain-label">Settle txid</span> ${idWithCopy(so.settle_txid, "txid")}</span>`
           : "";
       return `<div class="structured-branch${isSel ? " is-selected" : ""}">
         <div class="structured-branch-main">
@@ -2635,6 +2657,8 @@ function branchListHtml(
     .join("");
   const published = selectedBranchHash({ selected, branches });
   return `<div class="structured-branches">
+    <p class="fee-pay-bond-label">RELEASE · COSIGN</p>
+    <p class="fee-pay-bond-contrast">Paste an <strong>unsigned Release PSBT</strong> to verify the hash. This is not a settle txid and not Structure funding. Broadcast stays in Sparrow after N-of-M cosign.</p>
     <p class="onchain-label">Release branches (unsigned)</p>
     ${rows}
     ${hashGateHtml({
@@ -2642,16 +2666,65 @@ function branchListHtml(
       inputId: "branch-psbt-verify",
       statusId: "branch-hash-status",
       compact: true,
+      pasteLabel: "Release PSBT (base64) — not a settle txid",
+      placeholder: "Paste unsigned Release PSBT to verify SHA-256",
     })}
-    <button type="button" class="btn" id="branch-sign-ready" disabled>Hash matches — copy for Sparrow</button>
+    <button type="button" class="btn" id="branch-sign-ready" disabled title="Paste a matching unsigned Release PSBT (base64) to enable — not a settle txid" aria-label="Paste a matching unsigned Release PSBT (base64) to enable — not a settle txid">Hash matches — copy for Sparrow</button>
   </div>`;
 }
 
-function structuredFundingBodyHtml(data: StructuredFundingView): string {
+/** Public Structure stage sentence (summary line). */
+export function structuredFundingStageSentence(
+  state: string,
+  kind: string,
+): string {
+  if (state === "awaiting_funds") {
+    return `${kind} — Structure · waiting for confirmed funds (allocation, reviewer reserve, miner fee). Do not send bond or Donate to Structure outs.`;
+  }
+  if (state === "confirmed") {
+    return `${kind} — Structure · confirmed on-chain. Release branches may follow for payout.`;
+  }
+  return `${kind} — Structure · unsigned PSBT ready. Keyholders cosign in Sparrow; this site does not broadcast.`;
+}
+
+/** Structure out role label — never imply claim-bond / Donate destinations. */
+export function structureOutRoleLabel(raw?: string | null): string {
+  const s = String(raw || "").trim();
+  if (!s) return "structure out";
+  const key = s.toLowerCase().replace(/[\s-]+/g, "_");
+  if (
+    key === "bounty" ||
+    key === "allocation" ||
+    key === "milestone" ||
+    key.startsWith("milestone_")
+  ) {
+    return "bounty / allocation";
+  }
+  if (key === "reserve" || key === "reviewer_reserve" || key === "reviewer") {
+    return "reviewer reserve";
+  }
+  if (key === "kh_fee" || key === "keyholder" || key === "keyholders") {
+    return "keyholder fee";
+  }
+  if (key === "platform" || key === "platform_fee" || key === "fee") {
+    return "platform fee";
+  }
+  if (key === "bdi" || key === "bitcoin_district" || key.includes("district")) {
+    return "Bitcoin District";
+  }
+  if (key === "change" || key === "miner" || key === "miner_fee") {
+    return s;
+  }
+  return s;
+}
+
+export function structuredFundingBodyHtml(data: StructuredFundingView): string {
   const rows: string[] = [];
+  rows.push(`<p class="fee-pay-bond-label">STRUCTURE OUTPUTS</p>
+    <p class="fee-pay-bond-contrast">Addresses below are Structure / bounty / reserve outs for keyholder funding — <strong>not</strong> Donate/escrow and <strong>not</strong> claim bond. Do not send payments here by index or by accident.</p>`);
   if (data.pool_refund_address) {
     rows.push(`<div class="onchain-row">
-      <span class="onchain-label">Donor pool refund</span>
+      <span class="onchain-label">Structure · donor pool refund</span>
       <div class="onchain-value">
         ${idWithCopy(data.pool_refund_address, "address")}
       </div>
@@ -2666,7 +2739,7 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
   const hash = data.structured?.sha256;
   if (hash) {
     rows.push(`<div class="onchain-row">
-      <span class="onchain-label">PSBT SHA-256</span>
+      <span class="onchain-label">Structure PSBT SHA-256</span>
       <div class="onchain-value">
         ${idWithCopy(hash, "hash")}
       </div>
@@ -2681,11 +2754,11 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
     const io = [
       ...(decode.inputs || []).map(
         (i) =>
-          `<div class="structured-io-row"><span>in</span><span></span>${idWithCopy(i.address, "address")}<span class="structured-io-amt">${escapeHtml(formatSats(i.amount_sats))}</span></div>`,
+          `<div class="structured-io-row"><span>in</span><span class="structured-io-label">escrow in</span>${idWithCopy(i.address, "address")}<span class="structured-io-amt">${escapeHtml(formatSats(i.amount_sats))}</span></div>`,
       ),
       ...(decode.outputs || []).map(
         (o) =>
-          `<div class="structured-io-row"><span>out</span><span class="structured-io-label">${escapeHtml(o.label || "")}</span>${idWithCopy(o.address, "address")}<span class="structured-io-amt">${escapeHtml(formatSats(o.amount_sats))}</span></div>`,
+          `<div class="structured-io-row"><span>out</span><span class="structured-io-label">${escapeHtml(structureOutRoleLabel(o.label))}</span>${idWithCopy(o.address, "address")}<span class="structured-io-amt">${escapeHtml(formatSats(o.amount_sats))}</span></div>`,
       ),
     ].join("");
     if (io) {
@@ -2695,7 +2768,7 @@ function structuredFundingBodyHtml(data: StructuredFundingView): string {
   if (data.structured?.settle_txid) {
     const tx = data.structured.settle_txid;
     rows.push(`<div class="onchain-row">
-      <span class="onchain-label">Structured funding tx</span>
+      <span class="onchain-label">Structure settle txid (broadcast already recorded)</span>
       <div class="onchain-value">
         ${idWithCopy(tx, "txid")}
         <span class="onchain-actions">

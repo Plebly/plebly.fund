@@ -11,6 +11,10 @@ import {
   metaChipsHtml,
   milestonesHtml,
   structuredFundingPanelHtml,
+  structuredFundingBodyHtml,
+  structuredFundingStageSentence,
+  structureOutRoleLabel,
+  branchSignoffStageLabel,
   proposalContextHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
@@ -740,14 +744,81 @@ describe("proposal UI critical render helpers", () => {
     expect(document.querySelector("#structured-funding-status")?.textContent).toMatch(
       /Type 1/,
     );
+    expect(document.querySelector("#structured-funding-status")?.textContent).toMatch(
+      /Structure/,
+    );
     expect(document.querySelector("#branch-psbt-verify")).toBeTruthy();
+    expect(document.body.innerHTML).toContain("Release PSBT (base64) — not a settle txid");
+    expect(document.body.innerHTML).toContain("STRUCTURE OUTPUTS");
+    expect(document.body.innerHTML).toContain("not</strong> Donate/escrow");
+    expect(document.body.innerHTML).toContain("Needs 0/2 signatures (cosign");
+    const ready = document.querySelector<HTMLButtonElement>("#branch-sign-ready");
+    expect(ready?.disabled).toBe(true);
+    expect(ready?.title || "").toMatch(/Release PSBT/);
     expect(panel?.textContent || "").not.toContain("a".repeat(32));
     expect(panel?.querySelector(".copy-btn-icon .fa-copy")).toBeTruthy();
     expect(panel?.querySelector(".copy-btn-icon")?.getAttribute("data-copy")).toBe(
       "aa".repeat(32),
     );
-    expect(document.body.innerHTML.toLowerCase()).not.toContain("broadcast");
+    // Public panel never offers a Broadcast CTA (broadcast stays in Sparrow).
+    expect(document.body.innerHTML).not.toMatch(/>\s*Broadcast\s*</);
     expect(document.body.innerHTML).not.toContain("cHNidP8");
     vi.unstubAllGlobals();
+  });
+
+  it("structure outs hard-label roles and never invite bond/donate sends", () => {
+    expect(structureOutRoleLabel("")).toBe("structure out");
+    expect(structureOutRoleLabel("bounty")).toBe("bounty / allocation");
+    expect(structureOutRoleLabel("reviewer_reserve")).toBe("reviewer reserve");
+    expect(structureOutRoleLabel("kh_fee")).toBe("keyholder fee");
+    expect(
+      structuredFundingStageSentence("awaiting_funds", "Type 1 (single bounty)"),
+    ).toMatch(/Structure · waiting/);
+    expect(
+      structuredFundingStageSentence("psbt_ready", "Type 1 (single bounty)"),
+    ).toMatch(/does not broadcast/);
+    expect(branchSignoffStageLabel({ signed: 1, required_threshold: 3, state: "open" })).toMatch(
+      /Needs 1\/3 signatures \(cosign/,
+    );
+    expect(
+      branchSignoffStageLabel({
+        signed: 3,
+        required_threshold: 3,
+        state: "threshold_met",
+      }),
+    ).toMatch(/ready to broadcast in Sparrow/);
+    expect(
+      branchSignoffStageLabel({
+        signed: 3,
+        required_threshold: 3,
+        state: "settled",
+        settle_txid: "ab".repeat(32),
+      }),
+    ).toMatch(/Settled/);
+    const body = structuredFundingBodyHtml({
+      pool_refund_address: "tb1qrefund",
+      structured: {
+        state: "psbt_ready",
+        sha256: "cd".repeat(32),
+        decode: {
+          locktime: 0,
+          version: 2,
+          miner_fee_sats: 200,
+          inputs: [{ address: "tb1qin", amount_sats: 100_000 }],
+          outputs: [
+            { address: "tb1qbounty", amount_sats: 80_000, label: "bounty" },
+            { address: "tb1qreserve", amount_sats: 10_000, label: "" },
+          ],
+        },
+      },
+    });
+    expect(body).toContain("STRUCTURE OUTPUTS");
+    expect(body).toContain("not</strong> Donate/escrow");
+    expect(body).toContain("not</strong> claim bond");
+    expect(body).toContain("bounty / allocation");
+    expect(body).toContain("structure out");
+    expect(body).toContain("escrow in");
+    expect(body).not.toContain("CLAIM BOND");
+    expect(body).not.toContain("DONATE / ESCROW ADDRESS");
   });
 });
