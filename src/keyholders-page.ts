@@ -154,12 +154,14 @@ export function branchSignDeskHtml(
   const proposed = item.state === "settle_proposed";
   const stateLabel =
     item.state === "threshold_met"
-      ? " · threshold met"
+      ? " · ready to broadcast in Sparrow"
       : proposed
-        ? " · settle proposed"
+        ? " · settle proposed — waiting confirm"
         : settled
-          ? " · settled"
-          : "";
+          ? " · settled — broadcast recorded"
+          : need > 0 && signed < need
+            ? ` · Needs ${signed}/${need} cosignatures`
+            : "";
   const who = signerLabels(item.partials, opts?.signerNames || {});
   const canDownload = Boolean(item.psbt_base64);
   return `<div class="form-panel form-panel-wide">
@@ -192,16 +194,18 @@ export function branchSignDeskHtml(
         ? `<div class="comment-compose-actions"><button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button></div>`
         : ""
     }
-    <p class="muted">Sign in Sparrow, then paste the partial below. The Worker does not broadcast.</p>
+    <p class="muted">Cosign: sign in Sparrow, then paste the signed partial below. The Worker does not broadcast — broadcast stays in Sparrow after N-of-M.</p>
     ${hashGateHtml({
       publishedHash: item.published_sha256,
       inputId: "kh-branch-verify",
       statusId: "kh-branch-hash-status",
+      pasteLabel: "Unsigned Release PSBT you received (base64) — not a settle txid",
+      placeholder: "Paste unsigned Release PSBT to verify SHA-256",
     })}
-    <label class="donate-amount-label" for="kh-branch-partial">Signed partial (base64)</label>
-    <textarea id="kh-branch-partial" class="comment-input mono" rows="3" placeholder="Paste from Sparrow"></textarea>
+    <label class="donate-amount-label" for="kh-branch-partial">Signed partial (base64) — not a settle txid</label>
+    <textarea id="kh-branch-partial" class="comment-input mono" rows="3" placeholder="Paste signed partial from Sparrow"></textarea>
     <div class="comment-compose-actions">
-      <button type="button" class="btn" id="kh-branch-sign" disabled>Upload signature</button>
+      <button type="button" class="btn" id="kh-branch-sign" disabled title="Paste a matching unsigned Release PSBT above, then a signed partial" aria-label="Paste a matching unsigned Release PSBT above, then a signed partial">Upload signature</button>
       ${
         item.combined_sha256
           ? `<button type="button" class="btn ghost" id="kh-branch-combined">Download combined</button>`
@@ -211,19 +215,42 @@ export function branchSignDeskHtml(
     <p class="builder-msg" id="kh-branch-msg" hidden role="status" aria-live="polite"></p>
     ${
       settled
-        ? `<p class="muted">Settled <code class="mono">${escapeHtml(item.settle_txid || "")}</code>. Broadcast stays in Sparrow.</p>`
-        : `<div class="form-panel">
-      <h3 class="proposal-block-title">Record broadcast</h3>
-      <p class="muted">After you broadcast the combined transaction in Sparrow, paste the txid. A second keyholder must confirm.</p>
-      <label class="donate-amount-label" for="kh-branch-txid">Settle txid</label>
-      <input id="kh-branch-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${proposed ? "readonly" : ""} autocomplete="off" />
+        ? `<p class="muted">Settled — broadcast already recorded. Settle txid <code class="mono">${escapeHtml(item.settle_txid || "")}</code>.</p>`
+        : (() => {
+            const thresholdMet =
+              item.state === "threshold_met" ||
+              (need > 0 && signed >= need);
+            const proposeDisabled = proposed;
+            const proposeWhy = proposeDisabled
+              ? "Settle already proposed — waiting for another keyholder to confirm"
+              : thresholdMet
+                ? "After you broadcast in Sparrow, paste the 64-character settle txid"
+                : `Waiting for ${signed}/${need || "?"} cosignatures before broadcast / settle`;
+            const confirmDisabled =
+              !proposed || item.settle_proposed_by === opts?.userId;
+            const confirmWhy = !proposed
+              ? "Waiting for a keyholder to propose the settle txid"
+              : item.settle_proposed_by === opts?.userId
+                ? "You proposed this settle — another keyholder must confirm"
+                : "Confirm the proposed settle txid matches the Release outputs";
+            return `<div class="form-panel">
+      <h3 class="proposal-block-title">${thresholdMet ? "Settle · record broadcast" : "Settle · waiting for cosign"}</h3>
+      <p class="fee-pay-bond-label">SETTLE TXID</p>
+      <p class="fee-pay-bond-contrast">${
+        thresholdMet
+          ? "Ready to broadcast in Sparrow when combined. Then paste the <strong>64-character settle txid</strong> here — not a PSBT."
+          : `Needs ${signed}/${need} signatures (cosign). Do not paste a settle txid until threshold is met and you have broadcast in Sparrow.`
+      }</p>
+      <label class="donate-amount-label" for="kh-branch-txid">Settle txid (64 hex) — not a PSBT</label>
+      <input id="kh-branch-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${proposed ? "readonly" : ""} autocomplete="off" placeholder="64-character transaction id" />
       <div class="comment-compose-actions">
-        <button type="button" class="btn" id="kh-branch-propose" ${proposed ? "disabled" : ""}>Propose settle</button>
+        <button type="button" class="btn" id="kh-branch-propose" ${proposeDisabled ? "disabled" : ""} title="${escapeHtml(proposeWhy)}" aria-label="${escapeHtml(proposeWhy)}">Propose settle</button>
         <button type="button" class="btn ghost" id="kh-branch-confirm" ${
-          !proposed || item.settle_proposed_by === opts?.userId ? "disabled" : ""
-        }>Confirm settle</button>
+          confirmDisabled ? "disabled" : ""
+        } title="${escapeHtml(confirmWhy)}" aria-label="${escapeHtml(confirmWhy)}">Confirm settle</button>
       </div>
-    </div>`
+    </div>`;
+          })()
     }
   </div>`;
 }
@@ -359,8 +386,9 @@ export function cashoutDeskHtml(opts: {
     <div class="comment-compose-actions">
       <button type="button" class="btn ghost" id="kh-cashout-dl">Download unsigned transaction</button>
     </div>
-    <label class="donate-amount-label" for="kh-cashout-txid">Settle txid</label>
-    <input id="kh-cashout-txid" class="donate-amount mono" autocomplete="off" />
+    <p class="fee-pay-bond-contrast">After broadcast, paste the <strong>64-character settle txid</strong> — not a PSBT.</p>
+    <label class="donate-amount-label" for="kh-cashout-txid">Settle txid (64 hex) — not a PSBT</label>
+    <input id="kh-cashout-txid" class="donate-amount mono" autocomplete="off" placeholder="64-character transaction id" />
     <div class="comment-compose-actions">
       <button type="button" class="btn" id="kh-cashout-settle">Record payout</button>
     </div>
@@ -463,12 +491,12 @@ export function keyholderDeskHtml(
   ];
   const steps = opts.isRelease
     ? `<ol class="kh-steps">
-        <li class="${khStepClass("freeze", step, releaseOrder)}">Check the outputs, then freeze the unsigned transaction</li>
-        <li class="${khStepClass("sign", step, releaseOrder)}">Sign in Sparrow and paste the partial</li>
-        <li class="${khStepClass("broadcast", step, releaseOrder)}">Broadcast when the threshold is met</li>
+        <li class="${khStepClass("freeze", step, releaseOrder)}">Structure/Release · check outputs, then freeze the unsigned transaction</li>
+        <li class="${khStepClass("sign", step, releaseOrder)}">Cosign · sign in Sparrow and paste the partial (not a settle txid)</li>
+        <li class="${khStepClass("broadcast", step, releaseOrder)}">Broadcast in Sparrow when N-of-M is met — then settle txid if needed</li>
       </ol>`
     : `<ol class="kh-steps">
-        <li class="${step === "settle" ? "is-current" : ""}">Check the outputs, then propose the settle txid</li>
+        <li class="${step === "settle" ? "is-current" : ""}">Settle · check outputs, then paste the settle txid (64 hex — not a PSBT)</li>
       </ol>`;
 
   const outputs = `<table class="kh-outputs">
@@ -528,7 +556,19 @@ export function keyholderDeskHtml(
         }>Upload signature</button>
         <button type="button" class="btn ${step === "broadcast" ? "" : "ghost"}" id="kh-broadcast" ${
           opts.canBroadcast ? "" : "disabled"
-        }>Broadcast</button>
+        } title="${
+          opts.canBroadcast
+            ? "Threshold met — broadcast the combined transaction in Sparrow (or via Worker if enabled)"
+            : need
+              ? `Waiting for ${signed}/${need} cosignatures before broadcast`
+              : "Waiting for cosignatures before broadcast"
+        }" aria-label="${
+          opts.canBroadcast
+            ? "Threshold met — ready to broadcast"
+            : need
+              ? `Waiting for ${signed}/${need} cosignatures before broadcast`
+              : "Waiting for cosignatures before broadcast"
+        }">Broadcast</button>
       </div>`
     : "";
 
@@ -592,13 +632,17 @@ export function keyholderDeskHtml(
     ${signBlock}
     <details class="next-card-more">
       <summary>Other settle tools</summary>
-      <label class="donate-amount-label" for="kh-txid">Broadcast txid</label>
+      <p class="fee-pay-bond-label">SETTLE TXID</p>
+      <p class="fee-pay-bond-contrast">Paste the <strong>64-character broadcast txid</strong> after Sparrow broadcast — not a PSBT and not Structure outs.</p>
+      <label class="donate-amount-label" for="kh-txid">Settle txid (64 hex) — not a PSBT</label>
       <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
         opts.canPsbt ? "" : "disabled"
-      } />
+      } placeholder="64-character transaction id" title="${
+        opts.canPsbt ? "Paste settle txid after broadcast" : "Waiting for package readiness"
+      }" />
       <div id="kh-verify-panel" class="lifecycle-banner" hidden>
         <span class="lifecycle-k">Verify</span>
-        <p>Match this txid to the outputs above.</p>
+        <p>Match this settle txid to the outputs above.</p>
         <ul class="kh-verify-outputs">${item.outputs
           .map(
             (o) =>
@@ -611,13 +655,37 @@ export function keyholderDeskHtml(
       <div class="comment-compose-actions">
         <button type="button" class="btn ghost" id="kh-propose" ${
           opts.canPsbt ? "" : "disabled"
-        }>Propose settle</button>
+        } title="${
+          opts.canPsbt
+            ? "Propose this settle txid for dual-ack"
+            : "Waiting on payout addresses / package readiness"
+        }" aria-label="${
+          opts.canPsbt
+            ? "Propose this settle txid for dual-ack"
+            : "Waiting on payout addresses / package readiness"
+        }">Propose settle</button>
         ${
           opts.requiresDualSettle
             ? `<button type="button" class="btn ghost" id="kh-confirm"${
                 item.settle_proposed_by === opts.userId || !opts.canPsbt
                   ? " disabled"
                   : ""
+              } title="${
+                !opts.canPsbt
+                  ? "Waiting on payout addresses / package readiness"
+                  : item.settle_proposed_by === opts.userId
+                    ? "You proposed this settle — another keyholder must confirm"
+                    : item.settle_proposed_by
+                      ? "Confirm the proposed settle txid"
+                      : "Waiting for a keyholder to propose the settle txid"
+              }" aria-label="${
+                !opts.canPsbt
+                  ? "Waiting on payout addresses / package readiness"
+                  : item.settle_proposed_by === opts.userId
+                    ? "You proposed this settle — another keyholder must confirm"
+                    : item.settle_proposed_by
+                      ? "Confirm the proposed settle txid"
+                      : "Waiting for a keyholder to propose the settle txid"
               }>Confirm settle</button>`
             : ""
         }

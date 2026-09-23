@@ -40,6 +40,20 @@ describe("hashGateState", () => {
     expect(html).toContain('id="kh-psbt-verify"');
     expect(html).toContain('id="kh-hash-status"');
     expect(html).toContain("Published SHA-256");
+    expect(html).toContain("Unsigned transaction you received (base64)");
+    expect(html).not.toContain(SAMPLE);
+  });
+
+  it("accepts paste-label override to distinguish PSBT from settle txid", () => {
+    const html = hashGateHtml({
+      publishedHash: "aa".repeat(32),
+      inputId: "branch-psbt-verify",
+      statusId: "branch-hash-status",
+      pasteLabel: "Release PSBT (base64) — not a settle txid",
+      placeholder: "Paste unsigned Release PSBT to verify SHA-256",
+    });
+    expect(html).toContain("Release PSBT (base64) — not a settle txid");
+    expect(html).toContain("Paste unsigned Release PSBT to verify SHA-256");
     expect(html).not.toContain(SAMPLE);
   });
 });

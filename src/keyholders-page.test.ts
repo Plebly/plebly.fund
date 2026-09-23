@@ -127,8 +127,11 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain('id="kh-verify-panel"');
     expect(html).toContain("kh-outputs");
     expect(html).toContain("Other settle tools");
+    expect(html).toContain("Settle txid (64 hex) — not a PSBT");
+    expect(html).toContain("Waiting for 0/3 cosignatures before broadcast");
     expect(html).not.toContain("cHNidP8");
-    expect(html).not.toContain("PSBT");
+    // Copy may say "not a PSBT"; never embed PSBT payload bytes.
+    expect(html).not.toMatch(/cHNidP8|psbt_base64/i);
   });
 
   it("keeps outputs, verify, and sign markup on the console", () => {
@@ -162,7 +165,10 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("kh-branch-txid");
     expect(html).toContain("Propose settle");
     expect(html).toContain("does not broadcast");
-    expect(html).not.toContain("Broadcast");
+    expect(html).toContain("Settle txid (64 hex) — not a PSBT");
+    expect(html).toContain("Needs 0/2 cosignatures");
+    expect(html).toContain("not a settle txid");
+    expect(html).not.toContain(">Broadcast<");
     expect(html).not.toContain("cHNidP8");
   });
 
@@ -185,8 +191,8 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("One signature");
     expect(html).toContain(keyholderTxPurpose("clean"));
     expect(html).not.toContain(secret);
-    expect(html).not.toContain("PSBT");
-    expect(html).not.toContain("Broadcast");
+    expect(html).not.toContain("cHNidP8");
+    expect(html).not.toMatch(/>\s*Broadcast\s*</);
   });
 
   it("names a multisig quorum and the signers", () => {
@@ -220,8 +226,8 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("tb1qpay");
     expect(html).toContain("Download unsigned transaction");
     expect(html).toContain("kh-cashout-settle");
+    expect(html).toContain("Settle txid (64 hex) — not a PSBT");
     expect(html).not.toContain("cHNidP8");
-    expect(html).not.toContain("PSBT");
   });
 
   it("fills the receive address from Account and saves it from this step", () => {
