@@ -291,7 +291,11 @@ export function formatProposalDate(iso: string | null): string | null {
 }
 
 export function statusLabel(status: string): string {
-  return status.replace(/_/g, " ");
+  const s = String(status || "").toLowerCase();
+  if (s === "listed") return "Listed — still raising";
+  if (s === "claimable") return "Claimable";
+  if (s === "in_review") return "In review";
+  return String(status || "").replace(/_/g, " ");
 }
 
 export function statusClass(status: string): string {
@@ -313,10 +317,10 @@ export function statusClass(status: string): string {
   return "status-neutral";
 }
 
-/** Status pill for cards/hero. Hidden for `listed` — being on the site already implies that. */
+/** Status pill for cards/hero — same canonical labels as filters. */
 export function statusPillHtml(status: string): string {
   const s = String(status || "").toLowerCase();
-  if (!s || s === "listed") return "";
+  if (!s) return "";
   return `<span class="pill pill-status ${statusClass(s)}">${escapeHtml(statusLabel(s))}</span>`;
 }
 

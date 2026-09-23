@@ -62,6 +62,23 @@ describe("feePayHtml", () => {
     expect(html).toContain("Send bond");
     expect(html).toContain("Bond address is not ready yet");
     expect(html).toContain('data-kind="bond"');
+    expect(html).toContain("CLAIM BOND PAYMENT ADDRESS");
+    expect(html).toContain("not Donate/escrow");
+    expect(html).toContain("10,000 sats");
+  });
+
+  it("labels claim-bond address when present", () => {
+    const html = feePayHtml({
+      id: "claim-bond",
+      amountSats: 10_000,
+      address: "tb1qbondaddressxxxxxxxxxxxxxxxxxxxxxxx",
+      kind: "bond",
+      assigned: true,
+    });
+    expect(html).toContain("CLAIM BOND PAYMENT ADDRESS");
+    expect(html).toContain("Not your payout · not Donate/escrow");
+    expect(html).toContain("tb1qbondaddressxxxxxxxxxxxxxxxxxxxxxxx");
+    expect(html).toContain("10,000 sats");
   });
 });
 

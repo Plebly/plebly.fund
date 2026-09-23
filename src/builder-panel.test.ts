@@ -83,7 +83,7 @@ describe("builderPanelHtml proposal types", () => {
 
   it("uses progress copy instead of a disabled claim below floor", () => {
     const html = builderPanelHtml(proposal({ balance_sats: 1 }), 1, false);
-    expect(html).toContain("Still raising.");
+    expect(html).toContain("Listed — still raising");
     expect(html).not.toContain('id="builder-claim" disabled');
   });
 

@@ -238,11 +238,39 @@ export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
   return `${kind}${second}${esc} · ${d.vote_count} vote(s) · closes ${closes}.`;
 }
 
+/** Sole primary closed-ballot summary (sidebar / next-card). */
+export function closedBallotSummary(d: ReviewDecisionView): string {
+  const result = d.result || d.status;
+  return `Closed — ${result}${d.passed ? " (passed)" : ""}`;
+}
+
+export const FULFILLER_CANNOT_VOTE =
+  "You are the fulfiller; you cannot vote on this proposal’s decision.";
+
+/** Hide actionable Flag when a closed ballot is the sole primary state. */
+export function suppressFlagForClosedBallot(
+  root: ParentNode,
+  d: ReviewDecisionView,
+): void {
+  if (d.status === "open") return;
+  const summary = closedBallotSummary(d);
+  const sentence = root.querySelector<HTMLElement>("#next-card-sentence");
+  if (sentence) sentence.textContent = summary;
+  const detail = root.querySelector<HTMLElement>("#next-card-detail");
+  if (detail) detail.remove();
+  const flag = root.querySelector<HTMLButtonElement>("#builder-flag");
+  if (!flag) return;
+  const primary = flag.closest(".next-card-primary");
+  if (primary) primary.remove();
+  else flag.remove();
+}
+
 function renderDecision(
   root: ParentNode,
   d: ReviewDecisionView,
   isReviewer: boolean,
   userId?: string | null,
+  isFulfiller = false,
 ): void {
   const statusEl = root.querySelector<HTMLElement>("#review-status");
   const counts = root.querySelector<HTMLElement>("#review-counts");
@@ -252,6 +280,9 @@ function renderDecision(
   const mine = Boolean(
     userId && (d.dissent || []).some((e) => e.user_id === userId),
   );
+  const ownDeliverable =
+    isFulfiller &&
+    (d.kind === "deliverable_confirm" || d.kind === "second_review");
 
   if (statusEl) {
     statusEl.textContent = reviewDecisionStatusLine(d);
@@ -273,8 +304,15 @@ function renderDecision(
       : "";
     list.innerHTML = `${reply}${dissentListHtml(d.dissent || [])}`;
   }
-  if (actions) actions.hidden = !(d.status === "open" && isReviewer);
-  if (dissent) dissent.hidden = !(isReviewer && !mine);
+  if (actions) {
+    if (ownDeliverable) {
+      actions.hidden = false;
+      actions.innerHTML = `<p class="review-fulfiller-blocked muted" role="status">${escapeHtml(FULFILLER_CANNOT_VOTE)}</p>`;
+    } else {
+      actions.hidden = !(d.status === "open" && isReviewer);
+    }
+  }
+  if (dissent) dissent.hidden = ownDeliverable ? true : !(isReviewer && !mine);
   const challenge = root.querySelector<HTMLElement>("#review-challenge-ai");
   if (challenge) {
     const show = isAiChallengeableDecision(d);
@@ -293,7 +331,7 @@ function renderDecision(
 
 export async function bindReviewPanel(
   root: ParentNode,
-  opts: { proposalId: string; user: AuthUser | null },
+  opts: { proposalId: string; user: AuthUser | null; isFulfiller?: boolean },
 ): Promise<void> {
   const panel = root.querySelector<HTMLElement>("#review-panel");
   if (!panel || !opts.proposalId) return;
@@ -317,12 +355,19 @@ export async function bindReviewPanel(
   if (!stillCurrent()) return;
 
   const isReviewer = Boolean(me?.active);
+  const isFulfiller = Boolean(opts.isFulfiller);
 
   if (!decision) {
     if (statusEl) {
       statusEl.textContent = "No open reviewer decision yet.";
     }
-    if (!opts.user) {
+    if (isFulfiller) {
+      const slot = panel.querySelector<HTMLElement>("#review-actions");
+      if (slot) {
+        slot.hidden = false;
+        slot.innerHTML = `<p class="review-fulfiller-blocked muted" role="status">${escapeHtml(FULFILLER_CANNOT_VOTE)}</p>`;
+      }
+    } else if (!opts.user) {
       const slot = panel.querySelector<HTMLElement>("#review-actions");
       if (slot) {
         slot.hidden = false;
@@ -332,12 +377,13 @@ export async function bindReviewPanel(
     return;
   }
 
-  renderDecision(panel, decision, isReviewer, opts.user?.id);
+  renderDecision(panel, decision, isReviewer, opts.user?.id, isFulfiller);
+  suppressFlagForClosedBallot(root, decision);
   // Track last painted decision so tests / later sync can detect a good paint.
   panel.dataset.reviewDecisionId = decision.id;
   panel.dataset.reviewDecisionStatus = decision.status;
 
-  if (!opts.user && decision.status === "open") {
+  if (!opts.user && !isFulfiller && decision.status === "open") {
     const actions = panel.querySelector<HTMLElement>("#review-actions");
     if (actions) {
       actions.hidden = false;
@@ -359,7 +405,8 @@ export async function bindReviewPanel(
       setMsg(msg, "Recording vote…");
       try {
         const next = await voteReviewDecision(liveDecision(), vote);
-        renderDecision(panel, next, isReviewer, opts.user?.id);
+        renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller);
+        suppressFlagForClosedBallot(root, next);
         panel.dataset.reviewDecisionId = next.id;
         panel.dataset.reviewDecisionStatus = next.status;
         setMsg(msg, "Vote recorded.", "success");
@@ -386,7 +433,8 @@ export async function bindReviewPanel(
     setMsg(msg, "Publishing…");
     try {
       const next = await publishDissent(liveDecision(), text);
-      renderDecision(panel, next, isReviewer, opts.user?.id);
+      renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller);
+        suppressFlagForClosedBallot(root, next);
       panel.dataset.reviewDecisionId = next.id;
       panel.dataset.reviewDecisionStatus = next.status;
       setMsg(msg, "Dissent published.", "success");
@@ -410,7 +458,8 @@ export async function bindReviewPanel(
         liveDecision(),
         reason || undefined,
       );
-      renderDecision(panel, next, isReviewer, opts.user?.id);
+      renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller);
+        suppressFlagForClosedBallot(root, next);
       panel.dataset.reviewDecisionId = next.id;
       panel.dataset.reviewDecisionStatus = next.status;
       setMsg(msg, "AI challenged — escalated to humans.", "success");
