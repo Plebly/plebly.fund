@@ -60,6 +60,50 @@ export function keyholderPackageSentence(item: {
   return "Sign this release.";
 }
 
+/** Plain purpose for a branch, release, refund, or pool payout. */
+export function keyholderTxPurpose(kind: string): string {
+  switch (kind) {
+    case "clean":
+      return "Pay the builder, and send the keyholder and reviewer shares out of this escrow.";
+    case "reserve_reviewers":
+      return "Pay reviewers from the reserve.";
+    case "reserve_refund":
+    case "refund":
+    case "contrib_refund":
+    case "bond_refund":
+      return "Return funds.";
+    case "disputed":
+      return "Pay the disputed branch.";
+    case "timelock":
+      return "Spend the timelock branch.";
+    case "release":
+      return "Pay this month's lines, including the keyholder pool output.";
+    case "cashout":
+      return "Pay this keyholder from the pool.";
+    default:
+      return kind.replace(/_/g, " ");
+  }
+}
+
+/** Threshold 1 is a single signature. Anything higher is the multisig quorum. */
+export function signatureProgressLabel(signed: number, need: number): string {
+  const n = Math.max(0, Math.floor(need));
+  const s = Math.max(0, Math.floor(signed));
+  if (n <= 1) return "One signature";
+  return `Multisig · ${s} of ${n}`;
+}
+
+export function signerLabels(
+  partials: { keyholder_id: string; fingerprint: string }[] | undefined,
+  names: Record<string, string>,
+): string[] {
+  return (partials || []).map((p) => {
+    const name = names[p.keyholder_id];
+    if (name) return name.startsWith("@") ? name : `@${name}`;
+    return p.fingerprint || p.keyholder_id;
+  });
+}
+
 export type KeyholderDeskItem = {
   kind: string;
   proposal_id: string;
@@ -91,6 +135,7 @@ export type BranchSignDeskItem = {
   combined_sha256?: string;
   settle_txid?: string;
   settle_proposed_by?: string;
+  partials?: { keyholder_id: string; fingerprint: string }[];
   decode?: {
     outputs?: { address: string; amount_sats: number; label?: string }[];
   };
@@ -98,7 +143,7 @@ export type BranchSignDeskItem = {
 
 export function branchSignDeskHtml(
   item: BranchSignDeskItem,
-  opts?: { userId?: string },
+  opts?: { userId?: string; signerNames?: Record<string, string> },
 ): string {
   const need = item.required_threshold || 0;
   const signed = item.signed || 0;
@@ -113,10 +158,17 @@ export function branchSignDeskHtml(
         : settled
           ? " · settled"
           : "";
+  const who = signerLabels(item.partials, opts?.signerNames || {});
+  const canDownload = Boolean(item.psbt_base64);
   return `<div class="form-panel form-panel-wide">
     <h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">${escapeHtml(item.kind)} · ${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</h2>
-    <p class="next-card-sentence">Verify the published hash, then sign in Sparrow. The Worker does not broadcast.</p>
-    <p class="muted">${signed}/${need} signed${stateLabel}</p>
+    <p class="next-card-sentence">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
+    <p class="kh-sign-chip">${escapeHtml(signatureProgressLabel(signed, need))}${stateLabel ? escapeHtml(stateLabel) : ""}</p>
+    ${
+      who.length
+        ? `<p class="kh-signers">Signed by ${escapeHtml(who.join(", "))}</p>`
+        : ""
+    }
     <table class="kh-outputs">
       <caption class="sr-only">Outputs</caption>
       <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
@@ -133,6 +185,12 @@ export function branchSignDeskHtml(
         }
       </tbody>
     </table>
+    ${
+      canDownload
+        ? `<div class="comment-compose-actions"><button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button></div>`
+        : ""
+    }
+    <p class="muted">Sign in Sparrow, then paste the partial below. The Worker does not broadcast.</p>
     ${hashGateHtml({
       publishedHash: item.published_sha256,
       inputId: "kh-branch-verify",
@@ -166,6 +224,39 @@ export function branchSignDeskHtml(
     </div>`
     }
   </div>`;
+}
+
+export function cashoutDeskHtml(opts: {
+  amount_sats: number;
+  payout_address: string;
+}): string {
+  return `<div class="form-panel" id="kh-cashout-card">
+    <h2 class="proposal-block-title">${escapeHtml(keyholderTxPurpose("cashout"))}</h2>
+    <p class="muted">${formatSats(opts.amount_sats)} to <span class="mono">${escapeHtml(opts.payout_address)}</span></p>
+    <p class="muted">Sign this in Sparrow. The escrow quorum does not apply.</p>
+    <div class="comment-compose-actions">
+      <button type="button" class="btn ghost" id="kh-cashout-dl">Download unsigned transaction</button>
+    </div>
+    <label class="donate-amount-label" for="kh-cashout-txid">Settle txid</label>
+    <input id="kh-cashout-txid" class="donate-amount mono" autocomplete="off" />
+    <div class="comment-compose-actions">
+      <button type="button" class="btn" id="kh-cashout-settle">Record payout</button>
+    </div>
+    <p class="builder-msg" id="kh-cashout-msg" hidden role="status" aria-live="polite"></p>
+  </div>`;
+}
+
+function downloadBase64File(b64: string, filename: string): void {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function publishedUnsignedHash(item: {
@@ -225,6 +316,7 @@ export function keyholderDeskHtml(
     isRelease: boolean;
     requiresDualSettle: boolean;
     userId: string;
+    signerNames?: Record<string, string>;
   },
 ): string {
   const signed = item.partials?.length || 0;
@@ -285,7 +377,7 @@ export function keyholderDeskHtml(
           }>Freeze outputs</button>
           ${
             item.psbts?.[0]
-              ? `<button type="button" class="btn ghost" id="kh-psbt-dl">Download latest</button>`
+              ? `<button type="button" class="btn ghost" id="kh-psbt-dl">Download unsigned transaction</button>`
               : ""
           }
         </div>`
@@ -318,14 +410,21 @@ export function keyholderDeskHtml(
       </div>`
     : "";
 
+  const who = signerLabels(item.partials, opts.signerNames || {});
+  const progress = need
+    ? `${signatureProgressLabel(signed, need)}${who.length ? ` · ${who.join(", ")}` : ""}${
+        item.period ? ` · ${item.period}` : ""
+      }`
+    : "";
   return `<div class="form-panel form-panel-wide">
     <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
-    ${readyLine ? `<p class="next-card-sentence">${escapeHtml(readyLine)}</p>` : ""}
+    <p class="next-card-sentence">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
+    ${readyLine ? `<p class="muted">${escapeHtml(readyLine)}</p>` : ""}
     ${
       item.monthly_accruing
         ? `<p class="muted">Signing opens after month-end freeze.</p>`
-        : need
-          ? `<p class="muted">${signed}/${need} signed${item.period ? ` · ${escapeHtml(item.period)}` : ""}</p>`
+        : progress
+          ? `<p class="kh-sign-chip">${escapeHtml(progress)}</p>`
           : ""
     }
     ${steps}
@@ -729,12 +828,15 @@ export async function renderKeyholders(
     ? ((await meRes.json()) as {
         keyholder: KeyholderMe | null;
         earnings_sats?: number;
+        cashed_out_sats?: number;
+        balance_sats?: number;
         can_apply?: boolean;
         application?: KeyholderOnboardApplication | null;
       })
-    : { keyholder: null, earnings_sats: 0, can_apply: false, application: null };
+    : { keyholder: null, earnings_sats: 0, balance_sats: 0, can_apply: false, application: null };
   const kh = meBody.keyholder;
   const earnings = meBody.earnings_sats || 0;
+  const balance = meBody.balance_sats ?? earnings;
   const onboardInput: KeyholderOnboardInput = {
     signedIn: true,
     canApply: Boolean(meBody.can_apply),
@@ -765,7 +867,12 @@ export async function renderKeyholders(
         <p class="eyebrow">Keyholders · Ops</p>
         <h1>Keyholders</h1>
         <p class="lede">${escapeHtml(keyholderOnboardLede("active"))}</p>
-        <p class="kh-earnings">Accrued: <strong>${formatSats(earnings)}</strong></p>
+        <div class="kh-balance">
+          <p class="kh-balance-amt"><span>Spendable</span><strong>${formatSats(balance)}</strong></p>
+          <p class="kh-earnings">Accrued ${formatSats(earnings)}</p>
+          <button type="button" class="btn ghost" id="kh-cashout">Pay out</button>
+        </div>
+        <div id="kh-cashout-detail" hidden></div>
         ${
           kh.keys_stale
             ? `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Keys older than 1 year</span><p>Re-confirm fingerprint + xpub below.</p></div>`
@@ -808,8 +915,28 @@ export async function renderKeyholders(
 
   const queueEl = app.querySelector<HTMLElement>("#kh-queue")!;
   const detailEl = app.querySelector<HTMLElement>("#kh-detail")!;
+  const cashoutEl = app.querySelector<HTMLElement>("#kh-cashout-detail")!;
   let kind = "release";
   let challengeMessage = "";
+  let signerNames: Record<string, string> = {};
+  let cashoutB64 = "";
+
+  const loadSignerNames = async () => {
+    try {
+      const res = await fetch(`${api()}/keyholders/public`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        keyholders?: { user_id?: string; github?: string }[];
+      };
+      const next: Record<string, string> = {};
+      for (const row of data.keyholders || []) {
+        if (row.user_id && row.github) next[row.user_id] = row.github;
+      }
+      signerNames = next;
+    } catch {
+      signerNames = {};
+    }
+  };
 
   const loadQueue = async () => {
     queueEl.setAttribute("aria-busy", "true");
@@ -829,9 +956,10 @@ export async function renderKeyholders(
       queueEl.innerHTML = `<ul class="declined-list">${data.items
         .map((item) => {
           return `<li class="declined-row">
-            <button type="button" class="declined-title btn ghost" data-branch="${escapeHtml(item.proposal_id)}" data-alloc="${escapeHtml(item.allocation_id)}" aria-label="${escapeHtml(item.proposal_id)} ${escapeHtml(item.kind)} ${item.signed} of ${item.required_threshold} signed">${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</button>
+            <button type="button" class="declined-title btn ghost" data-branch="${escapeHtml(item.proposal_id)}" data-alloc="${escapeHtml(item.allocation_id)}" aria-label="${escapeHtml(item.proposal_id)} ${escapeHtml(item.kind)} ${escapeHtml(signatureProgressLabel(item.signed, item.required_threshold))}">${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</button>
+            <p class="kh-queue-purpose">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
             <span class="declined-meta"><span class="pill">${escapeHtml(item.kind)}</span>
-            <span class="muted">${item.signed}/${item.required_threshold} signed</span>
+            <span class="kh-sign-chip">${escapeHtml(signatureProgressLabel(item.signed, item.required_threshold))}</span>
             <span class="pill">${escapeHtml(item.state)}</span></span>
           </li>`;
         })
@@ -866,7 +994,8 @@ export async function renderKeyholders(
         const signed = item.partials?.length || 0;
         const need = item.required_threshold || 0;
         return `<li class="declined-row">
-          <button type="button" class="declined-title btn ghost" data-disburse="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.period || item.proposal_id)} ${escapeHtml(item.state)}${need ? ` ${signed} of ${need} signed` : ""}">${escapeHtml(item.period || item.proposal_id)}</button>
+          <button type="button" class="declined-title btn ghost" data-disburse="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.period || item.proposal_id)} ${escapeHtml(item.state)}${need ? ` ${signatureProgressLabel(signed, need)}` : ""}">${escapeHtml(item.period || item.proposal_id)}</button>
+          <p class="kh-queue-purpose">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
           <span class="declined-meta"><span class="pill">${escapeHtml(item.state)}</span>
           ${
             item.monthly_accruing
@@ -880,7 +1009,7 @@ export async function renderKeyholders(
           }
           ${
             need
-              ? `<span class="muted">${signed}/${need} signed</span>`
+              ? `<span class="kh-sign-chip">${escapeHtml(signatureProgressLabel(signed, need))}</span>`
               : ""
           }
           ${
@@ -911,7 +1040,10 @@ export async function renderKeyholders(
     const data = (await res.json()) as { item: BranchSignDeskItem };
     const item = data.item;
     detailEl.hidden = false;
-    detailEl.innerHTML = branchSignDeskHtml(item, { userId: kh.user_id });
+    detailEl.innerHTML = branchSignDeskHtml(item, {
+      userId: kh.user_id,
+      signerNames,
+    });
     detailEl.querySelector<HTMLElement>("#kh-branch-title")?.focus();
     bindHashGate({
       input: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-verify"),
@@ -919,6 +1051,13 @@ export async function renderKeyholders(
       publishedHash: item.published_sha256,
       action: detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign"),
       enableActionWithoutHash: false,
+    });
+    detailEl.querySelector("#kh-branch-dl")?.addEventListener("click", () => {
+      if (!item.psbt_base64) return;
+      downloadBase64File(
+        item.psbt_base64,
+        `${item.proposal_id}-${item.allocation_id}-unsigned.psbt`,
+      );
     });
     const setMsg = (t: string) => {
       const el = detailEl.querySelector<HTMLElement>("#kh-branch-msg");
@@ -1089,6 +1228,7 @@ export async function renderKeyholders(
       isRelease,
       requiresDualSettle: data.requires_dual_settle,
       userId: kh.user_id,
+      signerNames,
     });
 
     detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
@@ -1489,9 +1629,67 @@ export async function renderKeyholders(
   const start = app.querySelector<HTMLButtonElement>(
     `[data-kh-tab="${initial}"]`,
   );
-  if (start && initial !== "release") {
-    setTab(initial, start);
-  } else {
-    void loadQueue();
-  }
+
+  app.querySelector("#kh-cashout")?.addEventListener("click", async () => {
+    const res = await authFetchWithTos(`${api()}/keyholders/me/cashout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      psbt_base64?: string;
+      amount_sats?: number;
+      payout_address?: string;
+    };
+    if (!res.ok || !body.psbt_base64 || !body.payout_address) {
+      cashoutEl.hidden = false;
+      cashoutEl.innerHTML = `<p class="builder-msg bad" role="alert">${escapeHtml(body.error || "Could not build the payout.")}</p>`;
+      return;
+    }
+    cashoutB64 = body.psbt_base64;
+    cashoutEl.hidden = false;
+    cashoutEl.innerHTML = cashoutDeskHtml({
+      amount_sats: body.amount_sats || 0,
+      payout_address: body.payout_address,
+    });
+    cashoutEl.querySelector("#kh-cashout-dl")?.addEventListener("click", () => {
+      if (!cashoutB64) return;
+      downloadBase64File(cashoutB64, "keyholder-payout-unsigned.psbt");
+    });
+    cashoutEl.querySelector("#kh-cashout-settle")?.addEventListener("click", async () => {
+      const txid =
+        cashoutEl.querySelector<HTMLInputElement>("#kh-cashout-txid")?.value.trim() ||
+        "";
+      const note = cashoutEl.querySelector<HTMLElement>("#kh-cashout-msg");
+      if (!txid) {
+        if (note) {
+          note.hidden = false;
+          note.textContent = "Paste the broadcast txid.";
+        }
+        return;
+      }
+      const settled = await authFetchWithTos(`${api()}/keyholders/me/cashout/settle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txid }),
+      });
+      const settledBody = (await settled.json().catch(() => ({}))) as { error?: string };
+      if (note) {
+        note.hidden = false;
+        note.textContent = settled.ok
+          ? "Payout recorded."
+          : settledBody.error || "Could not record the payout.";
+      }
+      if (settled.ok) rerender();
+    });
+  });
+
+  void loadSignerNames().finally(() => {
+    if (start && initial !== "release") {
+      setTab(initial, start);
+    } else {
+      void loadQueue();
+    }
+  });
 }

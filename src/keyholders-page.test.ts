@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   branchSignDeskHtml,
+  cashoutDeskHtml,
   keyholderDeskHtml,
   keyholderDeskStep,
   keyholderColdStart,
@@ -15,6 +16,8 @@ import {
   keyholderOnboardStepIndex,
   keyholderPackageSentence,
   keyholderTabFromSearch,
+  keyholderTxPurpose,
+  signatureProgressLabel,
 } from "./keyholders-page";
 import { parseLocation, seoForRoute } from "./router";
 
@@ -156,6 +159,64 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("does not broadcast");
     expect(html).not.toContain("Broadcast");
     expect(html).not.toContain("cHNidP8");
+  });
+
+  it("downloads the unsigned branch transaction without embedding it", () => {
+    const secret = "cHNidP8FAKEUNSIGNED";
+    const html = branchSignDeskHtml({
+      proposal_id: "p1",
+      allocation_id: "bounty",
+      kind: "clean",
+      published_sha256: "aa".repeat(32),
+      psbt_base64: secret,
+      signed: 0,
+      required_threshold: 1,
+      state: "open",
+      decode: {
+        outputs: [{ address: "tb1qout", amount_sats: 50_000, label: "builder" }],
+      },
+    });
+    expect(html).toContain("Download unsigned transaction");
+    expect(html).toContain("One signature");
+    expect(html).toContain(keyholderTxPurpose("clean"));
+    expect(html).not.toContain(secret);
+    expect(html).not.toContain("PSBT");
+    expect(html).not.toContain("Broadcast");
+  });
+
+  it("names a multisig quorum and the signers", () => {
+    const html = branchSignDeskHtml(
+      {
+        proposal_id: "p1",
+        allocation_id: "bounty",
+        kind: "clean",
+        published_sha256: "aa".repeat(32),
+        signed: 1,
+        required_threshold: 3,
+        state: "open",
+        partials: [{ keyholder_id: "github:1", fingerprint: "AABBCCDD" }],
+        decode: { outputs: [] },
+      },
+      { signerNames: { "github:1": "ada" } },
+    );
+    expect(html).toContain("Multisig");
+    expect(html).toContain("1 of 3");
+    expect(html).toContain("@ada");
+    expect(signatureProgressLabel(1, 3)).toBe("Multisig · 1 of 3");
+    expect(signatureProgressLabel(0, 1)).toBe("One signature");
+  });
+
+  it("cash-out card names the destination and hides the transaction bytes", () => {
+    const html = cashoutDeskHtml({
+      amount_sats: 20_000,
+      payout_address: "tb1qpay",
+    });
+    expect(html).toContain(keyholderTxPurpose("cashout"));
+    expect(html).toContain("tb1qpay");
+    expect(html).toContain("Download unsigned transaction");
+    expect(html).toContain("kh-cashout-settle");
+    expect(html).not.toContain("cHNidP8");
+    expect(html).not.toContain("PSBT");
   });
 });
 
