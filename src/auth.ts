@@ -747,9 +747,20 @@ export async function updateProfile(input: {
       "Could not reach the API. If this persists after a refresh, the server may need an update.",
     );
   }
-  const data = (await res.json()) as { user?: UserProfile; error?: string };
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data.user!;
+  const data = (await res.json().catch(() => ({}))) as {
+    user?: UserProfile;
+    error?: string;
+  };
+  if (!res.ok) {
+    throw new Error(
+      data.error ||
+        (res.status === 401
+          ? "Session expired — sign in again."
+          : `HTTP ${res.status}`),
+    );
+  }
+  if (!data.user) throw new Error(data.error || "Profile update failed.");
+  return data.user;
 }
 
 export async function claimUsername(username: string): Promise<UserProfile> {

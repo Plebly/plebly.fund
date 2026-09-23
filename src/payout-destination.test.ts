@@ -28,3 +28,85 @@ describe("payoutLooksValid", () => {
     expect(payoutLooksValid("satoshi@getalby.com", "lightning")).toBe(false);
   });
 });
+
+describe("account payout fail-closed gate", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("distinguishes missing omit vs needs explicit clear vs invalid", async () => {
+    vi.stubEnv("VITE_BITCOIN_NETWORK", "signet");
+    const {
+      gateAccountPayoutSave,
+      payoutInvalidReason,
+      accountPayoutMissingMessage,
+    } = await import("./payout-destination");
+
+    expect(gateAccountPayoutSave({ raw: "  ", previous: "" })).toEqual({
+      ok: true,
+      mode: "omit",
+    });
+
+    const blocked = gateAccountPayoutSave({
+      raw: "",
+      previous: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+    });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      expect(blocked.kind).toBe("needs_explicit_clear");
+      expect(blocked.message).toMatch(/Clear receive address/i);
+    }
+
+    const cleared = gateAccountPayoutSave({
+      raw: "",
+      previous: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+      allowClear: true,
+    });
+    expect(cleared).toEqual({ ok: true, mode: "clear" });
+
+    const invalid = gateAccountPayoutSave({
+      raw: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+      previous: "",
+    });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) {
+      expect(invalid.kind).toBe("invalid");
+      expect(invalid.message).toMatch(/mainnet/i);
+      expect(invalid.message).toMatch(/signet/i);
+    }
+
+    const ln = payoutInvalidReason("satoshi@getalby.com");
+    expect(ln).toMatch(/Lightning/i);
+    expect(ln).toMatch(/signet/i);
+
+    const garbage = payoutInvalidReason("not-an-address");
+    expect(garbage).toMatch(/Invalid receive address/i);
+    expect(garbage).toMatch(/tb1/i);
+
+    expect(accountPayoutMissingMessage()).toMatch(/not set yet/i);
+    expect(accountPayoutMissingMessage()).toMatch(/signet/i);
+  });
+
+  it("accepts signet tb1 and labels placeholder/hint", async () => {
+    vi.stubEnv("VITE_BITCOIN_NETWORK", "signet");
+    const {
+      gateAccountPayoutSave,
+      accountPayoutPlaceholder,
+      accountPayoutHint,
+      payoutLooksValid,
+    } = await import("./payout-destination");
+
+    const addr = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
+    expect(payoutLooksValid(addr)).toBe(true);
+    expect(gateAccountPayoutSave({ raw: addr, previous: "" })).toEqual({
+      ok: true,
+      mode: "set",
+      payout_address: addr,
+    });
+    expect(accountPayoutPlaceholder()).toBe("tb1…");
+    expect(accountPayoutHint()).toMatch(/signet/i);
+    expect(accountPayoutHint()).toMatch(/tb1/i);
+    expect(accountPayoutHint()).toMatch(/Lightning not allowed/i);
+  });
+});
