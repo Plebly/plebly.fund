@@ -1,4 +1,5 @@
 import { authFetch, currentReturnPath, loginChoicesHtml, type AuthUser } from "./auth";
+import { solidIcon } from "./icons";
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
 import { bindKhApplyForm, khApplyFormHtml } from "./governance-page";
@@ -740,7 +741,7 @@ export function keyholderOnboardHtml(input: KeyholderOnboardInput): string {
   }).join("");
   return `<div class="kh-onboard">
     ${keyholderColdStartHtml(input.activeSeats)}
-    <ol class="kh-steps" aria-label="Keyholder onboarding">
+    <ol class="kh-steps kh-onboard-steps" aria-label="Keyholder onboarding">
       ${steps}
     </ol>
     ${keyholderOnboardCardHtml(input)}
@@ -867,6 +868,11 @@ export async function renderKeyholders(
         <p class="eyebrow">Keyholders · Ops</p>
         <h1>Keyholders</h1>
         <p class="lede">${escapeHtml(keyholderOnboardLede("active"))}</p>
+        <p class="kh-seat">Seated as @${escapeHtml(kh.github)}${
+          kh.fingerprint
+            ? ` · <code class="mono">${escapeHtml(kh.fingerprint)}</code>`
+            : ""
+        }. <a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
         <div class="kh-balance">
           <p class="kh-balance-amt"><span>Spendable</span><strong>${formatSats(balance)}</strong></p>
           <p class="kh-earnings">Accrued ${formatSats(earnings)}</p>
@@ -879,19 +885,6 @@ export async function renderKeyholders(
             : ""
         }
       </header>
-      ${keyholderOnboardHtml(onboardInput)}
-      <div class="form-panel">
-        <h2 class="proposal-block-title">Signing session</h2>
-        <label class="donate-amount-label" for="kh-auth-addr">Auth address</label>
-        <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" value="${escapeHtml(kh.auth_address || "")}" autocomplete="off" />
-        <button type="button" class="btn" id="kh-challenge">Request challenge</button>
-        <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
-        <button type="button" class="btn ghost" id="kh-challenge-copy" hidden>Copy message</button>
-        <label class="donate-amount-label" for="kh-challenge-sig">Signature (base64)</label>
-        <textarea id="kh-challenge-sig" class="comment-input mono" rows="2" placeholder="Paste compact signed message"></textarea>
-        <button type="button" class="btn ghost" id="kh-challenge-verify">Verify</button>
-        <p class="builder-msg" id="kh-challenge-status" hidden role="status" aria-live="polite"></p>
-      </div>
       ${
         kh.keys_stale
           ? keyholderKeysFormHtml({
@@ -901,6 +894,33 @@ export async function renderKeyholders(
             })
           : ""
       }
+      <div class="kh-session-bar">
+        <p class="muted" id="kh-session-state">Prove your key before you upload a signature.</p>
+        <button type="button" class="btn ghost" id="kh-session-open">Prove your key</button>
+      </div>
+      <div class="site-modal" id="kh-session" hidden>
+        <div class="site-modal-backdrop" data-kh-session-close tabindex="-1" aria-hidden="true"></div>
+        <div class="site-modal-card kh-session-card" role="dialog" aria-modal="true" aria-labelledby="kh-session-title">
+          <button type="button" class="site-modal-close" data-kh-session-close aria-label="Close">${solidIcon("xmark")}</button>
+          <h2 id="kh-session-title" tabindex="-1">Prove you hold the key</h2>
+          <p class="muted">GitHub login names this seat. It does not prove the hardware key is still yours. Before an upload is accepted, sign a one-time message from the address registered on the seat.</p>
+          <p class="muted">That message is not the escrow or pool transaction. In Sparrow, sign the message with the address below, then paste the signature here. The message expires in a few minutes. After it checks out, this browser can upload signatures for 15 minutes.</p>
+          <ol class="kh-session-steps">
+            <li>Check the registered address.</li>
+            <li>Get a message and sign it in Sparrow.</li>
+            <li>Paste the signature and check it.</li>
+          </ol>
+          <label class="donate-amount-label" for="kh-auth-addr">Registered address</label>
+          <input id="kh-auth-addr" class="donate-amount mono" placeholder="tb1… / bc1…" value="${escapeHtml(kh.auth_address || "")}" autocomplete="off" />
+          <button type="button" class="btn" id="kh-challenge">Get a message to sign</button>
+          <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
+          <button type="button" class="btn ghost" id="kh-challenge-copy" hidden>Copy message</button>
+          <label class="donate-amount-label" for="kh-challenge-sig">Signature from Sparrow</label>
+          <textarea id="kh-challenge-sig" class="comment-input mono" rows="2" placeholder="Paste the compact signature"></textarea>
+          <button type="button" class="btn" id="kh-challenge-verify">Check signature</button>
+          <p class="builder-msg" id="kh-challenge-status" hidden role="status" aria-live="polite"></p>
+        </div>
+      </div>
       <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
         <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
         <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
@@ -920,6 +940,40 @@ export async function renderKeyholders(
   let challengeMessage = "";
   let signerNames: Record<string, string> = {};
   let cashoutB64 = "";
+
+  let sessionKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
+  const closeSignSession = () => {
+    const session = app.querySelector<HTMLElement>("#kh-session");
+    if (session) session.hidden = true;
+    if (sessionKeyHandler) {
+      document.removeEventListener("keydown", sessionKeyHandler);
+      sessionKeyHandler = null;
+    }
+    app.querySelector<HTMLButtonElement>("#kh-session-open")?.focus();
+  };
+  const openSignSession = () => {
+    const session = app.querySelector<HTMLElement>("#kh-session");
+    if (!session) return;
+    session.hidden = false;
+    if (!sessionKeyHandler) {
+      sessionKeyHandler = (ev: KeyboardEvent) => {
+        if (ev.key !== "Escape") return;
+        ev.preventDefault();
+        closeSignSession();
+      };
+      document.addEventListener("keydown", sessionKeyHandler);
+    }
+    app.querySelector<HTMLElement>("#kh-session-title")?.focus();
+  };
+  const noteSignSession = (message: string) => {
+    if (!/bitcoin-key session/i.test(message)) return;
+    const state = app.querySelector<HTMLElement>("#kh-session-state");
+    if (state) {
+      state.dataset.live = "needed";
+      state.textContent = "Prove your key, then try the upload again.";
+    }
+    openSignSession();
+  };
 
   const loadSignerNames = async () => {
     try {
@@ -1064,6 +1118,7 @@ export async function renderKeyholders(
       if (!el) return;
       el.hidden = !t;
       el.textContent = t;
+      noteSignSession(t);
     };
     detailEl.querySelector("#kh-branch-sign")?.addEventListener("click", async () => {
       const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign");
@@ -1247,6 +1302,7 @@ export async function renderKeyholders(
       if (!el) return;
       el.hidden = !t;
       el.textContent = t;
+      noteSignSession(t);
     };
 
     detailEl.querySelector("#kh-lockup-save")?.addEventListener("click", async () => {
@@ -1529,8 +1585,25 @@ export async function renderKeyholders(
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     if (el) {
       el.hidden = false;
-      el.textContent = res.ok ? "Signing session active." : body.error || "Verify failed";
+      el.textContent = res.ok
+        ? "Checked. This browser can upload signatures for 15 minutes."
+        : body.error || "Could not check that signature.";
     }
+    const state = app.querySelector<HTMLElement>("#kh-session-state");
+    if (state) {
+      state.dataset.live = res.ok ? "active" : "";
+      state.textContent = res.ok
+        ? "This browser can upload signatures for 15 minutes."
+        : "Prove your key before you upload a signature.";
+    }
+    if (res.ok) closeSignSession();
+  });
+
+  app.querySelector("#kh-session-open")?.addEventListener("click", () => {
+    openSignSession();
+  });
+  app.querySelectorAll("[data-kh-session-close]").forEach((el) => {
+    el.addEventListener("click", () => closeSignSession());
   });
 
   bindKeyholderKeys(app);

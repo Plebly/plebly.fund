@@ -8543,6 +8543,131 @@ a.claim-app-bond:hover {
   transform: none;
 }
 
+.kh-seat {
+  margin: 0.35rem 0 0;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+.kh-session-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.kh-session-bar p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.kh-session-card {
+  width: min(36rem, 100%);
+  max-width: 36rem;
+  display: grid;
+  gap: 0.45rem;
+  padding: 1.35rem 1.35rem 1.2rem;
+}
+
+.kh-session-card h2 {
+  margin: 0 0 0.2rem;
+  padding-right: 2.25rem;
+  font-size: 1.25rem;
+}
+
+.kh-session-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.kh-session-steps {
+  margin: 0.35rem 0 0.5rem;
+  padding-left: 1.15rem;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.kh-session-card .donate-amount-label {
+  margin: 0.65rem 0 0;
+}
+
+.kh-session-card .comment-input {
+  margin-top: 0;
+}
+
+.kh-session-card .btn {
+  justify-self: start;
+  width: auto;
+  margin-top: 0.2rem;
+}
+
+.keyholders-page .kh-onboard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keyholders-page .kh-onboard-steps li {
+  margin: 0;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.keyholders-page .kh-onboard-steps li.is-current {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.keyholders-page .kh-onboard-steps li.is-done {
+  color: var(--ink-secondary);
+}
+
+.keyholders-page .form-panel {
+  gap: 0.4rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.keyholders-page .form-panel > .donate-amount-label {
+  margin: 0.7rem 0 0;
+}
+
+.keyholders-page .form-panel > .btn {
+  justify-self: start;
+  width: auto;
+  margin-top: 0.35rem;
+}
+
+.keyholders-page .comment-input {
+  margin-top: 0;
+}
+
+.keyholders-page .declined-list {
+  gap: 0.6rem;
+}
+
+.keyholders-page .declined-row {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.keyholders-page .declined-row > .btn {
+  justify-self: start;
+  width: auto;
+}
+
 .kh-challenge-msg {
   white-space: pre-wrap;
   word-break: break-all;
