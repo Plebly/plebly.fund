@@ -332,8 +332,8 @@ export function keyholderProofWizardHtml(
     <div data-kh-wizard="sign" hidden>
       <p>In Sparrow, open Tools, then Sign/Verify Message. Sign with this receive address:</p>
       <div class="kh-wizard-addr-row"><p class="mono kh-wizard-addr" id="kh-auth-shown">${escapeHtml(addr)}</p><button type="button" class="btn ghost" id="kh-auth-copy">Copy for Sparrow</button></div>
-      <button type="button" class="btn" id="kh-challenge">Get a message to sign</button>
       <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
+      <button type="button" class="btn ghost" id="kh-challenge" hidden>Try again</button>
       <div id="kh-wizard-paste" hidden>
         <button type="button" class="btn ghost" id="kh-challenge-copy">Copy message</button>
         <p class="muted">Paste that message into Sparrow, sign it, then paste the signature here.</p>
@@ -1049,6 +1049,7 @@ export async function renderKeyholders(
   const cashoutEl = app.querySelector<HTMLElement>("#kh-cashout-detail")!;
   let kind = "release";
   let challengeMessage = "";
+  let challengeSeq = 0;
   let signerNames: Record<string, string> = {};
   let cashoutB64 = "";
 
@@ -1077,6 +1078,61 @@ export async function renderKeyholders(
     const title = app.querySelector<HTMLElement>("#kh-session-title");
     if (title) title.textContent = titles[step] || titles.why;
     title?.focus();
+    if (step === "sign") void loadChallenge();
+    else resetChallenge();
+  };
+  const resetChallenge = () => {
+    challengeSeq += 1;
+    challengeMessage = "";
+    const el = app.querySelector<HTMLElement>("#kh-challenge-msg");
+    const paste = app.querySelector<HTMLElement>("#kh-wizard-paste");
+    const sig = app.querySelector<HTMLTextAreaElement>("#kh-challenge-sig");
+    const status = app.querySelector<HTMLElement>("#kh-challenge-status");
+    const retry = app.querySelector<HTMLButtonElement>("#kh-challenge");
+    if (el) {
+      el.hidden = true;
+      el.textContent = "";
+    }
+    if (paste) paste.hidden = true;
+    if (sig) sig.value = "";
+    if (status) {
+      status.hidden = true;
+      status.textContent = "";
+    }
+    if (retry) retry.hidden = true;
+  };
+  const loadChallenge = async () => {
+    const seq = ++challengeSeq;
+    challengeMessage = "";
+    const el = app.querySelector<HTMLElement>("#kh-challenge-msg");
+    const paste = app.querySelector<HTMLElement>("#kh-wizard-paste");
+    const sig = app.querySelector<HTMLTextAreaElement>("#kh-challenge-sig");
+    const status = app.querySelector<HTMLElement>("#kh-challenge-status");
+    const retry = app.querySelector<HTMLButtonElement>("#kh-challenge");
+    if (sig) sig.value = "";
+    if (status) {
+      status.hidden = true;
+      status.textContent = "";
+    }
+    if (paste) paste.hidden = true;
+    if (retry) retry.hidden = true;
+    if (el) {
+      el.hidden = false;
+      el.textContent = "Loading a message to sign…";
+    }
+    const res = await authFetch(`${api()}/keyholders/challenge`);
+    if (seq !== challengeSeq) return;
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+    };
+    challengeMessage = res.ok ? body.message || "" : "";
+    if (el) {
+      el.hidden = false;
+      el.textContent = challengeMessage || body.error || "Could not load a message to sign.";
+    }
+    if (paste) paste.hidden = !challengeMessage;
+    if (retry) retry.hidden = Boolean(challengeMessage);
   };
   const openSignSession = () => {
     const session = app.querySelector<HTMLElement>("#kh-session");
@@ -1708,24 +1764,8 @@ export async function renderKeyholders(
     });
   };
 
-  app.querySelector("#kh-challenge")?.addEventListener("click", async () => {
-    const res = await authFetch(`${api()}/keyholders/challenge`);
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      message?: string;
-    };
-    const el = app.querySelector<HTMLElement>("#kh-challenge-msg");
-    const copyBtn = app.querySelector<HTMLButtonElement>("#kh-challenge-copy");
-    challengeMessage = res.ok ? body.message || "" : "";
-    if (el) {
-      el.hidden = false;
-      el.textContent = res.ok
-        ? challengeMessage
-        : body.error || "Challenge failed";
-    }
-    if (copyBtn) copyBtn.hidden = !challengeMessage;
-    const paste = app.querySelector<HTMLElement>("#kh-wizard-paste");
-    if (paste) paste.hidden = !challengeMessage;
+  app.querySelector("#kh-challenge")?.addEventListener("click", () => {
+    void loadChallenge();
   });
   app.querySelector("#kh-challenge-copy")?.addEventListener("click", async () => {
     const ok = await copyText(challengeMessage);

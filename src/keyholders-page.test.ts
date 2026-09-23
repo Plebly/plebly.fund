@@ -234,6 +234,8 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("Step 1 of 3");
     expect(html).toContain("stores it on your Account");
     expect(html).toContain(`value="${seat}"`);
+    expect(html).toContain('id="kh-challenge-msg"');
+    expect(html).not.toContain("Get a message to sign");
     expect(html).toContain("kh-wizard-save-addr");
     expect(html).not.toContain("do not enter one here");
     expect(html).not.toContain("Registered address");
