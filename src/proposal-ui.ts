@@ -33,6 +33,7 @@ import {
   escrowAddressMatchesNetwork,
   isDonateChromeStatus,
   lightningUiAllowed,
+  networkLabel,
 } from "./config";
 import { signetPayNoteHtml } from "./signet";
 import { openShareMenu, prefersNativeShare } from "./share-menu";
@@ -104,6 +105,13 @@ export type DonateBindOpts = {
   /** Override confirmed-balance poll interval (tests use a short value). */
   balancePollMs?: number;
 };
+
+/** Hard-label beside Donate/escrow address — mirrors claim-bond feePay contrast. */
+function donateEscrowHardLabelHtml(): string {
+  const net = networkLabel();
+  return `<p class="fee-pay-bond-label" id="donate-escrow-label">DONATE / ESCROW ADDRESS</p>
+    <p class="fee-pay-bond-contrast" id="donate-escrow-contrast">Send any amount here on <strong>${escapeHtml(net)}</strong>. Not claim bond · not payout.</p>`;
+}
 
 function donateCreditStepHtml(signedIn: boolean): string {
   if (!signedIn) {
@@ -198,6 +206,7 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
+          ${donateEscrowHardLabelHtml()}
           <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
           <div class="donate-actions">
             <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
@@ -2025,6 +2034,7 @@ function donateShellHtml(address = ""): string {
             <h2 class="donate-title" id="donate-pay-title">Donate</h2>
             <p class="muted" id="donate-escrow-pending">${addr ? "" : "Loading escrow address…"}</p>
           </div>
+          ${donateEscrowHardLabelHtml()}
           <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
           <button type="button" class="btn ghost" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy</button>
           <a class="btn" id="donate-wallet" href="#">Open wallet</a>

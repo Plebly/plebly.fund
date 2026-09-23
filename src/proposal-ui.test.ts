@@ -370,6 +370,12 @@ describe("proposal UI critical render helpers", () => {
     expect(signedIn).toContain("Legal name for tax receipt (optional)");
     expect(signedIn).toContain('id="donate-legal-name"');
     expect(signedOut).not.toContain("donate-legal-name");
+    expect(signedOut).toContain("DONATE / ESCROW ADDRESS");
+    expect(signedOut).toContain("Not claim bond · not payout");
+    expect(signedOut).toContain("Send any amount here on");
+    expect(signedOut).toContain('id="donate-escrow-label"');
+    expect(signedIn).toContain("DONATE / ESCROW ADDRESS");
+    expect(signedIn).toContain("Not claim bond · not payout");
   });
 
   it("meta chips show type and tags", () => {
