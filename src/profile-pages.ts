@@ -37,6 +37,13 @@ import {
   syncStoredCreditPreferencesFromProfile,
 } from "./funder-credit";
 import { isBusy, runBusy, runFormBusy } from "./form-busy";
+import { confirmAction } from "./confirm-modal";
+import {
+  accountPayoutHint,
+  accountPayoutMissingMessage,
+  accountPayoutPlaceholder,
+  gateAccountPayoutSave,
+} from "./payout-destination";
 import { orgAttestationTitle, orgLoginLabel } from "./github-orgs-client";
 import {
   listAllPublicProposals,
@@ -446,9 +453,17 @@ export function accountProfilePaneHtml(
           <h2 class="account-card-title">Payout &amp; donations</h2>
           <p class="account-card-lede">Default destination for refunds and claim payouts, and how you appear on funder lists.</p>
           <fieldset class="form-block">
-            <legend>Payout destination</legend>
-            <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="bc1… / tb1… or you@host" maxlength="120" />
-            <p class="hint">On-chain bech32 or Lightning Address.</p>
+            <legend>Receive / payout destination</legend>
+            <input id="payout-input" class="mono" type="text" value="${escapeHtml(user.payout_address || "")}" placeholder="${escapeHtml(accountPayoutPlaceholder())}" maxlength="120" aria-describedby="payout-hint payout-status" />
+            <p class="hint" id="payout-hint">${escapeHtml(accountPayoutHint())}</p>
+            <p class="hint" id="payout-status"${user.payout_address?.trim() ? " hidden" : ""}>${escapeHtml(accountPayoutMissingMessage())}</p>
+            ${
+              user.payout_address?.trim()
+                ? `<div class="form-actions account-payout-clear-row">
+              <button type="button" class="btn ghost btn-compact" id="clear-payout-btn">Clear receive address</button>
+            </div>`
+                : ""
+            }
           </fieldset>
           <fieldset class="form-block account-funder-credit">
             <legend>Funder list</legend>
@@ -1319,13 +1334,58 @@ export async function renderAccount(
     }
   });
 
+  const previousPayout = (user.payout_address || "").trim();
+
+  const showAccountMsg = (text: string, kind: "error" | "success" | "") => {
+    if (!msg) return;
+    msg.hidden = false;
+    msg.textContent = text;
+    msg.className =
+      kind === "error"
+        ? "form-msg error"
+        : kind === "success"
+          ? "form-msg success"
+          : "form-msg";
+  };
+
+  document
+    .getElementById("clear-payout-btn")
+    ?.addEventListener("click", async () => {
+      const btn = document.getElementById(
+        "clear-payout-btn",
+      ) as HTMLButtonElement | null;
+      if (btn?.dataset.submitBusy === "1") return;
+      const ok = await confirmAction({
+        title: "Clear receive address?",
+        body: "Refunds and claim payouts will have no destination until you set a new address. This is not a silent Save — receive will show as missing.",
+        confirmLabel: "Clear address",
+        danger: true,
+      });
+      if (!ok) return;
+      showAccountMsg("Clearing receive address…", "");
+      try {
+        const clearFn = () => updateProfile({ payout_address: "" });
+        const saved = btn
+          ? await runBusy(btn, clearFn, { busyLabel: "Clearing…" })
+          : await clearFn();
+        if (!saved) return;
+        ctx.user = {
+          ...ctx.user!,
+          ...saved,
+          payout_address: saved.payout_address,
+        };
+        showAccountMsg(accountPayoutMissingMessage(), "error");
+        ctx.rerender();
+      } catch (err) {
+        showAccountMsg((err as Error).message || "Could not clear address.", "error");
+      }
+    });
+
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!msg || !linksList) return;
     if (isBusy(form)) return;
-    msg.hidden = false;
-    msg.textContent = "Saving…";
-    msg.className = "form-msg";
+    showAccountMsg("Saving…", "");
     try {
       const links: ProfileLink[] = [];
       linksList.querySelectorAll(".link-row").forEach((row) => {
@@ -1342,36 +1402,58 @@ export async function renderAccount(
         links.push({ label, url });
       });
       const bio = (document.getElementById("bio-input") as HTMLTextAreaElement).value;
-      const payout_address = (
+      const payoutRaw = (
         document.getElementById("payout-input") as HTMLInputElement
-      ).value.trim();
+      ).value;
+      const payoutGate = gateAccountPayoutSave({
+        raw: payoutRaw,
+        previous: previousPayout,
+      });
+      if (!payoutGate.ok) {
+        showAccountMsg(payoutGate.message, "error");
+        return;
+      }
       const skills_tags = skillsTags?.getTags() || [];
       const credit = readCreditPreferences(app, "account-credit");
       const funder_credit = {
         public_credit: credit.public_credit,
         show_amount: credit.show_amount,
       };
+      const payload: Parameters<typeof updateProfile>[0] = {
+        bio,
+        links,
+        skills_tags,
+        funder_credit,
+      };
+      if (payoutGate.mode === "set") {
+        payload.payout_address = payoutGate.payout_address;
+      } else if (payoutGate.mode === "clear") {
+        payload.payout_address = "";
+      }
+      // mode "omit": leave payout unchanged on the server
       const saved = await runFormBusy(
         form,
-        () =>
-          updateProfile({
-            bio,
-            links,
-            payout_address,
-            skills_tags,
-            funder_credit,
-          }),
+        () => updateProfile(payload),
         { busyLabel: "Saving…" },
       );
       if (!saved) return;
       saveStoredCreditPreferences(credit);
       syncStoredCreditPreferencesFromProfile(saved.funder_credit || funder_credit);
-      msg.textContent = "Profile saved.";
-      msg.className = "form-msg success";
+      ctx.user = {
+        ...ctx.user!,
+        ...saved,
+        payout_address: saved.payout_address,
+      };
+      const stillMissing = !(saved.payout_address || "").trim();
+      showAccountMsg(
+        stillMissing
+          ? `Profile saved. ${accountPayoutMissingMessage()}`
+          : "Profile saved.",
+        "success",
+      );
       ctx.rerender();
     } catch (err) {
-      msg.textContent = (err as Error).message;
-      msg.className = "form-msg error";
+      showAccountMsg((err as Error).message || "Could not save profile.", "error");
     }
   });
 

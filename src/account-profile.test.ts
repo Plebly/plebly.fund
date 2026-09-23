@@ -53,4 +53,32 @@ describe("account profile editor layout", () => {
     expect(html).toContain("tag-input-more");
     expect(html).not.toContain(">Display<");
   });
+
+  it("labels receive/payout destination and shows missing vs clear affordance", () => {
+    const withAddr = accountProfilePaneHtml(
+      user({
+        id: "github:1",
+        github: "alice",
+        username: "alice",
+        payout_address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+      }),
+      null,
+    );
+    expect(withAddr).toContain("Receive / payout destination");
+    expect(withAddr).toContain("clear-payout-btn");
+    expect(withAddr).toContain("Clear receive address");
+    expect(withAddr).toMatch(/tb1/);
+
+    const missing = accountProfilePaneHtml(
+      user({
+        id: "github:2",
+        github: "bob",
+        username: "bob",
+      }),
+      null,
+    );
+    expect(missing).toContain("payout-status");
+    expect(missing).toMatch(/not set yet/i);
+    expect(missing).not.toContain("clear-payout-btn");
+  });
 });
