@@ -1,4 +1,4 @@
-import { authFetch, currentReturnPath, loginChoicesHtml, updateProfile, type AuthUser } from "./auth";
+import { authFetch, currentReturnPath, githubLoginUrl, loginChoicesHtml, logout, updateProfile, type AuthUser } from "./auth";
 import { solidIcon } from "./icons";
 import { WORKERS_API } from "./config";
 import { confirmAction } from "./confirm-modal";
@@ -228,11 +228,79 @@ export function branchSignDeskHtml(
   </div>`;
 }
 
-/** Prefer the Account receive address when it is an on-chain address. */
+/** Keyholder money and key changes refuse a GitHub login older than 12 hours. */
+export function keyholderSessionStale(message: string): boolean {
+  return /session older than 12h/i.test(message);
+}
+
+export type KeyholderReturnState = {
+  step: "why" | "address" | "sign";
+  address: string;
+  tab: string;
+  wizardOpen: boolean;
+  branch?: { proposalId: string; allocationId: string };
+  disburseId?: string;
+};
+
+const KH_RETURN_KEY = "plebly_kh_return";
+
+export function parseKeyholderReturnState(raw: string | null): KeyholderReturnState | null {
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw) as Partial<KeyholderReturnState>;
+    const step = data.step;
+    if (step !== "why" && step !== "address" && step !== "sign") return null;
+    return {
+      step,
+      address: typeof data.address === "string" ? data.address : "",
+      tab: typeof data.tab === "string" && data.tab ? data.tab : "release",
+      wizardOpen: Boolean(data.wizardOpen),
+      branch:
+        data.branch?.proposalId && data.branch.allocationId
+          ? {
+              proposalId: data.branch.proposalId,
+              allocationId: data.branch.allocationId,
+            }
+          : undefined,
+      disburseId: typeof data.disburseId === "string" ? data.disburseId : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveKeyholderReturnState(state: KeyholderReturnState): void {
+  try {
+    sessionStorage.setItem(KH_RETURN_KEY, JSON.stringify(state));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function takeKeyholderReturnState(): KeyholderReturnState | null {
+  try {
+    const raw = sessionStorage.getItem(KH_RETURN_KEY);
+    sessionStorage.removeItem(KH_RETURN_KEY);
+    return parseKeyholderReturnState(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** True when the field still holds the address the wizard opened with. */
+export function receiveAddressUnchanged(current: string, initial: string): boolean {
+  const next = current.trim().toLowerCase();
+  const saved = initial.trim().toLowerCase();
+  return Boolean(saved) && next === saved;
+}
+
+/** The address this check signs. The seat address wins when it is already on-chain. */
 export function keyholderReceiveAddress(authAddress: string, payoutAddress = ""): string {
+  const auth = authAddress.trim();
+  if (auth && payoutLooksValid(auth, "onchain")) return auth;
   const payout = payoutAddress.trim();
   if (payout && payoutLooksValid(payout, "onchain")) return payout;
-  return authAddress.trim();
+  return auth;
 }
 
 /** Walk through setting the receive address, then signing a message from it. */
@@ -250,11 +318,12 @@ export function keyholderProofWizardHtml(
       </div>
     </div>
     <div data-kh-wizard="address" hidden>
-      <p>This is your receive address. It is filled from your Account when one is already saved.</p>
-      <p class="muted">Enter or change it here. Saving stores it on your Account, and the message in the next step is signed from this address. It is not the project escrow.</p>
+      <p>This is your receive address. It is the one already saved for this seat, or your Account address if the seat does not have one yet.</p>
+      <p class="muted">Change it only if you want a different address. Saving a new one stores it on your Account and on this seat. The message in the next step is signed from this address. It is not the project escrow.</p>
       <label class="donate-amount-label" for="kh-auth-addr">Receive address</label>
-      <input id="kh-auth-addr" class="donate-amount mono" value="${escapeHtml(addr)}" placeholder="tb1… / bc1…" autocomplete="off" />
+      <input id="kh-auth-addr" class="donate-amount mono" data-initial="${escapeHtml(addr)}" value="${escapeHtml(addr)}" placeholder="tb1… / bc1…" autocomplete="off" />
       <p class="builder-msg" id="kh-auth-msg" hidden role="status"></p>
+      <a class="btn" id="kh-relogin-inline" href="#" hidden>Log in with GitHub</a>
       <div class="kh-wizard-actions">
         <button type="button" class="btn ghost" data-kh-wizard-go="why">Back</button>
         <button type="button" class="btn" id="kh-wizard-save-addr">Save and continue</button>
@@ -931,6 +1000,11 @@ export async function renderKeyholders(
           <button type="button" class="btn ghost" id="kh-cashout">Pay out</button>
         </div>
         <div id="kh-cashout-detail" hidden></div>
+        <div class="lifecycle-banner" id="kh-relogin" hidden role="status">
+          <span class="lifecycle-k">Log in again</span>
+          <p>Keyholder changes need a GitHub login from the last 12 hours. Log in again and you come back to this page.</p>
+          <a class="btn" id="kh-relogin-link" href="#">Log in with GitHub</a>
+        </div>
         ${
           kh.keys_stale
             ? `<div class="lifecycle-banner lifecycle-warn" role="status"><span class="lifecycle-k">Keys older than 1 year</span><p>Re-confirm fingerprint + xpub below.</p></div>`
@@ -1027,6 +1101,44 @@ export async function renderKeyholders(
       state.textContent = "Confirm the wallet saved for this seat, then try the upload again.";
     }
     openSignSession();
+  };
+
+  let openBranch: { proposalId: string; allocationId: string } | null = null;
+  let openDisburse: string | null = null;
+
+  const captureReturn = () => {
+    const session = app.querySelector<HTMLElement>("#kh-session");
+    const visible = [...app.querySelectorAll<HTMLElement>("[data-kh-wizard]")].find(
+      (el) => !el.hidden,
+    );
+    const step = visible?.dataset.khWizard;
+    saveKeyholderReturnState({
+      step: step === "why" || step === "sign" || step === "address" ? step : "address",
+      address: app.querySelector<HTMLInputElement>("#kh-auth-addr")?.value || "",
+      tab: kind,
+      wizardOpen: Boolean(session && !session.hidden),
+      branch: openBranch || undefined,
+      disburseId: openDisburse || undefined,
+    });
+  };
+
+  const noteStaleSession = (message: string): string => {
+    if (!keyholderSessionStale(message)) return message;
+    const href = githubLoginUrl(currentReturnPath());
+    const box = app.querySelector<HTMLElement>("#kh-relogin");
+    const link = app.querySelector<HTMLAnchorElement>("#kh-relogin-link");
+    const inline = app.querySelector<HTMLAnchorElement>("#kh-relogin-inline");
+    if (link) link.href = href;
+    if (inline) {
+      inline.href = href;
+      inline.hidden = false;
+    }
+    if (box) box.hidden = false;
+    captureReturn();
+    void logout().finally(() => {
+      window.location.assign(href);
+    });
+    return "Signing you out. A keyholder change needs a new GitHub login.";
   };
 
   const loadSignerNames = async () => {
@@ -1137,6 +1249,8 @@ export async function renderKeyholders(
   };
 
   const openBranchDetail = async (proposalId: string, allocationId: string) => {
+    openBranch = { proposalId, allocationId };
+    openDisburse = null;
     const res = await authFetch(
       `${api()}/keyholders/branch-sign/${encodeURIComponent(proposalId)}/${encodeURIComponent(allocationId)}`,
     );
@@ -1170,9 +1284,10 @@ export async function renderKeyholders(
     const setMsg = (t: string) => {
       const el = detailEl.querySelector<HTMLElement>("#kh-branch-msg");
       if (!el) return;
-      el.hidden = !t;
-      el.textContent = t;
-      noteSignSession(t);
+      const text = noteStaleSession(t);
+      el.hidden = !text;
+      el.textContent = text;
+      noteSignSession(text);
     };
     detailEl.querySelector("#kh-branch-sign")?.addEventListener("click", async () => {
       const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign");
@@ -1303,6 +1418,8 @@ export async function renderKeyholders(
   };
 
   const openDetail = async (id: string) => {
+    openDisburse = id;
+    openBranch = null;
     const res = await authFetch(`${api()}/disburse/${encodeURIComponent(id)}`);
     if (!res.ok) {
       detailEl.hidden = false;
@@ -1354,9 +1471,10 @@ export async function renderKeyholders(
     const setMsg = (t: string) => {
       const el = detailEl.querySelector<HTMLElement>("#kh-settle-msg");
       if (!el) return;
-      el.hidden = !t;
-      el.textContent = t;
-      noteSignSession(t);
+      const text = noteStaleSession(t);
+      el.hidden = !text;
+      el.textContent = text;
+      noteSignSession(text);
     };
 
     detailEl.querySelector("#kh-lockup-save")?.addEventListener("click", async () => {
@@ -1663,12 +1781,26 @@ export async function renderKeyholders(
     const msg = app.querySelector<HTMLElement>("#kh-auth-msg");
     const say = (t: string) => {
       if (!msg) return;
-      msg.hidden = !t;
-      msg.textContent = t;
+      const text = noteStaleSession(t);
+      msg.hidden = !text;
+      msg.textContent = text;
     };
     const addr = input?.value.trim() || "";
     if (!payoutLooksValid(addr, "onchain")) {
       say("Enter an on-chain receive address (tb1… or bc1…).");
+      return;
+    }
+    const seatAddr = (kh.auth_address || "").trim();
+    const matchesSeat =
+      Boolean(seatAddr) && addr.toLowerCase() === seatAddr.toLowerCase();
+    const seatReady = Boolean(seatAddr) && payoutLooksValid(seatAddr, "onchain");
+    if (matchesSeat || (receiveAddressUnchanged(addr, input?.dataset.initial || "") && seatReady)) {
+      const signWith = matchesSeat ? addr : seatAddr;
+      if (input) input.value = signWith;
+      const shown = app.querySelector<HTMLElement>("#kh-auth-shown");
+      if (shown) shown.textContent = signWith;
+      say("");
+      showProofStep("sign");
       return;
     }
     const btn = app.querySelector<HTMLButtonElement>("#kh-wizard-save-addr");
@@ -1791,6 +1923,8 @@ export async function renderKeyholders(
     });
     queueEl.setAttribute("aria-labelledby", btn.id);
     detailEl.hidden = true;
+    openBranch = null;
+    openDisburse = null;
     if (kind === "roster") {
       void loadRoster();
     } else {
@@ -1880,11 +2014,32 @@ export async function renderKeyholders(
     });
   });
 
+  const resume = takeKeyholderReturnState();
+
   void loadSignerNames().finally(() => {
-    if (start && initial !== "release") {
+    const resumeTab = resume?.tab && resume.tab !== "release" ? resume.tab : "";
+    const resumeBtn = resumeTab
+      ? app.querySelector<HTMLButtonElement>(`[data-kh-tab="${resumeTab}"]`)
+      : null;
+    if (resumeBtn) {
+      setTab(resumeTab, resumeBtn);
+    } else if (start && initial !== "release") {
       setTab(initial, start);
     } else {
       void loadQueue();
+    }
+    if (resume?.wizardOpen) {
+      openSignSession();
+      const input = app.querySelector<HTMLInputElement>("#kh-auth-addr");
+      if (input && resume.address) input.value = resume.address;
+      const shown = app.querySelector<HTMLElement>("#kh-auth-shown");
+      if (shown && resume.address) shown.textContent = resume.address;
+      showProofStep(resume.step);
+    }
+    if (resume?.branch) {
+      void openBranchDetail(resume.branch.proposalId, resume.branch.allocationId);
+    } else if (resume?.disburseId) {
+      void openDetail(resume.disburseId);
     }
   });
 }

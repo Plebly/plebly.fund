@@ -7,6 +7,9 @@ import {
   cashoutDeskHtml,
   keyholderProofWizardHtml,
   keyholderReceiveAddress,
+  keyholderSessionStale,
+  parseKeyholderReturnState,
+  receiveAddressUnchanged,
   keyholderDeskHtml,
   keyholderDeskStep,
   keyholderColdStart,
@@ -224,18 +227,48 @@ describe("keyholderPackageSentence", () => {
   it("fills the receive address from Account and saves it from this step", () => {
     const payout = "tb1q" + "p".repeat(30);
     const seat = "tb1q" + "a".repeat(30);
-    expect(keyholderReceiveAddress(seat, payout)).toBe(payout);
+    expect(keyholderReceiveAddress(seat, payout)).toBe(seat);
+    expect(keyholderReceiveAddress("", payout)).toBe(payout);
     expect(keyholderReceiveAddress(seat, "satoshi@example.com")).toBe(seat);
     const html = keyholderProofWizardHtml(seat, payout);
     expect(html).toContain("Step 1 of 3");
     expect(html).toContain("stores it on your Account");
-    expect(html).toContain(`value="${payout}"`);
+    expect(html).toContain(`value="${seat}"`);
     expect(html).toContain("kh-wizard-save-addr");
     expect(html).not.toContain("do not enter one here");
     expect(html).not.toContain("Registered address");
     const empty = keyholderProofWizardHtml("  ");
     expect(empty).toContain('id="kh-auth-addr"');
     expect(empty).toContain("Save and continue");
+    expect(
+      keyholderSessionStale(
+        "re-login required for keyholder actions (session older than 12h)",
+      ),
+    ).toBe(true);
+    expect(keyholderSessionStale("unauthorized")).toBe(false);
+    expect(receiveAddressUnchanged("tb1qabc", "tb1qabc")).toBe(true);
+    expect(receiveAddressUnchanged("TB1QABC", "tb1qabc")).toBe(true);
+    expect(receiveAddressUnchanged("tb1qchanged", "tb1qabc")).toBe(false);
+    expect(receiveAddressUnchanged("tb1qabc", "")).toBe(false);
+    expect(
+      parseKeyholderReturnState(
+        JSON.stringify({
+          step: "address",
+          address: "tb1qtyped",
+          tab: "branch",
+          wizardOpen: true,
+          branch: { proposalId: "p1", allocationId: "bounty" },
+        }),
+      ),
+    ).toEqual({
+      step: "address",
+      address: "tb1qtyped",
+      tab: "branch",
+      wizardOpen: true,
+      branch: { proposalId: "p1", allocationId: "bounty" },
+      disburseId: undefined,
+    });
+    expect(parseKeyholderReturnState("{")).toBeNull();
   });
 });
 
