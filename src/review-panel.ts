@@ -56,6 +56,7 @@ const UNSCORED_AI_REASON =
 
 function scoresSupportLabel(ai: {
   outcome: string;
+  reasoning?: string;
   failing_criteria?: string[];
   acceptance_scored?: boolean;
 }): boolean {
