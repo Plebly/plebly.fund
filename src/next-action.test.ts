@@ -91,6 +91,38 @@ describe("resolveNextAction", () => {
       button: "donate",
     },
     {
+      name: "listed + open high balance stays donate (shared escrow)",
+      input: {
+        proposal: proposal({ status: "listed", balance_sats: 30_586 }),
+        claim: claim({
+          state: "open",
+          status: "listed",
+          confirmed_balance_sats: 30_586,
+          claim_floor_sats: 10_000,
+          claimer: null,
+          psbt: { structured_state: "psbt_ready" },
+        }),
+        user: builder,
+      },
+      sentence: "Listed — still raising",
+      button: "donate",
+    },
+    {
+      name: "funding + open high balance stays donate",
+      input: {
+        proposal: proposal({ status: "funding", balance_sats: 30_586 }),
+        claim: claim({
+          state: "open",
+          status: "funding",
+          confirmed_balance_sats: 30_586,
+          claim_floor_sats: 10_000,
+        }),
+        user: builder,
+      },
+      sentence: "Listed — still raising",
+      button: "donate",
+    },
+    {
       name: "declined_fundable",
       input: { proposal: proposal({ status: "declined_fundable" }) },
       sentence: "Listing declined. You can still fund.",
@@ -663,6 +695,49 @@ describe("resolveNextAction", () => {
       const primaries = html.match(/class="btn"/g) || [];
       expect(primaries.length).toBe(got.button ? 1 : 0);
     }
+  });
+});
+
+describe("listed status ignores balance-derived open", () => {
+  it("keeps Donate + explainer when listed with open state above floor", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "listed", balance_sats: 30_586 }),
+      claim: claim({
+        state: "open",
+        status: "listed",
+        confirmed_balance_sats: 30_586,
+        claim_floor_sats: 10_000,
+        claimer: null,
+        psbt: { structured_state: "psbt_ready" },
+      }),
+      user: builder,
+    });
+    expect(action.sentence).toBe("Listed — still raising");
+    expect(action.detail).toContain(
+      "applications open when this listing becomes claimable",
+    );
+    expect(action.button).toBe("donate");
+    const html = nextActionPrimaryHtml(action);
+    expect(html).toContain("data-open-donate");
+    expect(html).toContain("Donate");
+    expect(html).not.toContain("builder-claim");
+    expect(html).not.toContain("Apply with bond");
+  });
+
+  it("still offers Apply when status is claimable with open state", () => {
+    const action = resolveNextAction({
+      proposal: proposal({ status: "claimable", balance_sats: 30_586 }),
+      claim: claim({
+        state: "open",
+        status: "claimable",
+        confirmed_balance_sats: 30_586,
+        claim_floor_sats: 10_000,
+      }),
+      user: builder,
+    });
+    expect(action.sentence).toBe("Apply with a bond.");
+    expect(action.button).toBe("apply");
+    expect(nextActionPrimaryHtml(action)).toContain("builder-claim");
   });
 });
 
