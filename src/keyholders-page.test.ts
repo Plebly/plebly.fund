@@ -149,6 +149,114 @@ describe("keyholderPackageSentence", () => {
     expect(html).not.toMatch(/cHNidP8|psbt_base64/i);
   });
 
+  it("bond_refund shows settle txid + Propose settle as primary (not only in details)", () => {
+    const html = keyholderDeskHtml(
+      {
+        kind: "bond_refund",
+        proposal_id: "PLEBLY-2026-003",
+        state: "ready",
+        outputs: [
+          {
+            address: "tb1q0za7fw3vvwevpkxxcev0z2g9dzgq2fe8d6vey8",
+            amount_sats: 10_000,
+            label: "bond refund",
+          },
+        ],
+        required_threshold: 0,
+        partials: [],
+      },
+      {
+        needsLn: false,
+        canPsbt: true,
+        canUnsigned: false,
+        canPartial: false,
+        canBroadcast: false,
+        isRelease: false,
+        requiresDualSettle: false,
+        userId: "github:1",
+      },
+    );
+    expect(html).toContain("Return funds.");
+    expect(html).toContain('data-kh-settle-primary="1"');
+    expect(html).toContain("Settle · record broadcast");
+    expect(html).toContain('id="kh-txid"');
+    expect(html).toContain("Settle txid (64 hex) — not a PSBT");
+    expect(html).toContain("fee-pay-bond-label");
+    expect(html).toContain("fee-pay-bond-contrast");
+    expect(html).toContain("fee/bond Sparrow wallet");
+    expect(html).toContain("Propose settle");
+    expect(html).not.toContain("Confirm settle");
+    // Primary settle controls must appear before the collapsed details.
+    const txidAt = html.indexOf('id="kh-txid"');
+    const proposeAt = html.indexOf('id="kh-propose"');
+    const detailsAt = html.indexOf('<details class="next-card-more">');
+    expect(txidAt).toBeGreaterThan(-1);
+    expect(proposeAt).toBeGreaterThan(-1);
+    expect(detailsAt).toBeGreaterThan(-1);
+    expect(txidAt).toBeLessThan(detailsAt);
+    expect(proposeAt).toBeLessThan(detailsAt);
+    // Details is chat-only for non-release; settle is not buried there alone.
+    expect(html).toContain("<summary>Keyholder chat</summary>");
+    expect(html).not.toContain("<summary>Other settle tools</summary>");
+    // No Confirm settle when dual-ack is not required (bond_refund).
+    expect(html).not.toContain('id="kh-confirm"');
+  });
+
+  it("contrib_refund also promotes settle primary; dual-settle keeps Confirm", () => {
+    const html = keyholderDeskHtml(
+      {
+        kind: "contrib_refund",
+        proposal_id: "PLEBLY-2026-009",
+        state: "ready",
+        outputs: [{ address: "tb1qout", amount_sats: 5_000, label: "refund" }],
+        settle_proposed_by: "github:2",
+      },
+      {
+        needsLn: false,
+        canPsbt: true,
+        canUnsigned: false,
+        canPartial: false,
+        canBroadcast: false,
+        isRelease: false,
+        requiresDualSettle: true,
+        userId: "github:1",
+      },
+    );
+    expect(html).toContain('data-kh-settle-primary="1"');
+    const detailsAt = html.indexOf('<details class="next-card-more">');
+    expect(html.indexOf('id="kh-txid"')).toBeLessThan(detailsAt);
+    expect(html).toContain('id="kh-confirm"');
+    expect(html).toContain("Confirm settle");
+  });
+
+  it("release keeps settle under Other settle tools (PSBT primary)", () => {
+    const html = keyholderDeskHtml(
+      {
+        kind: "release",
+        proposal_id: "p1",
+        state: "ready",
+        outputs: [{ address: "tb1qout", amount_sats: 50_000, label: "builder" }],
+        required_threshold: 3,
+        partials: [],
+      },
+      {
+        needsLn: false,
+        canPsbt: true,
+        canUnsigned: false,
+        canPartial: true,
+        canBroadcast: false,
+        isRelease: true,
+        requiresDualSettle: true,
+        userId: "github:1",
+      },
+    );
+    expect(html).not.toContain('data-kh-settle-primary="1"');
+    expect(html).toContain("<summary>Other settle tools</summary>");
+    const detailsAt = html.indexOf('<details class="next-card-more">');
+    expect(html.indexOf('id="kh-txid"')).toBeGreaterThan(detailsAt);
+    expect(html.indexOf('id="kh-propose"')).toBeGreaterThan(detailsAt);
+  });
+
   it("keeps outputs, verify, and sign markup on the console", () => {
     const src = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "keyholders-page.ts"),
