@@ -916,6 +916,12 @@ export async function renderProposalPage(
           proposalId: match.id,
           user,
           isFulfiller,
+          claimCtx: {
+            state: match.status ?? null,
+            status: match.status ?? null,
+            donorReviewStatus: match.donor_review_status ?? null,
+            listingStatus: match.status ?? null,
+          },
         });
       }
     }

@@ -240,10 +240,74 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
   el.className = `builder-msg ${cls}`.trim();
 }
 
-/** Single primary state line for header / sidebar / panel chrome. */
+/** Claim/listing runtime context for listing ballot chrome (not panel copy). */
+export type ListingBallotClaimCtx = {
+  /** Claim state from /claims (preferred). */
+  state?: string | null;
+  /** Claim or proposal status string. */
+  status?: string | null;
+  donorReviewStatus?: string | null;
+  /** Catalog / proposal.status when distinct from claim runtime. */
+  listingStatus?: string | null;
+};
+
+const LISTING_CLOSED_STATES = new Set([
+  "rejected",
+  "completed",
+  "declined",
+  "refunding",
+  "redirected",
+]);
+
+/**
+ * True when listing chrome may paint "Closed — …" from a tallied ballot.
+ * API claim still in_review / donor flagged is disputed — not a closed listing.
+ */
+export function claimAllowsClosedBallotListingChrome(
+  ctx?: ListingBallotClaimCtx | null,
+): boolean {
+  if (!ctx) return true;
+  const runtime = String(ctx.state || ctx.status || "").toLowerCase();
+  const listing = String(ctx.listingStatus || "").toLowerCase();
+  const donor = String(ctx.donorReviewStatus || "").toLowerCase();
+  if (LISTING_CLOSED_STATES.has(runtime) || LISTING_CLOSED_STATES.has(listing)) {
+    return true;
+  }
+  if (runtime === "in_review" || donor === "flagged") return false;
+  return true;
+}
+
+/** Listing primary when a closed ballot must not promote the listing to Closed. */
+export function flaggedDisputedListingLabel(): string {
+  return "Flagged — disputed";
+}
+
+/**
+ * Decision-native primary (panel status line). Open kinds share one shape:
+ * `${decisionKindLabel(kind)} — open`; closed → Closed — …
+ */
 export function primaryBallotStatusLabel(d: ReviewDecisionView): string {
   if (d.status !== "open") return closedBallotSummary(d);
   return `${decisionKindLabel(d.kind)} — open`;
+}
+
+/**
+ * Listing header / meter / sidebar / next-card primary. Defers to claim
+ * runtime so in_review+flagged never paints Closed — reject from a tallied
+ * ballot while the claim is still live.
+ */
+export function listingBallotStatusLabel(
+  d: ReviewDecisionView,
+  ctx?: ListingBallotClaimCtx | null,
+): string {
+  if (d.status === "open") return primaryBallotStatusLabel(d);
+  if (!claimAllowsClosedBallotListingChrome(ctx)) {
+    if (String(ctx?.donorReviewStatus || "").toLowerCase() === "flagged") {
+      return flaggedDisputedListingLabel();
+    }
+    return "In review — disputed";
+  }
+  return closedBallotSummary(d);
 }
 
 export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
@@ -258,7 +322,7 @@ export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
   return `${primary}${second}${esc} · closes ${closes}.`;
 }
 
-/** Sole primary closed-ballot summary (sidebar / next-card). */
+/** Sole primary closed-ballot summary (sidebar / next-card when listing is closed). */
 export function closedBallotSummary(d: ReviewDecisionView): string {
   const result = d.result || d.status;
   return `Closed — ${result}${d.passed ? " (passed)" : ""}`;
@@ -276,13 +340,63 @@ function queryListingChrome(root: ParentNode, selector: string): HTMLElement | n
   return null;
 }
 
+function readStashedClaimCtx(
+  panel: HTMLElement | null,
+): ListingBallotClaimCtx | null {
+  if (!panel) return null;
+  if (
+    !panel.dataset.claimRuntimeState &&
+    !panel.dataset.claimRuntimeStatus &&
+    !panel.dataset.donorReviewStatus &&
+    !panel.dataset.listingStatus
+  ) {
+    return null;
+  }
+  return {
+    state: panel.dataset.claimRuntimeState || null,
+    status: panel.dataset.claimRuntimeStatus || null,
+    donorReviewStatus: panel.dataset.donorReviewStatus || null,
+    listingStatus: panel.dataset.listingStatus || null,
+  };
+}
+
+function stashClaimCtx(
+  panel: HTMLElement,
+  ctx?: ListingBallotClaimCtx | null,
+): void {
+  if (!ctx) {
+    delete panel.dataset.claimRuntimeState;
+    delete panel.dataset.claimRuntimeStatus;
+    delete panel.dataset.donorReviewStatus;
+    delete panel.dataset.listingStatus;
+    delete panel.dataset.ballotAllowClosed;
+    return;
+  }
+  if (ctx.state != null && ctx.state !== "") {
+    panel.dataset.claimRuntimeState = String(ctx.state);
+  } else delete panel.dataset.claimRuntimeState;
+  if (ctx.status != null && ctx.status !== "") {
+    panel.dataset.claimRuntimeStatus = String(ctx.status);
+  } else delete panel.dataset.claimRuntimeStatus;
+  if (ctx.donorReviewStatus != null && ctx.donorReviewStatus !== "") {
+    panel.dataset.donorReviewStatus = String(ctx.donorReviewStatus);
+  } else delete panel.dataset.donorReviewStatus;
+  if (ctx.listingStatus != null && ctx.listingStatus !== "") {
+    panel.dataset.listingStatus = String(ctx.listingStatus);
+  } else delete panel.dataset.listingStatus;
+  panel.dataset.ballotAllowClosed = claimAllowsClosedBallotListingChrome(ctx)
+    ? "1"
+    : "0";
+}
+
 /** Hide actionable Flag when a closed ballot is the sole primary state. */
 export function suppressFlagForClosedBallot(
   root: ParentNode,
   d: ReviewDecisionView,
+  ctx?: ListingBallotClaimCtx | null,
 ): void {
   if (d.status === "open") return;
-  const summary = closedBallotSummary(d);
+  const summary = listingBallotStatusLabel(d, ctx);
   const sentence = queryListingChrome(root, "#next-card-sentence");
   if (sentence) sentence.textContent = summary;
   const detail = queryListingChrome(root, "#next-card-detail");
@@ -297,13 +411,15 @@ export function suppressFlagForClosedBallot(
 /**
  * Drive one status source of truth across listing header, funding meter,
  * sidebar jump, and next-card. Vote / fulfiller-blocked stay the decision
- * primary inside #review-panel.
+ * primary inside #review-panel. All open decision kinds (deliverable_confirm,
+ * claim_extension, second_review, …) share primaryBallotStatusLabel.
  */
 export function syncListingBallotChrome(
   root: ParentNode,
   d: ReviewDecisionView,
+  ctx?: ListingBallotClaimCtx | null,
 ): void {
-  const label = primaryBallotStatusLabel(d);
+  const label = listingBallotStatusLabel(d, ctx);
   const pill = queryListingChrome(root, ".proposal-hero-top .pill-status");
   if (pill) {
     pill.textContent = label;
@@ -326,11 +442,15 @@ export function syncListingBallotChrome(
     jump.dataset.ballotChrome = "1";
   }
   // Stash enough for late stepper/status paints to re-apply without re-fetch.
+  // Always set reviewDecisionId with the chrome stash so reapply never races
+  // a post-sync paint that only has kind/label.
   const panel = queryListingChrome(root, "#review-panel");
   if (panel) {
+    if (d.id) panel.dataset.reviewDecisionId = d.id;
     panel.dataset.ballotPrimaryLabel = label;
     panel.dataset.reviewDecisionKind = d.kind;
     panel.dataset.reviewDecisionStatus = d.status;
+    stashClaimCtx(panel, ctx);
     if (d.status !== "open") {
       panel.dataset.reviewDecisionResult = d.result || d.status;
       panel.dataset.reviewDecisionPassed = d.passed ? "1" : "0";
@@ -340,7 +460,7 @@ export function syncListingBallotChrome(
     }
   }
   if (d.status !== "open") {
-    suppressFlagForClosedBallot(root, d);
+    suppressFlagForClosedBallot(root, d, ctx);
     return;
   }
   // Open ballot: status chrome only. Decision primary (vote / fulfiller
@@ -358,25 +478,30 @@ export function syncListingBallotChrome(
  */
 export function reapplyListingBallotChrome(root: ParentNode = document): void {
   const panel = queryListingChrome(root, "#review-panel");
+  // Prefer a full stash (id set with chrome) so every open kind re-syncs.
   if (
-    panel?.dataset.reviewDecisionId &&
-    panel.dataset.ballotPrimaryLabel &&
+    panel?.dataset.ballotPrimaryLabel &&
     panel.dataset.reviewDecisionKind
   ) {
     const status = panel.dataset.reviewDecisionStatus || "open";
-    syncListingBallotChrome(root, {
-      id: panel.dataset.reviewDecisionId,
-      proposal_id: "",
-      kind: panel.dataset.reviewDecisionKind,
-      round: 1,
-      created_at: "",
-      closes_at: "",
-      status,
-      counts: { yes: 0, no: 0, abstain: 0 },
-      vote_count: 0,
-      result: panel.dataset.reviewDecisionResult,
-      passed: panel.dataset.reviewDecisionPassed === "1",
-    });
+    const id = panel.dataset.reviewDecisionId || "stashed";
+    syncListingBallotChrome(
+      root,
+      {
+        id,
+        proposal_id: "",
+        kind: panel.dataset.reviewDecisionKind,
+        round: 1,
+        created_at: "",
+        closes_at: "",
+        status,
+        counts: { yes: 0, no: 0, abstain: 0 },
+        vote_count: 0,
+        result: panel.dataset.reviewDecisionResult,
+        passed: panel.dataset.reviewDecisionPassed === "1",
+      },
+      readStashedClaimCtx(panel),
+    );
     return;
   }
   // Fallback: jump/pill already marked ballot-owned — copy that label back.
@@ -417,6 +542,7 @@ export function renderDecision(
   isReviewer: boolean,
   userId?: string | null,
   isFulfiller = false,
+  claimCtx?: ListingBallotClaimCtx | null,
 ): void {
   const statusEl = root.querySelector<HTMLElement>("#review-status");
   const counts = root.querySelector<HTMLElement>("#review-counts");
@@ -450,7 +576,7 @@ export function renderDecision(
       ?.querySelectorAll(":scope > .ai-review-card")
       .forEach((el) => el.remove());
   }
-  syncListingBallotChrome(root, d);
+  syncListingBallotChrome(root, d, claimCtx);
   if (counts) {
     counts.hidden = false;
     counts.innerHTML = `
@@ -491,12 +617,19 @@ export function renderDecision(
 
 export async function bindReviewPanel(
   root: ParentNode,
-  opts: { proposalId: string; user: AuthUser | null; isFulfiller?: boolean },
+  opts: {
+    proposalId: string;
+    user: AuthUser | null;
+    isFulfiller?: boolean;
+    /** Claim/listing runtime so listing chrome does not paint Closed early. */
+    claimCtx?: ListingBallotClaimCtx | null;
+  },
 ): Promise<void> {
   const panel = root.querySelector<HTMLElement>("#review-panel");
   if (!panel || !opts.proposalId) return;
   const msg = panel.querySelector<HTMLElement>("#review-msg");
   const statusEl = panel.querySelector<HTMLElement>("#review-status");
+  const claimCtx = opts.claimCtx ?? null;
 
   // Generation guard: claim-refresh / proposal-page may call bind twice.
   // Signed-in paths await fetchReviewerMe first and can lose a race to a
@@ -537,11 +670,12 @@ export async function bindReviewPanel(
     return;
   }
 
-  renderDecision(panel, decision, isReviewer, opts.user?.id, isFulfiller);
-  suppressFlagForClosedBallot(root, decision);
-  // Track last painted decision so tests / later sync can detect a good paint.
+  // Set id before/with chrome so reapplyListingBallotChrome always has a full stash
+  // even if a late refreshStepper races the paint.
   panel.dataset.reviewDecisionId = decision.id;
   panel.dataset.reviewDecisionStatus = decision.status;
+  renderDecision(panel, decision, isReviewer, opts.user?.id, isFulfiller, claimCtx);
+  suppressFlagForClosedBallot(root, decision, claimCtx);
 
   if (!opts.user && !isFulfiller && decision.status === "open") {
     const actions = panel.querySelector<HTMLElement>("#review-actions");
@@ -565,10 +699,10 @@ export async function bindReviewPanel(
       setMsg(msg, "Recording vote…");
       try {
         const next = await voteReviewDecision(liveDecision(), vote);
-        renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller);
-        suppressFlagForClosedBallot(root, next);
         panel.dataset.reviewDecisionId = next.id;
         panel.dataset.reviewDecisionStatus = next.status;
+        renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller, claimCtx);
+        suppressFlagForClosedBallot(root, next, claimCtx);
         setMsg(msg, "Vote recorded.", "success");
       } catch (e) {
         if ((e as Error).message === "login_required") {
@@ -593,10 +727,10 @@ export async function bindReviewPanel(
     setMsg(msg, "Publishing…");
     try {
       const next = await publishDissent(liveDecision(), text);
-      renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller);
-        suppressFlagForClosedBallot(root, next);
       panel.dataset.reviewDecisionId = next.id;
       panel.dataset.reviewDecisionStatus = next.status;
+      renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller, claimCtx);
+      suppressFlagForClosedBallot(root, next, claimCtx);
       setMsg(msg, "Dissent published.", "success");
     } catch (e) {
       if ((e as Error).message === "login_required") {
@@ -618,10 +752,10 @@ export async function bindReviewPanel(
         liveDecision(),
         reason || undefined,
       );
-      renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller);
-        suppressFlagForClosedBallot(root, next);
       panel.dataset.reviewDecisionId = next.id;
       panel.dataset.reviewDecisionStatus = next.status;
+      renderDecision(panel, next, isReviewer, opts.user?.id, isFulfiller, claimCtx);
+      suppressFlagForClosedBallot(root, next, claimCtx);
       setMsg(msg, "AI challenged — escalated to humans.", "success");
     } catch (e) {
       if ((e as Error).message === "login_required") {

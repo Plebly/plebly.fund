@@ -772,19 +772,27 @@ async function syncHybridReviewUi(
     else host.insertAdjacentHTML("beforeend", reviewPanelHtml(proposal.id));
     panel = host.querySelector<HTMLElement>("#review-panel");
   }
+  const claimCtx = {
+    state: status.state ?? null,
+    status: status.status ?? proposal.status ?? null,
+    donorReviewStatus: donor,
+    listingStatus: proposal.status ?? null,
+  };
   if (wantPanel && panel) {
     await bindReviewPanel(host, {
       proposalId: proposal.id,
       user,
       isFulfiller: sessionIsClaimStatusFulfiller(user, status),
+      claimCtx,
     });
   } else if (st === "in_review" && donor === "window_open") {
     // Flag may have just painted for window_open while a closed ballot still
-    // sits in the main column (or is fetchable). Closed summary wins.
+    // sits in the main column (or is fetchable). Closed summary wins only when
+    // the claim/listing is actually closed — not while still in_review+flagged.
     try {
       const { fetchOpenReviewDecision } = await import("./reviewers");
       const decision = await fetchOpenReviewDecision(proposal.id);
-      if (decision) suppressFlagForClosedBallot(root, decision);
+      if (decision) suppressFlagForClosedBallot(root, decision, claimCtx);
     } catch {
       /* ignore */
     }
@@ -1676,7 +1684,13 @@ export async function bindBuilderPanel(
         );
         if (pill?.dataset.ballotChrome === "1") return true;
         const panel = document.querySelector<HTMLElement>("#review-panel");
-        return Boolean(panel?.dataset.reviewDecisionId && panel.dataset.ballotPrimaryLabel);
+        // ballotPrimaryLabel alone is enough — sync now stashes id with chrome,
+        // but tolerate a partial stash so refreshStepper cannot leave hero on
+        // lifecycle "In review" while the panel owns an open decision.
+        return Boolean(
+          panel?.dataset.ballotPrimaryLabel &&
+            (panel.dataset.reviewDecisionId || panel.dataset.reviewDecisionKind),
+        );
       };
       const refreshStepper = () => {
         const stepper =
