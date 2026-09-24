@@ -3,12 +3,15 @@ import {
   aiOutcomeClass,
   aiOutcomeLabel,
   aiReviewCardHtml,
+  claimAllowsClosedBallotListingChrome,
   closedBallotSummary,
   dissentListHtml,
+  flaggedDisputedListingLabel,
   FULFILLER_CANNOT_VOTE,
   isAiChallengeableDecision,
   isDemotedAiOutcome,
   challengeAiButtonLabel,
+  listingBallotStatusLabel,
   primaryBallotStatusLabel,
   renderDecision,
   reviewPanelHtml,
@@ -623,6 +626,159 @@ describe("listing ballot status chrome", () => {
     }
     expect(document.querySelector(".pill-status")?.textContent).toBe(
       "Time extension — open",
+    );
+  });
+
+  it("reapply after pill clobber keeps Completion review primary (deliverable_confirm)", () => {
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">In review</span></div>
+      <div class="proposal-funding-bar"><span class="funding-meter-label">In review</span></div>
+      <a id="review-side-link" href="#proposal-review">In review</a>
+      <p id="next-card-sentence">Reviewers are checking the work.</p>
+      <div id="review-panel"></div>`;
+    const decision = {
+      id: "d-deliv-1",
+      proposal_id: "PLEBLY-2026-003",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-10-05T00:00:00Z",
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+      escalated: true,
+    };
+    // sync stashes reviewDecisionId with chrome (no separate post-assign needed).
+    syncListingBallotChrome(document.body, decision);
+    const panel = document.querySelector("#review-panel") as HTMLElement;
+    expect(panel.dataset.reviewDecisionId).toBe(decision.id);
+    expect(panel.dataset.ballotPrimaryLabel).toBe("Completion review — open");
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Completion review — open",
+    );
+
+    // Simulate builder-panel refreshStepper lifecycle overwrite of hero pill.
+    const pillHost = document.querySelector(".proposal-hero-top")!;
+    const prev = pillHost.querySelector(".pill-status");
+    const next = statusPillHtml("in_review");
+    if (prev && next) prev.outerHTML = next;
+    expect(document.querySelector(".pill-status")?.textContent).toBe("In review");
+
+    reapplyListingBallotChrome(document.body);
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Completion review — open",
+    );
+    expect(document.querySelector(".funding-meter-label")?.textContent).toBe(
+      "Completion review — open",
+    );
+    expect(document.querySelector("#review-side-link")?.textContent).toBe(
+      "Completion review — open",
+    );
+    expect(document.querySelector("#next-card-sentence")?.textContent).toBe(
+      "Completion review — open",
+    );
+    expect(document.querySelector(".pill-status")?.textContent).not.toBe(
+      "In review",
+    );
+  });
+
+  it("closed reject + claim still in_review+flagged does not paint Closed — reject", () => {
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">In review</span></div>
+      <div class="proposal-funding-bar"><span class="funding-meter-label">In review</span></div>
+      <a id="review-side-link" href="#proposal-review">In review</a>
+      <p id="next-card-sentence">Reviewers are checking the work.</p>
+      <div class="next-card-primary"><button type="button" class="btn" id="builder-flag">Flag this close</button></div>
+      <div id="review-panel"></div>`;
+    const closedReject = {
+      id: "d-closed-reject",
+      proposal_id: "PLEBLY-2026-001",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-01-02T00:00:00Z",
+      status: "closed",
+      counts: { yes: 0, no: 3, abstain: 0 },
+      vote_count: 3,
+      passed: false,
+      result: "reject",
+      ai_decisive: true,
+    };
+    const claimCtx = {
+      state: "in_review",
+      status: "in_review",
+      donorReviewStatus: "flagged",
+      listingStatus: "in_review",
+    };
+    expect(claimAllowsClosedBallotListingChrome(claimCtx)).toBe(false);
+    expect(listingBallotStatusLabel(closedReject, claimCtx)).toBe(
+      flaggedDisputedListingLabel(),
+    );
+    expect(listingBallotStatusLabel(closedReject, claimCtx)).not.toContain(
+      "Closed",
+    );
+    // Panel-native primary may still say Closed — reject (honest about ballot).
+    expect(primaryBallotStatusLabel(closedReject)).toBe("Closed — reject");
+
+    syncListingBallotChrome(document.body, closedReject, claimCtx);
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Flagged — disputed",
+    );
+    expect(document.querySelector(".funding-meter-label")?.textContent).toBe(
+      "Flagged — disputed",
+    );
+    expect(document.querySelector("#review-side-link")?.textContent).toBe(
+      "Flagged — disputed",
+    );
+    expect(document.querySelector("#next-card-sentence")?.textContent).toBe(
+      "Flagged — disputed",
+    );
+    expect(document.querySelector("#builder-flag")).toBeNull();
+    expect(document.querySelector(".pill-status")?.textContent).not.toBe(
+      "Closed — reject",
+    );
+
+    // Late stepper clobber → reapply keeps flagged vocabulary, not Closed.
+    const pillHost = document.querySelector(".proposal-hero-top")!;
+    const prev = pillHost.querySelector(".pill-status");
+    const next = statusPillHtml("in_review");
+    if (prev && next) prev.outerHTML = next;
+    reapplyListingBallotChrome(document.body);
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Flagged — disputed",
+    );
+    expect(document.querySelector(".pill-status")?.textContent).not.toMatch(
+      /^Closed/,
+    );
+  });
+
+  it("closed reject paints Closed when claim/listing is actually rejected", () => {
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">Rejected</span></div>
+      <div class="proposal-funding-bar"><span class="funding-meter-label">Rejected</span></div>
+      <a id="review-side-link" href="#proposal-review">Rebuttal</a>
+      <p id="next-card-sentence">The builder has time to reply once.</p>
+      <div id="review-panel"></div>`;
+    const closedReject = {
+      id: "d-closed-reject-2",
+      proposal_id: "p-rej",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-01-02T00:00:00Z",
+      status: "closed",
+      counts: { yes: 0, no: 3, abstain: 0 },
+      vote_count: 3,
+      passed: false,
+      result: "reject",
+    };
+    syncListingBallotChrome(document.body, closedReject, {
+      state: "rejected",
+      status: "rejected",
+      listingStatus: "rejected",
+    });
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Closed — reject",
     );
   });
 });
