@@ -8,6 +8,7 @@ import {
   FULFILLER_CANNOT_VOTE,
   isAiChallengeableDecision,
   challengeAiButtonLabel,
+  renderDecision,
   reviewPanelHtml,
   rebuttalPanelHtml,
   reviewDecisionStatusLine,
@@ -356,5 +357,74 @@ describe("closed ballot / fulfiller copy", () => {
   it("fulfiller cannot-vote copy is fixed", () => {
     expect(FULFILLER_CANNOT_VOTE).toContain("fulfiller");
     expect(FULFILLER_CANNOT_VOTE).toContain("cannot vote");
+  });
+
+  function openDecision(kind: string): ReviewDecisionView {
+    return {
+      id: "d-open",
+      proposal_id: "p1",
+      kind,
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-01-08T00:00:00Z",
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+    };
+  }
+
+  function mountReviewPanel(): HTMLElement {
+    document.body.innerHTML = reviewPanelHtml("p1");
+    return document.body.querySelector("#review-panel")!;
+  }
+
+  it("blocks fulfiller on open claim_extension (not only deliverable kinds)", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, openDecision("claim_extension"), true, "github:1", true);
+    const actions = panel.querySelector("#review-actions")!;
+    expect(actions.hidden).toBe(false);
+    expect(actions.textContent).toContain(FULFILLER_CANNOT_VOTE);
+    expect(panel.querySelectorAll("[data-rev-vote]")).toHaveLength(0);
+    expect(panel.querySelector("#review-dissent")?.hidden).toBe(true);
+  });
+
+  it("blocks fulfiller on open listing_challenge", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, openDecision("listing_challenge"), true, "github:1", true);
+    expect(panel.querySelector("#review-actions")?.textContent).toContain(
+      FULFILLER_CANNOT_VOTE,
+    );
+    expect(panel.querySelectorAll("[data-rev-vote]")).toHaveLength(0);
+  });
+
+  it("still blocks fulfiller on open deliverable_confirm", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, openDecision("deliverable_confirm"), true, "github:1", true);
+    expect(panel.querySelector("#review-actions")?.textContent).toContain(
+      FULFILLER_CANNOT_VOTE,
+    );
+    expect(panel.querySelectorAll("[data-rev-vote]")).toHaveLength(0);
+  });
+
+  it("non-fulfiller reviewer still sees open vote buttons", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, openDecision("claim_extension"), true, "github:2", false);
+    const actions = panel.querySelector("#review-actions")!;
+    expect(actions.hidden).toBe(false);
+    expect(actions.textContent).not.toContain(FULFILLER_CANNOT_VOTE);
+    expect(panel.querySelectorAll("[data-rev-vote]").length).toBeGreaterThanOrEqual(3);
+    expect(panel.querySelector("#review-dissent")?.hidden).toBe(false);
+  });
+
+  it("open ballot keeps Flag CTA (closed suppress only)", () => {
+    document.body.innerHTML = `
+      ${reviewPanelHtml("p1")}
+      <p id="next-card-sentence">Flag if the work is not finished. 7 days left.</p>
+      <div class="next-card-primary"><button type="button" class="btn" id="builder-flag">Flag this close</button></div>`;
+    suppressFlagForClosedBallot(document.body, openDecision("claim_extension"));
+    expect(document.querySelector("#builder-flag")).not.toBeNull();
+    expect(document.querySelector("#next-card-sentence")?.textContent).toContain(
+      "Flag if the work",
+    );
   });
 });
