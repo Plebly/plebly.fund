@@ -334,6 +334,15 @@ export function decisionKindLabel(kind: string): string {
   return kind;
 }
 
+/** Kind-aware vote prompt (inbox + listing decision primary). */
+export function decisionPrimarySentence(kind: string): string {
+  if (kind === "deliverable_confirm") return "Vote whether this meets the project.";
+  if (kind === "second_review") return "Vote on the builder's reply.";
+  if (kind === "claim_extension") return "Vote on more time.";
+  if (kind === "listing_challenge") return "Vote on this listing.";
+  return "Vote on this decision.";
+}
+
 export function decisionKindPayLine(kind: string): string {
   return reviewKindPayLabel(kind);
 }

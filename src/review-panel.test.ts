@@ -7,12 +7,15 @@ import {
   dissentListHtml,
   FULFILLER_CANNOT_VOTE,
   isAiChallengeableDecision,
+  isDemotedAiOutcome,
   challengeAiButtonLabel,
+  primaryBallotStatusLabel,
   renderDecision,
   reviewPanelHtml,
   rebuttalPanelHtml,
   reviewDecisionStatusLine,
   suppressFlagForClosedBallot,
+  syncListingBallotChrome,
 } from "./review-panel";
 import type { ReviewDecisionView } from "./reviewers";
 
@@ -426,5 +429,111 @@ describe("closed ballot / fulfiller copy", () => {
     expect(document.querySelector("#next-card-sentence")?.textContent).toContain(
       "Flag if the work",
     );
+  });
+});
+
+
+describe("listing ballot status chrome", () => {
+  it("primaryBallotStatusLabel unifies open extension and closed tallies", () => {
+    expect(
+      primaryBallotStatusLabel({
+        id: "d1",
+        proposal_id: "p1",
+        kind: "claim_extension",
+        round: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        closes_at: "2026-10-07T00:00:00Z",
+        status: "open",
+        counts: { yes: 0, no: 0, abstain: 0 },
+        vote_count: 0,
+        escalated: true,
+      }),
+    ).toBe("Time extension — open");
+    expect(
+      primaryBallotStatusLabel({
+        id: "d1",
+        proposal_id: "p1",
+        kind: "deliverable_confirm",
+        round: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        closes_at: "2026-01-02T00:00:00Z",
+        status: "closed",
+        counts: { yes: 3, no: 0, abstain: 0 },
+        vote_count: 3,
+        passed: true,
+        result: "approve",
+      }),
+    ).toBe("Closed — approve (passed)");
+  });
+
+  it("open status line leads with primary and keeps escalate/closes detail", () => {
+    const line = reviewDecisionStatusLine({
+      id: "d1",
+      proposal_id: "p1",
+      kind: "claim_extension",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-10-07T00:00:00Z",
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+      escalated: true,
+    });
+    expect(line.startsWith("Time extension — open")).toBe(true);
+    expect(line).toContain("Escalated to humans");
+    expect(line).toContain("closes");
+    expect(line).not.toContain("Review is open");
+  });
+
+  it("syncListingBallotChrome paints one label across header/sidebar", () => {
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">In review</span></div>
+      <div class="proposal-funding-bar"><span class="funding-meter-label">In review</span></div>
+      <a id="review-side-link" href="#proposal-review">Review is open</a>
+      <p id="next-card-sentence">Vote whether this meets the project.</p>
+      <p id="next-card-detail" class="muted">extra</p>`;
+    syncListingBallotChrome(document.body, {
+      id: "d1",
+      proposal_id: "p1",
+      kind: "claim_extension",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-10-07T00:00:00Z",
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+      escalated: true,
+    });
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector(".funding-meter-label")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector("#review-side-link")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector("#next-card-sentence")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector("#next-card-detail")).toBeNull();
+    expect(
+      (document.querySelector("#review-side-link") as HTMLElement).dataset
+        .ballotChrome,
+    ).toBe("1");
+  });
+
+  it("tucks skipped AI cards so they do not compete with the ballot", () => {
+    expect(isDemotedAiOutcome("bypass")).toBe(true);
+    expect(isDemotedAiOutcome("unavailable")).toBe(true);
+    expect(isDemotedAiOutcome("pass")).toBe(false);
+    const html = aiReviewCardHtml({
+      outcome: "bypass",
+      reasoning: "AI Reviewer skipped: listing tags are outside competence.",
+    });
+    expect(html).toContain("<details");
+    expect(html).toContain("is-tucked");
+    expect(html).toContain("Skipped");
+    expect(html).not.toContain("decisive vote");
   });
 });

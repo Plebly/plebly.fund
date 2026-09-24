@@ -9841,6 +9841,32 @@ a.proposal-comment-author:hover {
   padding: 0.75rem;
 }
 
+.ai-review-card.is-tucked {
+  margin-top: 0.5rem;
+  padding: 0;
+  border-color: var(--line);
+  background: transparent;
+}
+
+.ai-review-card.is-tucked > summary.ai-review-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  display: block;
+}
+
+.ai-review-card.is-tucked > summary.ai-review-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-review-card.is-tucked .ai-review-head {
+  margin-bottom: 0;
+}
+
+.ai-review-card.is-tucked .ai-review-tucked-body {
+  padding: 0 0.75rem 0.75rem;
+}
+
 .ai-review-card.ai-pass {
   border-color: rgba(var(--good-rgb), 0.4);
   background: rgba(var(--good-rgb), 0.06);
