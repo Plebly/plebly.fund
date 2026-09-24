@@ -29,6 +29,14 @@ export function keyholderTabFromSearch(search: string): KeyholderTab {
     : "release";
 }
 
+/** Compact empty queue chrome for Releases / Branches / refunds / roster. */
+export function keyholderQueueEmptyHtml(title: string, body: string): string {
+  return `<div class="empty-state empty-state-compact kh-queue-empty"><div class="empty-state-inner">
+    <p class="empty-state-title">${escapeHtml(title)}</p>
+    <p class="empty-state-body">${escapeHtml(body)}</p>
+  </div></div>`;
+}
+
 type DisburseItem = {
   id: string;
   kind: string;
@@ -1092,7 +1100,7 @@ export async function renderKeyholders(
       }
       <div class="kh-session-bar">
         <p class="muted" id="kh-session-state">Before an upload, confirm the wallet saved for this seat.</p>
-        <button type="button" class="btn ghost" id="kh-session-open">Start the check</button>
+        <button type="button" class="btn ghost btn-compact" id="kh-session-open">Start the check</button>
       </div>
       <div class="site-modal" id="kh-session" hidden>
         <div class="site-modal-backdrop" data-kh-session-close tabindex="-1" aria-hidden="true"></div>
@@ -1102,14 +1110,17 @@ export async function renderKeyholders(
           ${keyholderProofWizardHtml(kh.auth_address || "", user.payout_address || "")}
         </div>
       </div>
-      <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
-        <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
-        <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
-        <button type="button" class="account-tab" role="tab" id="kh-tab-bond_refund" data-kh-tab="bond_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Bond refunds</button>
-        <button type="button" class="account-tab" role="tab" id="kh-tab-contrib_refund" data-kh-tab="contrib_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Contributor refunds</button>
-        <button type="button" class="account-tab" role="tab" id="kh-tab-roster" data-kh-tab="roster" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Roster</button>
+      <div class="kh-desk-queues">
+        <h2 class="kh-desk-queues-title">Signing queues</h2>
+        <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
+          <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-bond_refund" data-kh-tab="bond_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Bond refunds</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-contrib_refund" data-kh-tab="contrib_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Contributor refunds</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-roster" data-kh-tab="roster" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Roster</button>
+        </div>
+        <div id="kh-queue" class="kh-queue" role="tabpanel" aria-labelledby="kh-tab-release" aria-live="polite"><p class="muted">Loading…</p></div>
       </div>
-      <div id="kh-queue" role="tabpanel" aria-labelledby="kh-tab-release" aria-live="polite"><p class="muted">Loading…</p></div>
       <div id="kh-detail" hidden></div>
     </section>
   `);
@@ -1295,7 +1306,10 @@ export async function renderKeyholders(
       }
       const data = (await res.json()) as { items: BranchSignDeskItem[] };
       if (!data.items.length) {
-        queueEl.innerHTML = `<p class="muted">No selected bounty branches ready to sign.</p>`;
+        queueEl.innerHTML = keyholderQueueEmptyHtml(
+          "Nothing to sign",
+          "No selected bounty branches ready to sign.",
+        );
         queueEl.removeAttribute("aria-busy");
         return;
       }
@@ -1328,7 +1342,10 @@ export async function renderKeyholders(
     }
     const data = (await res.json()) as { items: DisburseItem[] };
     if (!data.items.length) {
-      queueEl.innerHTML = `<p class="muted">No open ${escapeHtml(kind.replace(/_/g, " "))} items.</p>`;
+      queueEl.innerHTML = keyholderQueueEmptyHtml(
+        "Nothing to sign",
+        `No open ${kind.replace(/_/g, " ")} items.`,
+      );
       queueEl.removeAttribute("aria-busy");
       return;
     }
@@ -2004,7 +2021,7 @@ export async function renderKeyholders(
          <ul class="declined-list">${rows
           .map(
             (k) =>
-              `<li class="declined-row"><span>@${escapeHtml(k.github)}</span>
+              `<li class="declined-row kh-roster-row"><span class="kh-roster-name">@${escapeHtml(k.github)}</span>
           <span class="declined-meta"><span class="pill">${escapeHtml(k.status)}</span>
           <span class="mono muted">${escapeHtml(k.fingerprint || "—")}</span></span>
           ${
@@ -2014,7 +2031,10 @@ export async function renderKeyholders(
           }</li>`,
           )
           .join("")}</ul>`
-      : `<p class="muted">No keyholders listed yet.</p>`;
+      : keyholderQueueEmptyHtml(
+          "No seats listed",
+          "Active and pending keyholders appear here when the roster has rows.",
+        );
     queueEl.querySelectorAll<HTMLButtonElement>("[data-coattest]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.coattest || "";
