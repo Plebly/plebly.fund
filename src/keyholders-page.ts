@@ -265,9 +265,75 @@ export function branchSignDeskHtml(
   </div>`;
 }
 
+/** Absolute age from JWT iat. Matches workers KEYHOLDER_SESSION_MAX_AGE_MS. */
+export const KEYHOLDER_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+/** Prompt re-login this long before the money-move bound, without moving the bound. */
+export const KEYHOLDER_REAUTH_WARN_MS = 15 * 60 * 1000;
+
+const SETTLE_DRAFT_PREFIX = "plebly_kh_settle_draft:";
+
+export type SettleDraft = {
+  proposalId: string;
+  disburseId: string;
+  txid: string;
+};
+
 /** Keyholder money and key changes refuse a GitHub login older than 12 hours. */
 export function keyholderSessionStale(message: string): boolean {
   return /session older than 12h/i.test(message);
+}
+
+export function keyholderSessionIssuedAtMs(token: string | null | undefined): number | null {
+  if (!token) return null;
+  const part = token.split(".")[1];
+  if (!part) return null;
+  try {
+    const padded = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(padded.padEnd(padded.length + ((4 - (padded.length % 4)) % 4), "="));
+    const payload = JSON.parse(json) as { iat?: unknown };
+    return typeof payload.iat === "number" ? payload.iat * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True once the login is inside the warn window or already past the 12h money bound. */
+export function keyholderSessionNeedsReauth(
+  token: string | null | undefined,
+  now = Date.now(),
+): boolean {
+  const issued = keyholderSessionIssuedAtMs(token);
+  if (issued == null) return false;
+  return now - issued >= KEYHOLDER_SESSION_MAX_AGE_MS - KEYHOLDER_REAUTH_WARN_MS;
+}
+
+export function saveSettleDraft(draft: SettleDraft, storage: Storage = localStorage): void {
+  const txid = draft.txid.trim();
+  if (!draft.proposalId || !draft.disburseId || !/^[0-9a-fA-F]{64}$/.test(txid)) return;
+  storage.setItem(
+    SETTLE_DRAFT_PREFIX + draft.proposalId,
+    JSON.stringify({ proposalId: draft.proposalId, disburseId: draft.disburseId, txid }),
+  );
+}
+
+export function readSettleDraft(
+  proposalId: string,
+  storage: Storage = localStorage,
+): SettleDraft | null {
+  const raw = storage.getItem(SETTLE_DRAFT_PREFIX + proposalId);
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw) as Partial<SettleDraft>;
+    if (data.proposalId !== proposalId || !data.disburseId || !data.txid) return null;
+    if (!/^[0-9a-fA-F]{64}$/.test(data.txid)) return null;
+    return { proposalId, disburseId: data.disburseId, txid: data.txid };
+  } catch {
+    return null;
+  }
+}
+
+export function clearSettleDraft(proposalId: string, storage: Storage = localStorage): void {
+  storage.removeItem(SETTLE_DRAFT_PREFIX + proposalId);
 }
 
 export type KeyholderReturnState = {
@@ -1152,6 +1218,7 @@ export async function renderKeyholders(
   let detailKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
   let openBranch: { proposalId: string; allocationId: string } | null = null;
   let openDisburse: string | null = null;
+  let persistOpenSettleDraft: () => void = () => {};
 
   const labelDetailDialog = () => {
     const card = detailModal.querySelector<HTMLElement>("[role='dialog']");
@@ -1311,6 +1378,7 @@ export async function renderKeyholders(
 
   const noteStaleSession = (message: string): string => {
     if (!keyholderSessionStale(message)) return message;
+    persistOpenSettleDraft();
     const href = githubLoginUrl(currentReturnPath());
     const box = app.querySelector<HTMLElement>("#kh-relogin");
     const link = app.querySelector<HTMLAnchorElement>("#kh-relogin-link");
@@ -1659,6 +1727,21 @@ export async function renderKeyholders(
     });
     showDetailModal();
 
+    const txidInput = detailEl.querySelector<HTMLInputElement>("#kh-txid");
+    persistOpenSettleDraft = () => {
+      if (!txidInput || !item.proposal_id) return;
+      saveSettleDraft({
+        proposalId: item.proposal_id,
+        disburseId: id,
+        txid: txidInput.value,
+      });
+    };
+    const saved = readSettleDraft(item.proposal_id);
+    if (txidInput && !txidInput.value.trim() && saved?.disburseId === id) {
+      txidInput.value = saved.txid;
+    }
+    txidInput?.addEventListener("input", () => persistOpenSettleDraft());
+
     detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
 
     const publishedHash = publishedUnsignedHash(item);
@@ -1829,6 +1912,23 @@ export async function renderKeyholders(
         );
         return;
       }
+      persistOpenSettleDraft();
+      const token = sessionStorage.getItem("plebly_session");
+      if (keyholderSessionNeedsReauth(token)) {
+        const href = githubLoginUrl(currentReturnPath());
+        const box = app.querySelector<HTMLElement>("#kh-relogin");
+        const link = app.querySelector<HTMLAnchorElement>("#kh-relogin-link");
+        const inline = app.querySelector<HTMLAnchorElement>("#kh-relogin-inline");
+        if (link) link.href = href;
+        if (inline) {
+          inline.href = href;
+          inline.hidden = false;
+        }
+        if (box) box.hidden = false;
+        captureReturn();
+        setMsg("This login is about to expire for keyholder actions. Log in again — the settle txid stays on this proposal.");
+        return;
+      }
       const txid = detailEl.querySelector<HTMLInputElement>("#kh-txid")?.value || "";
       const panel = detailEl.querySelector<HTMLElement>("#kh-verify-panel");
       if (panel) panel.hidden = false;
@@ -1852,6 +1952,7 @@ export async function renderKeyholders(
         missing?: { address: string; amount_sats: number }[];
       };
       if (res.ok) {
+        clearSettleDraft(item.proposal_id);
         setMsg("Settle proposed / completed.");
         void openDetail(id);
         void loadQueue();
