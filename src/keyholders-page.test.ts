@@ -8,6 +8,12 @@ import {
   keyholderProofWizardHtml,
   keyholderReceiveAddress,
   keyholderSessionStale,
+  keyholderSessionNeedsReauth,
+  KEYHOLDER_SESSION_MAX_AGE_MS,
+  KEYHOLDER_REAUTH_WARN_MS,
+  saveSettleDraft,
+  readSettleDraft,
+  clearSettleDraft,
   parseKeyholderReturnState,
   receiveAddressUnchanged,
   keyholderDeskHtml,
@@ -475,6 +481,49 @@ describe("keyholderPackageSentence", () => {
       ),
     ).toBe(true);
     expect(keyholderSessionStale("unauthorized")).toBe(false);
+  });
+
+  it("keeps a bond-refund settle txid across re-login", () => {
+    const mem = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        mem.set(k, v);
+      },
+      removeItem: (k: string) => {
+        mem.delete(k);
+      },
+      clear: () => mem.clear(),
+      key: (i: number) => [...mem.keys()][i] ?? null,
+      get length() {
+        return mem.size;
+      },
+    } as Storage;
+    const txid = "ab".repeat(32);
+    saveSettleDraft({ proposalId: "prop-1", disburseId: "d1", txid }, store);
+    expect(readSettleDraft("prop-1", store)).toEqual({
+      proposalId: "prop-1",
+      disburseId: "d1",
+      txid,
+    });
+    expect(readSettleDraft("prop-2", store)).toBeNull();
+    clearSettleDraft("prop-1", store);
+    expect(readSettleDraft("prop-1", store)).toBeNull();
+  });
+
+  it("asks for re-login inside the warn window and not on a fresh login", () => {
+    const header = btoa(JSON.stringify({ alg: "none" })).replace(/=+$/, "");
+    const fresh = `${header}.${btoa(JSON.stringify({ iat: Math.floor(Date.now() / 1000) })).replace(/=+$/, "")}.sig`;
+    const near = `${header}.${btoa(
+      JSON.stringify({
+        iat: Math.floor(
+          (Date.now() - (KEYHOLDER_SESSION_MAX_AGE_MS - KEYHOLDER_REAUTH_WARN_MS) - 2_000) / 1000,
+        ),
+      }),
+    ).replace(/=+$/, "")}.sig`;
+    expect(keyholderSessionNeedsReauth(fresh)).toBe(false);
+    expect(keyholderSessionNeedsReauth(near)).toBe(true);
+    expect(keyholderSessionNeedsReauth(null)).toBe(false);
     expect(receiveAddressUnchanged("tb1qabc", "tb1qabc")).toBe(true);
     expect(receiveAddressUnchanged("TB1QABC", "tb1qabc")).toBe(true);
     expect(receiveAddressUnchanged("tb1qchanged", "tb1qabc")).toBe(false);
