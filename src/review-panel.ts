@@ -305,12 +305,18 @@ export function syncListingBallotChrome(
 ): void {
   const label = primaryBallotStatusLabel(d);
   const pill = queryListingChrome(root, ".proposal-hero-top .pill-status");
-  if (pill) pill.textContent = label;
+  if (pill) {
+    pill.textContent = label;
+    pill.dataset.ballotChrome = "1";
+  }
   const meter = queryListingChrome(
     root,
     ".proposal-funding-bar .funding-meter-label",
   );
-  if (meter) meter.textContent = label;
+  if (meter) {
+    meter.textContent = label;
+    meter.dataset.ballotChrome = "1";
+  }
   const jump = queryListingChrome(
     root,
     "#review-side-link",
@@ -318,6 +324,20 @@ export function syncListingBallotChrome(
   if (jump && !jump.hidden) {
     jump.textContent = label;
     jump.dataset.ballotChrome = "1";
+  }
+  // Stash enough for late stepper/status paints to re-apply without re-fetch.
+  const panel = queryListingChrome(root, "#review-panel");
+  if (panel) {
+    panel.dataset.ballotPrimaryLabel = label;
+    panel.dataset.reviewDecisionKind = d.kind;
+    panel.dataset.reviewDecisionStatus = d.status;
+    if (d.status !== "open") {
+      panel.dataset.reviewDecisionResult = d.result || d.status;
+      panel.dataset.reviewDecisionPassed = d.passed ? "1" : "0";
+    } else {
+      delete panel.dataset.reviewDecisionResult;
+      delete panel.dataset.reviewDecisionPassed;
+    }
   }
   if (d.status !== "open") {
     suppressFlagForClosedBallot(root, d);
@@ -330,6 +350,64 @@ export function syncListingBallotChrome(
   if (sentence) sentence.textContent = label;
   const detail = queryListingChrome(root, "#next-card-detail");
   if (detail) detail.remove();
+}
+
+/**
+ * Re-paint listing chrome after a late stepper/status overwrite when
+ * #review-panel already owns an open/closed decision primary.
+ */
+export function reapplyListingBallotChrome(root: ParentNode = document): void {
+  const panel = queryListingChrome(root, "#review-panel");
+  if (
+    panel?.dataset.reviewDecisionId &&
+    panel.dataset.ballotPrimaryLabel &&
+    panel.dataset.reviewDecisionKind
+  ) {
+    const status = panel.dataset.reviewDecisionStatus || "open";
+    syncListingBallotChrome(root, {
+      id: panel.dataset.reviewDecisionId,
+      proposal_id: "",
+      kind: panel.dataset.reviewDecisionKind,
+      round: 1,
+      created_at: "",
+      closes_at: "",
+      status,
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+      result: panel.dataset.reviewDecisionResult,
+      passed: panel.dataset.reviewDecisionPassed === "1",
+    });
+    return;
+  }
+  // Fallback: jump/pill already marked ballot-owned — copy that label back.
+  const jump = queryListingChrome(
+    root,
+    "#review-side-link",
+  ) as HTMLAnchorElement | null;
+  const label =
+    (jump?.dataset.ballotChrome === "1" && jump.textContent?.trim()) ||
+    panel?.dataset.ballotPrimaryLabel ||
+    "";
+  if (!label) return;
+  const pill = queryListingChrome(root, ".proposal-hero-top .pill-status");
+  if (pill) {
+    pill.textContent = label;
+    pill.dataset.ballotChrome = "1";
+  }
+  const meter = queryListingChrome(
+    root,
+    ".proposal-funding-bar .funding-meter-label",
+  );
+  if (meter) {
+    meter.textContent = label;
+    meter.dataset.ballotChrome = "1";
+  }
+  if (jump && !jump.hidden) {
+    jump.textContent = label;
+    jump.dataset.ballotChrome = "1";
+  }
+  const sentence = queryListingChrome(root, "#next-card-sentence");
+  if (sentence) sentence.textContent = label;
 }
 
 /** Paint open/closed decision UI. Exported for fulfiller gate tests. */

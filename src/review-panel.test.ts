@@ -14,9 +14,11 @@ import {
   reviewPanelHtml,
   rebuttalPanelHtml,
   reviewDecisionStatusLine,
+  reapplyListingBallotChrome,
   suppressFlagForClosedBallot,
   syncListingBallotChrome,
 } from "./review-panel";
+import { statusPillHtml } from "./proposal-ui";
 import type { ReviewDecisionView } from "./reviewers";
 
 describe("review panel UI helpers", () => {
@@ -535,5 +537,92 @@ describe("listing ballot status chrome", () => {
     expect(html).toContain("is-tucked");
     expect(html).toContain("Skipped");
     expect(html).not.toContain("decisive vote");
+  });
+
+  it("reapply after refreshStepper-style pill clobber keeps Time extension primary", () => {
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">In review</span></div>
+      <div class="proposal-funding-bar"><span class="funding-meter-label">In review</span></div>
+      <a id="review-side-link" href="#proposal-review">Review is open</a>
+      <p id="next-card-sentence">Vote whether this meets the project.</p>
+      <div id="review-panel"></div>`;
+    const decision = {
+      id: "d-ext-1",
+      proposal_id: "p1",
+      kind: "claim_extension",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-10-07T00:00:00Z",
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+      escalated: true,
+    };
+    syncListingBallotChrome(document.body, decision);
+    const panel = document.querySelector("#review-panel") as HTMLElement;
+    panel.dataset.reviewDecisionId = decision.id;
+    panel.dataset.reviewDecisionStatus = decision.status;
+
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(
+      (document.querySelector(".pill-status") as HTMLElement).dataset.ballotChrome,
+    ).toBe("1");
+
+    // Simulate builder-panel refreshStepper lifecycle overwrite.
+    const pillHost = document.querySelector(".proposal-hero-top")!;
+    const prev = pillHost.querySelector(".pill-status");
+    const next = statusPillHtml("in_review");
+    if (prev && next) prev.outerHTML = next;
+    expect(document.querySelector(".pill-status")?.textContent).toBe("In review");
+
+    reapplyListingBallotChrome(document.body);
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector(".funding-meter-label")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector("#review-side-link")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector("#next-card-sentence")?.textContent).toBe(
+      "Time extension — open",
+    );
+    expect(document.querySelector(".pill-status")?.textContent).not.toBe(
+      "In review",
+    );
+  });
+
+  it("ballotChrome mark lets callers skip lifecycle pill overwrite", () => {
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">In review</span></div>
+      <a id="review-side-link" href="#proposal-review">Review</a>
+      <div id="review-panel"></div>`;
+    syncListingBallotChrome(document.body, {
+      id: "d1",
+      proposal_id: "p1",
+      kind: "claim_extension",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-10-07T00:00:00Z",
+      status: "open",
+      counts: { yes: 0, no: 0, abstain: 0 },
+      vote_count: 0,
+    });
+    const jump = document.querySelector("#review-side-link") as HTMLElement;
+    const pill = document.querySelector(".pill-status") as HTMLElement;
+    expect(jump.dataset.ballotChrome).toBe("1");
+    expect(pill.dataset.ballotChrome).toBe("1");
+    // Callers that honor the mark leave the ballot primary in place.
+    if (jump.dataset.ballotChrome === "1" || pill.dataset.ballotChrome === "1") {
+      // skip statusPillHtml overwrite
+    } else {
+      pill.outerHTML = statusPillHtml("in_review");
+    }
+    expect(document.querySelector(".pill-status")?.textContent).toBe(
+      "Time extension — open",
+    );
   });
 });
