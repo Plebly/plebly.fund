@@ -10,6 +10,7 @@ import {
   applyClaimStatusToProposal,
   claimFloorShortfall,
   claimWindowDaysLeft,
+  dedupeWantedRows,
   fetchClaimStatus,
   fetchPayIntent,
   isDirectProposal,
@@ -17,6 +18,7 @@ import {
   isOpenToClaim,
   isTakenStatus,
   type ClaimStatus,
+  type WantedRow,
 } from "./builder";
 import type { Proposal } from "./types";
 
@@ -321,3 +323,34 @@ describe("fetchPayIntent", () => {
     );
   });
 });
+
+describe("dedupeWantedRows", () => {
+  function row(partial: Partial<WantedRow> & Pick<WantedRow, "path" | "title">): WantedRow {
+    return {
+      id: null,
+      status: "listed",
+      watches: 0,
+      weighted: 0,
+      funded_pct: null,
+      balance_sats: null,
+      target_sats: null,
+      cover_image: null,
+      excerpt: "",
+      ...partial,
+    };
+  }
+
+  it("keeps the first row per id and falls back to path", () => {
+    const rows = [
+      row({ id: "wave-b", path: "a.md", title: "Wave B first" }),
+      row({ id: "wave-b", path: "b.md", title: "Wave B dup" }),
+      row({ id: null, path: "solo.md", title: "Solo" }),
+      row({ id: "", path: "solo.md", title: "Solo path dup" }),
+    ];
+    expect(dedupeWantedRows(rows).map((r) => r.title)).toEqual([
+      "Wave B first",
+      "Solo",
+    ]);
+  });
+});
+
