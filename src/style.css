@@ -3942,11 +3942,31 @@ a.project-card-by:hover .project-card-by-text {
   color: inherit;
 }
 
+.wanted-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
 .wanted-title {
   font-weight: 550;
   color: var(--ink);
   min-width: 0;
-  flex: 1 1 12rem;
+}
+
+.wanted-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.wanted-meta .pill-status {
+  font-size: 0.75rem;
 }
 
 .wanted-nums {

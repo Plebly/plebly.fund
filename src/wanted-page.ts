@@ -1,21 +1,44 @@
-import { fetchWanted } from "./builder";
-import { applySeo, href, projectsHref, proposalHref, seoForRoute } from "./router";
+import { fetchWanted, type WantedRow } from "./builder";
+import { statusPillHtml } from "./proposal-ui";
+import { applySeo, projectsHref, proposalHref, seoForRoute } from "./router";
 import { escapeHtml } from "./util";
 
 export type WantedShell = (inner: string) => string;
 
-function wantedRowHtml(r: {
-  id: string | null;
-  path: string;
-  title: string;
-  watches: number;
-  weighted: number;
-  funded_pct: number | null;
-}): string {
+export type WantedRowHtmlOpts = {
+  /** Home rail shows bare `%`; full /wanted page appends ` funded`. */
+  fundedSuffix?: boolean;
+};
+
+/** Shared wanted card chrome: title + proposal id + status + watch metrics. */
+export function wantedRowHtml(
+  r: Pick<
+    WantedRow,
+    "id" | "path" | "title" | "status" | "watches" | "weighted" | "funded_pct"
+  >,
+  opts?: WantedRowHtmlOpts,
+): string {
   const funded =
-    r.funded_pct != null ? `${r.funded_pct}% funded` : "—";
+    r.funded_pct != null
+      ? opts?.fundedSuffix === false
+        ? `${r.funded_pct}%`
+        : `${r.funded_pct}% funded`
+      : "—";
+  const idHtml = r.id
+    ? `<span class="mono proposal-meta-id">${escapeHtml(r.id)}</span>`
+    : "";
+  const statusHtml = statusPillHtml(r.status || "");
+  const metaBits = [idHtml, statusHtml].filter(Boolean);
+  const metaHtml = metaBits.length
+    ? `<span class="wanted-meta">${metaBits.join(
+        '<span class="wanted-metric-sep" aria-hidden="true">·</span>',
+      )}</span>`
+    : "";
   return `<a class="wanted-row" href="${proposalHref(r.path, r.id)}">
-      <span class="wanted-title">${escapeHtml(r.title)}</span>
+      <span class="wanted-main">
+        <span class="wanted-title">${escapeHtml(r.title)}</span>
+        ${metaHtml}
+      </span>
       <span class="wanted-nums mono">
         <span class="wanted-metric">${r.watches} watches</span>
         <span class="wanted-metric-sep" aria-hidden="true">·</span>
@@ -51,5 +74,5 @@ export async function renderWanted(shell: WantedShell): Promise<void> {
     host.innerHTML = `<p class="muted">No watched projects yet. <a href="${projectsHref()}">Browse projects</a> and watch ones you care about.</p>`;
     return;
   }
-  host.innerHTML = rows.map(wantedRowHtml).join("");
+  host.innerHTML = rows.map((r) => wantedRowHtml(r)).join("");
 }
