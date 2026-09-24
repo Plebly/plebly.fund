@@ -1158,13 +1158,14 @@ body.modal-open {
 
 .account-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin: 0 0 1.25rem;
-  padding: 0.2rem;
-  background: var(--bg);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
+  flex-wrap: nowrap;
+  gap: 0.1rem;
+  margin: 0 0 1.35rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
@@ -1173,20 +1174,29 @@ body.modal-open {
 .account-tab {
   flex: 0 0 auto;
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 550;
   color: var(--ink-secondary);
   background: transparent;
   border: 0;
-  border-radius: calc(var(--radius-sm) - 2px);
-  padding: 0.45rem 0.75rem;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 0.65rem 0.85rem;
+  white-space: nowrap;
   cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.account-tab:hover {
+  color: var(--ink);
 }
 
 .account-tab.active {
   color: var(--accent-text);
-  background: var(--bg-elevated);
-  box-shadow: 0 0 0 1px var(--accent-border);
+  background: transparent;
+  box-shadow: none;
+  border-bottom-color: var(--accent);
 }
 
 .account-tab-count {
@@ -1314,7 +1324,47 @@ body.modal-open {
 }
 
 .account-card-quiet {
-  padding: 0.85rem 1.1rem;
+  gap: 0.55rem;
+  padding: 0.8rem 1rem;
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--line);
+}
+
+.account-card-quiet .account-card-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  letter-spacing: -0.01em;
+}
+
+.account-card-quiet .account-card-lede {
+  margin-top: -0.25rem;
+}
+
+.account-card-quiet .account-card-action {
+  margin: 0.15rem 0 0;
+}
+
+.account-pane-lede {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.account-funds {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.account-funds-block .proposal-block-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.account-funds-block .account-pane-lede {
+  margin-bottom: 0.75rem;
 }
 
 .account-card.account-danger {
@@ -2337,7 +2387,7 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .empty-state {
-  padding: 2.5rem 1.5rem;
+  padding: 2.25rem 1.35rem;
   background: var(--bg-elevated);
   border: 1px dashed var(--line);
   border-radius: var(--radius);
@@ -2357,9 +2407,26 @@ a.project-card-by:hover .project-card-by-text {
 }
 
 .empty-state-body {
-  margin: 0 0 1.25rem;
+  margin: 0 0 1.1rem;
   font-size: 0.875rem;
   color: var(--muted);
+  line-height: 1.45;
+}
+
+.empty-state-body:last-child {
+  margin-bottom: 0;
+}
+
+.empty-state-compact {
+  padding: 1.5rem 1.15rem;
+}
+
+.empty-state-compact .empty-state-title {
+  font-size: 0.9375rem;
+}
+
+.empty-state-compact .empty-state-body {
+  font-size: 0.8125rem;
 }
 
 /* legacy list cards (profile / older views) */
@@ -8783,22 +8850,27 @@ a.claim-app-bond:hover {
 }
 
 .kh-steps {
-  margin: 0.5rem 0 1rem;
-  padding-left: 1.25rem;
-  font-size: 0.9rem;
+  margin: 0.35rem 0 0.95rem;
+  padding: 0.65rem 0.85rem 0.65rem 1.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 0.8125rem;
   line-height: 1.45;
+  color: var(--ink-secondary);
 }
 
 .kh-steps li {
-  margin: 0.35rem 0;
+  margin: 0.3rem 0;
 }
 
 .kh-steps li.is-current {
-  font-weight: 600;
+  font-weight: 650;
+  color: var(--ink);
 }
 
 .kh-steps li.is-done {
-  color: var(--ink-secondary);
+  color: var(--muted);
 }
 
 .kh-recipe {
@@ -8815,9 +8887,9 @@ a.claim-app-bond:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1.25rem;
-  margin: 1rem 0 1.25rem;
-  padding: 0.85rem 1rem;
+  gap: 0.65rem 1.1rem;
+  margin: 0.85rem 0 1rem;
+  padding: 0.7rem 0.9rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
@@ -8901,13 +8973,53 @@ a.claim-app-bond:hover {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.65rem 1rem;
-  margin: 0 0 1.25rem;
+  gap: 0.55rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
 }
 
 .kh-session-bar p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+}
+
+.kh-desk-queues {
+  margin: 0 0 1.25rem;
+}
+
+.kh-desk-queues-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.kh-desk-queues .account-tabs {
+  margin-bottom: 0.95rem;
+}
+
+.kh-queue {
+  min-height: 4.5rem;
+}
+
+.kh-queue-empty {
+  margin: 0;
+}
+
+.kh-roster-row {
+  display: grid;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.kh-roster-name {
+  font-weight: 550;
+  color: var(--ink);
 }
 
 .kh-session-card {
@@ -8979,6 +9091,8 @@ a.claim-app-bond:hover {
   margin: 0;
   padding: 0;
   list-style: none;
+  border: 0;
+  background: transparent;
 }
 
 .keyholders-page .kh-onboard-steps li {

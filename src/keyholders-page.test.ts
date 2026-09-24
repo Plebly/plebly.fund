@@ -22,6 +22,7 @@ import {
   keyholderPackageSentence,
   keyholderTabFromSearch,
   keyholderTxPurpose,
+  keyholderQueueEmptyHtml,
   signatureProgressLabel,
 } from "./keyholders-page";
 import { parseLocation, seoForRoute } from "./router";
@@ -34,6 +35,20 @@ describe("keyholders route", () => {
     expect(seo.title).toMatch(/Keyholder/i);
     expect(keyholderTabFromSearch("?tab=branch")).toBe("branch");
     expect(keyholderTabFromSearch("")).toBe("release");
+  });
+});
+
+describe("keyholderQueueEmptyHtml", () => {
+  it("uses compact empty-state chrome for nothing-to-sign queues", () => {
+    const html = keyholderQueueEmptyHtml(
+      "Nothing to sign",
+      "No open release items.",
+    );
+    expect(html).toContain("empty-state");
+    expect(html).toContain("empty-state-compact");
+    expect(html).toContain("kh-queue-empty");
+    expect(html).toContain("Nothing to sign");
+    expect(html).toContain("No open release items.");
   });
 });
 
@@ -144,6 +159,9 @@ describe("keyholderPackageSentence", () => {
     expect(src).toContain("kh-verify-outputs");
     expect(src).toContain("kh-outputs");
     expect(src).toContain('data-kh-tab="branch"');
+    expect(src).toContain("kh-desk-queues");
+    expect(src).toContain("keyholderQueueEmptyHtml");
+    expect(src).toContain("kh-roster-row");
     expect(src).toContain("kh-branch-sign");
   });
 

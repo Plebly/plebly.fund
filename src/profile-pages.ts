@@ -115,14 +115,14 @@ function notificationLabel(
 
 function fundsPaneHtml(): string {
   return `<div class="account-funds">
-    <section>
+    <section class="account-funds-block">
       <h2 class="proposal-block-title">Claim bonds</h2>
-      <p class="muted">Refundable bonds go out monthly. Set an address while the bond is refundable.</p>
+      <p class="account-pane-lede">Refundable bonds go out monthly. Set an address while the bond is refundable.</p>
       <div id="funds-bonds"><p class="muted">Loading…</p></div>
     </section>
-    <section>
+    <section class="account-funds-block">
       <h2 class="proposal-block-title">Contribution refunds</h2>
-      <p class="muted">When a project is refunding, register an address on the proposal page. Paid refunds show a txid here.</p>
+      <p class="account-pane-lede">When a project is refunding, register an address on the proposal page. Paid refunds show a txid here.</p>
       <div id="funds-refunds"><p class="muted">Loading…</p></div>
     </section>
     <p class="builder-msg" id="funds-msg" hidden></p>
@@ -154,11 +154,11 @@ function keyholderKeysCardHtml(kh: {
       : kh.status === "invited"
         ? `<p class="muted">Submit fingerprint + xpub in the console.</p>`
         : "";
-  return `<section class="account-card" id="account-keyholder-card">
+  return `<section class="account-card account-card-quiet" id="account-keyholder-card">
     <h2 class="account-card-title">Keyholder keys</h2>
     <p class="account-card-lede"><span class="pill">${escapeHtml(kh.status)}</span></p>
     ${fp}${xpub}${wait}
-    <p><a class="btn ghost btn-compact" href="${href("/keyholders")}">Keyholders console</a></p>
+    <p class="account-card-action"><a class="btn ghost btn-compact" href="${href("/keyholders")}">Keyholders console</a></p>
   </section>`;
 }
 
@@ -687,6 +687,7 @@ export async function renderAccount(
             ? `<div class="empty-state"><div class="empty-state-inner">
                 <p class="empty-state-title">No notifications</p>
                 <p class="empty-state-body">Watch a project to get funding and claim updates here.</p>
+                <a class="btn" href="${projectsHref()}">Browse projects</a>
               </div></div>`
             : `<ul class="work-list notify-list">${notifications
                 .map((notification) => {
@@ -723,7 +724,7 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="receipts" ${tab === "receipts" ? "" : "hidden"}>
-        <p class="muted">Private payment acknowledgments. Download stays available here.</p>
+        <p class="account-pane-lede">Private payment acknowledgments. Download stays available here.</p>
         <div id="receipts-list"><p class="muted">Loading…</p></div>
       </div>
     </section>

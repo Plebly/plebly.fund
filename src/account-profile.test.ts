@@ -50,6 +50,11 @@ describe("account profile editor layout", () => {
     expect(side?.textContent).toMatch(/Connected accounts/);
     expect(side?.querySelector("#delete-account-btn")).toBeTruthy();
     expect(side?.textContent).toMatch(/Keyholder keys/);
+    const khCard = side?.querySelector("#account-keyholder-card");
+    expect(khCard?.classList.contains("account-card-quiet")).toBe(true);
+    expect(khCard?.classList.contains("account-card")).toBe(true);
+    const connected = side?.querySelector(".account-connected");
+    expect(connected?.classList.contains("account-card-quiet")).toBe(false);
     expect(html).toContain("tag-input-more");
     expect(html).not.toContain(">Display<");
   });
