@@ -9022,6 +9022,30 @@ a.claim-app-bond:hover {
   color: var(--ink);
 }
 
+.kh-desk-card {
+  width: min(44rem, 100%);
+  max-height: min(92dvh, 52rem);
+  overflow: auto;
+  padding: 1.35rem 1.35rem 1.2rem;
+}
+
+.kh-desk-card > #kh-detail > .form-panel {
+  margin-top: 0;
+}
+
+.kh-desk-card h2 {
+  padding-right: 2.25rem;
+}
+
+@media (max-height: 720px) {
+  .site-modal:has(.kh-desk-card) {
+    align-items: flex-start;
+    padding-top: max(1.25rem, env(safe-area-inset-top, 0px));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+  }
+}
+
 .kh-session-card {
   width: min(36rem, 100%);
   max-width: 36rem;

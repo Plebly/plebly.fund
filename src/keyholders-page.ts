@@ -1129,18 +1129,63 @@ export async function renderKeyholders(
         </div>
         <div id="kh-queue" class="kh-queue" role="tabpanel" aria-labelledby="kh-tab-release" aria-live="polite"><p class="muted">Loading…</p></div>
       </div>
-      <div id="kh-detail" hidden></div>
+      <div class="site-modal" id="kh-detail-modal" hidden>
+        <div class="site-modal-backdrop" data-kh-detail-close tabindex="-1" aria-hidden="true"></div>
+        <div class="site-modal-card kh-desk-card" role="dialog" aria-modal="true" aria-labelledby="kh-detail-title">
+          <button type="button" class="site-modal-close" data-kh-detail-close aria-label="Close">${solidIcon("xmark")}</button>
+          <div id="kh-detail"></div>
+        </div>
+      </div>
     </section>
   `);
 
   const queueEl = app.querySelector<HTMLElement>("#kh-queue")!;
   const detailEl = app.querySelector<HTMLElement>("#kh-detail")!;
+  const detailModal = app.querySelector<HTMLElement>("#kh-detail-modal")!;
   const cashoutEl = app.querySelector<HTMLElement>("#kh-cashout-detail")!;
   let kind = "release";
   let challengeMessage = "";
   let challengeSeq = 0;
   let signerNames: Record<string, string> = {};
   let cashoutB64 = "";
+  let lastDeskOpener: HTMLButtonElement | null = null;
+  let detailKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
+  let openBranch: { proposalId: string; allocationId: string } | null = null;
+  let openDisburse: string | null = null;
+
+  const labelDetailDialog = () => {
+    const card = detailModal.querySelector<HTMLElement>("[role='dialog']");
+    const title = detailEl.querySelector<HTMLElement>(
+      "#kh-detail-title, #kh-branch-title",
+    );
+    if (card && title?.id) card.setAttribute("aria-labelledby", title.id);
+  };
+  const closeDetailModal = () => {
+    const wasOpen = !detailModal.hidden;
+    detailModal.hidden = true;
+    detailEl.innerHTML = "";
+    openBranch = null;
+    openDisburse = null;
+    document.body.classList.remove("modal-open");
+    if (detailKeyHandler) {
+      document.removeEventListener("keydown", detailKeyHandler);
+      detailKeyHandler = null;
+    }
+    if (wasOpen) lastDeskOpener?.focus();
+  };
+  const showDetailModal = () => {
+    detailModal.hidden = false;
+    document.body.classList.add("modal-open");
+    labelDetailDialog();
+    if (detailKeyHandler) return;
+    detailKeyHandler = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      if (document.querySelector(".confirm-modal")) return;
+      ev.preventDefault();
+      closeDetailModal();
+    };
+    document.addEventListener("keydown", detailKeyHandler);
+  };
 
   let sessionKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
   const closeSignSession = () => {
@@ -1248,9 +1293,6 @@ export async function renderKeyholders(
     openSignSession();
   };
 
-  let openBranch: { proposalId: string; allocationId: string } | null = null;
-  let openDisburse: string | null = null;
-
   const captureReturn = () => {
     const session = app.querySelector<HTMLElement>("#kh-session");
     const visible = [...app.querySelectorAll<HTMLElement>("[data-kh-wizard]")].find(
@@ -1334,6 +1376,7 @@ export async function renderKeyholders(
         .join("")}</ul>`;
       queueEl.querySelectorAll<HTMLButtonElement>("[data-branch]").forEach((btn) => {
         btn.addEventListener("click", () => {
+          lastDeskOpener = btn;
           void openBranchDetail(btn.dataset.branch || "", btn.dataset.alloc || "");
         });
       });
@@ -1393,6 +1436,7 @@ export async function renderKeyholders(
       .join("")}</ul>`;
     queueEl.querySelectorAll<HTMLButtonElement>("[data-disburse]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        lastDeskOpener = btn;
         void openDetail(btn.dataset.disburse || "");
       });
     });
@@ -1406,17 +1450,18 @@ export async function renderKeyholders(
       `${api()}/keyholders/branch-sign/${encodeURIComponent(proposalId)}/${encodeURIComponent(allocationId)}`,
     );
     if (!res.ok) {
-      detailEl.hidden = false;
-      detailEl.innerHTML = `<p class="builder-msg bad" role="alert">Could not load branch.</p>`;
+      detailEl.innerHTML = `<h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">Could not load</h2><p class="builder-msg bad" role="alert">Could not load branch.</p>`;
+      showDetailModal();
+      detailEl.querySelector<HTMLElement>("#kh-branch-title")?.focus();
       return;
     }
     const data = (await res.json()) as { item: BranchSignDeskItem };
     const item = data.item;
-    detailEl.hidden = false;
     detailEl.innerHTML = branchSignDeskHtml(item, {
       userId: kh.user_id,
       signerNames,
     });
+    showDetailModal();
     detailEl.querySelector<HTMLElement>("#kh-branch-title")?.focus();
     bindHashGate({
       input: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-verify"),
@@ -1578,8 +1623,9 @@ export async function renderKeyholders(
     openBranch = null;
     const res = await authFetch(`${api()}/disburse/${encodeURIComponent(id)}`);
     if (!res.ok) {
-      detailEl.hidden = false;
-      detailEl.innerHTML = `<p class="builder-msg bad" role="alert">Could not load item.</p>`;
+      detailEl.innerHTML = `<h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">Could not load</h2><p class="builder-msg bad" role="alert">Could not load item.</p>`;
+      showDetailModal();
+      detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
       return;
     }
     const data = (await res.json()) as {
@@ -1600,7 +1646,6 @@ export async function renderKeyholders(
     const canUnsigned = canPsbt && !(isRelease && signed > 0);
     const canPartial = isRelease && canPsbt && hasUnsigned;
     const canBroadcast = canPartial && need > 0 && signed >= need;
-    detailEl.hidden = false;
     detailEl.innerHTML = keyholderDeskHtml(item, {
       needsLn,
       canPsbt,
@@ -1612,6 +1657,7 @@ export async function renderKeyholders(
       userId: kh.user_id,
       signerNames,
     });
+    showDetailModal();
 
     detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
 
@@ -2004,6 +2050,22 @@ export async function renderKeyholders(
   app.querySelectorAll("[data-kh-session-close]").forEach((el) => {
     el.addEventListener("click", () => closeSignSession());
   });
+  app.querySelectorAll("[data-kh-detail-close]").forEach((el) => {
+    el.addEventListener("click", () => closeDetailModal());
+  });
+  // #app uses overflow-x: clip, which traps position:fixed inside the page.
+  // Mount the desk on body so it covers the viewport like the other popups.
+  document.body.appendChild(detailModal);
+  const page = app.querySelector(".keyholders-page");
+  if (page) {
+    const detach = new MutationObserver(() => {
+      if (document.contains(page)) return;
+      closeDetailModal();
+      detailModal.remove();
+      detach.disconnect();
+    });
+    detach.observe(document.documentElement, { childList: true, subtree: true });
+  }
 
   bindKeyholderKeys(app);
 
@@ -2070,9 +2132,7 @@ export async function renderKeyholders(
       t.tabIndex = on ? 0 : -1;
     });
     queueEl.setAttribute("aria-labelledby", btn.id);
-    detailEl.hidden = true;
-    openBranch = null;
-    openDisburse = null;
+    closeDetailModal();
     if (kind === "roster") {
       void loadRoster();
     } else {

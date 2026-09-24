@@ -271,6 +271,10 @@ describe("keyholderPackageSentence", () => {
     expect(src).toContain("keyholderQueueEmptyHtml");
     expect(src).toContain("kh-roster-row");
     expect(src).toContain("kh-branch-sign");
+    expect(src).toContain('id="kh-detail-modal"');
+    expect(src).toContain("data-kh-detail-close");
+    expect(src).toContain("showDetailModal");
+    expect(src).toContain("document.body.appendChild(detailModal)");
   });
 
   it("hash-gates Upload signature until signed partial is non-empty", () => {
