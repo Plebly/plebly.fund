@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   bitcoinUri,
   escapeHtml,
+  html,
+  raw,
   formatTimeAgo,
   formatTimeAhead,
   linkifyText,
@@ -24,6 +26,17 @@ describe("escapeHtml", () => {
   it("escapes markup carriers", () => {
     expect(escapeHtml(`<a href="x">&`)).toBe(
       "&lt;a href=&quot;x&quot;&gt;&amp;",
+    );
+  });
+});
+
+describe("html", () => {
+  it("escapes interpolated text and keeps nested markup", () => {
+    const name = `<b>"Ada" & co</b>`;
+    const row = html`<li>${name}</li>`;
+    const page = html`<ul>${row}${raw("<li>ok</li>")}${false}</ul>`;
+    expect(page.value).toBe(
+      "<ul><li>&lt;b&gt;&quot;Ada&quot; &amp; co&lt;/b&gt;</li><li>ok</li></ul>",
     );
   });
 });

@@ -6,6 +6,42 @@ export function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/** Markup produced by `html` or explicitly trusted via `raw`. */
+export class Html {
+  constructor(readonly value: string) {}
+  toString(): string {
+    return this.value;
+  }
+}
+
+/** Insert a string that is already HTML. Plain values passed to `html` are escaped. */
+export function raw(value: string): Html {
+  return new Html(value);
+}
+
+function embedHtml(value: unknown): string {
+  if (value == null || value === false) return "";
+  if (value instanceof Html) return value.value;
+  if (Array.isArray(value)) return value.map(embedHtml).join("");
+  return escapeHtml(String(value));
+}
+
+/**
+ * HTML template. Interpolated text is escaped. Nested `html` results and
+ * `raw(...)` fragments are inserted as markup.
+ */
+export function html(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Html {
+  let out = "";
+  for (let i = 0; i < strings.length; i++) {
+    out += strings[i] ?? "";
+    if (i < values.length) out += embedHtml(values[i]);
+  }
+  return new Html(out);
+}
+
 const BARE_URL_RE = /(https?:\/\/[^\s<]+)/gi;
 
 /**

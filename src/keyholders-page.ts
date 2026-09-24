@@ -6,7 +6,7 @@ import { bindKhApplyForm, khApplyFormHtml } from "./governance-page";
 import { href } from "./router";
 import { authFetchWithTos } from "./tos-modal";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
-import { escapeHtml, formatSats } from "./util";
+import { formatSats, html, raw } from "./util";
 import { payoutLooksValid } from "./payout-destination";
 
 export type KeyholdersShell = (inner: string) => string;
@@ -31,10 +31,10 @@ export function keyholderTabFromSearch(search: string): KeyholderTab {
 
 /** Compact empty queue chrome for Releases / Branches / refunds / roster. */
 export function keyholderQueueEmptyHtml(title: string, body: string): string {
-  return `<div class="empty-state empty-state-compact kh-queue-empty"><div class="empty-state-inner">
-    <p class="empty-state-title">${escapeHtml(title)}</p>
-    <p class="empty-state-body">${escapeHtml(body)}</p>
-  </div></div>`;
+  return html`<div class="empty-state empty-state-compact kh-queue-empty"><div class="empty-state-inner">
+    <p class="empty-state-title">${title}</p>
+    <p class="empty-state-body">${body}</p>
+  </div></div>`.value;
 }
 
 type DisburseItem = {
@@ -172,64 +172,53 @@ export function branchSignDeskHtml(
             : "";
   const who = signerLabels(item.partials, opts?.signerNames || {});
   const canDownload = Boolean(item.psbt_base64);
-  return `<div class="form-panel form-panel-wide">
-    <h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">${escapeHtml(item.kind)} · ${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</h2>
-    <p class="next-card-sentence">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
-    <p class="kh-sign-chip">${escapeHtml(signatureProgressLabel(signed, need))}${stateLabel ? escapeHtml(stateLabel) : ""}</p>
-    ${
-      who.length
-        ? `<p class="kh-signers">Signed by ${escapeHtml(who.join(", "))}</p>`
-        : ""
-    }
+  const outputRows = outputs.length
+    ? outputs.map(
+        (o) =>
+          html`<tr><td>${o.label || "—"}</td><td class="mono">${o.address}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
+      )
+    : html`<tr><td colspan="3" class="muted">No outputs</td></tr>`;
+  return html`<div class="form-panel form-panel-wide">
+    <h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">${item.kind} · ${item.proposal_id} · ${item.allocation_id}</h2>
+    <p class="next-card-sentence">${keyholderTxPurpose(item.kind)}</p>
+    <p class="kh-sign-chip">${signatureProgressLabel(signed, need)}${stateLabel}</p>
+    ${who.length ? html`<p class="kh-signers">Signed by ${who.join(", ")}</p>` : ""}
     <table class="kh-outputs">
       <caption class="sr-only">Outputs</caption>
       <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
-      <tbody>
-        ${
-          outputs.length
-            ? outputs
-                .map(
-                  (o) =>
-                    `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
-                )
-                .join("")
-            : `<tr><td colspan="3" class="muted">No outputs</td></tr>`
-        }
-      </tbody>
+      <tbody>${outputRows}</tbody>
     </table>
     ${
       canDownload
-        ? `<div class="comment-compose-actions"><button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button></div>`
+        ? html`<div class="comment-compose-actions"><button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button></div>`
         : ""
     }
     <p class="muted">Cosign: sign in Sparrow, then paste the signed partial below. The Worker does not broadcast — broadcast stays in Sparrow after N-of-M.</p>
-    ${hashGateHtml({
+    ${raw(hashGateHtml({
       publishedHash: item.published_sha256,
       inputId: "kh-branch-verify",
       statusId: "kh-branch-hash-status",
       pasteLabel: "Unsigned Release PSBT you received (base64) — not a settle txid",
       placeholder: "Paste unsigned Release PSBT to verify SHA-256",
-    })}
+    }))}
     <label class="donate-amount-label" for="kh-branch-partial">Signed partial (base64) — not a settle txid</label>
     <textarea id="kh-branch-partial" class="comment-input mono" rows="3" placeholder="Paste signed partial from Sparrow"></textarea>
     <div class="comment-compose-actions">
       <button type="button" class="btn" id="kh-branch-sign" disabled title="Paste a matching unsigned Release PSBT above, then a signed partial" aria-label="Paste a matching unsigned Release PSBT above, then a signed partial">Upload signature</button>
       ${
         item.combined_sha256
-          ? `<button type="button" class="btn ghost" id="kh-branch-combined">Download combined</button>`
+          ? html`<button type="button" class="btn ghost" id="kh-branch-combined">Download combined</button>`
           : ""
       }
     </div>
     <p class="builder-msg" id="kh-branch-msg" hidden role="status" aria-live="polite"></p>
     ${
       settled
-        ? `<p class="muted">Settled — broadcast already recorded. Settle txid <code class="mono">${escapeHtml(item.settle_txid || "")}</code>.</p>`
+        ? html`<p class="muted">Settled — broadcast already recorded. Settle txid <code class="mono">${item.settle_txid || ""}</code>.</p>`
         : (() => {
             const thresholdMet =
               item.state === "threshold_met" ||
               (need > 0 && signed >= need);
-            // Idiot-proof: never enable Propose settle while cosign threshold unmet
-            // (title already says waiting — button must match).
             const proposeDisabled = proposed || !thresholdMet;
             const proposeWhy = proposed
               ? "Settle already proposed — waiting for another keyholder to confirm"
@@ -243,26 +232,24 @@ export function branchSignDeskHtml(
               : item.settle_proposed_by === opts?.userId
                 ? "You proposed this settle — another keyholder must confirm"
                 : "Confirm the proposed settle txid matches the Release outputs";
-            return `<div class="form-panel">
+            return html`<div class="form-panel">
       <h3 class="proposal-block-title">${thresholdMet ? "Settle · record broadcast" : "Settle · waiting for cosign"}</h3>
       <p class="fee-pay-bond-label">SETTLE TXID</p>
       <p class="fee-pay-bond-contrast">${
         thresholdMet
-          ? "Ready to broadcast in Sparrow when combined. Then paste the <strong>64-character settle txid</strong> here — not a PSBT."
+          ? html`Ready to broadcast in Sparrow when combined. Then paste the <strong>64-character settle txid</strong> here — not a PSBT.`
           : `Needs ${signed}/${need} signatures (cosign). Do not paste a settle txid until threshold is met and you have broadcast in Sparrow.`
       }</p>
       <label class="donate-amount-label" for="kh-branch-txid">Settle txid (64 hex) — not a PSBT</label>
-      <input id="kh-branch-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${proposed ? "readonly" : ""} autocomplete="off" placeholder="64-character transaction id" />
+      <input id="kh-branch-txid" class="donate-amount mono" value="${item.settle_txid || ""}" ${proposed ? "readonly" : ""} autocomplete="off" placeholder="64-character transaction id" />
       <div class="comment-compose-actions">
-        <button type="button" class="btn" id="kh-branch-propose" ${proposeDisabled ? "disabled" : ""} title="${escapeHtml(proposeWhy)}" aria-label="${escapeHtml(proposeWhy)}">Propose settle</button>
-        <button type="button" class="btn ghost" id="kh-branch-confirm" ${
-          confirmDisabled ? "disabled" : ""
-        } title="${escapeHtml(confirmWhy)}" aria-label="${escapeHtml(confirmWhy)}">Confirm settle</button>
+        <button type="button" class="btn" id="kh-branch-propose" ${proposeDisabled ? "disabled" : ""} title="${proposeWhy}" aria-label="${proposeWhy}">Propose settle</button>
+        <button type="button" class="btn ghost" id="kh-branch-confirm" ${confirmDisabled ? "disabled" : ""} title="${confirmWhy}" aria-label="${confirmWhy}">Confirm settle</button>
       </div>
     </div>`;
           })()
     }
-  </div>`;
+  </div>`.value;
 }
 
 /** Absolute age from JWT iat. Matches workers KEYHOLDER_SESSION_MAX_AGE_MS. */
@@ -412,7 +399,7 @@ export function keyholderProofWizardHtml(
   payoutAddress = "",
 ): string {
   const addr = keyholderReceiveAddress(authAddress, payoutAddress);
-  return `<p class="kh-wizard-progress" id="kh-wizard-progress">Step 1 of 3</p>
+  return html`<p class="kh-wizard-progress" id="kh-wizard-progress">Step 1 of 3</p>
     <div data-kh-wizard="why">
       <p>You are about to upload a signature on a transaction. GitHub only tells the site which seat this is. It does not show that the wallet for this seat is in your hands.</p>
       <p class="muted">This check is a signed message, not that transaction. You sign it in Sparrow. After it passes, this browser can upload signatures for 15 minutes.</p>
@@ -424,7 +411,7 @@ export function keyholderProofWizardHtml(
       <p>This is your receive address. It is the one already saved for this seat, or your Account address if the seat does not have one yet.</p>
       <p class="muted">Change it only if you want a different address. Saving a new one stores it on your Account and on this seat. The message in the next step is signed from this address. It is not the project escrow.</p>
       <label class="donate-amount-label" for="kh-auth-addr">Receive address</label>
-      <input id="kh-auth-addr" class="donate-amount mono" data-initial="${escapeHtml(addr)}" value="${escapeHtml(addr)}" placeholder="tb1… / bc1…" autocomplete="off" />
+      <input id="kh-auth-addr" class="donate-amount mono" data-initial="${addr}" value="${addr}" placeholder="tb1… / bc1…" autocomplete="off" />
       <p class="builder-msg" id="kh-auth-msg" hidden role="status"></p>
       <a class="btn" id="kh-relogin-inline" href="#" hidden>Log in with GitHub</a>
       <div class="kh-wizard-actions">
@@ -434,7 +421,7 @@ export function keyholderProofWizardHtml(
     </div>
     <div data-kh-wizard="sign" hidden>
       <p>In Sparrow, open Tools, then Sign/Verify Message. Sign with this receive address:</p>
-      <div class="kh-wizard-addr-row"><p class="mono kh-wizard-addr" id="kh-auth-shown">${escapeHtml(addr)}</p><button type="button" class="btn ghost" id="kh-auth-copy">Copy for Sparrow</button></div>
+      <div class="kh-wizard-addr-row"><p class="mono kh-wizard-addr" id="kh-auth-shown">${addr}</p><button type="button" class="btn ghost" id="kh-auth-copy">Copy for Sparrow</button></div>
       <p class="mono kh-challenge-msg" id="kh-challenge-msg" hidden role="status"></p>
       <button type="button" class="btn ghost" id="kh-challenge" hidden>Try again</button>
       <div id="kh-wizard-paste" hidden>
@@ -448,16 +435,16 @@ export function keyholderProofWizardHtml(
       <div class="kh-wizard-actions">
         <button type="button" class="btn ghost" data-kh-wizard-go="address">Back</button>
       </div>
-    </div>`;
+    </div>`.value;
 }
 
 export function cashoutDeskHtml(opts: {
   amount_sats: number;
   payout_address: string;
 }): string {
-  return `<div class="form-panel" id="kh-cashout-card">
-    <h2 class="proposal-block-title">${escapeHtml(keyholderTxPurpose("cashout"))}</h2>
-    <p class="muted">${formatSats(opts.amount_sats)} to <span class="mono">${escapeHtml(opts.payout_address)}</span></p>
+  return html`<div class="form-panel" id="kh-cashout-card">
+    <h2 class="proposal-block-title">${keyholderTxPurpose("cashout")}</h2>
+    <p class="muted">${formatSats(opts.amount_sats)} to <span class="mono">${opts.payout_address}</span></p>
     <p class="muted">Sign this in Sparrow. The escrow quorum does not apply.</p>
     <div class="comment-compose-actions">
       <button type="button" class="btn ghost" id="kh-cashout-dl">Download unsigned transaction</button>
@@ -469,7 +456,7 @@ export function cashoutDeskHtml(opts: {
       <button type="button" class="btn" id="kh-cashout-settle">Record payout</button>
     </div>
     <p class="builder-msg" id="kh-cashout-msg" hidden role="status" aria-live="polite"></p>
-  </div>`;
+  </div>`.value;
 }
 
 function downloadBase64File(b64: string, filename: string): void {
@@ -566,34 +553,32 @@ export function keyholderDeskHtml(
     "broadcast",
   ];
   const steps = opts.isRelease
-    ? `<ol class="kh-steps">
+    ? html`<ol class="kh-steps">
         <li class="${khStepClass("freeze", step, releaseOrder)}">Structure/Release · check outputs, then freeze the unsigned transaction</li>
         <li class="${khStepClass("sign", step, releaseOrder)}">Cosign · sign in Sparrow and paste the partial (not a settle txid)</li>
         <li class="${khStepClass("broadcast", step, releaseOrder)}">Broadcast in Sparrow when N-of-M is met — then settle txid if needed</li>
       </ol>`
-    : `<ol class="kh-steps">
+    : html`<ol class="kh-steps">
         <li class="${step === "settle" ? "is-current" : ""}">Settle · check outputs, then paste the settle txid (64 hex — not a PSBT)</li>
       </ol>`;
 
-  const outputs = `<table class="kh-outputs">
+  const outputs = html`<table class="kh-outputs">
     <caption class="sr-only">Outputs</caption>
     <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
     <tbody>
       ${
         item.outputs.length
-          ? item.outputs
-              .map(
-                (o) =>
-                  `<tr><td>${escapeHtml(o.label || "—")}</td><td class="mono">${escapeHtml(o.address)}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
-              )
-              .join("")
-          : `<tr><td colspan="3" class="muted">No outputs yet</td></tr>`
+          ? item.outputs.map(
+              (o) =>
+                html`<tr><td>${o.label || "—"}</td><td class="mono">${o.address}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
+            )
+          : html`<tr><td colspan="3" class="muted">No outputs yet</td></tr>`
       }
     </tbody>
   </table>`;
 
   const freezeBlock = opts.isRelease
-    ? `<div class="comment-compose-actions" ${step === "freeze" || item.psbts?.[0] ? "" : "hidden"}>
+    ? html`<div class="comment-compose-actions" ${step === "freeze" || item.psbts?.[0] ? "" : "hidden"}>
           <label class="donate-amount-label" for="kh-psbt-unsigned">Unsigned transaction (base64)</label>
           <textarea id="kh-psbt-unsigned" class="comment-input mono" rows="3" placeholder="Paste from Sparrow" ${
             opts.canUnsigned ? "" : "disabled"
@@ -603,11 +588,11 @@ export function keyholderDeskHtml(
           }>Freeze outputs</button>
           ${
             item.psbts?.[0]
-              ? `<button type="button" class="btn ghost" id="kh-psbt-dl">Download unsigned transaction</button>`
+              ? html`<button type="button" class="btn ghost" id="kh-psbt-dl">Download unsigned transaction</button>`
               : ""
           }
         </div>`
-    : `<div class="comment-compose-actions" hidden>
+    : html`<div class="comment-compose-actions" hidden>
           <textarea id="kh-psbt-unsigned" hidden></textarea>
           <button type="button" id="kh-psbt-upload" hidden></button>
         </div>`;
@@ -615,14 +600,14 @@ export function keyholderDeskHtml(
   const publishedHash = publishedUnsignedHash(item);
   const signBlocked = !opts.canPartial || Boolean(publishedHash);
   const signBlock = opts.isRelease
-    ? `<div class="comment-compose-actions" ${
+    ? html`<div class="comment-compose-actions" ${
         step === "sign" || step === "broadcast" ? "" : "hidden"
       }>
-        ${hashGateHtml({
+        ${raw(hashGateHtml({
           publishedHash,
           inputId: "kh-psbt-verify",
           statusId: "kh-hash-status",
-        })}
+        }))}
         <label class="donate-amount-label" for="kh-psbt-partial">Signed partial (base64)</label>
         <textarea id="kh-psbt-partial" class="comment-input mono" rows="3" placeholder="Paste from Sparrow" ${
           opts.canPartial ? "" : "disabled"
@@ -671,12 +656,12 @@ export function keyholderDeskHtml(
   // Release keeps settle secondary inside details (PSBT / Download is primary).
   const settlePrimary = !opts.isRelease;
   const settleContrast = settlePrimary
-    ? "Pay/broadcast from the fee/bond Sparrow wallet to the output row above, then paste the <strong>64-character broadcast txid</strong> — not a PSBT and not Structure outs."
-    : "Paste the <strong>64-character broadcast txid</strong> after Sparrow broadcast — not a PSBT and not Structure outs.";
-  const settleControls = `<p class="fee-pay-bond-label">SETTLE TXID</p>
+    ? html`Pay/broadcast from the fee/bond Sparrow wallet to the output row above, then paste the <strong>64-character broadcast txid</strong> — not a PSBT and not Structure outs.`
+    : html`Paste the <strong>64-character broadcast txid</strong> after Sparrow broadcast — not a PSBT and not Structure outs.`;
+  const settleControls = html`<p class="fee-pay-bond-label">SETTLE TXID</p>
       <p class="fee-pay-bond-contrast">${settleContrast}</p>
       <label class="donate-amount-label" for="kh-txid">Settle txid (64 hex) — not a PSBT</label>
-      <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
+      <input id="kh-txid" class="donate-amount mono" value="${item.settle_txid || ""}" ${
         opts.canPsbt ? "" : "disabled"
       } placeholder="64-character transaction id" title="${
         opts.canPsbt ? "Paste settle txid after broadcast" : "Waiting for package readiness"
@@ -684,31 +669,29 @@ export function keyholderDeskHtml(
       <div id="kh-verify-panel" class="lifecycle-banner" hidden>
         <span class="lifecycle-k">Verify</span>
         <p>Match this settle txid to the outputs above.</p>
-        <ul class="kh-verify-outputs">${item.outputs
-          .map(
-            (o) =>
-              `<li class="mono">${escapeHtml(o.address)} · ${formatSats(o.amount_sats)}${
-                o.label ? ` · ${escapeHtml(o.label)}` : ""
-              }</li>`,
-          )
-          .join("")}</ul>
+        <ul class="kh-verify-outputs">${item.outputs.map(
+          (o) =>
+            html`<li class="mono">${o.address} · ${formatSats(o.amount_sats)}${
+              o.label ? html` · ${o.label}` : ""
+            }</li>`,
+        )}</ul>
       </div>
       <div class="comment-compose-actions">
         <button type="button" class="btn${settlePrimary ? "" : " ghost"}" id="kh-propose" ${
           opts.canPsbt ? "" : "disabled"
-        } title="${escapeHtml(proposeWhy)}" aria-label="${escapeHtml(proposeWhy)}">Propose settle</button>
+        } title="${proposeWhy}" aria-label="${proposeWhy}">Propose settle</button>
         ${
           opts.requiresDualSettle
-            ? `<button type="button" class="btn ghost" id="kh-confirm"${
+            ? html`<button type="button" class="btn ghost" id="kh-confirm"${
                 item.settle_proposed_by === opts.userId || !opts.canPsbt
                   ? " disabled"
                   : ""
-              } title="${escapeHtml(confirmWhy)}" aria-label="${escapeHtml(confirmWhy)}">Confirm settle</button>`
+              } title="${confirmWhy}" aria-label="${confirmWhy}">Confirm settle</button>`
             : ""
         }
       </div>`;
   const settlePrimaryBlock = settlePrimary
-    ? `<div class="kh-settle-primary" data-kh-settle-primary="1">
+    ? html`<div class="kh-settle-primary" data-kh-settle-primary="1">
       <h3 class="proposal-block-title">Settle · record broadcast</h3>
       ${settleControls}
     </div>`
@@ -716,47 +699,45 @@ export function keyholderDeskHtml(
   const settleDetailsInner = settlePrimary
     ? ""
     : settleControls;
-  const chatBlock = `<div id="kh-chat"></div>
+  const chatBlock = html`<div id="kh-chat"></div>
       <label class="sr-only" for="kh-chat-input">Message other keyholders</label>
       <textarea id="kh-chat-input" class="comment-input" rows="2" maxlength="2000" placeholder="Message other keyholders…"></textarea>
       <button type="button" class="btn ghost" id="kh-chat-send">Post</button>`;
 
-  return `<div class="form-panel form-panel-wide">
-    <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
-    <p class="next-card-sentence">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
-    ${readyLine ? `<p class="muted">${escapeHtml(readyLine)}</p>` : ""}
+  return html`<div class="form-panel form-panel-wide">
+    <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${item.kind.replace(/_/g, " ")} · ${item.proposal_id}</h2>
+    <p class="next-card-sentence">${keyholderTxPurpose(item.kind)}</p>
+    ${readyLine ? html`<p class="muted">${readyLine}</p>` : ""}
     ${
       item.monthly_accruing
-        ? `<p class="muted">Signing opens after month-end freeze.</p>`
+        ? html`<p class="muted">Signing opens after month-end freeze.</p>`
         : progress
-          ? `<p class="kh-sign-chip">${escapeHtml(progress)}</p>`
+          ? html`<p class="kh-sign-chip">${progress}</p>`
           : ""
     }
     ${steps}
     ${
       item.line_items?.length
-        ? `<table class="kh-outputs">
+        ? html`<table class="kh-outputs">
              <caption class="sr-only">Line items</caption>
              <thead><tr><th scope="col">Proposal</th><th scope="col">Escrow</th><th scope="col">Payout</th></tr></thead>
-             <tbody>${item.line_items
-               .map(
-                 (l) =>
-                   `<tr><td class="mono">${escapeHtml(l.proposal_id)}</td><td class="mono">${escapeHtml(l.escrow_address || "—")}</td><td>${formatSats(l.payout_sats)}</td></tr>`,
-               )
-               .join("")}</tbody>
+             <tbody>${item.line_items.map(
+               (l) =>
+                 html`<tr><td class="mono">${l.proposal_id}</td><td class="mono">${l.escrow_address || "—"}</td><td>${formatSats(l.payout_sats)}</td></tr>`,
+             )}</tbody>
            </table>`
         : ""
     }
     ${
       item.ln_destination
-        ? `<p class="muted mono">${escapeHtml(item.ln_destination)}${
+        ? html`<p class="muted mono">${item.ln_destination}${
             item.ln_amount_sats != null ? ` · ${formatSats(item.ln_amount_sats)}` : ""
           }</p>`
         : ""
     }
     ${
       opts.needsLn
-        ? `<div class="lifecycle-banner lifecycle-warn">
+        ? html`<div class="lifecycle-banner lifecycle-warn">
             <span class="lifecycle-k">Lockup</span>
             <p>Paste the lockup address, then sign in Sparrow.</p>
             <label class="donate-amount-label" for="kh-lockup">Lockup address</label>
@@ -767,7 +748,7 @@ export function keyholderDeskHtml(
     }
     ${
       !opts.canPsbt && !opts.needsLn && !item.monthly_accruing
-        ? `<p class="muted">Waiting on payout addresses.</p>`
+        ? html`<p class="muted">Waiting on payout addresses.</p>`
         : ""
     }
     ${outputs}
@@ -780,7 +761,7 @@ export function keyholderDeskHtml(
       ${chatBlock}
     </details>
     <p class="builder-msg" id="kh-settle-msg" hidden role="status" aria-live="polite"></p>
-  </div>`;
+  </div>`.value;
 }
 
 type KeyholderMe = {
@@ -838,10 +819,10 @@ export function keyholderColdStart(activeSeats?: number): boolean {
 
 export function keyholderColdStartHtml(activeSeats?: number): string {
   if (!keyholderColdStart(activeSeats)) return "";
-  return `<div class="lifecycle-banner" role="status">
+  return html`<div class="lifecycle-banner" role="status">
     <span class="lifecycle-k">First seats</span>
     <p>No sitting keyholders yet. Ops activates the first two together. Apply and co-attest on this page start after that.</p>
-  </div>`;
+  </div>`.value;
 }
 
 const ONBOARD_STEPS: { id: KeyholderOnboardPhase; label: string }[] = [
@@ -903,18 +884,18 @@ export function keyholderKeysFormHtml(opts: {
   xpub?: string | null;
   heading: string;
 }): string {
-  return `<div class="form-panel" id="kh-keys-panel">
-    <h2 class="proposal-block-title">${escapeHtml(opts.heading)}</h2>
+  return html`<div class="form-panel" id="kh-keys-panel">
+    <h2 class="proposal-block-title">${opts.heading}</h2>
     <p class="muted">Registers fingerprint + xpub on the Worker so other keyholders can co-attest. It does not change the Sparrow descriptor — ops publishes that separately. Saving again clears co-attestations. Never paste a seed.</p>
     <label class="donate-amount-label" for="kh-fp">Fingerprint (8 hex)</label>
-    <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${escapeHtml(opts.fingerprint || "")}" autocomplete="off" />
+    <input id="kh-fp" class="donate-amount mono" maxlength="8" value="${opts.fingerprint || ""}" autocomplete="off" />
     <label class="donate-amount-label" for="kh-xpub">xpub / tpub</label>
-    <textarea id="kh-xpub" class="comment-input mono" rows="3">${escapeHtml(opts.xpub || "")}</textarea>
+    <textarea id="kh-xpub" class="comment-input mono" rows="3">${opts.xpub || ""}</textarea>
     <label class="donate-amount-label" for="kh-auth-addr-keys">Auth address (P2WPKH from this xpub)</label>
     <input id="kh-auth-addr-keys" class="donate-amount mono" placeholder="tb1… / bc1…" autocomplete="off" />
     <button type="button" class="btn" id="kh-keys-submit">Save keys</button>
     <p class="builder-msg" id="kh-keys-msg" hidden role="status" aria-live="polite"></p>
-  </div>`;
+  </div>`.value;
 }
 
 function onboardReapplyBlocked(app: KeyholderOnboardApplication | null | undefined): boolean {
@@ -929,14 +910,14 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
   const kh = input.keyholder;
   const cold = keyholderColdStart(input.activeSeats);
   if (phase === "sign_in") {
-    return `<div class="form-panel kh-onboard-card">
+    return html`<div class="form-panel kh-onboard-card">
       <p class="next-card-sentence">Sign in to continue.</p>
-      ${loginChoicesHtml(undefined, currentReturnPath())}
+      ${raw(loginChoicesHtml(undefined, currentReturnPath()))}
       <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
-    </div>`;
+    </div>`.value;
   }
   if (phase === "earn_reviewer") {
-    return `<div class="form-panel kh-onboard-card">
+    return html`<div class="form-panel kh-onboard-card">
       <p class="next-card-sentence">${
         cold
           ? "Later seats open to earned reviewers after the first two are seated."
@@ -945,7 +926,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
       <p><a class="btn" href="${href("/reviewers")}">Reviewers</a>
       <a class="btn ghost" href="${href("/wanted")}">Most wanted</a></p>
       <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
-    </div>`;
+    </div>`.value;
   }
   if (phase === "election") {
     const closes = app?.election?.closes_at?.slice(0, 10) || "";
@@ -953,56 +934,56 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
       app?.election
         ? `yes ${app.election.yes} / no ${app.election.no}`
         : "votes pending";
-    return `<div class="form-panel kh-onboard-card">
+    return html`<div class="form-panel kh-onboard-card">
       <p class="next-card-sentence">Reviewers are voting on your application.</p>
-      <p class="muted">${closes ? `Closes ${escapeHtml(closes)} · ` : ""}${escapeHtml(tally)}. Fail → 90 days before you can apply again.</p>
-    </div>`;
+      <p class="muted">${closes ? html`Closes ${closes} · ` : ""}${tally}. Fail → 90 days before you can apply again.</p>
+    </div>`.value;
   }
   if (phase === "apply") {
     const blocked = onboardReapplyBlocked(app);
     const cooldown = blocked
-      ? `<p class="muted">You can apply again after ${escapeHtml((app?.reapply_after || "").slice(0, 10))}.</p>`
+      ? html`<p class="muted">You can apply again after ${(app?.reapply_after || "").slice(0, 10)}.</p>`
       : "";
-    return `<div class="kh-onboard-card">
+    return html`<div class="kh-onboard-card">
       <p class="next-card-sentence">Apply here. A pass invites you to register keys.</p>
       ${cooldown}
-      ${blocked ? "" : khApplyFormHtml(true, true)}
-    </div>`;
+      ${blocked ? "" : raw(khApplyFormHtml(true, true))}
+    </div>`.value;
   }
   if (phase === "submit_keys") {
-    return `<div class="kh-onboard-card">
+    return html`<div class="kh-onboard-card">
       <p class="next-card-sentence">Submit the fingerprint and xpub from your hardware wallet.</p>
-      ${keyholderKeysFormHtml({
+      ${raw(keyholderKeysFormHtml({
         fingerprint: kh?.fingerprint,
         xpub: kh?.xpub,
         heading: "Your keys",
-      })}
-    </div>`;
+      }))}
+    </div>`.value;
   }
   if (phase === "await_attest") {
     const n = kh?.attest_count || 0;
-    return `<div class="kh-onboard-card">
+    return html`<div class="kh-onboard-card">
       <p class="next-card-sentence">${
         cold
           ? "Co-attest cannot start until two seats are already active."
           : `Waiting for two sitting keyholders (${n}/2).`
       }</p>
-      <p class="muted">Fingerprint <code class="mono">${escapeHtml(kh?.fingerprint || "—")}</code>. ${
+      <p class="muted">Fingerprint <code class="mono">${kh?.fingerprint || "—"}</code>. ${
         cold
           ? "Ops activates the first two together."
           : "They open this page → Roster → Co-attest."
       }</p>
-      ${keyholderKeysFormHtml({
+      ${raw(keyholderKeysFormHtml({
         fingerprint: kh?.fingerprint,
         xpub: kh?.xpub,
         heading: "Update keys",
-      })}
-    </div>`;
+      }))}
+    </div>`.value;
   }
-  return `<div class="form-panel kh-onboard-card">
+  return html`<div class="form-panel kh-onboard-card">
     <p class="next-card-sentence">You are seated.</p>
     <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
-  </div>`;
+  </div>`.value;
 }
 
 export function keyholderOnboardHtml(input: KeyholderOnboardInput): string {
@@ -1010,15 +991,15 @@ export function keyholderOnboardHtml(input: KeyholderOnboardInput): string {
   const current = keyholderOnboardStepIndex(phase);
   const steps = ONBOARD_STEPS.map((step, i) => {
     const cls = i < current ? "is-done" : i === current ? "is-current" : "";
-    return `<li class="${cls}">${escapeHtml(step.label)}</li>`;
-  }).join("");
-  return `<div class="kh-onboard">
-    ${keyholderColdStartHtml(input.activeSeats)}
+    return html`<li class="${cls}">${step.label}</li>`;
+  });
+  return html`<div class="kh-onboard">
+    ${raw(keyholderColdStartHtml(input.activeSeats))}
     <ol class="kh-steps kh-onboard-steps" aria-label="Keyholder onboarding">
       ${steps}
     </ol>
-    ${keyholderOnboardCardHtml(input)}
-  </div>`;
+    ${raw(keyholderOnboardCardHtml(input))}
+  </div>`.value;
 }
 
 const api = () => WORKERS_API.replace(/\/$/, "");
@@ -1085,15 +1066,15 @@ export async function renderKeyholders(
   const rerender = () => void renderKeyholders(shell, user);
   const activeSeats = await loadActiveSeats();
   if (!user) {
-    app.innerHTML = shell(`
+    app.innerHTML = shell(html`
       <section class="wrap-wide detail keyholders-page">
         <header class="declined-head">
           <h1>Keyholders</h1>
-          <p class="lede">${escapeHtml(coldStartLede("sign_in", activeSeats))}</p>
+          <p class="lede">${coldStartLede("sign_in", activeSeats)}</p>
         </header>
-        ${keyholderOnboardHtml({ signedIn: false, canApply: false, activeSeats })}
+        ${raw(keyholderOnboardHtml({ signedIn: false, canApply: false, activeSeats }))}
       </section>
-    `);
+    `.value);
     return;
   }
 
@@ -1121,29 +1102,29 @@ export async function renderKeyholders(
   const phase = keyholderOnboardPhase(onboardInput);
 
   if (!kh || kh.status !== "active") {
-    app.innerHTML = shell(`
+    app.innerHTML = shell(html`
       <section class="wrap-wide detail keyholders-page">
         <header class="declined-head">
           <h1>Keyholders</h1>
-          <p class="lede">${escapeHtml(coldStartLede(phase, activeSeats))}</p>
+          <p class="lede">${coldStartLede(phase, activeSeats)}</p>
         </header>
-        ${keyholderOnboardHtml(onboardInput)}
+        ${raw(keyholderOnboardHtml(onboardInput))}
       </section>
-    `);
+    `.value);
     bindKhApplyForm(app, { onApplied: rerender });
     bindKeyholderKeys(app, { onSaved: rerender });
     return;
   }
 
-  app.innerHTML = shell(`
+  app.innerHTML = shell(html`
     <section class="wrap-wide detail keyholders-page">
       <header class="declined-head">
         <p class="eyebrow">Keyholders · Ops</p>
         <h1>Keyholders</h1>
-        <p class="lede">${escapeHtml(keyholderOnboardLede("active"))}</p>
-        <p class="kh-seat">Seated as @${escapeHtml(kh.github)}${
+        <p class="lede">${keyholderOnboardLede("active")}</p>
+        <p class="kh-seat">Seated as @${kh.github}${
           kh.fingerprint
-            ? ` · <code class="mono">${escapeHtml(kh.fingerprint)}</code>`
+            ? html` · <code class="mono">${kh.fingerprint}</code>`
             : ""
         }. <a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
         <div class="kh-balance">
@@ -1165,11 +1146,11 @@ export async function renderKeyholders(
       </header>
       ${
         kh.keys_stale
-          ? keyholderKeysFormHtml({
+          ? raw(keyholderKeysFormHtml({
               fingerprint: kh.fingerprint,
               xpub: kh.xpub,
               heading: "Re-confirm keys",
-            })
+            }))
           : ""
       }
       <div class="kh-session-bar">
@@ -1179,9 +1160,9 @@ export async function renderKeyholders(
       <div class="site-modal" id="kh-session" hidden>
         <div class="site-modal-backdrop" data-kh-session-close tabindex="-1" aria-hidden="true"></div>
         <div class="site-modal-card kh-session-card" role="dialog" aria-modal="true" aria-labelledby="kh-session-title">
-          <button type="button" class="site-modal-close" data-kh-session-close aria-label="Close">${solidIcon("xmark")}</button>
+          <button type="button" class="site-modal-close" data-kh-session-close aria-label="Close">${raw(solidIcon("xmark"))}</button>
           <h2 id="kh-session-title" tabindex="-1">Why this check exists</h2>
-          ${keyholderProofWizardHtml(kh.auth_address || "", user.payout_address || "")}
+          ${raw(keyholderProofWizardHtml(kh.auth_address || "", user.payout_address || ""))}
         </div>
       </div>
       <div class="kh-desk-queues">
@@ -1198,12 +1179,12 @@ export async function renderKeyholders(
       <div class="site-modal" id="kh-detail-modal" hidden>
         <div class="site-modal-backdrop" data-kh-detail-close tabindex="-1" aria-hidden="true"></div>
         <div class="site-modal-card kh-desk-card" role="dialog" aria-modal="true" aria-labelledby="kh-detail-title">
-          <button type="button" class="site-modal-close" data-kh-detail-close aria-label="Close">${solidIcon("xmark")}</button>
+          <button type="button" class="site-modal-close" data-kh-detail-close aria-label="Close">${raw(solidIcon("xmark"))}</button>
           <div id="kh-detail"></div>
         </div>
       </div>
     </section>
-  `);
+  `.value);
 
   const queueEl = app.querySelector<HTMLElement>("#kh-queue")!;
   const detailEl = app.querySelector<HTMLElement>("#kh-detail")!;
@@ -1431,17 +1412,15 @@ export async function renderKeyholders(
         queueEl.removeAttribute("aria-busy");
         return;
       }
-      queueEl.innerHTML = `<ul class="declined-list">${data.items
-        .map((item) => {
-          return `<li class="declined-row">
-            <button type="button" class="declined-title btn ghost" data-branch="${escapeHtml(item.proposal_id)}" data-alloc="${escapeHtml(item.allocation_id)}" aria-label="${escapeHtml(item.proposal_id)} ${escapeHtml(item.kind)} ${escapeHtml(signatureProgressLabel(item.signed, item.required_threshold))}">${escapeHtml(item.proposal_id)} · ${escapeHtml(item.allocation_id)}</button>
-            <p class="kh-queue-purpose">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
-            <span class="declined-meta"><span class="pill">${escapeHtml(item.kind)}</span>
-            <span class="kh-sign-chip">${escapeHtml(signatureProgressLabel(item.signed, item.required_threshold))}</span>
-            <span class="pill">${escapeHtml(item.state)}</span></span>
-          </li>`;
-        })
-        .join("")}</ul>`;
+      queueEl.innerHTML = html`<ul class="declined-list">${data.items.map(
+        (item) => html`<li class="declined-row">
+            <button type="button" class="declined-title btn ghost" data-branch="${item.proposal_id}" data-alloc="${item.allocation_id}" aria-label="${item.proposal_id} ${item.kind} ${signatureProgressLabel(item.signed, item.required_threshold)}">${item.proposal_id} · ${item.allocation_id}</button>
+            <p class="kh-queue-purpose">${keyholderTxPurpose(item.kind)}</p>
+            <span class="declined-meta"><span class="pill">${item.kind}</span>
+            <span class="kh-sign-chip">${signatureProgressLabel(item.signed, item.required_threshold)}</span>
+            <span class="pill">${item.state}</span></span>
+          </li>`,
+      )}</ul>`.value;
       queueEl.querySelectorAll<HTMLButtonElement>("[data-branch]").forEach((btn) => {
         btn.addEventListener("click", () => {
           lastDeskOpener = btn;
@@ -1468,40 +1447,23 @@ export async function renderKeyholders(
       queueEl.removeAttribute("aria-busy");
       return;
     }
-    queueEl.innerHTML = `<ul class="declined-list">${data.items
-      .map((item) => {
-        const sum = item.outputs.reduce((a, o) => a + o.amount_sats, 0);
-        const waiting = item.outputs.length === 0;
-        const lines = item.line_items?.length || 0;
-        const signed = item.partials?.length || 0;
-        const need = item.required_threshold || 0;
-        return `<li class="declined-row">
-          <button type="button" class="declined-title btn ghost" data-disburse="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.period || item.proposal_id)} ${escapeHtml(item.state)}${need ? ` ${signatureProgressLabel(signed, need)}` : ""}">${escapeHtml(item.period || item.proposal_id)}</button>
-          <p class="kh-queue-purpose">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
-          <span class="declined-meta"><span class="pill">${escapeHtml(item.state)}</span>
-          ${
-            item.monthly_accruing
-              ? `<span class="pill">accruing</span>`
-              : ""
-          }
-          ${
-            lines
-              ? `<span class="muted">${lines} bount${lines === 1 ? "y" : "ies"}</span>`
-              : ""
-          }
-          ${
-            need
-              ? `<span class="kh-sign-chip">${escapeHtml(signatureProgressLabel(signed, need))}</span>`
-              : ""
-          }
-          ${
-            waiting
-              ? `<span class="pill">waiting on address</span>`
-              : `<span class="muted">${formatSats(sum)}</span>`
-          }</span>
+    queueEl.innerHTML = html`<ul class="declined-list">${data.items.map((item) => {
+      const sum = item.outputs.reduce((a, o) => a + o.amount_sats, 0);
+      const waiting = item.outputs.length === 0;
+      const lines = item.line_items?.length || 0;
+      const signed = item.partials?.length || 0;
+      const need = item.required_threshold || 0;
+      return html`<li class="declined-row">
+          <button type="button" class="declined-title btn ghost" data-disburse="${item.id}" aria-label="${item.period || item.proposal_id} ${item.state}${need ? ` ${signatureProgressLabel(signed, need)}` : ""}">${item.period || item.proposal_id}</button>
+          <p class="kh-queue-purpose">${keyholderTxPurpose(item.kind)}</p>
+          <span class="declined-meta"><span class="pill">${item.state}</span>
+          ${item.monthly_accruing ? html`<span class="pill">accruing</span>` : ""}
+          ${lines ? html`<span class="muted">${lines} bount${lines === 1 ? "y" : "ies"}</span>` : ""}
+          ${need ? html`<span class="kh-sign-chip">${signatureProgressLabel(signed, need)}</span>` : ""}
+          ${waiting ? html`<span class="pill">waiting on address</span>` : html`<span class="muted">${formatSats(sum)}</span>`}
+          </span>
         </li>`;
-      })
-      .join("")}</ul>`;
+    })}</ul>`.value;
     queueEl.querySelectorAll<HTMLButtonElement>("[data-disburse]").forEach((btn) => {
       btn.addEventListener("click", () => {
         lastDeskOpener = btn;
@@ -1993,12 +1955,10 @@ export async function renderKeyholders(
         messages: { author: string; body: string; created_at: string }[];
       };
       chatEl.innerHTML = data.messages.length
-        ? data.messages
-            .map(
-              (m) =>
-                `<p><strong>@${escapeHtml(m.author)}</strong> <span class="muted">${escapeHtml(m.created_at.slice(0, 16))}</span><br />${escapeHtml(m.body)}</p>`,
-            )
-            .join("")
+        ? html`${data.messages.map(
+            (m) =>
+              html`<p><strong>@${m.author}</strong> <span class="muted">${m.created_at.slice(0, 16)}</span><br />${m.body}</p>`,
+          )}`.value
         : `<p class="muted">No messages yet.</p>`;
     };
     void loadChat();
@@ -2188,20 +2148,17 @@ export async function renderKeyholders(
       ...wait.map((k) => ({ ...k, _pending: true })),
     ];
     queueEl.innerHTML = rows.length
-      ? `<p class="builder-msg" id="kh-roster-msg" hidden role="status" aria-live="polite"></p>
-         <ul class="declined-list">${rows
-          .map(
-            (k) =>
-              `<li class="declined-row kh-roster-row"><span class="kh-roster-name">@${escapeHtml(k.github)}</span>
-          <span class="declined-meta"><span class="pill">${escapeHtml(k.status)}</span>
-          <span class="mono muted">${escapeHtml(k.fingerprint || "—")}</span></span>
+      ? html`<p class="builder-msg" id="kh-roster-msg" hidden role="status" aria-live="polite"></p>
+         <ul class="declined-list">${rows.map(
+           (k) => html`<li class="declined-row kh-roster-row"><span class="kh-roster-name">@${k.github}</span>
+          <span class="declined-meta"><span class="pill">${k.status}</span>
+          <span class="mono muted">${k.fingerprint || "—"}</span></span>
           ${
             k._pending && kh.status === "active"
-              ? `<button type="button" class="btn ghost" data-coattest="${escapeHtml(k.user_id)}">Co-attest</button>`
+              ? html`<button type="button" class="btn ghost" data-coattest="${k.user_id}">Co-attest</button>`
               : ""
           }</li>`,
-          )
-          .join("")}</ul>`
+         )}</ul>`.value
       : keyholderQueueEmptyHtml(
           "No seats listed",
           "Active and pending keyholders appear here when the roster has rows.",
@@ -2282,7 +2239,7 @@ export async function renderKeyholders(
     };
     if (!res.ok || !body.psbt_base64 || !body.payout_address) {
       cashoutEl.hidden = false;
-      cashoutEl.innerHTML = `<p class="builder-msg bad" role="alert">${escapeHtml(body.error || "Could not build the payout.")}</p>`;
+      cashoutEl.innerHTML = html`<p class="builder-msg bad" role="alert">${body.error || "Could not build the payout."}</p>`.value;
       return;
     }
     cashoutB64 = body.psbt_base64;
