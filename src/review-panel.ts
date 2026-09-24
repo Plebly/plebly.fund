@@ -265,7 +265,8 @@ export function suppressFlagForClosedBallot(
   else flag.remove();
 }
 
-function renderDecision(
+/** Paint open/closed decision UI. Exported for fulfiller gate tests. */
+export function renderDecision(
   root: ParentNode,
   d: ReviewDecisionView,
   isReviewer: boolean,
@@ -280,9 +281,9 @@ function renderDecision(
   const mine = Boolean(
     userId && (d.dissent || []).some((e) => e.user_id === userId),
   );
-  const ownDeliverable =
-    isFulfiller &&
-    (d.kind === "deliverable_confirm" || d.kind === "second_review");
+  // Match workers castReviewVote: fulfiller cannot vote on ANY kind of their
+  // proposal's decision (not only deliverable_confirm / second_review).
+  const fulfillerBlocked = isFulfiller;
 
   if (statusEl) {
     statusEl.textContent = reviewDecisionStatusLine(d);
@@ -305,14 +306,14 @@ function renderDecision(
     list.innerHTML = `${reply}${dissentListHtml(d.dissent || [])}`;
   }
   if (actions) {
-    if (ownDeliverable) {
+    if (fulfillerBlocked) {
       actions.hidden = false;
       actions.innerHTML = `<p class="review-fulfiller-blocked muted" role="status">${escapeHtml(FULFILLER_CANNOT_VOTE)}</p>`;
     } else {
       actions.hidden = !(d.status === "open" && isReviewer);
     }
   }
-  if (dissent) dissent.hidden = ownDeliverable ? true : !(isReviewer && !mine);
+  if (dissent) dissent.hidden = fulfillerBlocked ? true : !(isReviewer && !mine);
   const challenge = root.querySelector<HTMLElement>("#review-challenge-ai");
   if (challenge) {
     const show = isAiChallengeableDecision(d);
