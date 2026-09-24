@@ -1668,6 +1668,16 @@ export async function bindBuilderPanel(
       await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts);
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
+      const listingBallotChromeOwned = (): boolean => {
+        const jump = document.querySelector<HTMLAnchorElement>("#review-side-link");
+        if (jump?.dataset.ballotChrome === "1") return true;
+        const pill = document.querySelector<HTMLElement>(
+          ".proposal-hero-top .pill-status",
+        );
+        if (pill?.dataset.ballotChrome === "1") return true;
+        const panel = document.querySelector<HTMLElement>("#review-panel");
+        return Boolean(panel?.dataset.reviewDecisionId && panel.dataset.ballotPrimaryLabel);
+      };
       const refreshStepper = () => {
         const stepper =
           document.querySelector(".proposal-page .proposal-stepper") ||
@@ -1675,6 +1685,9 @@ export async function bindBuilderPanel(
         if (stepper) {
           stepper.outerHTML = proposalStepperHtml(mergedProposal);
         }
+        // Ballot sync owns the hero pill once a decision has painted — do not
+        // clobber "Time extension — open" / "Closed — …" with lifecycle "In review".
+        if (listingBallotChromeOwned()) return;
         const pillHost = document.querySelector(".proposal-hero-top");
         if (pillHost) {
           const prev = pillHost.querySelector(".pill-status");
@@ -1791,6 +1804,12 @@ export async function bindBuilderPanel(
       // Re-apply after awaits — a concurrent navigate can replace #app mid-flight;
       // document-scoped refresh still hits the visible stepper.
       refreshStepper();
+      // Late stepper refresh can race a just-painted decision; restore ballot
+      // primary on header / meter / sidebar / next-card when panel owns one.
+      if (listingBallotChromeOwned()) {
+        const { reapplyListingBallotChrome } = await import("./review-panel");
+        reapplyListingBallotChrome(document);
+      }
       bindClaimButton();
       bindDeliverable(refreshStatus);
       bindCheckpoint();
