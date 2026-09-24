@@ -316,12 +316,26 @@ export type WantedRow = {
   excerpt: string;
 };
 
+/** Drop duplicate wanted rows that share an id (preferred) or path. */
+export function dedupeWantedRows(rows: WantedRow[]): WantedRow[] {
+  const seen = new Set<string>();
+  const out: WantedRow[] = [];
+  for (const row of rows) {
+    const key = (row.id && String(row.id).trim()) || row.path;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
 export async function fetchWanted(limit = 12): Promise<WantedRow[]> {
   if (!WORKERS_API) return [];
   const res = await fetch(`${API()}/wanted?limit=${limit}`);
   if (!res.ok) return [];
   const data = (await res.json()) as { proposals?: WantedRow[] };
-  return Array.isArray(data.proposals) ? data.proposals : [];
+  const rows = Array.isArray(data.proposals) ? data.proposals : [];
+  return dedupeWantedRows(rows);
 }
 
 export async function addWatch(proposalPath: string): Promise<void> {

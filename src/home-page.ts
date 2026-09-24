@@ -129,7 +129,7 @@ function landingHeroHtml(): string {
       ${signetHeroNoteHtml()}
       <div class="landing-cta-row">
         <a class="btn landing-btn" href="${projectsHref()}">Browse</a>
-        <a class="btn ghost landing-btn" href="${href("/propose")}">Start a project</a>
+        <a class="landing-cta-secondary" href="${href("/propose")}">Start a project</a>
       </div>
     </div>
   </section>`;
@@ -857,9 +857,15 @@ function wantedRailHtml(
       .map(
         (r) => `<a class="wanted-row" href="${proposalHref(r.path, r.id)}">
         <span class="wanted-title">${escapeHtml(r.title)}</span>
-        <span class="wanted-nums mono">${r.watches} watches · ${r.weighted} weighted · ${
-          r.funded_pct != null ? `${r.funded_pct}%` : "—"
-        }</span>
+        <span class="wanted-nums mono">
+          <span class="wanted-metric">${r.watches} watches</span>
+          <span class="wanted-metric-sep" aria-hidden="true">·</span>
+          <span class="wanted-metric">${r.weighted} weighted</span>
+          <span class="wanted-metric-sep" aria-hidden="true">·</span>
+          <span class="wanted-metric wanted-metric-funded">${
+            r.funded_pct != null ? `${r.funded_pct}%` : "—"
+          }</span>
+        </span>
       </a>`,
       )
       .join("")}</div>
