@@ -612,7 +612,7 @@ export async function renderProposalPage(
       .join("");
     const reviewJump =
       status === "in_review"
-        ? "Review is open"
+        ? "In review"
         : status === "rejected"
           ? "Rebuttal"
           : status === "refunding"

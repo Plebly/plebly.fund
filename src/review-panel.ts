@@ -99,6 +99,11 @@ export function presentAiReviewCard<T extends {
   };
 }
 
+/** True when skipped/unavailable AI chrome should stay tucked under the ballot. */
+export function isDemotedAiOutcome(outcome: string): boolean {
+  return outcome === "bypass" || outcome === "unavailable";
+}
+
 /** Compact AI Reviewer card (deliverable submit, flag window, or decision). */
 export function aiReviewCardHtml(
   ai: {
@@ -108,7 +113,7 @@ export function aiReviewCardHtml(
     acceptance_scored?: boolean;
     attribution?: string;
   },
-  opts?: { compact?: boolean },
+  opts?: { compact?: boolean; tucked?: boolean },
 ): string {
   const shown = presentAiReviewCard(ai);
   const failList =
@@ -137,15 +142,25 @@ export function aiReviewCardHtml(
   const cites = truncated
     ? `<pre class="ai-reasoning${opts?.compact ? " is-compact" : ""}">${escapeHtml(truncated)}</pre>`
     : "";
-  return `<div class="ai-review-card ${aiOutcomeClass(shown.outcome)}${opts?.compact ? " is-compact" : ""}" role="status">
-    <div class="ai-review-head">
+  const tuck = opts?.tucked ?? isDemotedAiOutcome(shown.outcome);
+  const head = `<div class="ai-review-head">
       <span class="ai-k">AI Reviewer</span>
       <span class="pill ${aiOutcomeClass(shown.outcome)}">${escapeHtml(aiOutcomeLabel(shown.outcome))}</span>
-    </div>
-    <p class="ai-attr">${attribution}</p>
+    </div>`;
+  const body = `<p class="ai-attr">${attribution}</p>
     ${cites}
     ${failList}
-    ${next}
+    ${next}`;
+  const cls = `ai-review-card ${aiOutcomeClass(shown.outcome)}${opts?.compact ? " is-compact" : ""}${tuck ? " is-tucked" : ""}`;
+  if (tuck) {
+    return `<details class="${cls}" role="status">
+    <summary class="ai-review-summary">${head}</summary>
+    <div class="ai-review-tucked-body">${body}</div>
+  </details>`;
+  }
+  return `<div class="${cls}" role="status">
+    ${head}
+    ${body}
   </div>`;
 }
 
@@ -225,17 +240,22 @@ function setMsg(el: HTMLElement | null, text: string | null, cls = ""): void {
   el.className = `builder-msg ${cls}`.trim();
 }
 
+/** Single primary state line for header / sidebar / panel chrome. */
+export function primaryBallotStatusLabel(d: ReviewDecisionView): string {
+  if (d.status !== "open") return closedBallotSummary(d);
+  return `${decisionKindLabel(d.kind)} — open`;
+}
+
 export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
-  const kind = decisionKindLabel(d.kind);
+  const primary = primaryBallotStatusLabel(d);
   if (d.status !== "open") {
-    const result = d.result || d.status;
     const aiBit = d.ai_decisive ? " · AI decisive" : "";
-    return `${kind} · Closed · ${result}${d.passed ? " (passed)" : ""}${aiBit}`;
+    return `${primary}${aiBit}`;
   }
   const closes = new Date(d.closes_at).toLocaleDateString();
   const second = d.round === 2 ? " · Second look" : "";
   const esc = d.escalated ? " · Escalated to humans" : "";
-  return `${kind}${second}${esc} · ${d.vote_count} vote(s) · closes ${closes}.`;
+  return `${primary}${second}${esc} · closes ${closes}.`;
 }
 
 /** Sole primary closed-ballot summary (sidebar / next-card). */
@@ -247,6 +267,15 @@ export function closedBallotSummary(d: ReviewDecisionView): string {
 export const FULFILLER_CANNOT_VOTE =
   "You are the fulfiller; you cannot vote on this proposal’s decision.";
 
+function queryListingChrome(root: ParentNode, selector: string): HTMLElement | null {
+  const fromRoot = root.querySelector<HTMLElement>(selector);
+  if (fromRoot) return fromRoot;
+  if (typeof document !== "undefined" && root !== document) {
+    return document.querySelector<HTMLElement>(selector);
+  }
+  return null;
+}
+
 /** Hide actionable Flag when a closed ballot is the sole primary state. */
 export function suppressFlagForClosedBallot(
   root: ParentNode,
@@ -254,15 +283,53 @@ export function suppressFlagForClosedBallot(
 ): void {
   if (d.status === "open") return;
   const summary = closedBallotSummary(d);
-  const sentence = root.querySelector<HTMLElement>("#next-card-sentence");
+  const sentence = queryListingChrome(root, "#next-card-sentence");
   if (sentence) sentence.textContent = summary;
-  const detail = root.querySelector<HTMLElement>("#next-card-detail");
+  const detail = queryListingChrome(root, "#next-card-detail");
   if (detail) detail.remove();
-  const flag = root.querySelector<HTMLButtonElement>("#builder-flag");
+  const flag = queryListingChrome(root, "#builder-flag") as HTMLButtonElement | null;
   if (!flag) return;
   const primary = flag.closest(".next-card-primary");
   if (primary) primary.remove();
   else flag.remove();
+}
+
+/**
+ * Drive one status source of truth across listing header, funding meter,
+ * sidebar jump, and next-card. Vote / fulfiller-blocked stay the decision
+ * primary inside #review-panel.
+ */
+export function syncListingBallotChrome(
+  root: ParentNode,
+  d: ReviewDecisionView,
+): void {
+  const label = primaryBallotStatusLabel(d);
+  const pill = queryListingChrome(root, ".proposal-hero-top .pill-status");
+  if (pill) pill.textContent = label;
+  const meter = queryListingChrome(
+    root,
+    ".proposal-funding-bar .funding-meter-label",
+  );
+  if (meter) meter.textContent = label;
+  const jump = queryListingChrome(
+    root,
+    "#review-side-link",
+  ) as HTMLAnchorElement | null;
+  if (jump && !jump.hidden) {
+    jump.textContent = label;
+    jump.dataset.ballotChrome = "1";
+  }
+  if (d.status !== "open") {
+    suppressFlagForClosedBallot(root, d);
+    return;
+  }
+  // Open ballot: status chrome only. Decision primary (vote / fulfiller
+  // blocked) lives in the review panel — do not leave competing "Review is
+  // open" / wrong kind vote prompts in the sidebar.
+  const sentence = queryListingChrome(root, "#next-card-sentence");
+  if (sentence) sentence.textContent = label;
+  const detail = queryListingChrome(root, "#next-card-detail");
+  if (detail) detail.remove();
 }
 
 /** Paint open/closed decision UI. Exported for fulfiller gate tests. */
@@ -290,8 +357,22 @@ export function renderDecision(
   }
   const aiSlot = root.querySelector<HTMLElement>("#review-ai");
   if (aiSlot) {
-    aiSlot.innerHTML = d.ai_review ? aiReviewCardHtml(d.ai_review, { compact: true }) : "";
+    aiSlot.innerHTML = d.ai_review
+      ? aiReviewCardHtml(d.ai_review, { compact: true })
+      : "";
   }
+  // Prefer panel-owned tucked AI; drop a competing outer skipped card.
+  if (d.ai_review && isDemotedAiOutcome(d.ai_review.outcome)) {
+    const host =
+      (root instanceof Element ? root.closest("#proposal-review") : null) ||
+      (typeof document !== "undefined"
+        ? document.querySelector("#proposal-review")
+        : null);
+    host
+      ?.querySelectorAll(":scope > .ai-review-card")
+      .forEach((el) => el.remove());
+  }
+  syncListingBallotChrome(root, d);
   if (counts) {
     counts.hidden = false;
     counts.innerHTML = `

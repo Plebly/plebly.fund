@@ -700,8 +700,10 @@ function revealReviewHost(host: Element): void {
   if (!jump) return;
   jump.hidden = !has;
   if (!has) return;
+  // Ballot sync owns the jump label once a decision has painted.
+  if (jump.dataset.ballotChrome === "1") return;
   jump.textContent = host.querySelector("#review-panel")
-    ? "Review is open"
+    ? "In review"
     : host.querySelector(".rebuttal-panel")
       ? "Rebuttal"
       : host.querySelector(".ballot-panel")
@@ -728,29 +730,39 @@ async function syncHybridReviewUi(
 
   const {
     aiReviewCardHtml,
+    isDemotedAiOutcome,
     reviewPanelHtml,
     bindReviewPanel,
     suppressFlagForClosedBallot,
   } = await import("./review-panel");
-  const ai = status.ai_review || proposal.ai_review;
-  if (ai) {
-    const html = aiReviewCardHtml(ai);
-    // Direct child of the review section. Never replace the compact card
-    // inside #review-panel (that clobber race can desync challenge UI).
-    const existing = host.querySelector<HTMLElement>(":scope > .ai-review-card");
-    if (existing) existing.outerHTML = html;
-    else {
-      const title = host.querySelector(".proposal-block-title");
-      if (title) title.insertAdjacentHTML("afterend", html);
-      else host.insertAdjacentHTML("afterbegin", html);
-    }
-  }
 
   const st = String(status.state || proposal.status || "");
   const donor =
     status.donor_review_status ?? proposal.donor_review_status ?? null;
   const wantPanel =
     st === "in_review" && Boolean(proposal.id) && donor !== "window_open";
+
+  const ai = status.ai_review || proposal.ai_review;
+  if (ai) {
+    // Skipped / unavailable cards tuck under the ballot — do not mount a
+    // competing outer card when the review panel will own them.
+    if (wantPanel && isDemotedAiOutcome(String(ai.outcome || ""))) {
+      host
+        .querySelectorAll(":scope > .ai-review-card")
+        .forEach((el) => el.remove());
+    } else {
+      const html = aiReviewCardHtml(ai);
+      // Direct child of the review section. Never replace the compact card
+      // inside #review-panel (that clobber race can desync challenge UI).
+      const existing = host.querySelector<HTMLElement>(":scope > .ai-review-card");
+      if (existing) existing.outerHTML = html;
+      else {
+        const title = host.querySelector(".proposal-block-title");
+        if (title) title.insertAdjacentHTML("afterend", html);
+        else host.insertAdjacentHTML("afterbegin", html);
+      }
+    }
+  }
   let panel = host.querySelector<HTMLElement>("#review-panel");
   if (wantPanel && !panel) {
     const after =
