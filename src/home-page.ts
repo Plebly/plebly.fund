@@ -38,6 +38,7 @@ import {
   proposalHref,
 } from "./router";
 import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
+import { wantedRowHtml } from "./wanted-page";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
@@ -854,20 +855,7 @@ function wantedRailHtml(
     </div>
     <div class="wanted-list">${rows
       .slice(0, 4)
-      .map(
-        (r) => `<a class="wanted-row" href="${proposalHref(r.path, r.id)}">
-        <span class="wanted-title">${escapeHtml(r.title)}</span>
-        <span class="wanted-nums mono">
-          <span class="wanted-metric">${r.watches} watches</span>
-          <span class="wanted-metric-sep" aria-hidden="true">·</span>
-          <span class="wanted-metric">${r.weighted} weighted</span>
-          <span class="wanted-metric-sep" aria-hidden="true">·</span>
-          <span class="wanted-metric wanted-metric-funded">${
-            r.funded_pct != null ? `${r.funded_pct}%` : "—"
-          }</span>
-        </span>
-      </a>`,
-      )
+      .map((r) => wantedRowHtml(r, { fundedSuffix: false }))
       .join("")}</div>
   </section>`;
 }
