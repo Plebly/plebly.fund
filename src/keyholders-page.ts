@@ -588,6 +588,73 @@ export function keyholderDeskHtml(
         item.period ? ` · ${item.period}` : ""
       }`
     : "";
+  const proposeWhy = !opts.canPsbt
+    ? "Waiting on payout addresses / package readiness"
+    : opts.requiresDualSettle
+      ? "Propose this settle txid for dual-ack"
+      : "After Sparrow broadcast, paste the 64-character settle txid and propose";
+  const confirmWhy = !opts.canPsbt
+    ? "Waiting on payout addresses / package readiness"
+    : item.settle_proposed_by === opts.userId
+      ? "You proposed this settle — another keyholder must confirm"
+      : item.settle_proposed_by
+        ? "Confirm the proposed settle txid"
+        : "Waiting for a keyholder to propose the settle txid";
+  // Non-release (bond_refund / contrib_refund): settle txid + Propose settle are the
+  // only real action — keep them primary, not buried under "Other settle tools".
+  // Release keeps settle secondary inside details (PSBT / Download is primary).
+  const settlePrimary = !opts.isRelease;
+  const settleContrast = settlePrimary
+    ? "Pay/broadcast from the fee/bond Sparrow wallet to the output row above, then paste the <strong>64-character broadcast txid</strong> — not a PSBT and not Structure outs."
+    : "Paste the <strong>64-character broadcast txid</strong> after Sparrow broadcast — not a PSBT and not Structure outs.";
+  const settleControls = `<p class="fee-pay-bond-label">SETTLE TXID</p>
+      <p class="fee-pay-bond-contrast">${settleContrast}</p>
+      <label class="donate-amount-label" for="kh-txid">Settle txid (64 hex) — not a PSBT</label>
+      <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
+        opts.canPsbt ? "" : "disabled"
+      } placeholder="64-character transaction id" title="${
+        opts.canPsbt ? "Paste settle txid after broadcast" : "Waiting for package readiness"
+      }" />
+      <div id="kh-verify-panel" class="lifecycle-banner" hidden>
+        <span class="lifecycle-k">Verify</span>
+        <p>Match this settle txid to the outputs above.</p>
+        <ul class="kh-verify-outputs">${item.outputs
+          .map(
+            (o) =>
+              `<li class="mono">${escapeHtml(o.address)} · ${formatSats(o.amount_sats)}${
+                o.label ? ` · ${escapeHtml(o.label)}` : ""
+              }</li>`,
+          )
+          .join("")}</ul>
+      </div>
+      <div class="comment-compose-actions">
+        <button type="button" class="btn${settlePrimary ? "" : " ghost"}" id="kh-propose" ${
+          opts.canPsbt ? "" : "disabled"
+        } title="${escapeHtml(proposeWhy)}" aria-label="${escapeHtml(proposeWhy)}">Propose settle</button>
+        ${
+          opts.requiresDualSettle
+            ? `<button type="button" class="btn ghost" id="kh-confirm"${
+                item.settle_proposed_by === opts.userId || !opts.canPsbt
+                  ? " disabled"
+                  : ""
+              } title="${escapeHtml(confirmWhy)}" aria-label="${escapeHtml(confirmWhy)}">Confirm settle</button>`
+            : ""
+        }
+      </div>`;
+  const settlePrimaryBlock = settlePrimary
+    ? `<div class="kh-settle-primary" data-kh-settle-primary="1">
+      <h3 class="proposal-block-title">Settle · record broadcast</h3>
+      ${settleControls}
+    </div>`
+    : "";
+  const settleDetailsInner = settlePrimary
+    ? ""
+    : settleControls;
+  const chatBlock = `<div id="kh-chat"></div>
+      <label class="sr-only" for="kh-chat-input">Message other keyholders</label>
+      <textarea id="kh-chat-input" class="comment-input" rows="2" maxlength="2000" placeholder="Message other keyholders…"></textarea>
+      <button type="button" class="btn ghost" id="kh-chat-send">Post</button>`;
+
   return `<div class="form-panel form-panel-wide">
     <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${escapeHtml(item.kind.replace(/_/g, " "))} · ${escapeHtml(item.proposal_id)}</h2>
     <p class="next-card-sentence">${escapeHtml(keyholderTxPurpose(item.kind))}</p>
@@ -640,70 +707,11 @@ export function keyholderDeskHtml(
     ${outputs}
     ${freezeBlock}
     ${signBlock}
+    ${settlePrimaryBlock}
     <details class="next-card-more">
-      <summary>Other settle tools</summary>
-      <p class="fee-pay-bond-label">SETTLE TXID</p>
-      <p class="fee-pay-bond-contrast">Paste the <strong>64-character broadcast txid</strong> after Sparrow broadcast — not a PSBT and not Structure outs.</p>
-      <label class="donate-amount-label" for="kh-txid">Settle txid (64 hex) — not a PSBT</label>
-      <input id="kh-txid" class="donate-amount mono" value="${escapeHtml(item.settle_txid || "")}" ${
-        opts.canPsbt ? "" : "disabled"
-      } placeholder="64-character transaction id" title="${
-        opts.canPsbt ? "Paste settle txid after broadcast" : "Waiting for package readiness"
-      }" />
-      <div id="kh-verify-panel" class="lifecycle-banner" hidden>
-        <span class="lifecycle-k">Verify</span>
-        <p>Match this settle txid to the outputs above.</p>
-        <ul class="kh-verify-outputs">${item.outputs
-          .map(
-            (o) =>
-              `<li class="mono">${escapeHtml(o.address)} · ${formatSats(o.amount_sats)}${
-                o.label ? ` · ${escapeHtml(o.label)}` : ""
-              }</li>`,
-          )
-          .join("")}</ul>
-      </div>
-      <div class="comment-compose-actions">
-        <button type="button" class="btn ghost" id="kh-propose" ${
-          opts.canPsbt ? "" : "disabled"
-        } title="${
-          opts.canPsbt
-            ? "Propose this settle txid for dual-ack"
-            : "Waiting on payout addresses / package readiness"
-        }" aria-label="${
-          opts.canPsbt
-            ? "Propose this settle txid for dual-ack"
-            : "Waiting on payout addresses / package readiness"
-        }">Propose settle</button>
-        ${
-          opts.requiresDualSettle
-            ? `<button type="button" class="btn ghost" id="kh-confirm"${
-                item.settle_proposed_by === opts.userId || !opts.canPsbt
-                  ? " disabled"
-                  : ""
-              } title="${
-                !opts.canPsbt
-                  ? "Waiting on payout addresses / package readiness"
-                  : item.settle_proposed_by === opts.userId
-                    ? "You proposed this settle — another keyholder must confirm"
-                    : item.settle_proposed_by
-                      ? "Confirm the proposed settle txid"
-                      : "Waiting for a keyholder to propose the settle txid"
-              }" aria-label="${
-                !opts.canPsbt
-                  ? "Waiting on payout addresses / package readiness"
-                  : item.settle_proposed_by === opts.userId
-                    ? "You proposed this settle — another keyholder must confirm"
-                    : item.settle_proposed_by
-                      ? "Confirm the proposed settle txid"
-                      : "Waiting for a keyholder to propose the settle txid"
-              }>Confirm settle</button>`
-            : ""
-        }
-      </div>
-      <div id="kh-chat"></div>
-      <label class="sr-only" for="kh-chat-input">Message other keyholders</label>
-      <textarea id="kh-chat-input" class="comment-input" rows="2" maxlength="2000" placeholder="Message other keyholders…"></textarea>
-      <button type="button" class="btn ghost" id="kh-chat-send">Post</button>
+      <summary>${settlePrimary ? "Keyholder chat" : "Other settle tools"}</summary>
+      ${settleDetailsInner}
+      ${chatBlock}
     </details>
     <p class="builder-msg" id="kh-settle-msg" hidden role="status" aria-live="polite"></p>
   </div>`;
