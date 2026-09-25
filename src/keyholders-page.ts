@@ -323,6 +323,35 @@ export function clearSettleDraft(proposalId: string, storage: Storage = localSto
   storage.removeItem(SETTLE_DRAFT_PREFIX + proposalId);
 }
 
+/** Short txid prefix for page-level settle toasts (empty when missing/invalid). */
+export function settleToastTxidPrefix(txid?: string | null): string {
+  const t = (txid || "").trim();
+  if (!/^[0-9a-fA-F]{8,}$/.test(t)) return "";
+  return t.slice(0, 8);
+}
+
+/** Copy for post-settle page toast after the detail modal closes. */
+export function keyholderSettleToastText(opts: {
+  outcome: "settled" | "proposed_waiting";
+  txid?: string | null;
+}): string {
+  const prefix = settleToastTxidPrefix(opts.txid);
+  const tip = prefix ? ` · ${prefix}…` : "";
+  if (opts.outcome === "proposed_waiting") {
+    return `Settle proposed — waiting for second keyholder${tip}`;
+  }
+  return `Settled.${tip}`;
+}
+
+/** Page-level success banner HTML (outside the closed detail modal). */
+export function keyholderPageToastHtml(message: string): string {
+  return html`<div class="lifecycle-banner kh-page-toast" id="kh-page-toast" role="status" aria-live="polite">
+    <span class="lifecycle-k">Settle</span>
+    <p>${message}</p>
+    <button type="button" class="btn ghost btn-compact" data-kh-toast-dismiss aria-label="Dismiss">Dismiss</button>
+  </div>`.value;
+}
+
 export type KeyholderReturnState = {
   step: "why" | "address" | "sign";
   address: string;
@@ -1234,6 +1263,7 @@ export async function renderKeyholders(
           ${raw(keyholderProofWizardHtml(kh.auth_address || "", user.payout_address || ""))}
         </div>
       </div>
+      <div id="kh-page-toast-host" class="kh-page-toast-host" hidden></div>
       <div class="kh-desk-queues">
         <h2 class="kh-desk-queues-title">Signing queues</h2>
         <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
@@ -1304,6 +1334,36 @@ export async function renderKeyholders(
       detailKeyHandler = null;
     }
     if (wasOpen) lastDeskOpener?.focus();
+  };
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  const showPageToast = (message: string) => {
+    const host = app.querySelector<HTMLElement>("#kh-page-toast-host");
+    if (!host) return;
+    host.hidden = false;
+    host.innerHTML = keyholderPageToastHtml(message);
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      host.innerHTML = "";
+      host.hidden = true;
+      toastTimer = null;
+    }, 6000);
+    host.querySelector("[data-kh-toast-dismiss]")?.addEventListener("click", () => {
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = null;
+      host.innerHTML = "";
+      host.hidden = true;
+    });
+  };
+  /** Close modal, refresh queue, surface settle result on the desk (not inside the popup). */
+  const settleSuccess = (opts: {
+    outcome: "settled" | "proposed_waiting";
+    txid?: string | null;
+    proposalId?: string;
+  }) => {
+    if (opts.proposalId) clearSettleDraft(opts.proposalId);
+    closeDetailModal();
+    void loadQueue();
+    showPageToast(keyholderSettleToastText(opts));
   };
   const showDetailModal = () => {
     detailModal.hidden = false;
@@ -1695,9 +1755,10 @@ export async function renderKeyholders(
         missing?: { address: string; amount_sats: number }[];
       };
       if (res.ok) {
-        setMsg("Settle proposed. A second keyholder must confirm.");
-        void openBranchDetail(item.proposal_id, item.allocation_id);
-        void loadQueue();
+        settleSuccess({
+          outcome: "proposed_waiting",
+          txid,
+        });
         return;
       }
       const miss = body.missing?.length
@@ -1725,11 +1786,14 @@ export async function renderKeyholders(
         { method: "POST" },
       );
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setMsg(res.ok ? "Settled." : body.error || "Failed");
       if (res.ok) {
-        void openBranchDetail(item.proposal_id, item.allocation_id);
-        void loadQueue();
+        settleSuccess({
+          outcome: "settled",
+          txid: item.settle_txid,
+        });
+        return;
       }
+      setMsg(body.error || "Failed");
     });
   };
 
@@ -1996,10 +2060,11 @@ export async function renderKeyholders(
         missing?: { address: string; amount_sats: number }[];
       };
       if (res.ok) {
-        clearSettleDraft(item.proposal_id);
-        setMsg("Settle proposed / completed.");
-        void openDetail(id);
-        void loadQueue();
+        settleSuccess({
+          outcome: data.requires_dual_settle ? "proposed_waiting" : "settled",
+          txid,
+          proposalId: item.proposal_id,
+        });
       } else {
         const miss = body.missing?.length
           ? ` Missing: ${body.missing
@@ -2022,11 +2087,15 @@ export async function renderKeyholders(
         method: "POST",
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setMsg(res.ok ? "Settled." : body.error || "Failed");
       if (res.ok) {
-        void openDetail(id);
-        void loadQueue();
+        settleSuccess({
+          outcome: "settled",
+          txid: item.settle_txid || detailEl.querySelector<HTMLInputElement>("#kh-txid")?.value,
+          proposalId: item.proposal_id,
+        });
+        return;
       }
+      setMsg(body.error || "Failed");
     });
 
     const chatEl = detailEl.querySelector<HTMLElement>("#kh-chat");
