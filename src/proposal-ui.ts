@@ -299,6 +299,28 @@ export function formatProposalDate(iso: string | null): string | null {
   });
 }
 
+const CLOSED_OUTCOME: Record<string, string> = {
+  completed: "Shipped",
+  declined: "Declined",
+  declined_fundable: "Declined",
+  underfunded: "Underfunded",
+  refunding: "Refunding",
+  redirected: "Redirected",
+};
+
+/** One muted sentence under the title when the public status is closed. */
+export function projectOutcomeHtml(
+  status: string,
+  shippedBy?: string | null,
+): string {
+  const label = CLOSED_OUTCOME[String(status || "").toLowerCase()];
+  if (!label) return "";
+  const login = String(shippedBy || "").replace(/^@/, "").trim();
+  const text =
+    label === "Shipped" && login ? `Shipped by @${login}.` : `${label}.`;
+  return `<p class="proposal-outcome muted" id="proposal-outcome">${escapeHtml(text)}</p>`;
+}
+
 export function statusLabel(status: string): string {
   const s = String(status || "").toLowerCase();
   if (s === "listed") return "Listed — still raising";

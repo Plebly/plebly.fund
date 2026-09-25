@@ -164,7 +164,7 @@ describe("claimerTrackHtml", () => {
     expect(claimerTrackHtml({ ...base, claimer_summary: null })).toBe("");
   });
 
-  it("shows First claim when all zeros", () => {
+  it("shows no shipped projects when the track is empty", () => {
     expect(
       claimerTrackHtml({
         ...base,
@@ -174,12 +174,13 @@ describe("claimerTrackHtml", () => {
           expired: 0,
           rejected: 0,
           abandoned: 0,
+          track: [],
         },
       }),
-    ).toContain("First claim");
+    ).toContain("No shipped projects yet");
   });
 
-  it("computes submitted/failed/rate from outcome buckets", () => {
+  it("lists shipped titles and names other results", () => {
     const html = claimerTrackHtml({
       ...base,
       claimer_summary: {
@@ -188,13 +189,41 @@ describe("claimerTrackHtml", () => {
         expired: 1,
         rejected: 1,
         abandoned: 0,
+        track: [
+          { proposal_id: "ship-a", outcome: "completed", at: "2026-02-01T00:00:00.000Z" },
+          { proposal_id: "ship-b", outcome: "completed", at: "2026-01-01T00:00:00.000Z" },
+          { proposal_id: "old", outcome: "rejected", at: "2025-12-01T00:00:00.000Z" },
+          { proposal_id: "late", outcome: "expired", at: "2025-11-01T00:00:00.000Z" },
+        ],
       },
     });
-    // submitted = 1+2+1+1+0 = 5; failed = 1+0+1 = 2; rate = 2/(2+2) = 50%
-    expect(html).toContain("5 claims");
-    expect(html).toContain("2 completed");
-    expect(html).toContain("2 failed");
-    expect(html).toContain("50%");
+    expect(html).toContain("ship-a");
+    expect(html).toContain("ship-b");
+    expect(html).toContain("1 not accepted · 1 window expired");
+    expect(html).not.toContain("%");
+    expect(html).not.toContain("failed");
+  });
+
+  it("hides shipped links past five behind more", () => {
+    const track = [1, 2, 3, 4, 5, 6].map((n) => ({
+      proposal_id: `ship-${n}`,
+      outcome: "completed" as const,
+      at: `2026-0${n}-01T00:00:00.000Z`,
+    }));
+    const html = claimerTrackHtml({
+      ...base,
+      claimer_summary: {
+        active: 0,
+        completed: 6,
+        expired: 0,
+        rejected: 0,
+        abandoned: 0,
+        track,
+      },
+    });
+    expect(html).toContain("ship-1");
+    expect(html).toContain(">1 more<");
+    expect(html).toContain("ship-6");
   });
 });
 
@@ -227,6 +256,14 @@ describe("applicationsPanelHtml", () => {
           expired: 0,
           rejected: 0,
           abandoned: 0,
+          track: [
+            {
+              proposal_id: "shipped-one",
+              proposal_path: "proposals/completed/shipped-one.md",
+              outcome: "completed",
+              at: "2026-01-01T00:00:00.000Z",
+            },
+          ],
         },
       },
     ],
@@ -243,7 +280,45 @@ describe("applicationsPanelHtml", () => {
     expect(html).toContain("data-reject-app=\"app-1\"");
     expect(html).toContain("Bond paid");
     expect(html).toContain("mempool.space");
-    expect(html).toContain("1 completed");
+    expect(html).toContain("shipped-one");
+    expect(html).toContain("claim-apps-head");
+    expect(html).not.toContain("%");
+  });
+
+  it("shows three shipped links on an applicant and folds the rest", () => {
+    const track: {
+      proposal_id: string;
+      outcome: "completed" | "abandoned";
+      at: string;
+    }[] = [1, 2, 3, 4, 5].map((n) => ({
+      proposal_id: `ship-${n}`,
+      outcome: "completed" as const,
+      at: `2026-0${n}-01T00:00:00.000Z`,
+    }));
+    track.push({
+      proposal_id: "left-it",
+      outcome: "abandoned",
+      at: "2025-01-01T00:00:00.000Z",
+    });
+    const apps = baseApps();
+    apps.applications[0]!.summary = {
+      active: 0,
+      completed: 5,
+      expired: 0,
+      rejected: 0,
+      abandoned: 1,
+      track,
+    };
+    const html = applicationsPanelHtml(apps);
+    const beforeMore = html.split("<details")[0] || "";
+    expect(beforeMore).toContain("ship-1");
+    expect(beforeMore).toContain("ship-3");
+    expect(beforeMore).not.toContain("ship-4");
+    expect(html).toContain(">2 more<");
+    expect(html).toContain("ship-5");
+    expect(html).toContain("1 left unfinished");
+    expect(html).toContain("Award");
+    expect(html).toContain("Bond paid");
     expect(html).toContain("claim-apps-head");
   });
 

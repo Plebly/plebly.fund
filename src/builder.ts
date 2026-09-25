@@ -10,6 +10,13 @@ import { claimsProposalPath } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
 
+export type TrackEntry = {
+  proposal_id: string;
+  proposal_path?: string;
+  outcome: "completed" | "rejected" | "expired" | "abandoned";
+  at: string;
+};
+
 export type WatchEntry = {
   proposal_id: string;
   proposal_path: string;
@@ -58,7 +65,9 @@ export type ClaimStatus = {
     expired: number;
     rejected: number;
     abandoned: number;
+    track?: TrackEntry[];
   } | null;
+  shipped_by?: string | null;
   claim_extension_used?: boolean;
   review_decision_open?: boolean;
   can_challenge_abandoned?: boolean;
@@ -169,6 +178,7 @@ export type ClaimApplicationView = {
     expired: number;
     rejected: number;
     abandoned: number;
+    track?: TrackEntry[];
   } | null;
 };
 

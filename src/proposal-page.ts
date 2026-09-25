@@ -48,6 +48,7 @@ import {
   proposerBylineHtml,
   refundRegisterHtml,
   sectionBodyHtml,
+  projectOutcomeHtml,
   statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
@@ -639,6 +640,7 @@ export async function renderProposalPage(
             <h1>${escapeHtml(match.title)}</h1>
             ${statusPillHtml(status)}
           </div>
+          ${projectOutcomeHtml(status)}
           <div class="proposal-hero-meta">
             ${byline}
             ${metaChipsHtml(match)}

@@ -23,6 +23,7 @@ import {
   submitClaim,
   submitDeliverable,
   withdrawClaimApplication,
+  type TrackEntry,
   type ClaimApplicationsResponse,
   type ClaimParams,
   type ClaimStatus,
@@ -63,9 +64,10 @@ import {
   hydrateAvatarSlots,
   orgAvatarSlotHtml,
 } from "./profile-avatars";
+import { cachedProposalTitle } from "./github";
 import { freshLinkedOrgs } from "./github-orgs-client";
 import { avatarImgHtml } from "./media";
-import { href, orgHref, profileHref } from "./router";
+import { href, orgHref, profileHref, proposalHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
@@ -79,6 +81,7 @@ import {
   mountDonateChromeWhenEscrowKnown,
   setDonateChromeContext,
   bindDonateModal,
+  projectOutcomeHtml,
   proposalStepperHtml,
   statusPillHtml,
   userMatchesProposer,
@@ -210,20 +213,49 @@ function mempoolTxUrl(txid: string): string {
   return `${mempoolWeb()}/tx/${txid}`;
 }
 
+function trackLinkHtml(row: TrackEntry): string {
+  const title = cachedProposalTitle(row.proposal_id) || row.proposal_id;
+  const href = proposalHref(row.proposal_path || "", row.proposal_id);
+  return `<a class="track-link" href="${escapeHtml(href)}">${escapeHtml(title)}</a>`;
+}
+
+function otherResultsHtml(rows: TrackEntry[]): string {
+  const rejected = rows.filter((r) => r.outcome === "rejected").length;
+  const expired = rows.filter((r) => r.outcome === "expired").length;
+  const abandoned = rows.filter((r) => r.outcome === "abandoned").length;
+  const bits: string[] = [];
+  if (rejected) bits.push(`${rejected} not accepted`);
+  if (expired) bits.push(`${expired} window expired`);
+  if (abandoned) bits.push(`${abandoned} left unfinished`);
+  if (!bits.length) return "";
+  return `<span class="track-other muted">${escapeHtml(bits.join(" · "))}</span>`;
+}
+
+function builderTrackInner(track: TrackEntry[] | undefined, limit: number): string {
+  const rows = track || [];
+  const shipped = rows.filter((r) => r.outcome === "completed");
+  const others = otherResultsHtml(rows);
+  if (!shipped.length && !others) {
+    return `<span class="track-empty muted">No shipped projects yet</span>`;
+  }
+  const shown = shipped.slice(0, limit).map(trackLinkHtml).join("");
+  const rest = shipped.slice(limit);
+  const more = rest.length
+    ? `<details class="track-more"><summary>${rest.length} more</summary>${rest.map(trackLinkHtml).join("")}</details>`
+    : "";
+  return `<span class="track-shipped">${shown}</span>${more}${others}`;
+}
+
 function applicantTrackHtml(s: {
   active: number;
   completed: number;
   expired: number;
   rejected: number;
   abandoned: number;
+  track?: TrackEntry[];
 } | null): string {
   if (!s) return "";
-  const submitted = s.active + s.completed + s.expired + s.rejected + s.abandoned;
-  const failed = s.expired + s.abandoned + s.rejected;
-  if (submitted === 0) return `<span class="claimer-track muted">First claim</span>`;
-  const denom = s.completed + failed;
-  const rate = denom > 0 ? Math.round((s.completed / denom) * 100) : 0;
-  return `<span class="claimer-track mono muted">${submitted} claims · ${s.completed} completed · ${failed} failed · ${rate}%</span>`;
+  return `<div class="claimer-track">${builderTrackInner(s.track, 3)}</div>`;
 }
 
 function earliestBondedLogin(apps: ClaimApplicationsResponse): string | null {
@@ -329,7 +361,8 @@ export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
                   a.claimer_type,
                   a.claim_agent,
                 )}${you}</div>
-                <div class="claim-app-meta">${bond}${applicantTrackHtml(a.summary)}</div>
+                ${applicantTrackHtml(a.summary)}
+                <div class="claim-app-meta">${bond}</div>
               </div>
               ${actions}
             </li>`;
@@ -579,20 +612,11 @@ function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
   btn.innerHTML = watchBtnHtml(watching);
 }
 
-/** Informational claimer track record (exported for unit tests). */
+/** Shipped projects for the awarded builder (exported for unit tests). */
 export function claimerTrackHtml(status: ClaimStatus): string {
   const s = status.claimer_summary;
   if (!s) return "";
-  const submitted =
-    s.active + s.completed + s.expired + s.rejected + s.abandoned;
-  const failed = s.expired + s.abandoned + s.rejected;
-  if (submitted === 0) {
-    return `<p class="claimer-track muted">First claim</p>`;
-  }
-  const denom = s.completed + failed;
-  const rate =
-    denom > 0 ? Math.round((s.completed / denom) * 100) : 0;
-  return `<p class="claimer-track mono muted">${submitted} claims · ${s.completed} completed · ${failed} failed · ${rate}%</p>`;
+  return `<div class="claimer-track claimer-track-block">${builderTrackInner(s.track, 5)}</div>`;
 }
 
 function metaBits(status: ClaimStatus): string {
@@ -1698,6 +1722,18 @@ export async function bindBuilderPanel(
           root.querySelector(".proposal-stepper");
         if (stepper) {
           stepper.outerHTML = proposalStepperHtml(mergedProposal);
+        }
+        const outcomeHost = document.querySelector("#proposal-outcome");
+        const outcomeHtml = projectOutcomeHtml(
+          String(mergedProposal.status || ""),
+          status.shipped_by,
+        );
+        if (outcomeHost && outcomeHtml) outcomeHost.outerHTML = outcomeHtml;
+        else if (outcomeHost && !outcomeHtml) outcomeHost.remove();
+        else if (!outcomeHost && outcomeHtml) {
+          document
+            .querySelector(".proposal-hero-top")
+            ?.insertAdjacentHTML("afterend", outcomeHtml);
         }
         // Ballot sync owns the hero pill once a decision has painted — do not
         // clobber "Time extension — open" / "Closed — …" with lifecycle "In review".

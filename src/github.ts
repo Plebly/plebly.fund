@@ -452,6 +452,16 @@ export async function findListedProposalById(
   );
 }
 
+/** Title from a catalog already loaded. Does not fetch. */
+export function cachedProposalTitle(id: string): string | null {
+  const needle = id.trim().toLowerCase();
+  if (!needle || !listedCache) return null;
+  const hit = listedCache.data.find(
+    (p) => p.id?.toLowerCase() === needle,
+  );
+  return hit?.title?.trim() || null;
+}
+
 export async function listAllPublicProposals(): Promise<Proposal[]> {
   if (
     listedCache &&

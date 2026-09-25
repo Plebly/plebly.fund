@@ -26,6 +26,7 @@ import {
   refundRegisterHtml,
   shareSlotHtml,
   statusClass,
+  projectOutcomeHtml,
   statusLabel,
   statusPillHtml,
   userMatchesProposer,
@@ -139,6 +140,19 @@ describe("proposal UI critical render helpers", () => {
     expect(statusClass("underfunded")).toBe("status-active");
     expect(statusClass("in_review")).toBe("status-active");
     expect(statusClass("rejected")).toBe("status-bad");
+  });
+
+  it("states a closed project in one sentence", () => {
+    expect(projectOutcomeHtml("listed")).toBe("");
+    expect(projectOutcomeHtml("completed")).toContain("Shipped.");
+    expect(projectOutcomeHtml("completed", "ada")).toContain("Shipped by @ada.");
+    expect(projectOutcomeHtml("refunding")).toContain("Refunding.");
+    expect(projectOutcomeHtml("declined_fundable")).toContain("Declined.");
+    expect(projectOutcomeHtml("declined")).toContain("Declined.");
+    expect(projectOutcomeHtml("underfunded")).toContain("Underfunded.");
+    expect(projectOutcomeHtml("redirected")).toContain("Redirected.");
+    expect(projectOutcomeHtml("claimed")).toBe("");
+    expect(projectOutcomeHtml("refunding", "ada")).not.toContain("@ada");
   });
 
   it("statusPillHtml shows canonical labels including listed", () => {
