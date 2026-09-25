@@ -46,6 +46,19 @@ import {
 import { aiReviewCardHtml } from "./review-panel";
 import { href, profileHref, projectsHref, proposalHref } from "./router";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
+import {
+  decisionCardHtml,
+  openRemovalFormHtml,
+  removalCardHtml,
+  reviewerRowHtml,
+} from "./governance-decisions-ui";
+
+export {
+  decisionCardHtml,
+  openRemovalFormHtml,
+  removalCardHtml,
+  reviewerRowHtml,
+} from "./governance-decisions-ui";
 
 export type GovernanceShell = (inner: string) => string;
 
@@ -436,27 +449,6 @@ export function rosterSectionHtml(
     <ul class="gov-roster" id="gov-roster">${rows}</ul>`;
 }
 
-export function reviewerRowHtml(
-  r: ReviewerPublic,
-  selectable = false,
-): string {
-  const kind =
-    r.kind === "bootstrap"
-      ? `<span class="pill">Bootstrap</span>`
-      : `<span class="pill status-good">Earned</span>`;
-  const select = selectable
-    ? `<button type="button" class="btn ghost gov-select-target" data-target="${escapeHtml(r.user_id)}" ${r.kind === "bootstrap" ? "disabled title=\"Bootstrap seats cannot be removed\"" : ""}>Select</button>`
-    : "";
-  return `<li class="gov-roster-row" data-user-id="${escapeHtml(r.user_id)}">
-    <div class="gov-roster-main">
-      <span class="mono gov-user">${escapeHtml(shortUserId(r.user_id))}</span>
-      ${kind}
-      <span class="muted">${r.completed_count} completed</span>
-    </div>
-    ${select}
-  </li>`;
-}
-
 export function openDecisionsHtml(
   decisions: ReviewDecisionView[],
   isReviewer: boolean,
@@ -476,54 +468,6 @@ export function inboxDecisionSentence(kind: string): string {
   return decisionPrimarySentence(kind);
 }
 
-export function decisionCardHtml(
-  d: ReviewDecisionView,
-  isReviewer: boolean,
-): string {
-  const path = decisionPath(d);
-  const buttons = `<div class="gov-card-actions" data-dec-actions ${
-    d.my_vote && d.status === "open" ? "hidden" : ""
-  }>
-        <button type="button" class="btn" data-dec-vote="yes" data-decision-id="${escapeHtml(d.id)}">${btnWithIcon("check", "Approve")}</button>
-        <button type="button" class="btn ghost" data-dec-vote="no" data-decision-id="${escapeHtml(d.id)}">${btnWithIcon("xmark", "Reject")}</button>
-        <button type="button" class="btn ghost" data-dec-vote="abstain" data-decision-id="${escapeHtml(d.id)}">Abstain</button>
-      </div>`;
-  const voted =
-    d.my_vote === "yes" ? "yes" : d.my_vote === "no" ? "no" : d.my_vote === "abstain" ? "abstain" : "";
-  const voteRow = !isReviewer
-    ? `<p class="muted gov-hint">Active reviewers vote on the <a href="${proposalHref(path, d.proposal_id)}">project page</a>.</p>`
-    : voted && d.status === "open"
-      ? `<p class="gov-my-vote">You voted ${voted}.</p>
-        <button type="button" class="btn ghost" data-dec-change="${escapeHtml(d.id)}">Change</button>
-        ${buttons}`
-      : buttons;
-  return `<li class="gov-card" data-decision-id="${escapeHtml(d.id)}">
-    <div class="gov-card-head">
-      <a class="gov-card-title" href="${proposalHref(path, d.proposal_id)}">${escapeHtml(d.proposal_id)}</a>
-      <span class="pill">${escapeHtml(decisionKindLabel(d.kind))}</span>
-      ${d.round === 2 ? `<span class="pill">Round 2</span>` : ""}
-    </div>
-    <p class="next-card-sentence">${escapeHtml(inboxDecisionSentence(d.kind))}</p>
-    ${
-      d.ai_review
-        ? aiReviewCardHtml(d.ai_review, { compact: true })
-        : ""
-    }
-    ${
-      d.rebuttal?.reasoning
-        ? `<p class="review-dissent-text">${escapeHtml(d.rebuttal.reasoning)}</p>`
-        : ""
-    }
-    <div class="gov-counts">
-      <span class="review-count yes">Yes ${d.counts.yes}</span>
-      <span class="review-count no">No ${d.counts.no}</span>
-    </div>
-    <p class="muted gov-closes">Closes ${escapeHtml(closesLabel(d.closes_at))}</p>
-    ${voteRow}
-    <p class="builder-msg gov-msg" hidden></p>
-  </li>`;
-}
-
 export function openRemovalsHtml(
   ballots: RemovalBallotView[],
   funderEligible: boolean,
@@ -537,79 +481,6 @@ export function openRemovalsHtml(
   return `<ul class="gov-list" id="gov-removals">${ballots
     .map((b) => removalCardHtml(b, funderEligible))
     .join("")}</ul>`;
-}
-
-export function removalCardHtml(
-  b: RemovalBallotView,
-  funderEligible: boolean,
-): string {
-  const voteRow = funderEligible
-    ? `<div class="gov-card-actions">
-        <button type="button" class="btn" data-rem-vote="yes" data-ballot-id="${escapeHtml(b.id)}">Remove</button>
-        <button type="button" class="btn ghost" data-rem-vote="no" data-ballot-id="${escapeHtml(b.id)}">Keep</button>
-      </div>`
-    : `<p class="muted gov-hint">Voting requires an eligible funder identity (confirmed contribution in the last 12 months).</p>`;
-  return `<li class="gov-card gov-removal" data-ballot-id="${escapeHtml(b.id)}">
-    <div class="gov-card-head">
-      <span class="gov-card-title mono">${escapeHtml(shortUserId(b.target_user_id))}</span>
-      <span class="pill">Removal</span>
-    </div>
-    <p class="next-card-sentence">Vote whether to remove this reviewer.</p>
-    <p class="gov-evidence">${escapeHtml(b.evidence)}</p>
-    <div class="gov-counts">
-      <span class="review-count yes">Remove ${b.counts.yes}</span>
-      <span class="review-count no">Keep ${b.counts.no}</span>
-      <span class="muted">${b.vote_count} cast</span>
-    </div>
-    <p class="muted gov-closes">Opened by <span class="mono">${escapeHtml(shortUserId(b.initiator_user_id))}</span> · closes ${escapeHtml(closesLabel(b.closes_at))}</p>
-    ${voteRow}
-    <p class="builder-msg gov-msg" hidden></p>
-  </li>`;
-}
-
-export function openRemovalFormHtml(
-  me: ReviewerMe | null,
-  loggedIn: boolean,
-  reviewers: ReviewerPublic[] = [],
-): string {
-  if (!loggedIn) {
-    return `<div class="gov-form-panel">
-      <p class="lede">Sign in as an eligible funder to open a removal ballot.</p>
-      ${loginChoicesHtml(undefined, currentReturnPath())}
-    </div>`;
-  }
-  const min = me?.removal_min_sats ?? 10_000;
-  if (!me?.funder_eligible) {
-    return `<div class="gov-form-panel">
-      <p class="lede">Removal ballots are open to funders with a confirmed contribution of at least ${escapeHtml(formatSats(min))} in the last 12 months.</p>
-      <p class="muted">Link your identity when contributing so the ballot can verify eligibility.</p>
-    </div>`;
-  }
-  const earned = reviewers.filter((r) => r.kind !== "bootstrap");
-  if (!earned.length) {
-    return `<div class="gov-form-panel">
-      <p class="lede">No earned reviewers to remove.</p>
-    </div>`;
-  }
-  return `<form class="gov-form-panel form-panel" id="removal-open-form">
-    <p class="lede">Cite a pattern of bad faith across at least two decisions. Bootstrap seats cannot be removed.</p>
-    <label class="donate-amount-label" for="removal-target">Reviewer</label>
-    <select id="removal-target" class="donate-amount" required>
-      <option value="">Choose an earned reviewer</option>
-      ${earned
-        .map(
-          (r) =>
-            `<option value="${escapeHtml(r.user_id)}">${escapeHtml(shortUserId(r.user_id))} · ${r.completed_count} completed</option>`,
-        )
-        .join("")}
-    </select>
-    <label class="donate-amount-label" for="removal-evidence">Evidence (min 40 characters)</label>
-    <textarea id="removal-evidence" class="donate-amount" rows="5" required minlength="40" maxlength="8000" placeholder="Cite specific decisions and the pattern of bad faith…"></textarea>
-    <div class="form-actions">
-      <button type="submit" class="btn">Open removal ballot</button>
-    </div>
-    <p class="builder-msg" id="removal-open-msg" hidden></p>
-  </form>`;
 }
 
 function statusStripHtml(me: ReviewerMe | null, user: AuthUser | null): string {

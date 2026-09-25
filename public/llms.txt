@@ -10,15 +10,23 @@ Listings and escrow balances are on the site at https://plebly.fund. Published f
 - [About](https://plebly.fund/about): Beliefs, how it works, fees, and network status
 - [Start a project](https://plebly.fund/propose): List a bounty or campaign (login; on-chain fee required)
 - [Funding stats](https://plebly.fund/stats): Public funding and completion totals
-- [Reviewers](https://plebly.bitcoin/reviewers): Reviewer roster and open decisions
-- [Reviewer rules](https://plebly.bitcoin/reviewer-responsibilities): Who can review and how a vote passes
-- [Keyholder responsibilities](https://plebly.bitcoin/keyholder-responsibilities): What a keyholder does and how they are paid
-- [Full context for LLMs](https://plebly.bitcoin/llms-full.txt): Longer plain-text overview of product rules and flows
+- [Reviewers](https://plebly.fund/reviewers): Reviewer roster and open decisions
+- [Reviewer rules](https://plebly.fund/reviewer-responsibilities): Who can review and how a vote passes
+- [Keyholder responsibilities](https://plebly.fund/keyholder-responsibilities): What a keyholder does and how they are paid
+- [Full context for LLMs](https://plebly.fund/llms-full.txt): Longer plain-text overview of product rules and flows
 
 ## Projects
 
-- [Signet smoke test bounty](https://plebly.fund/p/plebly-signet-demo): listed — Need a live signet proposal to exercise listing, balance display, and the claim floor path without mainnet risk
-- [Knots PR: reject high size-to-value relay spam](https://plebly.fund/p/plebly-knots-size-value-spam): listed — Bitcoin Knots already has strong relay knobs for datacarrier weight, tokens (-rejecttokens), parasites (-reject
+- [Josh KH 2-of-3 Release cosign rehearsal](https://plebly.fund/p/plebly-2026-010): in_review — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [Signet 2-of-3 Release rehearsal](https://plebly.fund/p/plebly-2026-009): in_review — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [Structure UTXO-selection fee recheck](https://plebly.fund/p/plebly-2026-008): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [A2b reserve_reviewers fee-floor E2E](https://plebly.fund/p/plebly-2026-007): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [A2b reserve_reviewers approve E2E](https://plebly.fund/p/plebly-2026-006): in_review — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [Docs Flag escalate E2E](https://plebly.fund/p/plebly-2026-005): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [Docs listing for escalate gate](https://plebly.fund/p/plebly-2026-004): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
+- [[Wave B] Signet escrow+bonds 20260921](https://plebly.fund/p/plebly-2026-003): in_review — Validate signet escrow and contributor bond flows for Wave B. Produce a concise test report documenting escr
+- [[Wave B] Signet escrow+bonds 20260921](https://plebly.fund/p/plebly-2026-002): claimable — Validate signet escrow and contributor bond flows for Wave B. Produce a concise test report documenting escr
+- [[Tester E2E] Signet poster smoke 20260919-1625](https://plebly.fund/p/plebly-2026-001): in_review — Plebly signet end-to-end smoke test for the proposal wizard. Audience: maintainers and independent testers v
 
 ## Protocol (published rules)
 
