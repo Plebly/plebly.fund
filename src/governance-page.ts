@@ -481,13 +481,22 @@ export function decisionCardHtml(
   isReviewer: boolean,
 ): string {
   const path = decisionPath(d);
-  const voteRow = isReviewer
-    ? `<div class="gov-card-actions">
+  const buttons = `<div class="gov-card-actions" data-dec-actions ${
+    d.my_vote && d.status === "open" ? "hidden" : ""
+  }>
         <button type="button" class="btn" data-dec-vote="yes" data-decision-id="${escapeHtml(d.id)}">${btnWithIcon("check", "Approve")}</button>
         <button type="button" class="btn ghost" data-dec-vote="no" data-decision-id="${escapeHtml(d.id)}">${btnWithIcon("xmark", "Reject")}</button>
         <button type="button" class="btn ghost" data-dec-vote="abstain" data-decision-id="${escapeHtml(d.id)}">Abstain</button>
-      </div>`
-    : `<p class="muted gov-hint">Active reviewers vote on the <a href="${proposalHref(path, d.proposal_id)}">project page</a>.</p>`;
+      </div>`;
+  const voted =
+    d.my_vote === "yes" ? "yes" : d.my_vote === "no" ? "no" : d.my_vote === "abstain" ? "abstain" : "";
+  const voteRow = !isReviewer
+    ? `<p class="muted gov-hint">Active reviewers vote on the <a href="${proposalHref(path, d.proposal_id)}">project page</a>.</p>`
+    : voted && d.status === "open"
+      ? `<p class="gov-my-vote">You voted ${voted}.</p>
+        <button type="button" class="btn ghost" data-dec-change="${escapeHtml(d.id)}">Change</button>
+        ${buttons}`
+      : buttons;
   return `<li class="gov-card" data-decision-id="${escapeHtml(d.id)}">
     <div class="gov-card-head">
       <a class="gov-card-title" href="${proposalHref(path, d.proposal_id)}">${escapeHtml(d.proposal_id)}</a>
@@ -561,6 +570,7 @@ export function removalCardHtml(
 export function openRemovalFormHtml(
   me: ReviewerMe | null,
   loggedIn: boolean,
+  reviewers: ReviewerPublic[] = [],
 ): string {
   if (!loggedIn) {
     return `<div class="gov-form-panel">
@@ -575,10 +585,24 @@ export function openRemovalFormHtml(
       <p class="muted">Link your identity when contributing so the ballot can verify eligibility.</p>
     </div>`;
   }
+  const earned = reviewers.filter((r) => r.kind !== "bootstrap");
+  if (!earned.length) {
+    return `<div class="gov-form-panel">
+      <p class="lede">No earned reviewers to remove.</p>
+    </div>`;
+  }
   return `<form class="gov-form-panel form-panel" id="removal-open-form">
     <p class="lede">Cite a pattern of bad faith across at least two decisions. Bootstrap seats cannot be removed.</p>
-    <label class="donate-amount-label" for="removal-target">Target reviewer user id</label>
-    <input id="removal-target" class="donate-amount mono" type="text" required maxlength="120" placeholder="github:…" autocomplete="off" />
+    <label class="donate-amount-label" for="removal-target">Reviewer</label>
+    <select id="removal-target" class="donate-amount" required>
+      <option value="">Choose an earned reviewer</option>
+      ${earned
+        .map(
+          (r) =>
+            `<option value="${escapeHtml(r.user_id)}">${escapeHtml(shortUserId(r.user_id))} · ${r.completed_count} completed</option>`,
+        )
+        .join("")}
+    </select>
     <label class="donate-amount-label" for="removal-evidence">Evidence (min 40 characters)</label>
     <textarea id="removal-evidence" class="donate-amount" rows="5" required minlength="40" maxlength="8000" placeholder="Cite specific decisions and the pattern of bad faith…"></textarea>
     <div class="form-actions">
@@ -769,35 +793,11 @@ export async function renderGovernance(
   `);
 
   const tab = initialGovTab();
-  const [roster, decisions, removals, me, opsRoles, reports, khPack] = await Promise.all([
+  const [roster, decisions, removals, me] = await Promise.all([
     fetchReviewerRoster().catch(() => null),
     fetchOpenReviewDecisions().catch(() => [] as ReviewDecisionView[]),
     fetchOpenRemovalBallots().catch(() => [] as RemovalBallotView[]),
     user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
-    tab === "roles"
-      ? fetchOpsRoles().catch(() => null)
-      : Promise.resolve(null),
-    user && tab === "reports"
-      ? fetchOpenReports().catch(() => [] as ModerationReportView[])
-      : Promise.resolve([] as ModerationReportView[]),
-    user && tab === "keyholders"
-      ? authFetch(`${govApi()}/keyholders/applications`)
-          .then(async (r) =>
-            r.ok
-              ? ((await r.json()) as {
-                  applications: KhApplicationView[];
-                  elections: KhElectionView[];
-                })
-              : { applications: [] as KhApplicationView[], elections: [] as KhElectionView[] },
-          )
-          .catch(() => ({
-            applications: [] as KhApplicationView[],
-            elections: [] as KhElectionView[],
-          }))
-      : Promise.resolve({
-          applications: [] as KhApplicationView[],
-          elections: [] as KhElectionView[],
-        }),
   ]);
 
   const isReviewer = Boolean(me?.active);
@@ -808,9 +808,7 @@ export async function renderGovernance(
 
   const decisionCount = decisions.length;
   const removalCount = removals.length;
-  const reportCount = reports.length;
-  const opsNormalized = normalizeOpsRolesPayload(opsRoles);
-  const opsBallotCount = opsNormalized?.ballots.length ?? 0;
+  const emptyKh = { applications: [] as KhApplicationView[], elections: [] as KhElectionView[] };
 
   app.innerHTML = shell(`
     <section class="wrap-wide detail gov-page">
@@ -823,9 +821,9 @@ export async function renderGovernance(
           <button type="button" class="account-tab ${tab === "roster" ? "active" : ""}" data-gov-tab="roster" role="tab" aria-selected="${tab === "roster"}">Roster${roster ? ` (${roster.count})` : ""}</button>
           <button type="button" class="account-tab ${tab === "decisions" ? "active" : ""}" data-gov-tab="decisions" role="tab" aria-selected="${tab === "decisions"}">Decisions${decisionCount ? ` (${decisionCount})` : ""}</button>
           <button type="button" class="account-tab ${tab === "removals" ? "active" : ""}" data-gov-tab="removals" role="tab" aria-selected="${tab === "removals"}">Removals${removalCount ? ` (${removalCount})` : ""}</button>
-          <button type="button" class="account-tab ${tab === "roles" ? "active" : ""}" data-gov-tab="roles" role="tab" aria-selected="${tab === "roles"}">Roles${opsBallotCount ? ` (${opsBallotCount})` : ""}</button>
-          <button type="button" class="account-tab ${tab === "reports" ? "active" : ""}" data-gov-tab="reports" role="tab" aria-selected="${tab === "reports"}">Reports${reportCount ? ` (${reportCount})` : ""}</button>
-          <button type="button" class="account-tab ${tab === "keyholders" ? "active" : ""}" data-gov-tab="keyholders" role="tab" aria-selected="${tab === "keyholders"}">Keyholders${khPack.elections.length ? ` (${khPack.elections.length})` : ""}</button>
+          <button type="button" class="account-tab ${tab === "roles" ? "active" : ""}" data-gov-tab="roles" role="tab" aria-selected="${tab === "roles"}">Roles</button>
+          <button type="button" class="account-tab ${tab === "reports" ? "active" : ""}" data-gov-tab="reports" role="tab" aria-selected="${tab === "reports"}">Reports</button>
+          <button type="button" class="account-tab ${tab === "keyholders" ? "active" : ""}" data-gov-tab="keyholders" role="tab" aria-selected="${tab === "keyholders"}">Keyholders</button>
         </div>
       </header>
 
@@ -849,25 +847,25 @@ export async function renderGovernance(
         ${openRemovalsHtml(removals, funderEligible)}
         <div class="gov-inline-panel" id="open-removal">
           <h3 class="gov-subhead">Open a removal</h3>
-          ${openRemovalFormHtml(me, Boolean(user))}
+          ${openRemovalFormHtml(me, Boolean(user), roster?.reviewers || [])}
         </div>
       </section>
 
       <section class="gov-block account-pane" data-gov-pane="roles" id="ops-roles" ${tab === "roles" ? "" : "hidden"}>
         <h2 class="gov-block-title">Operational roles</h2>
-        ${opsRolesSectionHtml(opsNormalized, isReviewer)}
+        <div id="gov-roles-host"><p class="muted">Loading roles…</p></div>
       </section>
 
       <section class="gov-block account-pane" data-gov-pane="reports" id="reports" ${tab === "reports" ? "" : "hidden"}>
         <h2 class="gov-block-title">Reports inbox</h2>
         <p class="muted gov-block-lede">Community reports on listings and comments. Dismiss, hide a comment, or escalate a listing into a formal challenge ballot.</p>
-        ${reportsInboxHtml(reports, isReviewer)}
+        <div id="gov-reports-host"><p class="muted">Loading reports…</p></div>
       </section>
 
       <section class="gov-block account-pane" data-gov-pane="keyholders" id="keyholders" ${tab === "keyholders" ? "" : "hidden"}>
         <h2 class="gov-block-title">Keyholder elections</h2>
         <p class="muted gov-block-lede">Earned reviewers with a completed bounty elect new keyholders. Pass → pending attestation.</p>
-        ${khElectionsHtml(khPack.elections, khPack.applications, canElect)}
+        <div id="gov-kh-host">${khElectionsHtml(emptyKh.elections, emptyKh.applications, canElect)}</div>
         <div class="gov-inline-panel">
           <h3 class="gov-subhead">Apply</h3>
           ${khApplyFormHtml(Boolean(user), canElect)}
@@ -879,22 +877,66 @@ export async function renderGovernance(
   `);
 
   bindGovernanceHandlers(app, { isReviewer, funderEligible });
-  bindGovTabs(app, {
-    onLazyTab: (next) => {
-      if (
-        (next === "reports" && user && reports.length === 0) ||
-        (next === "roles" && !opsRoles) ||
-        (next === "keyholders" && user && khPack.elections.length === 0 && khPack.applications.length === 0)
-      ) {
-        const url = new URL(location.href);
-        url.searchParams.set("tab", next);
-        history.replaceState(null, "", `${url.pathname}${url.search}`);
-        void renderGovernance(shell, user);
-        return true;
-      }
-      return false;
-    },
-  });
+  bindGovTabs(app);
+
+  const setGovCount = (name: GovTab, label: string, n: number) => {
+    const btn = app.querySelector<HTMLButtonElement>(`[data-gov-tab="${name}"]`);
+    if (btn) btn.textContent = n > 0 ? `${label} (${n})` : label;
+  };
+
+  void fetchOpsRoles()
+    .catch(() => null)
+    .then((opsRoles) => {
+      if (!app.querySelector(".gov-page")) return;
+      const opsNormalized = normalizeOpsRolesPayload(opsRoles);
+      const host = app.querySelector("#gov-roles-host");
+      if (host) host.innerHTML = opsRolesSectionHtml(opsNormalized, isReviewer);
+      setGovCount("roles", "Roles", opsNormalized?.ballots.length ?? 0);
+    });
+
+  if (user) {
+    void fetchOpenReports()
+      .catch(() => [] as ModerationReportView[])
+      .then((reports) => {
+        if (!app.querySelector(".gov-page")) return;
+        const host = app.querySelector("#gov-reports-host");
+        if (host) host.innerHTML = reportsInboxHtml(reports, isReviewer);
+        setGovCount("reports", "Reports", reports.length);
+      });
+    void authFetch(`${govApi()}/keyholders/applications`)
+      .then(async (r) =>
+        r.ok
+          ? ((await r.json()) as {
+              applications: KhApplicationView[];
+              elections: KhElectionView[];
+            })
+          : emptyKh,
+      )
+      .catch(() => emptyKh)
+      .then((khPack) => {
+        if (!app.querySelector(".gov-page")) return;
+        const host = app.querySelector("#gov-kh-host");
+        if (host) {
+          host.innerHTML = `${khElectionsHtml(khPack.elections, khPack.applications, canElect)}
+            <div class="gov-inline-panel">
+              <h3 class="gov-subhead">Apply</h3>
+              ${khApplyFormHtml(Boolean(user), canElect)}
+            </div>`;
+          bindKhApplyForm(host, { onApplied: () => void renderGovernance(shell, user) });
+        }
+        setGovCount("keyholders", "Keyholders", khPack.elections.length);
+      });
+  } else {
+    const host = app.querySelector("#gov-reports-host");
+    if (host) host.innerHTML = reportsInboxHtml([], false);
+    const khHost = app.querySelector("#gov-kh-host");
+    if (khHost) {
+      khHost.insertAdjacentHTML(
+        "beforeend",
+        `<div class="gov-inline-panel"><h3 class="gov-subhead">Apply</h3>${khApplyFormHtml(false, false)}</div>`,
+      );
+    }
+  }
 }
 
 function bindGovTabs(
@@ -949,6 +991,15 @@ function bindGovernanceHandlers(
 
   page.addEventListener("click", async (ev) => {
     const t = ev.target as Element | null;
+    const changeBtn = t?.closest?.<HTMLButtonElement>("[data-dec-change]");
+    if (changeBtn && page.contains(changeBtn)) {
+      const card = changeBtn.closest(".gov-card");
+      const actions = card?.querySelector<HTMLElement>("[data-dec-actions]");
+      if (actions) actions.hidden = false;
+      changeBtn.hidden = true;
+      return;
+    }
+
     const decBtn = t?.closest?.<HTMLButtonElement>("[data-dec-vote]");
     if (decBtn && page.contains(decBtn)) {
       const id = decBtn.dataset.decisionId;
@@ -1048,7 +1099,7 @@ function bindGovernanceHandlers(
     const selectBtn = t?.closest?.<HTMLButtonElement>(".gov-select-target");
     if (selectBtn && page.contains(selectBtn)) {
       const target = selectBtn.dataset.target;
-      const input = page.querySelector<HTMLInputElement>("#removal-target");
+      const input = page.querySelector<HTMLSelectElement>("#removal-target");
       if (target && input) {
         input.value = target;
         input.focus();
@@ -1064,11 +1115,10 @@ function bindGovernanceHandlers(
     }
   });
 
-  page
-    .querySelector<HTMLFormElement>("#ops-nominate-form")
-    ?.addEventListener("submit", async (e) => {
+  page.addEventListener("submit", async (e) => {
+      const form = e.target;
+      if (!(form instanceof HTMLFormElement) || form.id !== "ops-nominate-form") return;
       e.preventDefault();
-      const form = e.currentTarget as HTMLFormElement;
       const msg = page.querySelector<HTMLElement>("#ops-nominate-msg");
       const kind = page.querySelector<HTMLSelectElement>("#ops-kind");
       const action = page.querySelector<HTMLSelectElement>("#ops-action");
@@ -1129,7 +1179,7 @@ function bindGovernanceHandlers(
       e.preventDefault();
       const form = e.currentTarget as HTMLFormElement;
       const msg = page.querySelector<HTMLElement>("#removal-open-msg");
-      const target = page.querySelector<HTMLInputElement>("#removal-target");
+      const target = page.querySelector<HTMLSelectElement>("#removal-target");
       const evidence = page.querySelector<HTMLTextAreaElement>("#removal-evidence");
       if (!target || !evidence || !msg) return;
       if (isBusy(form)) return;

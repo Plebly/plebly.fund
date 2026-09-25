@@ -4143,6 +4143,41 @@ a.project-card-by:hover .project-card-by-text {
   font-size: 0.8rem;
 }
 
+.proposal-outcome {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+}
+
+.track-shipped,
+.track-more {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.track-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-more summary {
+  cursor: pointer;
+  color: var(--ink-secondary);
+  font-size: 0.75rem;
+}
+
+.track-other,
+.track-empty {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.claim-app-list .claimer-track {
+  margin: 0;
+}
+
 @media (max-width: 480px) {
   .nav-notify-dropdown {
     position: fixed;
@@ -9011,10 +9046,21 @@ a.claim-app-bond:hover {
   margin: 0;
 }
 
+.kh-roster-group {
+  margin: 1.1rem 0 0.35rem;
+  font-size: 0.95rem;
+}
+
 .kh-roster-row {
   display: grid;
-  gap: 0.45rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) auto;
+  gap: 0.45rem 0.75rem;
   align-items: center;
+}
+
+.kh-roster-confirmed {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .kh-roster-name {

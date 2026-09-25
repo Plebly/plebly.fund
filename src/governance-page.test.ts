@@ -291,6 +291,44 @@ describe("governance UI helpers", () => {
     expect(second).toContain("tests are in the linked repo");
   });
 
+  it("shows a cast vote with Change while the decision is open", () => {
+    const html = decisionCardHtml(
+      {
+        id: "dec-1",
+        proposal_id: "demo",
+        proposal_path: "proposals/claimed/demo.md",
+        kind: "deliverable_confirm",
+        round: 1,
+        created_at: "2026-01-01T00:00:00.000Z",
+        closes_at: "2026-01-15T00:00:00.000Z",
+        status: "open",
+        counts: { yes: 1, no: 0, abstain: 0 },
+        vote_count: 1,
+        my_vote: "yes",
+      },
+      true,
+    );
+    expect(html).toContain("You voted yes");
+    expect(html).toContain("data-dec-change");
+    expect(html).toContain("hidden");
+    expect(html).toContain('data-dec-vote="yes"');
+  });
+
+  it("offers earned reviewers in the removal control", () => {
+    const html = openRemovalFormHtml(
+      { active: false, funder_eligible: true, removal_min_sats: 10_000, reviewer: null },
+      true,
+      [
+        { user_id: "github:1", kind: "bootstrap", status: "active", seated_at: "", completed_count: 0, completed_proposal_ids: [] },
+        { user_id: "github:99", kind: "earned", status: "active", seated_at: "", completed_count: 2, completed_proposal_ids: [] },
+      ],
+    );
+    expect(html).toContain("<select");
+    expect(html).toContain("github:99");
+    expect(html).toContain("2 completed");
+    expect(html).not.toContain("github:1");
+  });
+
   it("removal cards and open form gate on funder eligibility", () => {
     const ballot = {
       id: "rem-1",
@@ -316,8 +354,7 @@ describe("governance UI helpers", () => {
       },
       true,
     );
-    expect(form).toContain("removal-open-form");
-    expect(form).toContain("removal-evidence");
+    expect(form).toContain("No earned reviewers to remove.");
 
     const blocked = openRemovalFormHtml(
       {

@@ -459,6 +459,15 @@ export function cashoutDeskHtml(opts: {
   </div>`.value;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
 function downloadBase64File(b64: string, filename: string): void {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -1058,6 +1067,66 @@ function bindKeyholderKeys(
   });
 }
 
+export type RosterSeat = {
+  user_id: string;
+  github: string;
+  status: string;
+  fingerprint?: string | null;
+  pending_revoke?: boolean;
+  revoke_attest_count?: number;
+  revoke_reason?: string;
+  revoke_attested_by_me?: boolean;
+  revoke_attested_by?: string[];
+};
+
+function rosterSeatAction(seat: RosterSeat, selfId: string) {
+  if (seat.status !== "active") {
+    return html`<button type="button" class="btn ghost" data-coattest="${seat.user_id}">Co-attest</button>`;
+  }
+  if (seat.user_id === selfId) {
+    return html`<span class="muted">You</span>`;
+  }
+  if (seat.pending_revoke && seat.revoke_attested_by_me) {
+    return html`<span class="muted">You confirmed</span>`;
+  }
+  if (seat.pending_revoke) {
+    return html`<button type="button" class="btn ghost" data-kh-revoke="${seat.user_id}">Confirm</button>`;
+  }
+  return html`<button type="button" class="btn ghost" data-kh-revoke="${seat.user_id}">Revoke</button>`;
+}
+
+function rosterSeatRow(seat: RosterSeat, selfId: string) {
+  const count = seat.pending_revoke ? seat.revoke_attest_count || 1 : 0;
+  return html`<li class="declined-row kh-roster-row">
+    <span class="kh-roster-name">@${seat.github}</span>
+    <span class="declined-meta">
+      <span class="pill">${seat.pending_revoke ? `${count} of 2` : seat.status}</span>
+      <span class="mono muted">${seat.fingerprint || "—"}</span>
+    </span>
+    ${rosterSeatAction(seat, selfId)}
+    ${
+      seat.pending_revoke && seat.revoke_attested_by?.length
+        ? html`<p class="muted kh-roster-confirmed">Confirmed by ${seat.revoke_attested_by.map((name) => `@${name}`).join(", ")}</p>`
+        : ""
+    }
+  </li>`;
+}
+
+/** Waiting seats keep co-attest. Sitting seats can start or confirm a revoke. */
+export function keyholderRosterHtml(rows: RosterSeat[], selfId: string): string {
+  const waiting = rows.filter((k) => k.status === "invited" || k.status === "pending_attest");
+  const sitting = rows.filter((k) => k.status === "active");
+  const group = (title: string, seats: RosterSeat[]) =>
+    seats.length
+      ? html`<h3 class="kh-roster-group">${title}</h3>
+        <ul class="declined-list">${seats.map((s) => rosterSeatRow(s, selfId))}</ul>`
+      : "";
+  return html`<p class="builder-msg" id="kh-roster-msg" hidden role="status" aria-live="polite"></p>
+    <p class="muted">Revoke removes someone from this desk after two keyholders confirm. It does not change the Sparrow descriptor. <a href="${href("/reviewers", "?tab=keyholders")}">Seat a replacement</a>.</p>
+    ${group("Waiting to sit", waiting)}
+    ${group("Sitting", sitting)}`.value;
+}
+
 export async function renderKeyholders(
   shell: KeyholdersShell,
   user: AuthUser | null,
@@ -1168,13 +1237,28 @@ export async function renderKeyholders(
       <div class="kh-desk-queues">
         <h2 class="kh-desk-queues-title">Signing queues</h2>
         <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
-          <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
-          <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
-          <button type="button" class="account-tab" role="tab" id="kh-tab-bond_refund" data-kh-tab="bond_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Bond refunds</button>
-          <button type="button" class="account-tab" role="tab" id="kh-tab-contrib_refund" data-kh-tab="contrib_refund" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Contributor refunds</button>
+          <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" data-kh-label="Releases" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" data-kh-label="Branches" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-bond_refund" data-kh-tab="bond_refund" data-kh-label="Bond refunds" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Bond refunds</button>
+          <button type="button" class="account-tab" role="tab" id="kh-tab-contrib_refund" data-kh-tab="contrib_refund" data-kh-label="Contributor refunds" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Contributor refunds</button>
           <button type="button" class="account-tab" role="tab" id="kh-tab-roster" data-kh-tab="roster" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Roster</button>
         </div>
         <div id="kh-queue" class="kh-queue" role="tabpanel" aria-labelledby="kh-tab-release" aria-live="polite"><p class="muted">Loading…</p></div>
+      </div>
+      <div class="site-modal" id="kh-revoke-modal" hidden>
+        <div class="site-modal-backdrop" data-kh-revoke-close tabindex="-1" aria-hidden="true"></div>
+        <div class="site-modal-card kh-desk-card" role="dialog" aria-modal="true" aria-labelledby="kh-revoke-title">
+          <button type="button" class="site-modal-close" data-kh-revoke-close aria-label="Close">${raw(solidIcon("xmark"))}</button>
+          <h2 class="proposal-block-title" id="kh-revoke-title" tabindex="-1">Revoke</h2>
+          <p class="muted" id="kh-revoke-copy"></p>
+          <label class="donate-amount-label" for="kh-revoke-reason">Reason</label>
+          <textarea id="kh-revoke-reason" class="comment-input" rows="3" maxlength="500"></textarea>
+          <p class="muted" id="kh-revoke-reason-read" hidden></p>
+          <p class="builder-msg" id="kh-revoke-msg" hidden role="status"></p>
+          <div class="comment-compose-actions">
+            <button type="button" class="btn" id="kh-revoke-submit" disabled>Attest revoke</button>
+          </div>
+        </div>
       </div>
       <div class="site-modal" id="kh-detail-modal" hidden>
         <div class="site-modal-backdrop" data-kh-detail-close tabindex="-1" aria-hidden="true"></div>
@@ -1493,7 +1577,7 @@ export async function renderKeyholders(
     });
     showDetailModal();
     detailEl.querySelector<HTMLElement>("#kh-branch-title")?.focus();
-    bindHashGate({
+    const branchGate = bindHashGate({
       input: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-verify"),
       status: detailEl.querySelector<HTMLElement>("#kh-branch-hash-status"),
       publishedHash: item.published_sha256,
@@ -1511,6 +1595,7 @@ export async function renderKeyholders(
         item.psbt_base64,
         `${item.proposal_id}-${item.allocation_id}-unsigned.psbt`,
       );
+      void branchGate.acceptDownload(item.psbt_base64);
     });
     const setMsg = (t: string) => {
       const el = detailEl.querySelector<HTMLElement>("#kh-branch-msg");
@@ -1707,7 +1792,7 @@ export async function renderKeyholders(
     detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
 
     const publishedHash = publishedUnsignedHash(item);
-    bindHashGate({
+    const releaseGate = bindHashGate({
       input: detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt-verify"),
       status: detailEl.querySelector<HTMLElement>("#kh-hash-status"),
       publishedHash,
@@ -1856,13 +1941,10 @@ export async function renderKeyholders(
     detailEl.querySelector("#kh-psbt-dl")?.addEventListener("click", async () => {
       const res = await authFetch(`${api()}/disburse/${id}/psbt`);
       if (!res.ok) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${item.proposal_id}.psbt`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const b64 = bytesToBase64(bytes);
+      downloadBase64File(b64, `${item.proposal_id}.psbt`);
+      void releaseGate.acceptDownload(b64);
     });
 
     detailEl.querySelector("#kh-propose")?.addEventListener("click", async () => {
@@ -2116,13 +2198,17 @@ export async function renderKeyholders(
   });
   // #app uses overflow-x: clip, which traps position:fixed inside the page.
   // Mount the desk on body so it covers the viewport like the other popups.
+  const revokeModal = app.querySelector<HTMLElement>("#kh-revoke-modal")!;
   document.body.appendChild(detailModal);
+  document.body.appendChild(revokeModal);
   const page = app.querySelector(".keyholders-page");
   if (page) {
     const detach = new MutationObserver(() => {
       if (document.contains(page)) return;
       closeDetailModal();
+      revokeModal.hidden = true;
       detailModal.remove();
+      revokeModal.remove();
       detach.disconnect();
     });
     detach.observe(document.documentElement, { childList: true, subtree: true });
@@ -2130,53 +2216,139 @@ export async function renderKeyholders(
 
   bindKeyholderKeys(app);
 
+  let rosterSeats: RosterSeat[] = [];
+  let rosterNote = "";
+  let revokeTarget: RosterSeat | null = null;
+  const closeRevoke = () => {
+    revokeModal.hidden = true;
+    revokeTarget = null;
+    if (detailModal.hidden) document.body.classList.remove("modal-open");
+  };
+  const openRevoke = (seat: RosterSeat) => {
+    revokeTarget = seat;
+    const confirming = Boolean(seat.pending_revoke);
+    const title = revokeModal.querySelector<HTMLElement>("#kh-revoke-title");
+    const copy = revokeModal.querySelector<HTMLElement>("#kh-revoke-copy");
+    const reason = revokeModal.querySelector<HTMLTextAreaElement>("#kh-revoke-reason");
+    const reasonLabel = revokeModal.querySelector<HTMLElement>("label[for='kh-revoke-reason']");
+    const written = revokeModal.querySelector<HTMLElement>("#kh-revoke-reason-read");
+    const submit = revokeModal.querySelector<HTMLButtonElement>("#kh-revoke-submit");
+    const err = revokeModal.querySelector<HTMLElement>("#kh-revoke-msg");
+    if (title) title.textContent = confirming ? `Confirm revoke of @${seat.github}` : `Revoke @${seat.github}`;
+    if (copy) {
+      copy.textContent = confirming
+        ? "A second confirmation removes them from this desk. The Sparrow descriptor stays as it is."
+        : "This removes them from the keyholder desk after a second keyholder confirms. It does not change the Sparrow descriptor or coins already in escrow.";
+    }
+    if (reason) {
+      reason.hidden = confirming;
+      reason.value = "";
+    }
+    if (reasonLabel) reasonLabel.hidden = confirming;
+    if (written) {
+      written.hidden = !confirming;
+      written.textContent = seat.revoke_reason || "";
+    }
+    if (submit) {
+      submit.textContent = confirming ? "Confirm revoke" : "Attest revoke";
+      submit.disabled = !confirming;
+    }
+    if (err) err.hidden = true;
+    revokeModal.hidden = false;
+    document.body.classList.add("modal-open");
+    title?.focus();
+  };
+  revokeModal.querySelector("#kh-revoke-reason")?.addEventListener("input", () => {
+    const reason = revokeModal.querySelector<HTMLTextAreaElement>("#kh-revoke-reason");
+    const submit = revokeModal.querySelector<HTMLButtonElement>("#kh-revoke-submit");
+    if (reason && submit && !reason.hidden) submit.disabled = reason.value.trim().length < 16;
+  });
+  revokeModal.querySelectorAll("[data-kh-revoke-close]").forEach((el) => {
+    el.addEventListener("click", () => closeRevoke());
+  });
+  revokeModal.querySelector("#kh-revoke-submit")?.addEventListener("click", async () => {
+    const seat = revokeTarget;
+    if (!seat) return;
+    const reasonEl = revokeModal.querySelector<HTMLTextAreaElement>("#kh-revoke-reason");
+    const reason = seat.pending_revoke ? seat.revoke_reason || "" : reasonEl?.value.trim() || "";
+    const err = revokeModal.querySelector<HTMLElement>("#kh-revoke-msg");
+    if (reason.trim().length < 16) {
+      if (err) {
+        err.hidden = false;
+        err.textContent = "Write at least 16 characters.";
+      }
+      return;
+    }
+    const submit = revokeModal.querySelector<HTMLButtonElement>("#kh-revoke-submit");
+    if (submit) submit.disabled = true;
+    const res = await authFetch(`${api()}/keyholders/${encodeURIComponent(seat.user_id)}/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; keyholder?: { status?: string } };
+    if (!res.ok) {
+      const text = noteStaleSession(body.error || "Could not revoke.");
+      if (err) {
+        err.hidden = !text;
+        err.textContent = text;
+      }
+      if (submit) submit.disabled = false;
+      return;
+    }
+    rosterNote = body.keyholder?.status === "revoked"
+      ? html`@${seat.github} revoked from the desk. The Sparrow descriptor is unchanged. <a href="${href("/reviewers", "?tab=keyholders")}">Seat a replacement</a>.`.value
+      : html`Revoke of @${seat.github} attested. A second keyholder must confirm.`.value;
+    closeRevoke();
+    void loadRoster();
+  });
+
   const loadRoster = async () => {
-    const [pub, pending] = await Promise.all([
-      fetch(`${api()}/keyholders/public`).then((r) =>
-        r.ok ? r.json() : { keyholders: [] },
-      ),
-      kh.status === "active"
-        ? authFetch(`${api()}/keyholders/pending`).then((r) =>
-            r.ok ? r.json() : { keyholders: [] },
-          )
-        : Promise.resolve({ keyholders: [] }),
-    ]);
-    const active = (pub as { keyholders: KeyholderMe[] }).keyholders || [];
-    const wait = (pending as { keyholders: KeyholderMe[] }).keyholders || [];
-    const rows = [
-      ...active.map((k) => ({ ...k, _pending: false })),
-      ...wait.map((k) => ({ ...k, _pending: true })),
-    ];
-    queueEl.innerHTML = rows.length
-      ? html`<p class="builder-msg" id="kh-roster-msg" hidden role="status" aria-live="polite"></p>
-         <ul class="declined-list">${rows.map(
-           (k) => html`<li class="declined-row kh-roster-row"><span class="kh-roster-name">@${k.github}</span>
-          <span class="declined-meta"><span class="pill">${k.status}</span>
-          <span class="mono muted">${k.fingerprint || "—"}</span></span>
-          ${
-            k._pending && kh.status === "active"
-              ? html`<button type="button" class="btn ghost" data-coattest="${k.user_id}">Co-attest</button>`
-              : ""
-          }</li>`,
-         )}</ul>`.value
+    const res = await authFetch(`${api()}/keyholders/roster`);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      queueEl.innerHTML = html`<p class="builder-msg bad" role="alert">${noteStaleSession(body.error || "Could not load the roster.")}</p>`.value;
+      return;
+    }
+    const data = (await res.json()) as { keyholders?: RosterSeat[] };
+    rosterSeats = data.keyholders || [];
+    queueEl.innerHTML = rosterSeats.length
+      ? keyholderRosterHtml(rosterSeats, kh.user_id)
       : keyholderQueueEmptyHtml(
           "No seats listed",
           "Active and pending keyholders appear here when the roster has rows.",
         );
+    const msg = queueEl.querySelector<HTMLElement>("#kh-roster-msg");
+    if (msg && rosterNote) {
+      msg.hidden = false;
+      msg.innerHTML = rosterNote;
+      rosterNote = "";
+    }
     queueEl.querySelectorAll<HTMLButtonElement>("[data-coattest]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.coattest || "";
-        const res = await authFetch(
+        const attest = await authFetch(
           `${api()}/keyholders/${encodeURIComponent(id)}/co-attest`,
           { method: "POST" },
         );
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        const msg = queueEl.querySelector<HTMLElement>("#kh-roster-msg");
-        if (msg) {
-          msg.hidden = false;
-          msg.textContent = res.ok ? "Co-attested." : body.error || "Failed";
+        const body = (await attest.json().catch(() => ({}))) as { error?: string };
+        const line = queueEl.querySelector<HTMLElement>("#kh-roster-msg");
+        if (!attest.ok) {
+          const text = noteStaleSession(body.error || "Failed");
+          if (line) {
+            line.hidden = !text;
+            line.textContent = text;
+          }
+          return;
         }
-        if (res.ok) void loadRoster();
+        rosterNote = html`Co-attested.`.value;
+        void loadRoster();
+      });
+    });
+    queueEl.querySelectorAll<HTMLButtonElement>("[data-kh-revoke]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const seat = rosterSeats.find((s) => s.user_id === btn.dataset.khRevoke);
+        if (seat && !seat.revoke_attested_by_me) openRevoke(seat);
       });
     });
   };
@@ -2282,6 +2454,29 @@ export async function renderKeyholders(
 
   const resume = takeKeyholderReturnState();
 
+  const paintQueueCount = (tab: string, n: number) => {
+    const btn = app.querySelector<HTMLButtonElement>(`[data-kh-tab="${tab}"]`);
+    const label = btn?.dataset.khLabel;
+    if (!btn || !label) return;
+    btn.textContent = n > 0 ? `${label} (${n})` : label;
+  };
+  const loadQueueCounts = async () => {
+    const [disburse, branch] = await Promise.all([
+      authFetch(`${api()}/disburse/queue?summary=1`).then(async (r) =>
+        r.ok
+          ? ((await r.json()) as { release?: number; bond_refund?: number; contrib_refund?: number })
+          : {},
+      ),
+      authFetch(`${api()}/keyholders/branch-queue?summary=1`).then(async (r) =>
+        r.ok ? ((await r.json()) as { count?: number }) : {},
+      ),
+    ]);
+    paintQueueCount("release", disburse.release || 0);
+    paintQueueCount("bond_refund", disburse.bond_refund || 0);
+    paintQueueCount("contrib_refund", disburse.contrib_refund || 0);
+    paintQueueCount("branch", branch.count || 0);
+  };
+
   void loadSignerNames().finally(() => {
     const resumeTab = resume?.tab && resume.tab !== "release" ? resume.tab : "";
     const resumeBtn = resumeTab
@@ -2294,6 +2489,7 @@ export async function renderKeyholders(
     } else {
       void loadQueue();
     }
+    void loadQueueCounts();
     if (resume?.wizardOpen) {
       openSignSession();
       const input = app.querySelector<HTMLInputElement>("#kh-auth-addr");

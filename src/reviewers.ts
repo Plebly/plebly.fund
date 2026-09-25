@@ -1,4 +1,5 @@
 import { WORKERS_API } from "./config";
+import { authFetch } from "./auth";
 import { authFetchWithTos } from "./tos-modal";
 import { reviewKindPayLabel } from "./tos";
 
@@ -40,6 +41,7 @@ export type ReviewDecisionView = {
   result?: string;
   roster_size?: number;
   need_yes?: number;
+  my_vote?: "yes" | "no" | "abstain" | null;
   ai_review?: AiReviewView;
   escalated?: boolean;
   ai_challenged_by?: string;
@@ -124,7 +126,7 @@ export async function fetchReviewerRoster(): Promise<ReviewerRoster | null> {
 
 export async function fetchOpenReviewDecisions(): Promise<ReviewDecisionView[]> {
   if (!WORKERS_API) return [];
-  const res = await fetch(`${API()}/reviewers/decisions/open`);
+  const res = await authFetch(`${API()}/reviewers/decisions/open`);
   if (!res.ok) return [];
   const data = (await res.json()) as { decisions?: ReviewDecisionView[] };
   return data.decisions || [];

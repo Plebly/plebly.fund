@@ -17,6 +17,7 @@ import {
   parseKeyholderReturnState,
   receiveAddressUnchanged,
   keyholderDeskHtml,
+  keyholderRosterHtml,
   keyholderDeskStep,
   keyholderColdStart,
   keyholderColdStartHtml,
@@ -276,11 +277,47 @@ describe("keyholderPackageSentence", () => {
     expect(src).toContain("kh-desk-queues");
     expect(src).toContain("keyholderQueueEmptyHtml");
     expect(src).toContain("kh-roster-row");
+    expect(src).toContain('id="kh-revoke-modal"');
     expect(src).toContain("kh-branch-sign");
     expect(src).toContain('id="kh-detail-modal"');
     expect(src).toContain("data-kh-detail-close");
     expect(src).toContain("showDetailModal");
     expect(src).toContain("document.body.appendChild(detailModal)");
+  });
+
+  it("splits the roster into co-attest and revoke actions", () => {
+    const html = keyholderRosterHtml(
+      [
+        { user_id: "github:me", github: "me", status: "active", fingerprint: "11223344" },
+        { user_id: "github:alice", github: "alice", status: "active", fingerprint: "99AABBCC" },
+        {
+          user_id: "github:bob",
+          github: "bob",
+          status: "active",
+          fingerprint: "DDEEFF00",
+          pending_revoke: true,
+          revoke_attest_count: 1,
+          revoke_reason: "Missed two signing windows.",
+          revoke_attested_by_me: false,
+          revoke_attested_by: ["alice"],
+        },
+        { user_id: "github:new", github: "new", status: "invited", fingerprint: "AABBCCDD" },
+      ],
+      "github:me",
+    );
+    expect(html).toContain("Waiting to sit");
+    expect(html).toContain("Sitting");
+    expect(html).toContain(">You<");
+    expect(html).toContain('data-kh-revoke="github:alice"');
+    expect(html).toContain(">Revoke<");
+    expect(html).toContain("1 of 2");
+    expect(html).toContain(">Confirm<");
+    expect(html).toContain('data-coattest="github:new"');
+    expect(html).not.toContain('data-kh-revoke="github:me"');
+    expect(html).toContain("does not change the Sparrow descriptor");
+    expect(html).toContain("tab=keyholders");
+    expect(html).toContain("Confirmed by @alice");
+    expect(html).not.toContain("Bond refunds (0)");
   });
 
   it("hash-gates Upload signature until signed partial is non-empty", () => {

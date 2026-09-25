@@ -127,9 +127,10 @@ export function bindHashGate(opts: {
   disabledReason?: string;
   /** Title/aria when the gated action is enabled. */
   enabledReason?: string;
-}): void {
+}): { acceptDownload: (b64: string) => Promise<boolean> } {
+  const noop = { acceptDownload: async () => false };
   const { input, status, action } = opts;
-  if (!input) return;
+  if (!input) return noop;
   const published = (opts.publishedHash || "").trim();
   const alsoRequire = opts.alsoRequire ?? null;
   const disabledReason =
@@ -141,8 +142,15 @@ export function bindHashGate(opts: {
     opts.alsoRequireEmptyReason?.trim() ||
     "Paste a signed partial to enable";
   const sync = async () => {
-    const state = await hashGateState(input.value, published);
-    if (status) status.textContent = hashGateLabel(state);
+    const typed = input.value.trim();
+    if (typed) input.dataset.downloadMatch = "";
+    const downloaded = !typed && input.dataset.downloadMatch === "1";
+    const state = downloaded ? "match" : await hashGateState(input.value, published);
+    if (status) {
+      status.textContent = downloaded
+        ? "SHA-256 matches the file you downloaded."
+        : hashGateLabel(state);
+    }
     if (!action) return;
     const extraOk = alsoRequire
       ? alsoRequire.value.trim().length > 0
@@ -181,6 +189,15 @@ export function bindHashGate(opts: {
     void sync();
   });
   void sync();
+  return {
+    async acceptDownload(b64: string): Promise<boolean> {
+      const state = await hashGateState(b64, published);
+      input.dataset.downloadMatch = state === "match" ? "1" : "";
+      if (state !== "match" && status) status.textContent = hashGateLabel(state);
+      await sync();
+      return state === "match";
+    },
+  };
 }
 
 /** <1M → 7d, 1M–10M → 14d, >10M → 30d. Keep aligned with Worker challengeWindowDays. */

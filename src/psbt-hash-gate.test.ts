@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bindHashGate,
   challengeWindowDays,
   hashGateActionEnabled,
   hashGateHtml,
@@ -123,5 +124,23 @@ describe("hashGateActionEnabled", () => {
         extraOk: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("bindHashGate download", () => {
+  it("marks a matching download without filling the paste box", async () => {
+    document.body.innerHTML = `<textarea id="v"></textarea><p id="s"></p><button id="a"></button>`;
+    const gate = bindHashGate({
+      input: document.querySelector("#v"),
+      status: document.querySelector("#s"),
+      publishedHash: SAMPLE_SHA256,
+      action: document.querySelector("#a"),
+    });
+    await gate.acceptDownload(SAMPLE);
+    const box = document.querySelector<HTMLTextAreaElement>("#v");
+    expect(box?.value).toBe("");
+    expect(document.querySelector("#s")?.textContent).toBe(
+      "SHA-256 matches the file you downloaded.",
+    );
   });
 });
