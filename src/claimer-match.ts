@@ -64,6 +64,40 @@ export function sessionMatchesPendingClaim(
   return Boolean(pendingHex && userHex && pendingHex === userHex);
 }
 
+/** True when session is the claim ops agent (claimowner), not every org co-admin. */
+export function sessionIsClaimer(
+  user: AuthUser | null,
+  claimer: string | null | undefined,
+  claimerType?: string | null,
+  claimAgent?: string | null,
+  pendingUserId?: string | null,
+): boolean {
+  if (sessionMatchesPendingClaim(user, pendingUserId)) return true;
+  return sessionMatchesClaimer(user, claimer, claimerType, claimAgent);
+}
+
+/** Prefer Workers claimer_user_id / pending.user_id when deciding fulfiller UI. */
+export function sessionIsClaimStatusFulfiller(
+  user: AuthUser | null,
+  status: {
+    claimer?: string | null;
+    claimer_user_id?: string | null;
+    claimer_type?: string | null;
+    claim_agent?: string | null;
+    pending?: { user_id?: string | null } | null;
+  } | null | undefined,
+): boolean {
+  if (!status) return false;
+  const full = status.claimer_user_id || status.pending?.user_id || null;
+  return sessionIsClaimer(
+    user,
+    status.claimer,
+    status.claimer_type,
+    status.claim_agent,
+    full,
+  );
+}
+
 /** Full fulfiller id from Workers claim status (claimer_user_id or pending). */
 export function claimerFullUserId(claim?: {
   claimer_user_id?: string | null;

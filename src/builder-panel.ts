@@ -23,7 +23,6 @@ import {
   submitClaim,
   submitDeliverable,
   withdrawClaimApplication,
-  type TrackEntry,
   type ClaimApplicationsResponse,
   type ClaimParams,
   type ClaimStatus,
@@ -64,10 +63,13 @@ import {
   hydrateAvatarSlots,
   orgAvatarSlotHtml,
 } from "./profile-avatars";
-import { cachedProposalTitle } from "./github";
+import {
+  applicationsPanelHtml,
+  collaboratorsPanelHtml,
+} from "./claimer-track-ui";
 import { freshLinkedOrgs } from "./github-orgs-client";
 import { avatarImgHtml } from "./media";
-import { href, orgHref, profileHref, proposalHref } from "./router";
+import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
@@ -75,7 +77,11 @@ import {
   nextActionMoreHtml,
   resolveNextAction,
 } from "./next-action";
-import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
+import {
+  sessionIsClaimStatusFulfiller,
+  sessionMatchesClaimer,
+  sessionMatchesPendingClaim,
+} from "./claimer-match";
 import {
   donateTriggerHtml,
   mountDonateChromeWhenEscrowKnown,
@@ -90,74 +96,21 @@ import type { Proposal } from "./types";
 import { sanitizePublicError } from "./public-errors";
 import { escapeHtml, formatSats } from "./util";
 import { fetchReviewerMe } from "./reviewers";
+import {
+  deliverableFormHtml,
+  renderClaimStatusBody,
+} from "./builder-claim-status";
 
-function githubUserHref(login: string): string {
-  return `https://github.com/${encodeURIComponent(login.replace(/^@/, ""))}`;
-}
+export {
+  applicationsPanelHtml,
+  claimerIdentityHtml,
+  claimerTrackHtml,
+} from "./claimer-track-ui";
 
-/** Linked claimer label (org → /org, individual → /u or GitHub). */
-export function claimerIdentityHtml(
-  login: string,
-  type?: string | null,
-  agent?: string | null,
-): string {
-  const handle = login.replace(/^@/, "").trim();
-  if (!handle) return escapeHtml(login || "another builder");
-  if (type === "org") {
-    const agentBit = agent
-      ? ` <span class="muted">(org · <a href="${escapeHtml(githubUserHref(agent))}" target="_blank" rel="noreferrer">@${escapeHtml(agent)}</a>)</span>`
-      : ` <span class="muted">(org)</span>`;
-    return `${orgAvatarSlotHtml(handle)}<a href="${orgHref(handle)}"><strong>${escapeHtml(handle)}</strong></a>${agentBit}`;
-  }
-  return `${avatarSlotHtml(handle)}<a href="${profileHref(handle)}"><strong>${escapeHtml(handle)}</strong></a>`;
-}
-
-/** True when session is the claim ops agent (claimowner), not every org co-admin. */
-export function sessionIsClaimer(
-  user: AuthUser | null,
-  claimer: string | null | undefined,
-  claimerType?: string | null,
-  claimAgent?: string | null,
-  pendingUserId?: string | null,
-): boolean {
-  if (sessionMatchesPendingClaim(user, pendingUserId)) return true;
-  return sessionMatchesClaimer(user, claimer, claimerType, claimAgent);
-}
-
-/** Prefer Workers claimer_user_id / pending.user_id when deciding fulfiller UI. */
-export function sessionIsClaimStatusFulfiller(
-  user: AuthUser | null,
-  status: {
-    claimer?: string | null;
-    claimer_user_id?: string | null;
-    claimer_type?: string | null;
-    claim_agent?: string | null;
-    pending?: { user_id?: string | null } | null;
-  } | null | undefined,
-): boolean {
-  if (!status) return false;
-  const full =
-    status.claimer_user_id || status.pending?.user_id || null;
-  return sessionIsClaimer(
-    user,
-    status.claimer,
-    status.claimer_type,
-    status.claim_agent,
-    full,
-  );
-}
-
-function deliverableFormHtml(): string {
-  return `<div id="deliverable-form" class="deliverable-form">
-    <label class="donate-amount-label" for="deliv-url">Deliverable URL</label>
-    <input id="deliv-url" class="donate-amount" type="url" placeholder="https://…" />
-    <label class="donate-amount-label" for="deliv-desc">Description</label>
-    <textarea id="deliv-desc" class="donate-amount" rows="3" placeholder="What to review…"></textarea>
-    <label class="donate-amount-label" for="deliv-hash">Artifact hash (optional)</label>
-    <input id="deliv-hash" class="donate-amount mono" type="text" />
-    <button type="button" class="btn" id="deliv-submit">Submit for review</button>
-  </div>`;
-}
+export {
+  sessionIsClaimer,
+  sessionIsClaimStatusFulfiller,
+} from "./claimer-match";
 
 function watchBtnHtml(watching: boolean): string {
   return watching
@@ -211,222 +164,6 @@ function claimBtnHtml(disabled = false): string {
 
 function mempoolTxUrl(txid: string): string {
   return `${mempoolWeb()}/tx/${txid}`;
-}
-
-function trackLinkHtml(row: TrackEntry): string {
-  const title = cachedProposalTitle(row.proposal_id) || row.proposal_id;
-  const href = proposalHref(row.proposal_path || "", row.proposal_id);
-  return `<a class="track-link" href="${escapeHtml(href)}">${escapeHtml(title)}</a>`;
-}
-
-function otherResultsHtml(rows: TrackEntry[]): string {
-  const rejected = rows.filter((r) => r.outcome === "rejected").length;
-  const expired = rows.filter((r) => r.outcome === "expired").length;
-  const abandoned = rows.filter((r) => r.outcome === "abandoned").length;
-  const bits: string[] = [];
-  if (rejected) bits.push(`${rejected} not accepted`);
-  if (expired) bits.push(`${expired} window expired`);
-  if (abandoned) bits.push(`${abandoned} left unfinished`);
-  if (!bits.length) return "";
-  return `<span class="track-other muted">${escapeHtml(bits.join(" · "))}</span>`;
-}
-
-function builderTrackInner(track: TrackEntry[] | undefined, limit: number): string {
-  const rows = track || [];
-  const shipped = rows.filter((r) => r.outcome === "completed");
-  const others = otherResultsHtml(rows);
-  if (!shipped.length && !others) {
-    return `<span class="track-empty muted">No shipped projects yet</span>`;
-  }
-  const shown = shipped.slice(0, limit).map(trackLinkHtml).join("");
-  const rest = shipped.slice(limit);
-  const more = rest.length
-    ? `<details class="track-more"><summary>${rest.length} more</summary>${rest.map(trackLinkHtml).join("")}</details>`
-    : "";
-  return `<span class="track-shipped">${shown}</span>${more}${others}`;
-}
-
-function applicantTrackHtml(s: {
-  active: number;
-  completed: number;
-  expired: number;
-  rejected: number;
-  abandoned: number;
-  track?: TrackEntry[];
-} | null): string {
-  if (!s) return "";
-  return `<div class="claimer-track">${builderTrackInner(s.track, 3)}</div>`;
-}
-
-function earliestBondedLogin(apps: ClaimApplicationsResponse): string | null {
-  const bonded = apps.applications
-    .filter((a) => a.bond_status === "bonded")
-    .slice()
-    .sort((a, b) =>
-      (a.bonded_at || a.applied_at).localeCompare(b.bonded_at || b.applied_at),
-    );
-  return bonded[0]?.claimer_login ?? null;
-}
-
-function relDeadlineHtml(iso: string): string {
-  return `<span data-rel-deadline="${escapeHtml(iso)}">${escapeHtml(relativeTimeLeft(iso))}</span>`;
-}
-
-/** Exported for unit tests (applicant list + proposer actions). */
-export function applicationsPanelHtml(apps: ClaimApplicationsResponse): string {
-  const modeLabel =
-    apps.claim_mode === "first_bonded"
-      ? "First bonded wins"
-      : `Proposer picks · ${apps.claim_window_days}d window`;
-  // Countdown only matters once someone is bonded — otherwise it reads like a
-  // pick deadline with nothing to pick.
-  const bondedCount = Math.max(0, Number(apps.summary?.bonded) || 0);
-  let timerHtml = "";
-  if (
-    bondedCount > 0 &&
-    apps.claim_mode === "proposer_select" &&
-    apps.phase === "collecting" &&
-    apps.window_ends_at
-  ) {
-    timerHtml = `<p class="claim-apps-deadline muted">Window closes ${relDeadlineHtml(apps.window_ends_at)}</p>`;
-  } else if (bondedCount > 0 && apps.phase === "grace" && apps.decision_ends_at) {
-    timerHtml = `<p class="claim-apps-deadline muted">Auto-award ${relDeadlineHtml(apps.decision_ends_at)}</p>`;
-  }
-  const earliest = earliestBondedLogin(apps);
-  let graceNote = "";
-  if (apps.phase === "grace" && apps.claim_mode === "proposer_select") {
-    if (earliest) {
-      graceNote = apps.is_proposer
-        ? `<p class="claim-grace-note">Auto-awards <strong>@${escapeHtml(earliest)}</strong> unless you pick.</p>`
-        : `<p class="claim-grace-note muted">Auto-awards <strong>@${escapeHtml(earliest)}</strong> if no pick.</p>`;
-    } else {
-      graceNote = `<p class="claim-grace-note muted">Decision window open — no bonded applicants to auto-award.</p>`;
-    }
-  }
-  // Bond is verified at apply — ignore legacy pending_bond rows in the open list.
-  const visible = apps.applications.filter((a) =>
-    ["bonded", "awarded"].includes(a.bond_status),
-  );
-  const countLabel =
-    bondedCount > 0
-      ? `${bondedCount} bonded`
-      : visible.length > 0
-        ? `${visible.length}`
-        : "";
-  const empty =
-    visible.length === 0
-      ? apps.phase === "grace" && !earliest
-        ? "" // graceNote already covers “no bonded applicants”
-        : apps.phase === "grace"
-          ? `<p class="claim-apps-empty muted">No open applications.</p>`
-          : `<p class="claim-apps-empty muted">No applicants yet.</p>`
-      : "";
-  const rows =
-    visible.length === 0
-      ? empty
-      : `<ul class="claim-app-list">${visible
-          .map((a) => {
-            const bondPaid =
-              a.bond_status === "bonded" || a.bond_status === "awarded";
-            const bond = bondPaid
-              ? a.claim_bond_txid
-                ? `<a class="claim-app-bond" href="${escapeHtml(mempoolTxUrl(a.claim_bond_txid))}" target="_blank" rel="noreferrer">Bond paid</a>`
-                : `<span class="claim-app-bond">Bond paid</span>`
-              : `<span class="claim-app-bond is-pending">${escapeHtml(a.bond_status.replace(/_/g, " "))}</span>`;
-            const proposerActions =
-              apps.is_proposer &&
-              apps.claim_mode === "proposer_select" &&
-              a.bond_status === "bonded" &&
-              !apps.awarded_application_id
-                ? `<button type="button" class="btn" data-accept-app="${escapeHtml(a.id)}">Award</button>
-                    <button type="button" class="btn ghost" data-reject-app="${escapeHtml(a.id)}">Reject</button>`
-                : "";
-            const mineWithdraw =
-              a.is_mine &&
-              a.bond_status === "bonded" &&
-              !apps.awarded_application_id
-                ? `<button type="button" class="btn ghost" data-withdraw-app="${escapeHtml(a.id)}">Withdraw</button>`
-                : "";
-            const actions =
-              proposerActions || mineWithdraw
-                ? `<div class="claim-app-actions">${proposerActions}${mineWithdraw}</div>`
-                : "";
-            const you = a.is_mine
-              ? ` <span class="claim-app-you muted">(you)</span>`
-              : "";
-            return `<li class="claim-app-row">
-              <div class="claim-app-main">
-                <div class="claim-app-identity">${claimerIdentityHtml(
-                  a.claimer_login,
-                  a.claimer_type,
-                  a.claim_agent,
-                )}${you}</div>
-                ${applicantTrackHtml(a.summary)}
-                <div class="claim-app-meta">${bond}</div>
-              </div>
-              ${actions}
-            </li>`;
-          })
-          .join("")}</ul>`;
-  return `<section class="claim-apps" id="claim-apps-panel" aria-labelledby="claim-apps-title">
-    <header class="claim-apps-head">
-      <div class="claim-apps-head-text">
-        <h3 class="claim-apps-title" id="claim-apps-title">Applicants</h3>
-        <p class="claim-apps-mode">${escapeHtml(modeLabel)}</p>
-      </div>
-      ${countLabel ? `<span class="claim-apps-count mono">${escapeHtml(countLabel)}</span>` : ""}
-    </header>
-    ${timerHtml}
-    ${graceNote}
-    ${rows}
-  </section>`;
-}
-
-function collaboratorsPanelHtml(
-  apps: ClaimApplicationsResponse,
-  user: AuthUser | null,
-  canInvite: boolean,
-): string {
-  const list =
-    apps.collaborators.length === 0
-      ? `<p class="builder-status muted">No credit collaborators yet.</p>`
-      : `<ul class="claim-app-list">${apps.collaborators
-          .map(
-            (c) =>
-              `<li class="claim-app-row"><div><strong>@${escapeHtml(c.github)}</strong> · ${escapeHtml(
-                c.status,
-              )}</div></li>`,
-          )
-          .join("")}</ul>`;
-  const myGh = (user?.github || "").toLowerCase();
-  const pendingForMe =
-    myGh &&
-    apps.collaborators.some(
-      (c) => c.github.toLowerCase() === myGh && c.status === "pending",
-    );
-  const acceptBtn = pendingForMe
-    ? `<button type="button" class="btn" id="collab-accept">Accept credit invite</button>`
-    : "";
-  const invite = canInvite
-    ? `<div class="claim-collab-invite">
-        <label class="donate-amount-label" for="collab-search">Credit a collaborator (GitHub)</label>
-        <p class="builder-claim-hint muted">Credit-only — they don’t operate the claim or earn completion badges.</p>
-        <input id="collab-search" class="donate-amount mono" type="search" placeholder="Search GitHub users…" autocomplete="off" />
-        <div id="collab-suggestions" class="claim-collab-suggestions"></div>
-        <div id="collab-following" class="claim-collab-following"></div>
-      </div>`
-    : "";
-  return `<section class="claim-collab" id="claim-collab-panel" aria-labelledby="claim-collab-title">
-    <header class="claim-apps-head">
-      <div class="claim-apps-head-text">
-        <h3 class="claim-apps-title" id="claim-collab-title">Collaborators</h3>
-        <p class="claim-apps-mode">Credit only</p>
-      </div>
-    </header>
-    ${list}
-    ${acceptBtn}
-    ${invite}
-  </section>`;
 }
 
 export function builderPanelHtml(
@@ -612,36 +349,6 @@ function setWatchBtn(btn: HTMLButtonElement, watching: boolean): void {
   btn.innerHTML = watchBtnHtml(watching);
 }
 
-/** Shipped projects for the awarded builder (exported for unit tests). */
-export function claimerTrackHtml(status: ClaimStatus): string {
-  const s = status.claimer_summary;
-  if (!s) return "";
-  return `<div class="claimer-track claimer-track-block">${builderTrackInner(s.track, 5)}</div>`;
-}
-
-function metaBits(status: ClaimStatus): string {
-  const bits: string[] = [];
-  if (status.proposer_claimed) {
-    bits.push(`<span class="pill pill-status status-active">Proposer-claimed</span>`);
-  }
-  if (status.claim_bond_txid) {
-    bits.push(
-      `<span class="builder-meta">Bond locked · <code class="mono">${escapeHtml(status.claim_bond_txid.slice(0, 12))}…</code></span>`,
-    );
-  }
-  if (status.checkpoint_due_at) {
-    const due = new Date(status.checkpoint_due_at).toLocaleDateString();
-    bits.push(
-      status.checkpoint_url
-        ? `<span class="builder-meta">Checkpoint filed</span>`
-        : `<span class="builder-meta">Checkpoint due ${escapeHtml(due)}</span>`,
-    );
-  }
-  return bits.length
-    ? `<div class="builder-meta-row">${bits.join(" ")}</div>`
-    : "";
-}
-
 function workboardSettingsHtml(enabled: boolean): string {
   return `<div class="workboard-settings" id="workboard-settings">
     <label class="radio-row workboard-toggle">
@@ -822,94 +529,6 @@ async function syncHybridReviewUi(
     }
   }
   revealReviewHost(host);
-}
-
-function renderStatusBody(
-  body: HTMLElement,
-  status: ClaimStatus,
-  user: AuthUser | null,
-  proposal: Proposal,
-  isProposer = false,
-  apps?: ClaimApplicationsResponse | null,
-  reviewerActive = false,
-): void {
-  const proposalPath = proposal.path;
-  const isYou = sessionIsClaimStatusFulfiller(user, status);
-  const action = resolveNextAction({
-    proposal,
-    claim: status,
-    apps,
-    user,
-    reviewerActive,
-    isProposer,
-    isBuilder: isYou,
-  });
-  const track = claimerTrackHtml(status);
-  const meta = metaBits(status);
-  const wbSlot = `<div id="workboard-settings-host"></div>`;
-  const collab = `<div id="claim-collab-host"></div>`;
-  const award = `<p class="builder-status muted" id="claim-award-reason" hidden></p>`;
-  const checkpointForm = `<div id="checkpoint-form" class="deliverable-form" hidden>
-          <label class="donate-amount-label" for="checkpoint-url">Progress URL</label>
-          <input id="checkpoint-url" class="donate-amount" type="url" placeholder="https://…" />
-          <button type="button" class="btn" id="checkpoint-submit">Save checkpoint</button>
-        </div>`;
-  const delivForm = deliverableFormHtml().replace(
-    'class="deliverable-form"',
-    'class="deliverable-form" hidden',
-  );
-  const more = nextActionMoreHtml(action, {
-    checkpoint: `<button type="button" class="btn ghost" id="builder-checkpoint">File checkpoint</button>${checkpointForm}`,
-    extension:
-      isYou && !status.claim_extension_used
-        ? `<button type="button" class="btn ghost" id="builder-request-extension">Request 30-day extension</button>`
-        : isYou
-          ? `<p class="builder-status muted">30-day extension already used.</p>`
-          : "",
-    challenge: status.can_challenge_abandoned
-      ? `<button type="button" class="btn ghost" id="builder-challenge" data-path="${escapeHtml(proposalPath)}">Challenge as abandoned</button>`
-      : "",
-    collab,
-    workboard: wbSlot,
-  });
-  const head = nextActionCardHtml(action, {
-    extra: `${action.button === "deliverable" || (status.state === "in_review" && isYou && !status.review_decision_open) ? delivForm : ""}${more}`,
-  });
-
-  switch (status.state) {
-    case "open": {
-      // state=open can mean shared-escrow ≥ floor while frontmatter stays listed.
-      // Keep Donate-only listed chrome — no applicants / Apply host — until claimable.
-      const listedStill =
-        ["listed", "funding"].includes(String(proposal.status || "")) ||
-        ["listed", "funding"].includes(String(status.status || ""));
-      body.innerHTML = listedStill
-        ? head
-        : `${head}${track}<div id="claim-apps-host"></div>`;
-      break;
-    }
-    case "below_floor":
-      body.innerHTML = head;
-      break;
-    case "claim_pending": {
-      const pr = safeHrefAttr(status.pending?.pr_url);
-      body.innerHTML = `${head}${track}${meta}${
-        pr ? `<p class="builder-status muted"><a href="${pr}" target="_blank" rel="noreferrer">PR</a></p>` : ""
-      }`;
-      break;
-    }
-    case "claimed":
-      body.innerHTML = `${head}${track}${meta}${award}`;
-      break;
-    case "in_review":
-      body.innerHTML = `${head}${track}${meta}${award}`;
-      break;
-    case "completed":
-      body.innerHTML = `${head}${track}${meta}`;
-      break;
-    default:
-      body.innerHTML = head || `<p class="builder-status muted">Not available for claim.</p>`;
-  }
 }
 
 export async function bindBuilderPanel(
@@ -1756,7 +1375,7 @@ export async function bindBuilderPanel(
       );
       const asFulfiller = sessionIsClaimStatusFulfiller(opts.user, status);
       void bindPayoutCard(asFulfiller);
-      renderStatusBody(
+      renderClaimStatusBody(
         body,
         status,
         opts.user,
