@@ -14,6 +14,9 @@ import {
   saveSettleDraft,
   readSettleDraft,
   clearSettleDraft,
+  settleToastTxidPrefix,
+  keyholderSettleToastText,
+  keyholderPageToastHtml,
   parseKeyholderReturnState,
   receiveAddressUnchanged,
   keyholderDeskHtml,
@@ -700,3 +703,44 @@ describe("keyholder onboarding", () => {
     expect(stuck).toContain("cannot start until two seats are already active");
   });
 });
+
+describe("keyholder settle page toast", () => {
+  it("formats settled and waiting copy with optional txid prefix", () => {
+    expect(settleToastTxidPrefix("")).toBe("");
+    expect(settleToastTxidPrefix("not-hex")).toBe("");
+    expect(settleToastTxidPrefix("abcdef01" + "aa".repeat(28))).toBe("abcdef01");
+    expect(keyholderSettleToastText({ outcome: "settled" })).toBe("Settled.");
+    expect(
+      keyholderSettleToastText({
+        outcome: "settled",
+        txid: "deadbeef" + "11".repeat(28),
+      }),
+    ).toBe("Settled. · deadbeef…");
+    expect(keyholderSettleToastText({ outcome: "proposed_waiting" })).toBe(
+      "Settle proposed — waiting for second keyholder",
+    );
+    expect(
+      keyholderSettleToastText({
+        outcome: "proposed_waiting",
+        txid: "cafebabe" + "22".repeat(28),
+      }),
+    ).toBe("Settle proposed — waiting for second keyholder · cafebabe…");
+  });
+
+  it("renders a page-level aria-live toast outside the detail modal", () => {
+    const html = keyholderPageToastHtml("Settled. · deadbeef…");
+    expect(html).toContain('id="kh-page-toast"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("lifecycle-banner");
+    expect(html).toContain("kh-page-toast");
+    expect(html).toContain("Settled. · deadbeef…");
+    expect(html).toContain('data-kh-toast-dismiss');
+    expect(html).toContain("Dismiss");
+    // Escapes untrusted copy
+    const escaped = keyholderPageToastHtml('<img src=x onerror=alert(1)>');
+    expect(escaped).not.toContain("<img");
+    expect(escaped).toContain("&lt;img");
+  });
+});
+

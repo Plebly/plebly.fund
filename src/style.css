@@ -9021,6 +9021,26 @@ a.claim-app-bond:hover {
   font-size: 0.8125rem;
 }
 
+.kh-page-toast-host {
+  margin: 0 0 0.85rem;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+}
+
+.kh-page-toast-host[hidden] {
+  display: none;
+}
+
+.keyholders-page .kh-page-toast {
+  align-items: center;
+}
+
+.keyholders-page .kh-page-toast .btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .kh-desk-queues {
   margin: 0 0 1.25rem;
 }
