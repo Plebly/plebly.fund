@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   branchSignDeskHtml,
+  branchSignChipLabel,
+  branchSignNextAction,
   cashoutDeskHtml,
   keyholderProofWizardHtml,
   keyholderReceiveAddress,
@@ -34,6 +36,8 @@ import {
   keyholderTxPurpose,
   keyholderQueueEmptyHtml,
   signatureProgressLabel,
+  shortSettleTxid,
+  SIGNET_23_JOIN_SHEET,
 } from "./keyholders-page";
 import { parseLocation, seoForRoute } from "./router";
 
@@ -355,12 +359,13 @@ describe("keyholderPackageSentence", () => {
     expect(html).toContain("does not broadcast");
     expect(html).toContain("Settle txid (64 hex) — not a PSBT");
     expect(html).toContain("Needs 0/2 cosignatures");
+    expect(html).toContain("off-desk Sparrow");
     expect(html).toContain("not a settle txid");
     expect(html).not.toContain(">Broadcast<");
     expect(html).not.toContain("cHNidP8");
   });
 
-  it("disables Propose settle while cosign threshold is unmet", () => {
+  it("enables Propose settle while open even if cosign threshold unmet (off-desk)", () => {
     const waiting01 = branchSignDeskHtml({
       proposal_id: "PLEBLY-2026-007",
       allocation_id: "reserve",
@@ -373,15 +378,10 @@ describe("keyholderPackageSentence", () => {
         outputs: [{ address: "tb1qout", amount_sats: 10_000, label: "reserve" }],
       },
     });
-    expect(waiting01).toMatch(/id="kh-branch-propose"\s+disabled\b/);
-    expect(waiting01).toContain(
-      "Waiting for 0/1 cosignatures before broadcast / settle",
-    );
+    expect(waiting01).not.toMatch(/id="kh-branch-propose"\s+disabled\b/);
+    expect(waiting01).toContain("Off-desk cosign OK");
     expect(waiting01).toMatch(
-      /id="kh-branch-propose"[^>]*title="Waiting for 0\/1 cosignatures before broadcast \/ settle"/,
-    );
-    expect(waiting01).toMatch(
-      /id="kh-branch-propose"[^>]*aria-label="Waiting for 0\/1 cosignatures before broadcast \/ settle"/,
+      /id="kh-branch-propose"[^>]*title="Off-desk cosign OK — after Sparrow broadcast, paste the confirmed 64-character settle txid \(API verifies\)"/,
     );
     expect(waiting01).toMatch(/id="kh-branch-confirm"\s+disabled\b/);
 
@@ -395,10 +395,8 @@ describe("keyholderPackageSentence", () => {
       state: "open",
       decode: { outputs: [] },
     });
-    expect(waiting03).toMatch(/id="kh-branch-propose"\s+disabled\b/);
-    expect(waiting03).toContain(
-      "Waiting for 0/3 cosignatures before broadcast / settle",
-    );
+    expect(waiting03).not.toMatch(/id="kh-branch-propose"\s+disabled\b/);
+    expect(waiting03).toContain("off-desk Sparrow broadcast");
 
     const ready = branchSignDeskHtml({
       proposal_id: "p1",
@@ -439,6 +437,70 @@ describe("keyholderPackageSentence", () => {
     expect(proposed).not.toMatch(/id="kh-branch-confirm"\s+disabled\b/);
   });
 
+  it("settled chrome shows Settled + txid, not Needs 0/2 as primary", () => {
+    const txid = "2f28600d643866e1cac40e7108497ae7deead552cf20a4b6aedfd533f3d4e309";
+    const html = branchSignDeskHtml({
+      proposal_id: "PLEBLY-2026-010",
+      allocation_id: "bounty",
+      kind: "clean",
+      published_sha256: "aa".repeat(32),
+      signed: 0,
+      required_threshold: 2,
+      state: "settled",
+      settle_txid: txid,
+      decode: { outputs: [] },
+    });
+    expect(html).toContain("Settled");
+    expect(html).toContain(txid);
+    expect(html).toMatch(/lifecycle-k">Settled</);
+    expect(html).not.toContain("Needs 0/2 cosignatures");
+    expect(html).not.toContain("kh-branch-propose");
+    expect(branchSignChipLabel({
+      state: "settled",
+      signed: 0,
+      required_threshold: 2,
+      settle_txid: txid,
+    })).toBe(`Settled · ${shortSettleTxid(txid)}`);
+  });
+
+  it("N-of-M next action names signers and off-desk settle path", () => {
+    const next = branchSignNextAction(
+      {
+        state: "open",
+        signed: 1,
+        required_threshold: 2,
+        published_sha256: "aa".repeat(32),
+        partials: [{ keyholder_id: "github:1", fingerprint: "5c4993d8" }],
+      },
+      { signerNames: { "github:1": "josh" } },
+    );
+    expect(next).toContain("5c4993d8");
+    expect(next).toContain("@josh");
+    expect(next).toContain("Needs 1 more cosignature");
+    expect(next).toContain("off-desk Sparrow broadcast");
+    expect(
+      branchSignNextAction({
+        state: "threshold_met",
+        signed: 2,
+        required_threshold: 2,
+      }),
+    ).toContain("Ready to broadcast");
+  });
+
+  it("join sheet is public Signet 2-of-3 materials only", () => {
+    expect(SIGNET_23_JOIN_SHEET).toContain("5c4993d8");
+    expect(SIGNET_23_JOIN_SHEET).toContain("d9ae90f0");
+    expect(SIGNET_23_JOIN_SHEET).toContain("0623e747");
+    expect(SIGNET_23_JOIN_SHEET).toContain("m/84'/1'/0'");
+    expect(SIGNET_23_JOIN_SHEET).toContain("not BIP48");
+    expect(SIGNET_23_JOIN_SHEET).toContain(
+      "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx",
+    );
+    expect(SIGNET_23_JOIN_SHEET).toContain("wsh(sortedmulti(2,");
+    expect(SIGNET_23_JOIN_SHEET.toLowerCase()).not.toMatch(/\bseed(s)?\b.*mnemonic|mnemonic.*\bseed/);
+    expect(SIGNET_23_JOIN_SHEET).not.toMatch(/\bxprv|\btprv/i);
+  });
+
   it("downloads the unsigned branch transaction without embedding it", () => {
     const secret = "cHNidP8FAKEUNSIGNED";
     const html = branchSignDeskHtml({
@@ -455,6 +517,8 @@ describe("keyholderPackageSentence", () => {
       },
     });
     expect(html).toContain("Download unsigned transaction");
+    expect(html).toContain("Copy unsigned base64");
+    expect(html).toContain("kh-branch-copy");
     expect(html).toContain("One signature");
     expect(html).toContain(keyholderTxPurpose("clean"));
     expect(html).not.toContain(secret);
