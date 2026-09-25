@@ -114,6 +114,115 @@ export function signerLabels(
   });
 }
 
+/** Shorten a 64-hex settle txid for queue / chip chrome. */
+export function shortSettleTxid(txid: string | undefined | null): string {
+  const t = (txid || "").trim();
+  if (t.length < 16) return t;
+  return `${t.slice(0, 8)}…${t.slice(-8)}`;
+}
+
+/**
+ * Primary status chip for a branch signoff.
+ * Settled (or settle_txid on a settled row) must not surface "Needs 0/2 cosignatures".
+ */
+export function branchSignChipLabel(item: {
+  state: string;
+  signed: number;
+  required_threshold: number;
+  settle_txid?: string;
+}): string {
+  const need = item.required_threshold || 0;
+  const signed = item.signed || 0;
+  const tx = (item.settle_txid || "").trim();
+  if (item.state === "settled") {
+    return tx ? `Settled · ${shortSettleTxid(tx)}` : "Settled";
+  }
+  if (item.state === "settle_proposed") {
+    return tx
+      ? `Settle proposed · ${shortSettleTxid(tx)}`
+      : "Settle proposed — waiting confirm";
+  }
+  if (item.state === "threshold_met" || (need > 0 && signed >= need)) {
+    return `${signatureProgressLabel(signed, need)} · ready to broadcast`;
+  }
+  if (need > 0 && signed < need) {
+    return `${signatureProgressLabel(signed, need)} · Needs ${signed}/${need} cosignatures`;
+  }
+  return signatureProgressLabel(signed, need);
+}
+
+/** Clear next action under the N-of-M chip (desk detail). */
+export function branchSignNextAction(
+  item: {
+    state: string;
+    signed: number;
+    required_threshold: number;
+    settle_txid?: string;
+    published_sha256?: string;
+    partials?: { keyholder_id: string; fingerprint: string }[];
+  },
+  opts?: { signerNames?: Record<string, string> },
+): string {
+  const need = item.required_threshold || 0;
+  const signed = item.signed || 0;
+  const tx = (item.settle_txid || "").trim();
+  if (item.state === "settled") {
+    return tx
+      ? `Settled — broadcast recorded. Settle txid ${tx}`
+      : "Settled — broadcast recorded";
+  }
+  if (item.state === "settle_proposed") {
+    return "Settle proposed — another keyholder must Confirm settle";
+  }
+  if (item.state === "threshold_met" || (need > 0 && signed >= need)) {
+    return "Ready to broadcast in Sparrow — then paste settle txid";
+  }
+  const who = signerLabels(item.partials, opts?.signerNames || {});
+  const fps = (item.partials || [])
+    .map((p) => (p.fingerprint || "").trim())
+    .filter(Boolean);
+  const signedBit = fps.length
+    ? `Signed ${fps.join(", ")}${who.length ? ` (${who.join(", ")})` : ""}`
+    : who.length
+      ? `Signed ${who.join(", ")}`
+      : "No partials on desk yet";
+  const remain = Math.max(0, need - signed);
+  return `${signedBit}. Needs ${remain} more cosignature${remain === 1 ? "" : "s"} (${signed}/${need}) — or paste settle txid after off-desk Sparrow broadcast`;
+}
+
+/**
+ * Public Signet 2-of-3 join materials only (descriptor xpubs / fingerprints).
+ * BIP84 m/84'/1'/0' — not BIP48. No seeds.
+ */
+export const SIGNET_23_JOIN_SHEET = `# Signet 2-of-3 join sheet (public only — no seeds)
+
+Threshold: 2 of 3
+Network: Signet
+Script: wsh(sortedmulti(2,…)) BIP84-style account xpubs
+Derivation: m/84'/1'/0' (BIP84 Signet) — not BIP48
+
+## Cosigners
+1. Josh     fp=5c4993d8  tpub=tpubDDbJhLEZXSNLtUwJQd2BY8N99yqnfwDEUGsHgSm7WDKxKQxt8mbrM1pis1TrkfUtoiR2URaTTMiijNEifVKEijwhksQQHa4roCEDvjWDkhD
+2. Agent-A  fp=d9ae90f0  tpub=tpubDDCPG9Rx5V3HncoC8Hpotoec7wUw83RahiARSJn4CTQv1UEX7yFNMXKYyzvtKkjcGNV1VQq3UQi9B6dgQwPxBc7xmyQq79Gzr8sK4Y6gWuC
+3. Agent-B  fp=0623e747  tpub=tpubDCWfK6qmDSRB6AprCbchFHveXGUdwwgLLeEy5noeoWtwmNQCKEqvQ1Fu2311Uf8BEPyJfDJmiPjm4cgH4SrGDzJA8uH1eSJMxKWLAEm7Kp1
+
+## Descriptor (paste into Sparrow Multisig / Settings)
+wsh(sortedmulti(2,[5c4993d8/84h/1h/0h]tpubDDbJhLEZXSNLtUwJQd2BY8N99yqnfwDEUGsHgSm7WDKxKQxt8mbrM1pis1TrkfUtoiR2URaTTMiijNEifVKEijwhksQQHa4roCEDvjWDkhD/0/*,[d9ae90f0/84h/1h/0h]tpubDDCPG9Rx5V3HncoC8Hpotoec7wUw83RahiARSJn4CTQv1UEX7yFNMXKYyzvtKkjcGNV1VQq3UQi9B6dgQwPxBc7xmyQq79Gzr8sK4Y6gWuC/0/*,[0623e747/84h/1h/0h]tpubDCWfK6qmDSRB6AprCbchFHveXGUdwwgLLeEy5noeoWtwmNQCKEqvQ1Fu2311Uf8BEPyJfDJmiPjm4cgH4SrGDzJA8uH1eSJMxKWLAEm7Kp1/0/*))
+
+## Receive #0 expectation (must match Sparrow first receive)
+tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx
+
+## Sparrow steps
+1. File → New Wallet → Multi Signature → Signet
+2. Policy 2 of 3
+3. Keystore 1: Josh Signet BIP84 wallet / xpub (fp 5c4993d8), derivation m/84'/1'/0'
+4. Keystore 2: paste Agent-A tpub with derivation m/84'/1'/0'
+5. Keystore 3: paste Agent-B tpub the same way
+6. Confirm receive #0 equals the address above
+
+Public only — never paste seeds into this sheet or the SPA.
+`;
+
 export type KeyholderDeskItem = {
   kind: string;
   proposal_id: string;
@@ -160,18 +269,10 @@ export function branchSignDeskHtml(
   const outputs = item.decode?.outputs || [];
   const settled = item.state === "settled";
   const proposed = item.state === "settle_proposed";
-  const stateLabel =
-    item.state === "threshold_met"
-      ? " · ready to broadcast in Sparrow"
-      : proposed
-        ? " · settle proposed — waiting confirm"
-        : settled
-          ? " · settled — broadcast recorded"
-          : need > 0 && signed < need
-            ? ` · Needs ${signed}/${need} cosignatures`
-            : "";
   const who = signerLabels(item.partials, opts?.signerNames || {});
   const canDownload = Boolean(item.psbt_base64);
+  const chip = branchSignChipLabel(item);
+  const nextAction = branchSignNextAction(item, opts);
   const outputRows = outputs.length
     ? outputs.map(
         (o) =>
@@ -181,7 +282,8 @@ export function branchSignDeskHtml(
   return html`<div class="form-panel form-panel-wide">
     <h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">${item.kind} · ${item.proposal_id} · ${item.allocation_id}</h2>
     <p class="next-card-sentence">${keyholderTxPurpose(item.kind)}</p>
-    <p class="kh-sign-chip">${signatureProgressLabel(signed, need)}${stateLabel}</p>
+    <p class="kh-sign-chip">${chip}</p>
+    <p class="muted kh-branch-next" id="kh-branch-next">${nextAction}</p>
     ${who.length ? html`<p class="kh-signers">Signed by ${who.join(", ")}</p>` : ""}
     <table class="kh-outputs">
       <caption class="sr-only">Outputs</caption>
@@ -190,10 +292,13 @@ export function branchSignDeskHtml(
     </table>
     ${
       canDownload
-        ? html`<div class="comment-compose-actions"><button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button></div>`
+        ? html`<div class="comment-compose-actions">
+            <button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button>
+            <button type="button" class="btn ghost" id="kh-branch-copy">Copy unsigned base64</button>
+          </div>`
         : ""
     }
-    <p class="muted">Cosign: sign in Sparrow, then paste the signed partial below. The Worker does not broadcast — broadcast stays in Sparrow after N-of-M.</p>
+    <p class="muted">Cosign: sign in Sparrow, then paste the signed partial below. The Worker does not broadcast — broadcast stays in Sparrow after N-of-M. Off-desk Sparrow cosign + broadcast is fine — paste the settle txid when ready.</p>
     ${raw(hashGateHtml({
       publishedHash: item.published_sha256,
       inputId: "kh-branch-verify",
@@ -214,17 +319,23 @@ export function branchSignDeskHtml(
     <p class="builder-msg" id="kh-branch-msg" hidden role="status" aria-live="polite"></p>
     ${
       settled
-        ? html`<p class="muted">Settled — broadcast already recorded. Settle txid <code class="mono">${item.settle_txid || ""}</code>.</p>`
+        ? html`<div class="lifecycle-banner" role="status">
+            <span class="lifecycle-k">Settled</span>
+            <p>Broadcast already recorded. Settle txid <code class="mono">${item.settle_txid || ""}</code>.</p>
+          </div>`
         : (() => {
             const thresholdMet =
               item.state === "threshold_met" ||
               (need > 0 && signed >= need);
-            const proposeDisabled = proposed || !thresholdMet;
+            // Off-desk Sparrow cosign + broadcast: keep Propose settle enabled while
+            // the branch is still open so KH can paste a confirmed Release txid.
+            // Confirm settle keeps dual-KH rules. Worker verifies the txid.
+            const proposeDisabled = proposed;
             const proposeWhy = proposed
               ? "Settle already proposed — waiting for another keyholder to confirm"
               : thresholdMet
                 ? "After you broadcast in Sparrow, paste the 64-character settle txid"
-                : `Waiting for ${signed}/${need || "?"} cosignatures before broadcast / settle`;
+                : "Off-desk cosign OK — after Sparrow broadcast, paste the confirmed 64-character settle txid (API verifies)";
             const confirmDisabled =
               !proposed || item.settle_proposed_by === opts?.userId;
             const confirmWhy = !proposed
@@ -233,12 +344,12 @@ export function branchSignDeskHtml(
                 ? "You proposed this settle — another keyholder must confirm"
                 : "Confirm the proposed settle txid matches the Release outputs";
             return html`<div class="form-panel">
-      <h3 class="proposal-block-title">${thresholdMet ? "Settle · record broadcast" : "Settle · waiting for cosign"}</h3>
+      <h3 class="proposal-block-title">Settle · record broadcast</h3>
       <p class="fee-pay-bond-label">SETTLE TXID</p>
       <p class="fee-pay-bond-contrast">${
         thresholdMet
           ? html`Ready to broadcast in Sparrow when combined. Then paste the <strong>64-character settle txid</strong> here — not a PSBT.`
-          : `Needs ${signed}/${need} signatures (cosign). Do not paste a settle txid until threshold is met and you have broadcast in Sparrow.`
+          : html`Desk cosign is at <strong>${signed}/${need || "?"}</strong>. You can still paste a settle txid after an <strong>off-desk Sparrow broadcast</strong> — the API verifies Release outputs. Not a PSBT.`
       }</p>
       <label class="donate-amount-label" for="kh-branch-txid">Settle txid (64 hex) — not a PSBT</label>
       <input id="kh-branch-txid" class="donate-amount mono" value="${item.settle_txid || ""}" ${proposed ? "readonly" : ""} autocomplete="off" placeholder="64-character transaction id" />
@@ -502,6 +613,16 @@ function downloadBase64File(b64: string, filename: string): void {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTextFile(text: string, filename: string, mime = "text/plain"): void {
+  const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1229,6 +1350,7 @@ export async function renderKeyholders(
           <p class="kh-balance-amt"><span>Spendable</span><strong>${formatSats(balance)}</strong></p>
           <p class="kh-earnings">Accrued ${formatSats(earnings)}</p>
           <button type="button" class="btn ghost" id="kh-cashout">Pay out</button>
+          <button type="button" class="btn ghost" id="kh-join-sheet-dl" title="Public Signet 2-of-3 descriptor xpubs only — no seeds">Download Signet join sheet</button>
         </div>
         <div id="kh-cashout-detail" hidden></div>
         <div class="lifecycle-banner" id="kh-relogin" hidden role="status">
@@ -1557,13 +1679,16 @@ export async function renderKeyholders(
         return;
       }
       queueEl.innerHTML = html`<ul class="declined-list">${data.items.map(
-        (item) => html`<li class="declined-row">
-            <button type="button" class="declined-title btn ghost" data-branch="${item.proposal_id}" data-alloc="${item.allocation_id}" aria-label="${item.proposal_id} ${item.kind} ${signatureProgressLabel(item.signed, item.required_threshold)}">${item.proposal_id} · ${item.allocation_id}</button>
+        (item) => {
+          const chip = branchSignChipLabel(item);
+          return html`<li class="declined-row">
+            <button type="button" class="declined-title btn ghost" data-branch="${item.proposal_id}" data-alloc="${item.allocation_id}" aria-label="${item.proposal_id} ${item.kind} ${chip}">${item.proposal_id} · ${item.allocation_id}</button>
             <p class="kh-queue-purpose">${keyholderTxPurpose(item.kind)}</p>
             <span class="declined-meta"><span class="pill">${item.kind}</span>
-            <span class="kh-sign-chip">${signatureProgressLabel(item.signed, item.required_threshold)}</span>
-            <span class="pill">${item.state}</span></span>
-          </li>`,
+            <span class="kh-sign-chip">${chip}</span>
+            ${item.state === "settled" ? "" : html`<span class="pill">${item.state}</span>`}</span>
+          </li>`;
+        },
       )}</ul>`.value;
       queueEl.querySelectorAll<HTMLButtonElement>("[data-branch]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1665,6 +1790,12 @@ export async function renderKeyholders(
       el.textContent = text;
       noteSignSession(text);
     };
+    detailEl.querySelector("#kh-branch-copy")?.addEventListener("click", async () => {
+      if (!item.psbt_base64) return;
+      const ok = await copyText(item.psbt_base64);
+      setMsg(ok ? "Unsigned PSBT base64 copied." : "Could not copy unsigned PSBT.");
+      if (ok) void branchGate.acceptDownload(item.psbt_base64);
+    });
     detailEl.querySelector("#kh-branch-sign")?.addEventListener("click", async () => {
       const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign");
       if (btn?.disabled) {
@@ -2465,6 +2596,10 @@ export async function renderKeyholders(
   const start = app.querySelector<HTMLButtonElement>(
     `[data-kh-tab="${initial}"]`,
   );
+
+  app.querySelector("#kh-join-sheet-dl")?.addEventListener("click", () => {
+    downloadTextFile(SIGNET_23_JOIN_SHEET, "plebly-signet-2of3-join-sheet.md", "text/markdown");
+  });
 
   app.querySelector("#kh-cashout")?.addEventListener("click", async () => {
     const res = await authFetchWithTos(`${api()}/keyholders/me/cashout`, {
