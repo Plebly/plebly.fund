@@ -172,12 +172,16 @@ export async function parsedPsbtOutputs(psbtBase64: string): Promise<ParsedOutpu
   } catch {
     return { error: "invalid PSBT" };
   }
+  // Witness programs encode on both mainnet and testnet HRPs. Prefer the
+  // build network so Signet published tb1… outputs are not compared to bc1….
+  const buildNet = (import.meta.env.VITE_BITCOIN_NETWORK || "signet").toLowerCase();
+  const nets = buildNet === "mainnet" ? [NETWORK, TEST_NETWORK] : [TEST_NETWORK, NETWORK];
   const outputs: ParsedOutput[] = [];
   for (let i = 0; i < tx.outputsLength; i++) {
     const o = tx.getOutput(i);
     if (!o.script || o.amount == null) return { error: "output missing" };
     let address = "";
-    for (const net of [NETWORK, TEST_NETWORK]) {
+    for (const net of nets) {
       try {
         address = Address(net).encode(OutScript.decode(o.script));
         break;
