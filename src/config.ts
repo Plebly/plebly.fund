@@ -7,7 +7,15 @@ export const PROPOSALS_REPO = "Plebly/proposals";
 export const PROPOSALS_RAW = `https://raw.githubusercontent.com/${PROPOSALS_REPO}/main`;
 export const PROPOSALS_API = `https://api.github.com/repos/${PROPOSALS_REPO}/contents/proposals`;
 
-const LIVE_WORKERS_API = "https://api.plebly.fund";
+/** signet while testing; mainnet at launch */
+export const BITCOIN_NETWORK =
+  import.meta.env.VITE_BITCOIN_NETWORK || "signet";
+
+function liveWorkersApi(network: string = BITCOIN_NETWORK): string {
+  const n = network.toLowerCase();
+  if (n === "mainnet" || n === "bitcoin") return "https://api.plebly.fund";
+  return "https://api.signet.plebly.fund";
+}
 
 /**
  * Cloudflare Workers API.
@@ -18,23 +26,34 @@ export const WORKERS_API =
   import.meta.env.VITE_WORKERS_API ||
   (import.meta.env.DEV && import.meta.env.MODE !== "test"
     ? "/workers-api"
-    : LIVE_WORKERS_API);
+    : liveWorkersApi());
 
-/** signet while testing; mainnet at launch */
-export const BITCOIN_NETWORK =
-  import.meta.env.VITE_BITCOIN_NETWORK || "signet";
+function lightningFlagOn(value: string | undefined): boolean {
+  return value === "1" || value === "true";
+}
+
+function lightningFlagOff(value: string | undefined): boolean {
+  return value === "0" || value === "false";
+}
 
 /**
  * Show Lightning donate UI when mainnet/testnet.
  * Signet stays on-chain only (OpenNode is not signet escrow).
- * `VITE_LIGHTNING_TESTNET=1` / `VITE_LIGHTNING=1` are for testnet staging builds only.
+ * `VITE_LIGHTNING=0` hides LN on a mainnet build until OpenNode is on.
+ * `VITE_LIGHTNING_TESTNET=1` / `VITE_LIGHTNING=1` are for testnet staging.
  */
 export function lightningUiAllowed(): boolean {
   const n = BITCOIN_NETWORK.toLowerCase();
   if (n === "signet") return false;
   if (
-    import.meta.env.VITE_LIGHTNING_TESTNET === "1" ||
-    import.meta.env.VITE_LIGHTNING === "1"
+    lightningFlagOff(import.meta.env.VITE_LIGHTNING) ||
+    lightningFlagOff(import.meta.env.VITE_LIGHTNING_TESTNET)
+  ) {
+    return false;
+  }
+  if (
+    lightningFlagOn(import.meta.env.VITE_LIGHTNING_TESTNET) ||
+    lightningFlagOn(import.meta.env.VITE_LIGHTNING)
   ) {
     return true;
   }

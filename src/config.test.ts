@@ -25,6 +25,13 @@ describe("lightningUiAllowed", () => {
     expect(lightningUiAllowed()).toBe(true);
   });
 
+  it("is off on mainnet when VITE_LIGHTNING=0", async () => {
+    vi.stubEnv("VITE_BITCOIN_NETWORK", "mainnet");
+    vi.stubEnv("VITE_LIGHTNING", "0");
+    const { lightningUiAllowed } = await import("./config");
+    expect(lightningUiAllowed()).toBe(false);
+  });
+
   it("allows explicit flag on testnet staging builds", async () => {
     vi.stubEnv("VITE_BITCOIN_NETWORK", "testnet");
     vi.stubEnv("VITE_LIGHTNING_TESTNET", "1");

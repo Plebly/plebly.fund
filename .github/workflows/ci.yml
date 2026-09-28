@@ -16,16 +16,16 @@ jobs:
       - run: npm ci
       - run: npm test
         env:
-          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
+          VITE_BITCOIN_NETWORK: signet
       - run: npm run build
         env:
-          VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://api.plebly.fund' }}
-          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
-          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
+          VITE_WORKERS_API: https://api.signet.plebly.fund
+          VITE_BITCOIN_NETWORK: signet
+          VITE_BASE_PATH: /
 
   # Donate / claim-chrome smoke (Playwright). Blocks merge when #donate-modal
   # does not open on click — intentional until Donate is fixed on the target URL.
-  # Override PLEBLY_BASE_URL (repo var or PR env) to hit a preview with a fix.
+  # Hits the signet rehearsal site so CI never exercises live mainnet money.
   e2e:
     runs-on: plebly
     timeout-minutes: 15
@@ -41,4 +41,4 @@ jobs:
       - name: Donate modal smoke
         run: npm run test:e2e
         env:
-          PLEBLY_BASE_URL: ${{ vars.PLEBLY_BASE_URL || 'https://plebly.fund' }}
+          PLEBLY_BASE_URL: https://signet.plebly.fund

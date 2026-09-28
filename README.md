@@ -1,6 +1,6 @@
 # plebly.fund
 
-Static frontend for [Plebly](https://plebly.fund).
+Static frontend for [Plebly](https://plebly.fund) (mainnet, after cutover) and [signet.plebly.fund](https://signet.plebly.fund) (rehearsal).
 
 Reads listings from the Workers catalog (`VITE_WORKERS_API`) and balances from Mempool.space. GitHub is a fallback, not the live listing path.
 
@@ -21,15 +21,17 @@ Open `http://localhost:5173/`. The SPA talks to the deployed Workers API by defa
 
 ## Deploy
 
-Pushes to `main` build and deploy via GitHub Pages (see `.github/workflows/pages.yml`).
+Pushes to `develop` build a signet SPA (`VITE_BITCOIN_NETWORK=signet`, `VITE_WORKERS_API=https://api.signet.plebly.fund`) and `wrangler deploy --env signet`.
 
-The site uses **path-based SPA routes** (`/propose`, `/about`, `/proposal/…`). The build copies `index.html` to `404.html` so GitHub Pages deep links load the app. Legacy `#/…` URLs redirect to the path equivalent.
+Pushes to `main` still deploy the unnamed apex Worker (signet content) until the cutover commit that moves apex routes into `[env.production]` and bakes `VITE_BITCOIN_NETWORK=mainnet` + `VITE_LIGHTNING=0`.
+
+The site uses **path-based SPA routes** (`/propose`, `/about`, `/proposal/…`). The build copies `index.html` to `404.html` so deep links load the app. Legacy `#/…` URLs redirect to the path equivalent.
 
 LLM / agent discovery: [`/llms.txt`](https://plebly.fund/llms.txt) (curated index) and [`/llms-full.txt`](https://plebly.fund/llms-full.txt) (longer context), per [llmstxt.org](https://llmstxt.org/).
 
 ### Custom domain (`plebly.fund`)
 
-Cloudflare DNS should point `@` and `www` CNAME records at `plebly.github.io`. **Set proxy status to DNS only (grey cloud)** — orange cloud breaks GitHub Pages routing and blocks TLS certificate issuance.
+Apex and `www` are Cloudflare Workers assets (`wrangler.toml` routes). Signet rehearsal is `signet.plebly.fund`. GitHub Pages is not the live site.
 
 ## E2E (Playwright)
 
@@ -41,7 +43,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Defaults to `PLEBLY_BASE_URL=https://plebly.fund` (listing `PLEBLY-2026-001` → `/p/plebly-2026-001`). Point at a preview to verify a fix before production catches up:
+Defaults to `PLEBLY_BASE_URL=https://signet.plebly.fund` (listing `PLEBLY-2026-001` → `/p/plebly-2026-001`). Point at a preview to verify a fix before production catches up:
 
 ```bash
 PLEBLY_BASE_URL=https://your-preview.example npm run test:e2e

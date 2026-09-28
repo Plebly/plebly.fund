@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_BITCOIN_NETWORK?: string;
   /** Show Lightning donate UI on non-mainnet (pairs with Workers LIGHTNING_ENABLED). */
   readonly VITE_LIGHTNING_TESTNET?: string;
+  /** `1`/`true` enables LN UI; `0`/`false` hides it even on a mainnet build. */
   readonly VITE_LIGHTNING?: string;
 }
 

@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { liveWorkersApi } from "./live-api.mjs";
 
 /** GitHub Pages serves 404.html for unknown paths; copy index for SPA routes. */
 const dist = join(process.cwd(), "dist");
@@ -12,8 +13,7 @@ if (!existsSync(index)) {
 }
 
 const api = (
-  process.env.VITE_WORKERS_API ||
-  "https://api.plebly.fund"
+  process.env.VITE_WORKERS_API || liveWorkersApi()
 ).replace(/\/$/, "");
 const connectSrc = [
   "'self'",

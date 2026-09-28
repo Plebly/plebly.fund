@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
  * on document.body (visible), even while /claims is still loading.
  *
  * Listing: PLEBLY-2026-001 → /p/plebly-2026-001
- * Env: PLEBLY_BASE_URL (default https://plebly.fund)
+ * Env: PLEBLY_BASE_URL (default https://signet.plebly.fund)
  */
 const LISTING_PATH = "/p/plebly-2026-001";
 const DONATE_BTN = "#donate-open, [data-open-donate]";

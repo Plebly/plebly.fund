@@ -13,3 +13,14 @@ routes = [
 directory = "./dist"
 not_found_handling = "single-page-application"
 html_handling = "auto-trailing-slash"
+
+# develop → wrangler deploy --env signet
+# main keeps unnamed apex routes until the cutover commit that moves them
+# into [env.production] and switches the workflow to --env production.
+[env.signet]
+name = "plebly-fund-signet"
+workers_dev = true
+routes = [
+  { pattern = "signet.plebly.fund", zone_name = "plebly.fund" },
+  { pattern = "signet.plebly.fund/*", zone_name = "plebly.fund" },
+]

@@ -7,11 +7,11 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { liveWorkersApi } from "./live-api.mjs";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "public", "llms.txt");
-const WORKERS =
-  process.env.VITE_WORKERS_API ||
-  "https://api.plebly.fund";
+const WORKERS = process.env.VITE_WORKERS_API || liveWorkersApi();
 const SITE = "https://plebly.fund";
 
 async function loadProjects() {

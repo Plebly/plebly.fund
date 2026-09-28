@@ -129,9 +129,11 @@ describe("security — cover image pin", () => {
   it("only renders covers from the Workers API /media/covers/ path", async () => {
     const { safeCoverImageUrl } = await import("./media");
     expect(safeCoverImageUrl("https://evil.example/media/covers/x.jpg")).toBeNull();
-    expect(safeCoverImageUrl("https://api.test/media/covers/u/a.jpg")).toBeNull();
-    expect(safeCoverImageUrl("https://api.plebly.fund/media/covers/u/a.jpg")).toBe(
-      "https://api.plebly.fund/media/covers/u/a.jpg",
+    expect(safeCoverImageUrl("https://api.plebly.fun/media/covers/u/a.jpg")).toBeNull();
+    const { WORKERS_API } = await import("./config");
+    const api = WORKERS_API.replace(/\/$/, "");
+    expect(safeCoverImageUrl(`${api}/media/covers/u/a.jpg`)).toBe(
+      `${api}/media/covers/u/a.jpg`,
     );
   });
 });

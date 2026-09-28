@@ -1,6 +1,15 @@
 (() => {
-  const DEFAULT_API = "https://api.plebly.fund";
-  const DEFAULT_SITE = "https://plebly.fund";
+  const host =
+    typeof location !== "undefined"
+      ? location.hostname.replace(/^www\./i, "").toLowerCase()
+      : "";
+  const onSignet = host === "signet.plebly.fund";
+  const DEFAULT_API = onSignet
+    ? "https://api.signet.plebly.fund"
+    : "https://api.plebly.fund";
+  const DEFAULT_SITE = onSignet
+    ? "https://signet.plebly.fund"
+    : "https://plebly.fund";
   const STYLE = `
     :host { all: initial; display: block; }
     .card { box-sizing: border-box; max-width: 360px; padding: 12px; border: 1px solid #ded7e5; border-left: 4px solid #7828b8; border-radius: 8px; background: #fff; color: #211b28; font: 14px/1.4 system-ui, sans-serif; }
@@ -45,7 +54,7 @@
         const host = candidate.hostname.replace(/^www\./i, "").toLowerCase();
         const allowed =
           host === "plebly.fund" ||
-          host === "plebly.github.io";
+          host === "signet.plebly.fund";
         if (candidate.protocol === "https:" && allowed) url = candidate.href;
       } catch {
         // Keep the stable Plebly URL when an API response is malformed.

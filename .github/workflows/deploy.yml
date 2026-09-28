@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
 
 # Cancel superseded deploys so a stuck queue does not burn the timeout.
 concurrency:
-  group: deploy-plebly-fund
+  group: deploy-plebly-fund-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -25,14 +25,40 @@ jobs:
           cache: npm
       - run: npm ci
       # generated/*.ts is gitignored — must generate before test/build.
-      - run: npm test
+      # Bake network/API in the job. Do not read repo vars.VITE_* (they would
+      # flip both sites).
+      - name: Test (develop / signet)
+        if: github.ref == 'refs/heads/develop'
+        run: npm test
         env:
-          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
-      - run: npm run build
+          VITE_BITCOIN_NETWORK: signet
+      - name: Build (develop / signet)
+        if: github.ref == 'refs/heads/develop'
+        run: npm run build
         env:
-          VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://api.plebly.fund' }}
-          VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
-          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
-      # Live apex is Cloudflare Workers assets (wrangler.toml routes), not GitHub Pages.
-      - name: Deploy to Cloudflare
+          VITE_WORKERS_API: https://api.signet.plebly.fund
+          VITE_BITCOIN_NETWORK: signet
+          VITE_BASE_PATH: /
+      - name: Deploy signet.plebly.fund
+        if: github.ref == 'refs/heads/develop'
+        run: npx wrangler deploy --env signet
+
+      - name: Test (main / apex, still signet until cutover)
+        if: github.ref == 'refs/heads/main'
+        run: npm test
+        env:
+          VITE_BITCOIN_NETWORK: signet
+      - name: Build (main / apex, still signet until cutover)
+        if: github.ref == 'refs/heads/main'
+        run: npm run build
+        env:
+          VITE_WORKERS_API: https://api.plebly.fund
+          VITE_BITCOIN_NETWORK: signet
+          VITE_BASE_PATH: /
+      # Cutover: switch this job to VITE_BITCOIN_NETWORK=mainnet,
+      # VITE_WORKERS_API=https://api.plebly.fund, VITE_LIGHTNING=0, and
+      # `npx wrangler deploy --env production` in the same commit that moves
+      # apex routes into [env.production].
+      - name: Deploy apex (unnamed env)
+        if: github.ref == 'refs/heads/main'
         run: npx wrangler deploy

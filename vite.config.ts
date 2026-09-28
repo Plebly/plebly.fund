@@ -11,7 +11,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/workers-api": {
-        target: "https://api.plebly.fund",
+        // Dual-bind: same signet Worker as api.plebly.fund until DNS exists.
+        target:
+          process.env.VITE_WORKERS_API || "https://api.signet.plebly.fund",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/workers-api/, "") || "/",
       },

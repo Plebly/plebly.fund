@@ -2,9 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Donate / claim-chrome smoke against a live or preview deployment.
- * Base URL: PLEBLY_BASE_URL (default https://plebly.fund).
+ * Base URL: PLEBLY_BASE_URL (default https://signet.plebly.fund).
  */
-const baseURL = process.env.PLEBLY_BASE_URL || "https://plebly.fund";
+const baseURL = process.env.PLEBLY_BASE_URL || "https://signet.plebly.fund";
 
 export default defineConfig({
   testDir: "./e2e",
