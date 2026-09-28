@@ -1,5 +1,5 @@
 (() => {
-  const DEFAULT_API = "https://plebly-api.securesovereigns.workers.dev";
+  const DEFAULT_API = "https://api.plebly.fund";
   const DEFAULT_SITE = "https://plebly.fund";
   const STYLE = `
     :host { all: initial; display: block; }

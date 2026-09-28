@@ -11,7 +11,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "public", "llms.txt");
 const WORKERS =
   process.env.VITE_WORKERS_API ||
-  "https://plebly-api.securesovereigns.workers.dev";
+  "https://api.plebly.fund";
 const SITE = "https://plebly.fund";
 
 async function loadProjects() {

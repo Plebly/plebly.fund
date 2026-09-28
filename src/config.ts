@@ -7,7 +7,7 @@ export const PROPOSALS_REPO = "Plebly/proposals";
 export const PROPOSALS_RAW = `https://raw.githubusercontent.com/${PROPOSALS_REPO}/main`;
 export const PROPOSALS_API = `https://api.github.com/repos/${PROPOSALS_REPO}/contents/proposals`;
 
-const LIVE_WORKERS_API = "https://plebly-api.securesovereigns.workers.dev";
+const LIVE_WORKERS_API = "https://api.plebly.fund";
 
 /**
  * Cloudflare Workers API.

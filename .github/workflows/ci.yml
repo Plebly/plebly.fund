@@ -19,7 +19,7 @@ jobs:
           VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
       - run: npm run build
         env:
-          VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://plebly-api.securesovereigns.workers.dev' }}
+          VITE_WORKERS_API: ${{ vars.VITE_WORKERS_API || 'https://api.plebly.fund' }}
           VITE_BITCOIN_NETWORK: ${{ vars.VITE_BITCOIN_NETWORK || 'signet' }}
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
 

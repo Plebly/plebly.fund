@@ -9,11 +9,9 @@ describe("sanitizePublicError", () => {
         "Unavailable.",
       ),
     ).toBe("Unavailable.");
-    expect(
-      sanitizePublicError(
-        "Set GITHUB_APP_* secrets, or open a PR manually on Plebly/proposals",
-      ),
-    ).toBe("Something went wrong. Try again in a few minutes.");
+    expect(sanitizePublicError("call https://api.plebly.fund/health")).toBe(
+      "Something went wrong. Try again in a few minutes.",
+    );
   });
 
   it("keeps normal user-facing errors", () => {

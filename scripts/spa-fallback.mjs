@@ -13,7 +13,7 @@ if (!existsSync(index)) {
 
 const api = (
   process.env.VITE_WORKERS_API ||
-  "https://plebly-api.securesovereigns.workers.dev"
+  "https://api.plebly.fund"
 ).replace(/\/$/, "");
 const connectSrc = [
   "'self'",

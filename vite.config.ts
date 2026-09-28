@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/workers-api": {
-        target: "https://plebly-api.securesovereigns.workers.dev",
+        target: "https://api.plebly.fund",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/workers-api/, "") || "/",
       },

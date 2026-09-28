@@ -3,6 +3,7 @@ const INTERNAL_PATTERNS = [
   /\bworkers?\b/i,
   /wrangler/i,
   /plebly-api/i,
+  /api\.plebly\.fund/i,
   /github_app/i,
   /GITHUB_/,
   /\bKV\b/,

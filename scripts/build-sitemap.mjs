@@ -13,7 +13,7 @@ const out = join(root, "public", "sitemap.xml");
 const SITE = "https://plebly.fund";
 const WORKERS =
   process.env.VITE_WORKERS_API ||
-  "https://plebly-api.securesovereigns.workers.dev";
+  "https://api.plebly.fund";
 const REPO = "Plebly/proposals";
 
 const STATIC = [
