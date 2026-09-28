@@ -14,7 +14,7 @@ import {
 import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
-import { safeHttpsImageUrl } from "./media";
+import { safeCoverImageUrl } from "./media";
 import { addressBalanceSats } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
@@ -393,7 +393,7 @@ export function proposalCardHtml(
       : lightningEnabled && p.escrow_address
         ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
         : "";
-  const cover = safeHttpsImageUrl(p.cover_image);
+  const cover = safeCoverImageUrl(p.cover_image);
   const coverHtml = cover
     ? `<div class="project-card-cover"><img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" /></div>`
     : "";

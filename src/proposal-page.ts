@@ -65,7 +65,7 @@ import {
   reviewPanelHtml,
 } from "./review-panel";
 import type { Proposal } from "./types";
-import { safeHttpsImageUrl } from "./media";
+import { safeCoverImageUrl } from "./media";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import {
   bindProposalEngagement,
@@ -497,7 +497,7 @@ export async function renderProposalPage(
         /* ignore */
       }
     }
-    const coverUrl = safeHttpsImageUrl(match.cover_image);
+    const coverUrl = safeCoverImageUrl(match.cover_image);
     if (match.id) {
       const canonical = new URL(proposalHref(match.path, match.id), location.origin);
       if (location.pathname !== canonical.pathname) {

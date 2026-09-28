@@ -369,6 +369,19 @@ describe("keyholderPackageSentence", () => {
     expect(ready).not.toContain("kh-branch-propose");
   });
 
+  it("runs cardVerified before the branch Broadcast POST", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "keyholders-page.ts"),
+      "utf8",
+    );
+    const broadcastIdx = src.indexOf('querySelector("#kh-branch-broadcast")');
+    const verifyIdx = src.indexOf("cardVerified(verifyCard)", broadcastIdx);
+    const postIdx = src.indexOf("/broadcast", verifyIdx);
+    expect(broadcastIdx).toBeGreaterThan(0);
+    expect(verifyIdx).toBeGreaterThan(broadcastIdx);
+    expect(postIdx).toBeGreaterThan(verifyIdx);
+  });
+
   it("settled chrome shows Settled + txid, not Needs 0/2 as primary", () => {
     const txid = "2f28600d643866e1cac40e7108497ae7deead552cf20a4b6aedfd533f3d4e309";
     const html = branchSignDeskHtml({

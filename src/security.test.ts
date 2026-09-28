@@ -124,3 +124,14 @@ describe("security — parameters network assert", () => {
     );
   });
 });
+
+describe("security — cover image pin", () => {
+  it("only renders covers from the Workers API /media/covers/ path", async () => {
+    const { safeCoverImageUrl } = await import("./media");
+    expect(safeCoverImageUrl("https://evil.example/media/covers/x.jpg")).toBeNull();
+    expect(safeCoverImageUrl("https://api.test/media/covers/u/a.jpg")).toBeNull();
+    expect(safeCoverImageUrl("https://api.plebly.fund/media/covers/u/a.jpg")).toBe(
+      "https://api.plebly.fund/media/covers/u/a.jpg",
+    );
+  });
+});

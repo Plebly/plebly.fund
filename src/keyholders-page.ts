@@ -2043,6 +2043,30 @@ export async function renderKeyholders(
       noteSignSession(text);
     };
     detailEl.querySelector("#kh-branch-broadcast")?.addEventListener("click", async () => {
+      const verifyCard: SigningCard = {
+        card_id: `branch:${item.proposal_id}:${item.allocation_id}`,
+        source: "branch",
+        bucket: "approved",
+        proposal_id: item.proposal_id,
+        allocation_id: item.allocation_id,
+        kind: "structure",
+        title: "",
+        published_sha256: item.published_sha256,
+        psbt_base64: item.psbt_base64 || "",
+        outputs: item.decode?.outputs || [],
+        outpoints: [],
+        signed: item.signed,
+        required_threshold: item.required_threshold,
+        state: item.state,
+        settle_txid: item.settle_txid,
+        awaiting_confirmation: false,
+        in_sitting: true,
+      };
+      const problem = await cardVerified(verifyCard);
+      if (problem) {
+        setMsg(problem);
+        return;
+      }
       const ok = await confirmAction({
         title: "Broadcast",
         body: "Send the already-signed transaction. Review the outputs above first.",

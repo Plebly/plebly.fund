@@ -20,8 +20,23 @@ export function safeHttpsImageUrl(url: string | null | undefined): string | null
   const s = String(url).trim();
   if (!s) return null;
   try {
-    const u = new URL(s);
+    const u = new URL(s, `${API()}/`);
     if (u.protocol !== "https:") return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Cover images must come from the Workers API /media/covers/ path. */
+export function safeCoverImageUrl(url: string | null | undefined): string | null {
+  const href = safeHttpsImageUrl(url);
+  if (!href) return null;
+  try {
+    const u = new URL(href);
+    const api = new URL(`${API()}/`);
+    if (u.origin !== api.origin) return null;
+    if (!u.pathname.includes("/media/covers/")) return null;
     return u.href;
   } catch {
     return null;
