@@ -47,8 +47,9 @@ describe("keyholders route", () => {
     const seo = seoForRoute({ name: "keyholders" });
     expect(seo.path).toBe("/keyholders");
     expect(seo.title).toMatch(/Keyholder/i);
-    expect(keyholderTabFromSearch("?tab=branch")).toBe("branch");
-    expect(keyholderTabFromSearch("")).toBe("release");
+    expect(keyholderTabFromSearch("?tab=branch")).toBe("signing");
+    expect(keyholderTabFromSearch("?tab=release")).toBe("signing");
+    expect(keyholderTabFromSearch("")).toBe("signing");
   });
 });
 
@@ -126,7 +127,7 @@ describe("keyholderPackageSentence", () => {
     ).toBe("broadcast");
   });
 
-  it("desk shows the current step and keeps sign/verify/output ids", () => {
+  it("release detail points at the signing tab and has no txid paste", () => {
     const html = keyholderDeskHtml(
       {
         kind: "release",
@@ -147,20 +148,11 @@ describe("keyholderPackageSentence", () => {
         userId: "github:1",
       },
     );
-    expect(html).toContain("Sign this release.");
-    expect(html).toContain("kh-steps");
-    expect(html).toContain("is-current");
-    expect(html).toContain('id="kh-sign"');
-    expect(html).toContain('id="kh-psbt-verify"');
-    expect(html).toContain('id="kh-hash-status"');
-    expect(html).toContain('id="kh-verify-panel"');
-    expect(html).toContain("kh-outputs");
-    expect(html).toContain("Other settle tools");
-    expect(html).toContain("Settle txid (64 hex) — not a PSBT");
-    expect(html).toContain("Waiting for 0/3 cosignatures before broadcast");
+    expect(html).toContain("Pay this month's lines");
+    expect(html).toContain("Signing tab");
+    expect(html).not.toContain('id="kh-txid"');
+    expect(html).not.toContain("Propose settle");
     expect(html).not.toContain("cHNidP8");
-    // Copy may say "not a PSBT"; never embed PSBT payload bytes.
-    expect(html).not.toMatch(/cHNidP8|psbt_base64/i);
   });
 
   it("bond_refund shows settle txid + Propose settle as primary (not only in details)", () => {
@@ -192,14 +184,16 @@ describe("keyholderPackageSentence", () => {
     );
     expect(html).toContain("Return funds.");
     expect(html).toContain('data-kh-settle-primary="1"');
-    expect(html).toContain("Settle · record broadcast");
+    expect(html).toContain("Record the refund");
     expect(html).toContain('id="kh-txid"');
     expect(html).toContain("Settle txid (64 hex) — not a PSBT");
     expect(html).toContain("fee-pay-bond-label");
     expect(html).toContain("fee-pay-bond-contrast");
-    expect(html).toContain("fee/bond Sparrow wallet");
-    expect(html).toContain("Propose settle");
-    expect(html).not.toContain("Confirm settle");
+    expect(html).toContain("Pay from the refund wallet");
+    expect(html).toContain("Record txid");
+    expect(html).not.toContain("Confirm txid");
+    expect(html).not.toContain("Propose settle");
+    expect(html).not.toContain("Broadcast");
     // Primary settle controls must appear before the collapsed details.
     const txidAt = html.indexOf('id="kh-txid"');
     const proposeAt = html.indexOf('id="kh-propose"');
@@ -212,7 +206,7 @@ describe("keyholderPackageSentence", () => {
     // Details is chat-only for non-release; settle is not buried there alone.
     expect(html).toContain("<summary>Keyholder chat</summary>");
     expect(html).not.toContain("<summary>Other settle tools</summary>");
-    // No Confirm settle when dual-ack is not required (bond_refund).
+    // No Confirm txid when dual-ack is not required (bond_refund).
     expect(html).not.toContain('id="kh-confirm"');
   });
 
@@ -240,10 +234,13 @@ describe("keyholderPackageSentence", () => {
     const detailsAt = html.indexOf('<details class="next-card-more">');
     expect(html.indexOf('id="kh-txid"')).toBeLessThan(detailsAt);
     expect(html).toContain('id="kh-confirm"');
-    expect(html).toContain("Confirm settle");
+    expect(html).toContain("Confirm txid");
+    expect(html).toContain("Record txid");
+    expect(html).not.toContain("Propose settle");
+    expect(html).not.toContain(">Broadcast<");
   });
 
-  it("release keeps settle under Other settle tools (PSBT primary)", () => {
+  it("release desk has no paste-txid controls", () => {
     const html = keyholderDeskHtml(
       {
         kind: "release",
@@ -265,10 +262,9 @@ describe("keyholderPackageSentence", () => {
       },
     );
     expect(html).not.toContain('data-kh-settle-primary="1"');
-    expect(html).toContain("<summary>Other settle tools</summary>");
-    const detailsAt = html.indexOf('<details class="next-card-more">');
-    expect(html.indexOf('id="kh-txid"')).toBeGreaterThan(detailsAt);
-    expect(html.indexOf('id="kh-propose"')).toBeGreaterThan(detailsAt);
+    expect(html).not.toContain('id="kh-propose"');
+    expect(html).not.toContain('id="kh-txid"');
+    expect(html).toContain("Signing tab");
   });
 
   it("keeps outputs, verify, and sign markup on the console", () => {
@@ -280,12 +276,12 @@ describe("keyholderPackageSentence", () => {
     expect(src).toContain('id="kh-verify-panel"');
     expect(src).toContain("kh-verify-outputs");
     expect(src).toContain("kh-outputs");
-    expect(src).toContain('data-kh-tab="branch"');
+    expect(src).toContain('data-kh-tab="signing"');
     expect(src).toContain("kh-desk-queues");
     expect(src).toContain("keyholderQueueEmptyHtml");
     expect(src).toContain("kh-roster-row");
     expect(src).toContain('id="kh-revoke-modal"');
-    expect(src).toContain("kh-branch-sign");
+    expect(src).toContain("kh-sign-ledger");
     expect(src).toContain('id="kh-detail-modal"');
     expect(src).toContain("data-kh-detail-close");
     expect(src).toContain("showDetailModal");
@@ -327,19 +323,19 @@ describe("keyholderPackageSentence", () => {
     expect(html).not.toContain("Bond refunds (0)");
   });
 
-  it("hash-gates Upload signature until signed partial is non-empty", () => {
+  it("does not paste a branch partial before the device loop", () => {
     const src = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "keyholders-page.ts"),
       "utf8",
     );
-    // Branch desk: #kh-branch-sign requires #kh-branch-partial
-    expect(src).toContain('alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-partial")');
-    // Settle desk: #kh-sign requires #kh-psbt-partial
-    expect(src).toContain('alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-psbt-partial")');
-    expect(src).toContain('alsoRequireEmptyReason: "Paste a signed partial to enable"');
+    expect(src).not.toContain('id="kh-branch-partial"');
+    expect(src).toContain("openLedgerSession");
+    expect(src).toContain("seedSignerParts");
+    expect(src).not.toContain("15 minutes");
+    expect(src).not.toContain("plebly_kh_sign");
   });
 
-  it("branch desk hash-gates sign and does not offer broadcast", () => {
+  it("branch desk broadcasts without a txid paste", () => {
     const html = branchSignDeskHtml({
       proposal_id: "p1",
       allocation_id: "bounty",
@@ -352,52 +348,11 @@ describe("keyholderPackageSentence", () => {
         outputs: [{ address: "tb1qout", amount_sats: 50_000, label: "builder" }],
       },
     });
-    expect(html).toContain("kh-branch-verify");
-    expect(html).toContain("kh-branch-sign");
-    expect(html).toContain("kh-branch-txid");
-    expect(html).toContain("Propose settle");
-    expect(html).toContain("does not broadcast");
-    expect(html).toContain("Settle txid (64 hex) — not a PSBT");
-    expect(html).toContain("Needs 0/2 cosignatures");
-    expect(html).toContain("off-desk Sparrow");
-    expect(html).toContain("not a settle txid");
-    expect(html).not.toContain(">Broadcast<");
+    expect(html).toContain("Ledger or SeedSigner");
+    expect(html).not.toContain("Propose settle");
+    expect(html).not.toContain("kh-branch-txid");
+    expect(html).not.toContain('id="kh-branch-broadcast"');
     expect(html).not.toContain("cHNidP8");
-  });
-
-  it("enables Propose settle while open even if cosign threshold unmet (off-desk)", () => {
-    const waiting01 = branchSignDeskHtml({
-      proposal_id: "PLEBLY-2026-007",
-      allocation_id: "reserve",
-      kind: "clean",
-      published_sha256: "aa".repeat(32),
-      signed: 0,
-      required_threshold: 1,
-      state: "open",
-      decode: {
-        outputs: [{ address: "tb1qout", amount_sats: 10_000, label: "reserve" }],
-      },
-    });
-    expect(waiting01).not.toMatch(/id="kh-branch-propose"\s+disabled\b/);
-    expect(waiting01).toContain("Off-desk cosign OK");
-    expect(waiting01).toMatch(
-      /id="kh-branch-propose"[^>]*title="Off-desk cosign OK — after Sparrow broadcast, paste the confirmed 64-character settle txid \(API verifies\)"/,
-    );
-    expect(waiting01).toMatch(/id="kh-branch-confirm"\s+disabled\b/);
-
-    const waiting03 = branchSignDeskHtml({
-      proposal_id: "p1",
-      allocation_id: "bounty",
-      kind: "clean",
-      published_sha256: "bb".repeat(32),
-      signed: 0,
-      required_threshold: 3,
-      state: "open",
-      decode: { outputs: [] },
-    });
-    expect(waiting03).not.toMatch(/id="kh-branch-propose"\s+disabled\b/);
-    expect(waiting03).toContain("off-desk Sparrow broadcast");
-
     const ready = branchSignDeskHtml({
       proposal_id: "p1",
       allocation_id: "bounty",
@@ -408,33 +363,10 @@ describe("keyholderPackageSentence", () => {
       state: "threshold_met",
       decode: { outputs: [] },
     });
-    expect(ready).toMatch(/id="kh-branch-propose"\s+title=/);
-    expect(ready).not.toMatch(/id="kh-branch-propose"\s+disabled\b/);
-    expect(ready).toContain(
-      "After you broadcast in Sparrow, paste the 64-character settle txid",
-    );
-    expect(ready).toMatch(/id="kh-branch-confirm"\s+disabled\b/);
-
-    const proposed = branchSignDeskHtml(
-      {
-        proposal_id: "p1",
-        allocation_id: "bounty",
-        kind: "clean",
-        published_sha256: "dd".repeat(32),
-        signed: 2,
-        required_threshold: 2,
-        state: "settle_proposed",
-        settle_txid: "ab".repeat(32),
-        settle_proposed_by: "github:1",
-        decode: { outputs: [] },
-      },
-      { userId: "github:2" },
-    );
-    expect(proposed).toMatch(/id="kh-branch-propose"\s+disabled\b/);
-    expect(proposed).toContain(
-      "Settle already proposed — waiting for another keyholder to confirm",
-    );
-    expect(proposed).not.toMatch(/id="kh-branch-confirm"\s+disabled\b/);
+    expect(ready).toContain('id="kh-branch-broadcast"');
+    expect(ready).toContain(">Broadcast<");
+    expect(ready).not.toContain("Sparrow");
+    expect(ready).not.toContain("kh-branch-propose");
   });
 
   it("settled chrome shows Settled + txid, not Needs 0/2 as primary", () => {
@@ -476,15 +408,14 @@ describe("keyholderPackageSentence", () => {
     );
     expect(next).toContain("5c4993d8");
     expect(next).toContain("@josh");
-    expect(next).toContain("Needs 1 more cosignature");
-    expect(next).toContain("off-desk Sparrow broadcast");
+    expect(next).toContain("Needs 1 more");
     expect(
       branchSignNextAction({
         state: "threshold_met",
         signed: 2,
         required_threshold: 2,
       }),
-    ).toContain("Ready to broadcast");
+    ).toContain("Review the outputs, then broadcast");
   });
 
   it("join sheet is public Signet 2-of-3 materials only", () => {
@@ -501,7 +432,7 @@ describe("keyholderPackageSentence", () => {
     expect(SIGNET_23_JOIN_SHEET).not.toMatch(/\bxprv|\btprv/i);
   });
 
-  it("downloads the unsigned branch transaction without embedding it", () => {
+  it("keeps the unsigned branch transaction out of the page", () => {
     const secret = "cHNidP8FAKEUNSIGNED";
     const html = branchSignDeskHtml({
       proposal_id: "p1",
@@ -516,14 +447,12 @@ describe("keyholderPackageSentence", () => {
         outputs: [{ address: "tb1qout", amount_sats: 50_000, label: "builder" }],
       },
     });
-    expect(html).toContain("Download unsigned transaction");
-    expect(html).toContain("Copy unsigned base64");
-    expect(html).toContain("kh-branch-copy");
+    expect(html).not.toContain("Download unsigned transaction");
     expect(html).toContain("One signature");
     expect(html).toContain(keyholderTxPurpose("clean"));
     expect(html).not.toContain(secret);
     expect(html).not.toContain("cHNidP8");
-    expect(html).not.toMatch(/>\s*Broadcast\s*</);
+    expect(html).not.toContain('id="kh-branch-broadcast"');
   });
 
   it("names a multisig quorum and the signers", () => {

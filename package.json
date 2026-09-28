@@ -24,6 +24,11 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
+    "@ledgerhq/hw-transport-webhid": "^6.36.0",
+    "@ledgerhq/ledger-bitcoin": "^0.3.1",
+    "@scure/btc-signer": "^2.4.1",
+    "barcode-detector": "^3.2.2",
+    "bbqr": "^1.2.0",
     "dompurify": "^3.4.13",
     "qrcode": "^1.5.4"
   }

@@ -8,12 +8,16 @@ import { authFetchWithTos } from "./tos-modal";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { formatSats, html, raw } from "./util";
 import { payoutLooksValid } from "./payout-destination";
+import { disableSiblingOutpoints, signingCardHtml, signingQueueHtml } from "./signing-queue-ui";
+import type { SigningCard } from "./signing-types";
+import { sha256HexOfPsbtBase64 } from "./psbt-hash-gate";
+import { amountsMatchCard, outputsMatchPublished, parsedPsbtOutputs } from "./signing-verify";
+import { joinScannedParts, openLedgerSession, scanQrParts, seedSignerParts } from "./signing-device";
 
 export type KeyholdersShell = (inner: string) => string;
 
 const KH_TABS = [
-  "release",
-  "branch",
+  "signing",
   "bond_refund",
   "contrib_refund",
   "roster",
@@ -24,9 +28,10 @@ export type KeyholderTab = (typeof KH_TABS)[number];
 export function keyholderTabFromSearch(search: string): KeyholderTab {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   const tab = new URLSearchParams(raw).get("tab") || "";
+  if (tab === "release" || tab === "branch") return "signing";
   return (KH_TABS as readonly string[]).includes(tab)
     ? (tab as KeyholderTab)
-    : "release";
+    : "signing";
 }
 
 /** Compact empty queue chrome for Releases / Branches / refunds / roster. */
@@ -171,11 +176,16 @@ export function branchSignNextAction(
       ? `Settled — broadcast recorded. Settle txid ${tx}`
       : "Settled — broadcast recorded";
   }
+  if (item.state === "broadcast") {
+    return tx
+      ? `Sent. Waiting for one confirmation. ${tx}`
+      : "Sent. Waiting for one confirmation.";
+  }
   if (item.state === "settle_proposed") {
-    return "Settle proposed — another keyholder must Confirm settle";
+    return "Sent. Waiting for one confirmation.";
   }
   if (item.state === "threshold_met" || (need > 0 && signed >= need)) {
-    return "Ready to broadcast in Sparrow — then paste settle txid";
+    return "Review the outputs, then broadcast.";
   }
   const who = signerLabels(item.partials, opts?.signerNames || {});
   const fps = (item.partials || [])
@@ -187,7 +197,21 @@ export function branchSignNextAction(
       ? `Signed ${who.join(", ")}`
       : "No partials on desk yet";
   const remain = Math.max(0, need - signed);
-  return `${signedBit}. Needs ${remain} more cosignature${remain === 1 ? "" : "s"} (${signed}/${need}) — or paste settle txid after off-desk Sparrow broadcast`;
+  return `${signedBit}. Needs ${remain} more.`;
+}
+
+/** Desk ceremony: collect signatures, then one review-and-broadcast step, then record the txid. */
+export function branchCeremonyPhase(item: {
+  state: string;
+  signed: number;
+  required_threshold: number;
+}): "settled" | "confirm" | "broadcast" | "sign" {
+  if (item.state === "settled") return "settled";
+  if (item.state === "broadcast" || item.state === "settle_proposed") return "broadcast";
+  const need = item.required_threshold || 0;
+  const signed = item.signed || 0;
+  if (item.state === "threshold_met" || (need > 0 && signed >= need)) return "broadcast";
+  return "sign";
 }
 
 /**
@@ -260,6 +284,20 @@ export type BranchSignDeskItem = {
   };
 };
 
+function branchCeremonyStepClass(
+  name: "sign" | "broadcast" | "record",
+  phase: ReturnType<typeof branchCeremonyPhase>,
+): string {
+  if (phase === "settled") return "is-done";
+  const order = ["sign", "broadcast", "record"] as const;
+  const current = phase === "confirm" ? "record" : phase;
+  const i = order.indexOf(name);
+  const c = order.indexOf(current);
+  if (i < c) return "is-done";
+  if (i === c) return "is-current";
+  return "";
+}
+
 export function branchSignDeskHtml(
   item: BranchSignDeskItem,
   opts?: { userId?: string; signerNames?: Record<string, string> },
@@ -267,10 +305,8 @@ export function branchSignDeskHtml(
   const need = item.required_threshold || 0;
   const signed = item.signed || 0;
   const outputs = item.decode?.outputs || [];
-  const settled = item.state === "settled";
-  const proposed = item.state === "settle_proposed";
   const who = signerLabels(item.partials, opts?.signerNames || {});
-  const canDownload = Boolean(item.psbt_base64);
+  const phase = branchCeremonyPhase(item);
   const chip = branchSignChipLabel(item);
   const nextAction = branchSignNextAction(item, opts);
   const outputRows = outputs.length
@@ -279,9 +315,34 @@ export function branchSignDeskHtml(
           html`<tr><td>${o.label || "—"}</td><td class="mono">${o.address}</td><td>${formatSats(o.amount_sats)}</td></tr>`,
       )
     : html`<tr><td colspan="3" class="muted">No outputs</td></tr>`;
+  const signBlock =
+    phase === "sign"
+      ? html`<p class="muted">Sign this on a Ledger or SeedSigner. The transaction stays on this page.</p>
+        <p class="kh-verify-status" id="kh-branch-hash-status">Match the address on the device to the row above.</p>`
+      : "";
+  const broadcastBlock =
+    phase === "broadcast"
+      ? html`<div class="form-panel" id="kh-branch-broadcast-panel">
+          <h3 class="proposal-block-title">Review, then broadcast</h3>
+          <p class="muted">Check the outputs above, then broadcast. This sends the already-signed transaction.</p>
+          <div class="comment-compose-actions"><button type="button" class="btn" id="kh-branch-broadcast">Broadcast</button></div>
+        </div>`
+      : "";
+  const settledBlock =
+    phase === "settled"
+      ? html`<div class="lifecycle-banner" role="status">
+            <span class="lifecycle-k">Settled</span>
+            <p>Broadcast already recorded. Settle txid <code class="mono">${item.settle_txid || ""}</code>.</p>
+          </div>`
+      : "";
   return html`<div class="form-panel form-panel-wide">
     <h2 class="proposal-block-title" id="kh-branch-title" tabindex="-1">${item.kind} · ${item.proposal_id} · ${item.allocation_id}</h2>
     <p class="next-card-sentence">${keyholderTxPurpose(item.kind)}</p>
+    <ol class="kh-steps" aria-label="Signing ceremony">
+      <li class="${branchCeremonyStepClass("sign", phase)}">Sign</li>
+      <li class="${branchCeremonyStepClass("broadcast", phase)}">Broadcast</li>
+      <li class="${branchCeremonyStepClass("broadcast", phase)}">Done</li>
+    </ol>
     <p class="kh-sign-chip">${chip}</p>
     <p class="muted kh-branch-next" id="kh-branch-next">${nextAction}</p>
     ${who.length ? html`<p class="kh-signers">Signed by ${who.join(", ")}</p>` : ""}
@@ -290,76 +351,10 @@ export function branchSignDeskHtml(
       <thead><tr><th scope="col">Label</th><th scope="col">Address</th><th scope="col">Amount</th></tr></thead>
       <tbody>${outputRows}</tbody>
     </table>
-    ${
-      canDownload
-        ? html`<div class="comment-compose-actions">
-            <button type="button" class="btn" id="kh-branch-dl">Download unsigned transaction</button>
-            <button type="button" class="btn ghost" id="kh-branch-copy">Copy unsigned base64</button>
-          </div>`
-        : ""
-    }
-    <p class="muted">Cosign: sign in Sparrow, then paste the signed partial below. The Worker does not broadcast — broadcast stays in Sparrow after N-of-M. Off-desk Sparrow cosign + broadcast is fine — paste the settle txid when ready.</p>
-    ${raw(hashGateHtml({
-      publishedHash: item.published_sha256,
-      inputId: "kh-branch-verify",
-      statusId: "kh-branch-hash-status",
-      pasteLabel: "Unsigned Release PSBT you received (base64) — not a settle txid",
-      placeholder: "Paste unsigned Release PSBT to verify SHA-256",
-    }))}
-    <label class="donate-amount-label" for="kh-branch-partial">Signed partial (base64) — not a settle txid</label>
-    <textarea id="kh-branch-partial" class="comment-input mono" rows="3" placeholder="Paste signed partial from Sparrow"></textarea>
-    <div class="comment-compose-actions">
-      <button type="button" class="btn" id="kh-branch-sign" disabled title="Paste a matching unsigned Release PSBT above, then a signed partial" aria-label="Paste a matching unsigned Release PSBT above, then a signed partial">Upload signature</button>
-      ${
-        item.combined_sha256
-          ? html`<button type="button" class="btn ghost" id="kh-branch-combined">Download combined</button>`
-          : ""
-      }
-    </div>
+    ${signBlock}
+    ${broadcastBlock}
+    ${settledBlock}
     <p class="builder-msg" id="kh-branch-msg" hidden role="status" aria-live="polite"></p>
-    ${
-      settled
-        ? html`<div class="lifecycle-banner" role="status">
-            <span class="lifecycle-k">Settled</span>
-            <p>Broadcast already recorded. Settle txid <code class="mono">${item.settle_txid || ""}</code>.</p>
-          </div>`
-        : (() => {
-            const thresholdMet =
-              item.state === "threshold_met" ||
-              (need > 0 && signed >= need);
-            // Off-desk Sparrow cosign + broadcast: keep Propose settle enabled while
-            // the branch is still open so KH can paste a confirmed Release txid.
-            // Confirm settle keeps dual-KH rules. Worker verifies the txid.
-            const proposeDisabled = proposed;
-            const proposeWhy = proposed
-              ? "Settle already proposed — waiting for another keyholder to confirm"
-              : thresholdMet
-                ? "After you broadcast in Sparrow, paste the 64-character settle txid"
-                : "Off-desk cosign OK — after Sparrow broadcast, paste the confirmed 64-character settle txid (API verifies)";
-            const confirmDisabled =
-              !proposed || item.settle_proposed_by === opts?.userId;
-            const confirmWhy = !proposed
-              ? "Waiting for a keyholder to propose the settle txid"
-              : item.settle_proposed_by === opts?.userId
-                ? "You proposed this settle — another keyholder must confirm"
-                : "Confirm the proposed settle txid matches the Release outputs";
-            return html`<div class="form-panel">
-      <h3 class="proposal-block-title">Settle · record broadcast</h3>
-      <p class="fee-pay-bond-label">SETTLE TXID</p>
-      <p class="fee-pay-bond-contrast">${
-        thresholdMet
-          ? html`Ready to broadcast in Sparrow when combined. Then paste the <strong>64-character settle txid</strong> here — not a PSBT.`
-          : html`Desk cosign is at <strong>${signed}/${need || "?"}</strong>. You can still paste a settle txid after an <strong>off-desk Sparrow broadcast</strong> — the API verifies Release outputs. Not a PSBT.`
-      }</p>
-      <label class="donate-amount-label" for="kh-branch-txid">Settle txid (64 hex) — not a PSBT</label>
-      <input id="kh-branch-txid" class="donate-amount mono" value="${item.settle_txid || ""}" ${proposed ? "readonly" : ""} autocomplete="off" placeholder="64-character transaction id" />
-      <div class="comment-compose-actions">
-        <button type="button" class="btn" id="kh-branch-propose" ${proposeDisabled ? "disabled" : ""} title="${proposeWhy}" aria-label="${proposeWhy}">Propose settle</button>
-        <button type="button" class="btn ghost" id="kh-branch-confirm" ${confirmDisabled ? "disabled" : ""} title="${confirmWhy}" aria-label="${confirmWhy}">Confirm settle</button>
-      </div>
-    </div>`;
-          })()
-    }
   </div>`.value;
 }
 
@@ -541,8 +536,8 @@ export function keyholderProofWizardHtml(
   const addr = keyholderReceiveAddress(authAddress, payoutAddress);
   return html`<p class="kh-wizard-progress" id="kh-wizard-progress">Step 1 of 3</p>
     <div data-kh-wizard="why">
-      <p>You are about to upload a signature on a transaction. GitHub only tells the site which seat this is. It does not show that the wallet for this seat is in your hands.</p>
-      <p class="muted">This check is a signed message, not that transaction. You sign it in Sparrow. After it passes, this browser can upload signatures for 15 minutes.</p>
+      <p>Check that the wallet for this seat is the one in your hands. GitHub only tells the site which seat this is.</p>
+      <p class="muted">This is optional. Sign a message in Sparrow (Tools, Sign/Verify Message) from the seat receive address. It does not unlock signing or Broadcast.</p>
       <div class="kh-wizard-actions">
         <button type="button" class="btn" data-kh-wizard-go="address">Continue</button>
       </div>
@@ -718,7 +713,7 @@ export function keyholderDeskHtml(
         <li class="${khStepClass("broadcast", step, releaseOrder)}">Broadcast in Sparrow when N-of-M is met — then settle txid if needed</li>
       </ol>`
     : html`<ol class="kh-steps">
-        <li class="${step === "settle" ? "is-current" : ""}">Settle · check outputs, then paste the settle txid (64 hex — not a PSBT)</li>
+        <li class="${step === "settle" ? "is-current" : ""}">Pay from the refund wallet, then paste the 64-character txid</li>
       </ol>`;
 
   const outputs = html`<table class="kh-outputs">
@@ -800,30 +795,35 @@ export function keyholderDeskHtml(
     : "";
   const proposeWhy = !opts.canPsbt
     ? "Waiting on payout addresses / package readiness"
-    : opts.requiresDualSettle
-      ? "Propose this settle txid for dual-ack"
-      : "After Sparrow broadcast, paste the 64-character settle txid and propose";
+    : "Pay from the refund wallet, then paste the 64-character txid";
   const confirmWhy = !opts.canPsbt
     ? "Waiting on payout addresses / package readiness"
     : item.settle_proposed_by === opts.userId
-      ? "You proposed this settle — another keyholder must confirm"
+      ? "You recorded this txid — another keyholder must confirm it"
       : item.settle_proposed_by
-        ? "Confirm the proposed settle txid"
-        : "Waiting for a keyholder to propose the settle txid";
+        ? "Confirm the recorded txid"
+        : "Waiting for a keyholder to record the txid";
   // Non-release (bond_refund / contrib_refund): settle txid + Propose settle are the
   // only real action — keep them primary, not buried under "Other settle tools".
   // Release keeps settle secondary inside details (PSBT / Download is primary).
   const settlePrimary = !opts.isRelease;
+  if (opts.isRelease) {
+    return html`<div class="form-panel form-panel-wide">
+      <h2 class="proposal-block-title" id="kh-detail-title" tabindex="-1">${item.kind.replace(/_/g, " ")} · ${item.proposal_id}</h2>
+      <p class="next-card-sentence">${keyholderTxPurpose(item.kind)}</p>
+      <p class="muted">Monthly releases are signed from the Signing tab. Broadcast is the only send step.</p>
+    </div>`.value;
+  }
   const settleContrast = settlePrimary
-    ? html`Pay/broadcast from the fee/bond Sparrow wallet to the output row above, then paste the <strong>64-character broadcast txid</strong> — not a PSBT and not Structure outs.`
-    : html`Paste the <strong>64-character broadcast txid</strong> after Sparrow broadcast — not a PSBT and not Structure outs.`;
+    ? html`Pay from the refund wallet, then paste the <strong>64-character txid</strong>.`
+    : "";
   const settleControls = html`<p class="fee-pay-bond-label">SETTLE TXID</p>
       <p class="fee-pay-bond-contrast">${settleContrast}</p>
       <label class="donate-amount-label" for="kh-txid">Settle txid (64 hex) — not a PSBT</label>
       <input id="kh-txid" class="donate-amount mono" value="${item.settle_txid || ""}" ${
         opts.canPsbt ? "" : "disabled"
       } placeholder="64-character transaction id" title="${
-        opts.canPsbt ? "Paste settle txid after broadcast" : "Waiting for package readiness"
+        opts.canPsbt ? "Paste the 64-character txid" : "Waiting for package readiness"
       }" />
       <div id="kh-verify-panel" class="lifecycle-banner" hidden>
         <span class="lifecycle-k">Verify</span>
@@ -838,20 +838,20 @@ export function keyholderDeskHtml(
       <div class="comment-compose-actions">
         <button type="button" class="btn${settlePrimary ? "" : " ghost"}" id="kh-propose" ${
           opts.canPsbt ? "" : "disabled"
-        } title="${proposeWhy}" aria-label="${proposeWhy}">Propose settle</button>
+        } title="${proposeWhy}" aria-label="${proposeWhy}">Record txid</button>
         ${
           opts.requiresDualSettle
             ? html`<button type="button" class="btn ghost" id="kh-confirm"${
                 item.settle_proposed_by === opts.userId || !opts.canPsbt
                   ? " disabled"
                   : ""
-              } title="${confirmWhy}" aria-label="${confirmWhy}">Confirm settle</button>`
+              } title="${confirmWhy}" aria-label="${confirmWhy}">Confirm txid</button>`
             : ""
         }
       </div>`;
   const settlePrimaryBlock = settlePrimary
     ? html`<div class="kh-settle-primary" data-kh-settle-primary="1">
-      <h3 class="proposal-block-title">Settle · record broadcast</h3>
+      <h3 class="proposal-block-title">Record the refund</h3>
       ${settleControls}
     </div>`
     : "";
@@ -1374,7 +1374,7 @@ export async function renderKeyholders(
           : ""
       }
       <div class="kh-session-bar">
-        <p class="muted" id="kh-session-state">Before an upload, confirm the wallet saved for this seat.</p>
+        <p class="muted" id="kh-session-state">Optional: check that this seat's wallet is set up.</p>
         <button type="button" class="btn ghost btn-compact" id="kh-session-open">Start the check</button>
       </div>
       <div class="site-modal" id="kh-session" hidden>
@@ -1387,15 +1387,14 @@ export async function renderKeyholders(
       </div>
       <div id="kh-page-toast-host" class="kh-page-toast-host" hidden></div>
       <div class="kh-desk-queues">
-        <h2 class="kh-desk-queues-title">Signing queues</h2>
+        <h2 class="kh-desk-queues-title">Queues</h2>
         <div class="account-tabs" role="tablist" aria-label="Disbursement queues">
-          <button type="button" class="account-tab active" role="tab" id="kh-tab-release" data-kh-tab="release" data-kh-label="Releases" aria-selected="true" aria-controls="kh-queue" tabindex="0">Releases</button>
-          <button type="button" class="account-tab" role="tab" id="kh-tab-branch" data-kh-tab="branch" data-kh-label="Branches" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Branches</button>
+          <button type="button" class="account-tab active" role="tab" id="kh-tab-signing" data-kh-tab="signing" data-kh-label="Signing" aria-selected="true" aria-controls="kh-queue" tabindex="0">Signing</button>
           <button type="button" class="account-tab" role="tab" id="kh-tab-bond_refund" data-kh-tab="bond_refund" data-kh-label="Bond refunds" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Bond refunds</button>
           <button type="button" class="account-tab" role="tab" id="kh-tab-contrib_refund" data-kh-tab="contrib_refund" data-kh-label="Contributor refunds" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Contributor refunds</button>
           <button type="button" class="account-tab" role="tab" id="kh-tab-roster" data-kh-tab="roster" aria-selected="false" aria-controls="kh-queue" tabindex="-1">Roster</button>
         </div>
-        <div id="kh-queue" class="kh-queue" role="tabpanel" aria-labelledby="kh-tab-release" aria-live="polite"><p class="muted">Loading…</p></div>
+        <div id="kh-queue" class="kh-queue" role="tabpanel" aria-labelledby="kh-tab-signing" aria-live="polite"><p class="muted">Loading…</p></div>
       </div>
       <div class="site-modal" id="kh-revoke-modal" hidden>
         <div class="site-modal-backdrop" data-kh-revoke-close tabindex="-1" aria-hidden="true"></div>
@@ -1426,7 +1425,8 @@ export async function renderKeyholders(
   const detailEl = app.querySelector<HTMLElement>("#kh-detail")!;
   const detailModal = app.querySelector<HTMLElement>("#kh-detail-modal")!;
   const cashoutEl = app.querySelector<HTMLElement>("#kh-cashout-detail")!;
-  let kind = "release";
+  let kind = "signing";
+  const signingCards = new Map<string, SigningCard>();
   let challengeMessage = "";
   let challengeSeq = 0;
   let signerNames: Record<string, string> = {};
@@ -1437,6 +1437,14 @@ export async function renderKeyholders(
   let openDisburse: string | null = null;
   let persistOpenSettleDraft: () => void = () => {};
 
+  let sittingToken = 0;
+  let scanAbort: AbortController | null = null;
+  const stopSitting = () => {
+    sittingToken += 1;
+    scanAbort?.abort();
+    scanAbort = null;
+  };
+
   const labelDetailDialog = () => {
     const card = detailModal.querySelector<HTMLElement>("[role='dialog']");
     const title = detailEl.querySelector<HTMLElement>(
@@ -1445,6 +1453,7 @@ export async function renderKeyholders(
     if (card && title?.id) card.setAttribute("aria-labelledby", title.id);
   };
   const closeDetailModal = () => {
+    stopSitting();
     const wasOpen = !detailModal.hidden;
     detailModal.hidden = true;
     detailEl.innerHTML = "";
@@ -1660,40 +1669,303 @@ export async function renderKeyholders(
     }
   };
 
+  const cardVerified = async (card: SigningCard): Promise<string | null> => {
+    if (!card.psbt_base64) return "This card has no published transaction.";
+    const hash = await sha256HexOfPsbtBase64(card.psbt_base64);
+    if (!hash || hash !== card.published_sha256.trim().toLowerCase()) {
+      return "SHA-256 does not match the published hash.";
+    }
+    const parsed = await parsedPsbtOutputs(card.psbt_base64);
+    if ("error" in parsed) return parsed.error;
+    if (!outputsMatchPublished(parsed, card.outputs)) {
+      return "Outputs do not match the published decode.";
+    }
+    const amounts = amountsMatchCard(card);
+    if (!amounts.ok) return amounts.error;
+    return null;
+  };
+
+  const postPartial = async (card: SigningCard, psbt_base64: string) => {
+    if (card.source === "branch" && card.allocation_id) {
+      return authFetchWithTos(
+        `${api()}/keyholders/branch-sign/${encodeURIComponent(card.proposal_id)}/${encodeURIComponent(card.allocation_id)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            psbt_base64,
+            published_sha256: card.published_sha256,
+          }),
+        },
+      );
+    }
+    if (card.source === "structure") {
+      return authFetchWithTos(
+        `${api()}/keyholders/structure-sign/${encodeURIComponent(card.proposal_id)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            psbt_base64,
+            published_sha256: card.published_sha256,
+          }),
+        },
+      );
+    }
+    return authFetchWithTos(`${api()}/disburse/${encodeURIComponent(card.disburse_id || "")}/sign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ psbt_base64 }),
+    });
+  };
+
+  const sittingCards = (startId: string): SigningCard[] => {
+    const all = [...signingCards.values()];
+    const start = all.findIndex((card) => card.card_id === startId);
+    const seq = start >= 0 ? [...all.slice(start), ...all.slice(0, start)] : all;
+    const used = new Set<string>();
+    const out: SigningCard[] = [];
+    for (const card of seq) {
+      if (card.bucket === "blocked" || !card.in_sitting) continue;
+      if (card.bucket === "flagged" && card.card_id !== startId) continue;
+      if (card.signed >= card.required_threshold) continue;
+      if (card.outpoints.some((op) => used.has(op))) continue;
+      for (const op of card.outpoints) used.add(op);
+      out.push(card);
+    }
+    return out;
+  };
+
+  const setSignMsg = (t: string) => {
+    const el = detailEl.querySelector<HTMLElement>("#kh-sign-msg");
+    if (!el) return;
+    el.hidden = !t;
+    el.textContent = t;
+  };
+  const setVerifyStatus = (t: string) => {
+    const status = detailEl.querySelector<HTMLElement>("#kh-verify-status");
+    if (status) status.textContent = t;
+  };
+  const paintSigningCard = (card: SigningCard, busy?: "ledger" | "seed") => {
+    detailEl.innerHTML = signingCardHtml(card, busy ? { busy } : undefined);
+    labelDetailDialog();
+  };
+
+  const bindSigningCard = (card: SigningCard) => {
+    detailEl.querySelector(".kh-flag")?.addEventListener("toggle", (ev) => {
+      const open = (ev.currentTarget as HTMLDetailsElement).open;
+      detailEl.querySelectorAll<HTMLButtonElement>("#kh-sign-ledger, #kh-sign-seed").forEach((btn) => {
+        btn.disabled = !open;
+      });
+    });
+    const runDevice = async (mode: "ledger" | "seed") => {
+      stopSitting();
+      const token = sittingToken;
+      const alive = () => token === sittingToken && !detailModal.hidden;
+      const policyRes = await authFetch(`${api()}/keyholders/wallet-policy`);
+      const policy = (await policyRes.json().catch(() => ({}))) as {
+        configured?: boolean;
+        descriptor?: string | null;
+      };
+      if (!alive()) return;
+      if (!policyRes.ok || !policy.configured || !policy.descriptor) {
+        setSignMsg("Multisig is not configured. The device loop will not start.");
+        return;
+      }
+      const queue = sittingCards(card.card_id);
+      if (!queue.length) {
+        setSignMsg("Nothing left to sign in this sitting.");
+        return;
+      }
+      let session: Awaited<ReturnType<typeof openLedgerSession>> | null = null;
+      let hold = false;
+      try {
+        if (mode === "ledger") session = await openLedgerSession(policy.descriptor);
+        for (let i = 0; i < queue.length; i++) {
+          if (!alive()) return;
+          const next = queue[i];
+          if (!next) continue;
+          paintSigningCard(next, mode);
+          const bad = await cardVerified(next);
+          if (bad) {
+            paintSigningCard(next);
+            setVerifyStatus(bad);
+            setSignMsg(`${next.title}: ${bad}`);
+            detailEl.querySelectorAll("button").forEach((btn) => {
+              btn.disabled = true;
+            });
+            hold = true;
+            break;
+          }
+          setVerifyStatus(
+            `${i + 1} of ${queue.length}. Match the address above, then confirm on the device.`,
+          );
+          detailEl.querySelector("#kh-sign-stop")?.addEventListener("click", () => stopSitting(), {
+            once: true,
+          });
+          let partial = "";
+          if (mode === "ledger") {
+            if (!session) return;
+            partial = await session.sign(next.psbt_base64);
+          } else {
+            const parts = await seedSignerParts(next.psbt_base64);
+            const canvas = detailEl.querySelector<HTMLCanvasElement>("#kh-seed-qr");
+            const video = detailEl.querySelector<HTMLVideoElement>("#kh-seed-video");
+            if (!canvas || !video || !alive()) return;
+            const QRCode = (await import("qrcode")).default;
+            let frame = 0;
+            const timer = window.setInterval(() => {
+              const part = parts[frame % parts.length] || "";
+              frame += 1;
+              void QRCode.toCanvas(canvas, part, { margin: 1, width: 280 });
+            }, 280);
+            const choice = await new Promise<"go" | "stop">((resolve) => {
+              scanAbort = new AbortController();
+              scanAbort.signal.addEventListener("abort", () => resolve("stop"), { once: true });
+              detailEl.querySelector("#kh-seed-scan")?.addEventListener(
+                "click",
+                () => resolve("go"),
+                { once: true },
+              );
+            });
+            window.clearInterval(timer);
+            if (choice !== "go" || !alive()) break;
+            canvas.hidden = true;
+            video.hidden = false;
+            setVerifyStatus("Point the camera at the SeedSigner's signed QR.");
+            try {
+              const scanned = await scanQrParts(video, scanAbort?.signal || AbortSignal.abort());
+              partial = await joinScannedParts(scanned);
+            } catch (err) {
+              if (!alive()) break;
+              paintSigningCard(next);
+              setSignMsg(err instanceof Error ? err.message : "Could not read the signed QR.");
+              hold = true;
+              break;
+            } finally {
+              video.hidden = true;
+              const stream = video.srcObject;
+              if (stream instanceof MediaStream) stream.getTracks().forEach((track) => track.stop());
+              video.srcObject = null;
+            }
+          }
+          if (!partial) break;
+          const posted = await postPartial(next, partial);
+          const body = (await posted.json().catch(() => ({}))) as { error?: string };
+          if (!posted.ok) {
+            paintSigningCard(next);
+            setSignMsg(body.error || "Could not store the signature.");
+            hold = true;
+            break;
+          }
+          if (!alive()) break;
+        }
+      } finally {
+        await session?.close();
+      }
+      if (hold || detailModal.hidden) {
+        void loadQueue();
+        return;
+      }
+      await loadQueue();
+      const fresh = signingCards.get(card.card_id);
+      if (!fresh || fresh.bucket === "blocked" || detailModal.hidden) return;
+      await presentSigningCard(fresh);
+    };
+    detailEl.querySelector("#kh-sign-ledger")?.addEventListener("click", () => {
+      void runDevice("ledger").catch((err: unknown) => {
+        setSignMsg(err instanceof Error ? err.message : "Ledger signing stopped.");
+      });
+    });
+    detailEl.querySelector("#kh-sign-seed")?.addEventListener("click", () => {
+      void runDevice("seed").catch((err: unknown) => {
+        setSignMsg(err instanceof Error ? err.message : "SeedSigner signing stopped.");
+      });
+    });
+    detailEl.querySelector("#kh-sign-broadcast")?.addEventListener("click", async () => {
+      const ok = await confirmAction({
+        title: "Broadcast",
+        body: card.awaiting_confirmation
+          ? "Check whether the sent transaction has one confirmation. This does not send it again."
+          : "Send the already-signed transaction. Review the address and outputs above first.",
+        confirmLabel: card.awaiting_confirmation ? "Check confirmation" : "Broadcast",
+        danger: true,
+      });
+      if (!ok) return;
+      let url = "";
+      if (card.source === "branch" && card.allocation_id) {
+        url = `${api()}/keyholders/branch-sign/${encodeURIComponent(card.proposal_id)}/${encodeURIComponent(card.allocation_id)}/broadcast`;
+      } else if (card.source === "structure") {
+        url = `${api()}/keyholders/structure-sign/${encodeURIComponent(card.proposal_id)}/broadcast`;
+      } else {
+        url = `${api()}/disburse/${encodeURIComponent(card.disburse_id || "")}/broadcast`;
+      }
+      const res = await authFetchWithTos(url, { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        settled?: boolean;
+      };
+      if (!res.ok && body.error !== "transaction not confirmed yet") {
+        setSignMsg(body.error || "Broadcast failed.");
+        return;
+      }
+      setSignMsg(body.settled ? "Broadcast recorded." : "Sent. Waiting for one confirmation.");
+      await loadQueue();
+      const fresh = signingCards.get(card.card_id);
+      if (!fresh || detailModal.hidden) return;
+      if (fresh.bucket === "blocked") return;
+      await presentSigningCard(fresh);
+    });
+  };
+
+  const presentSigningCard = async (card: SigningCard) => {
+    paintSigningCard(card);
+    const problem = await cardVerified(card);
+    setVerifyStatus(problem || "Outputs match. Match the address above on the device.");
+    if (problem) {
+      detailEl.querySelectorAll("button").forEach((btn) => {
+        btn.disabled = true;
+      });
+      return;
+    }
+    bindSigningCard(card);
+    detailEl.querySelector<HTMLElement>("#kh-detail-title")?.focus();
+  };
+
+  const openSigningCard = async (id: string) => {
+    const card = signingCards.get(id);
+    if (!card || card.bucket === "blocked") return;
+    showDetailModal();
+    await presentSigningCard(card);
+  };
+
   const loadQueue = async () => {
     queueEl.setAttribute("aria-busy", "true");
-    if (kind === "branch") {
-      const res = await authFetch(`${api()}/keyholders/branch-queue`);
+    if (kind === "signing") {
+      const res = await authFetch(`${api()}/keyholders/signing-queue`);
       if (!res.ok) {
-        queueEl.innerHTML = `<p class="muted">Could not load branch queue.</p>`;
+        queueEl.innerHTML = `<p class="muted">Could not load the signing queue.</p>`;
         queueEl.removeAttribute("aria-busy");
         return;
       }
-      const data = (await res.json()) as { items: BranchSignDeskItem[] };
-      if (!data.items.length) {
+      const data = (await res.json()) as { items: SigningCard[] };
+      signingCards.clear();
+      for (const card of data.items || []) signingCards.set(card.card_id, card);
+      if (!data.items?.length) {
         queueEl.innerHTML = keyholderQueueEmptyHtml(
           "Nothing to sign",
-          "No selected bounty branches ready to sign.",
+          "No structure transactions, branches, or monthly releases are ready.",
         );
         queueEl.removeAttribute("aria-busy");
         return;
       }
-      queueEl.innerHTML = html`<ul class="declined-list">${data.items.map(
-        (item) => {
-          const chip = branchSignChipLabel(item);
-          return html`<li class="declined-row">
-            <button type="button" class="declined-title btn ghost" data-branch="${item.proposal_id}" data-alloc="${item.allocation_id}" aria-label="${item.proposal_id} ${item.kind} ${chip}">${item.proposal_id} · ${item.allocation_id}</button>
-            <p class="kh-queue-purpose">${keyholderTxPurpose(item.kind)}</p>
-            <span class="declined-meta"><span class="pill">${item.kind}</span>
-            <span class="kh-sign-chip">${chip}</span>
-            ${item.state === "settled" ? "" : html`<span class="pill">${item.state}</span>`}</span>
-          </li>`;
-        },
-      )}</ul>`.value;
-      queueEl.querySelectorAll<HTMLButtonElement>("[data-branch]").forEach((btn) => {
+      queueEl.innerHTML = signingQueueHtml(data.items);
+      queueEl.querySelectorAll<HTMLButtonElement>("[data-open-card]").forEach((btn) => {
         btn.addEventListener("click", () => {
           lastDeskOpener = btn;
-          void openBranchDetail(btn.dataset.branch || "", btn.dataset.alloc || "");
+          const id = btn.dataset.openCard || "";
+          disableSiblingOutpoints(queueEl, id);
+          void openSigningCard(id);
         });
       });
       queueEl.removeAttribute("aria-busy");
@@ -1762,26 +2034,6 @@ export async function renderKeyholders(
     });
     showDetailModal();
     detailEl.querySelector<HTMLElement>("#kh-branch-title")?.focus();
-    const branchGate = bindHashGate({
-      input: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-verify"),
-      status: detailEl.querySelector<HTMLElement>("#kh-branch-hash-status"),
-      publishedHash: item.published_sha256,
-      action: detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign"),
-      enableActionWithoutHash: false,
-      alsoRequire: detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-partial"),
-      alsoRequireEmptyReason: "Paste a signed partial to enable",
-      disabledReason:
-        "Paste a matching unsigned Release PSBT (base64) to enable — not a settle txid",
-      enabledReason: "Hash matches and signed partial ready — upload signature",
-    });
-    detailEl.querySelector("#kh-branch-dl")?.addEventListener("click", () => {
-      if (!item.psbt_base64) return;
-      downloadBase64File(
-        item.psbt_base64,
-        `${item.proposal_id}-${item.allocation_id}-unsigned.psbt`,
-      );
-      void branchGate.acceptDownload(item.psbt_base64);
-    });
     const setMsg = (t: string) => {
       const el = detailEl.querySelector<HTMLElement>("#kh-branch-msg");
       if (!el) return;
@@ -1790,141 +2042,29 @@ export async function renderKeyholders(
       el.textContent = text;
       noteSignSession(text);
     };
-    detailEl.querySelector("#kh-branch-copy")?.addEventListener("click", async () => {
-      if (!item.psbt_base64) return;
-      const ok = await copyText(item.psbt_base64);
-      setMsg(ok ? "Unsigned PSBT base64 copied." : "Could not copy unsigned PSBT.");
-      if (ok) void branchGate.acceptDownload(item.psbt_base64);
-    });
-    detailEl.querySelector("#kh-branch-sign")?.addEventListener("click", async () => {
-      const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-sign");
-      if (btn?.disabled) {
-        setMsg("Verify the published SHA-256 before uploading a signature.");
-        return;
-      }
-      const b64 =
-        detailEl.querySelector<HTMLTextAreaElement>("#kh-branch-partial")?.value.trim() ||
-        "";
-      if (!b64) {
-        setMsg("Paste a signed partial.");
-        return;
-      }
+    detailEl.querySelector("#kh-branch-broadcast")?.addEventListener("click", async () => {
       const ok = await confirmAction({
-        title: "Upload signature",
-        body: "Store your signature on the selected branch. The Worker will not broadcast.",
-        confirmLabel: "Upload",
-      });
-      if (!ok) return;
-      const res = await authFetchWithTos(
-        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            psbt_base64: b64,
-            published_sha256: item.published_sha256,
-          }),
-        },
-      );
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        threshold_met?: boolean;
-        broadcast?: boolean;
-      };
-      setMsg(
-        res.ok
-          ? body.threshold_met
-            ? "Threshold met — download the combined transaction and broadcast in Sparrow."
-            : "Partial stored"
-          : body.error || "Sign failed",
-      );
-      if (res.ok) {
-        void openBranchDetail(item.proposal_id, item.allocation_id);
-        void loadQueue();
-      }
-    });
-    detailEl.querySelector("#kh-branch-combined")?.addEventListener("click", async () => {
-      const dl = await authFetch(
-        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/combined`,
-      );
-      if (!dl.ok) {
-        setMsg("Combined transaction is not ready.");
-        return;
-      }
-      const blob = await dl.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${item.proposal_id}-${item.allocation_id}.psbt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-    detailEl.querySelector("#kh-branch-propose")?.addEventListener("click", async () => {
-      const txid =
-        detailEl.querySelector<HTMLInputElement>("#kh-branch-txid")?.value.trim() ||
-        "";
-      if (!txid) {
-        setMsg("Paste the broadcast txid.");
-        return;
-      }
-      const ok = await confirmAction({
-        title: "Propose settle",
-        body: "Confirm this txid pays every output on the selected branch. A second keyholder must confirm. The Worker will not broadcast.",
-        confirmLabel: "Propose",
-      });
-      if (!ok) return;
-      const res = await authFetch(
-        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/propose-settle`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ txid }),
-        },
-      );
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        missing?: { address: string; amount_sats: number }[];
-      };
-      if (res.ok) {
-        settleSuccess({
-          outcome: "proposed_waiting",
-          txid,
-        });
-        return;
-      }
-      const miss = body.missing?.length
-        ? ` Missing: ${body.missing
-            .map((m) => `${m.address} (${m.amount_sats} sats)`)
-            .join("; ")}`
-        : "";
-      setMsg((body.error || "Failed") + miss);
-    });
-    detailEl.querySelector("#kh-branch-confirm")?.addEventListener("click", async () => {
-      const btn = detailEl.querySelector<HTMLButtonElement>("#kh-branch-confirm");
-      if (btn?.disabled) {
-        setMsg("A second keyholder must confirm settle.");
-        return;
-      }
-      const ok = await confirmAction({
-        title: "Confirm settle",
-        body: "Second keyholder confirmation. Re-verifies the txid against the selected branch outputs.",
-        confirmLabel: "Confirm",
+        title: "Broadcast",
+        body: "Send the already-signed transaction. Review the outputs above first.",
+        confirmLabel: "Broadcast",
         danger: true,
       });
       if (!ok) return;
-      const res = await authFetch(
-        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/confirm-settle`,
+      const res = await authFetchWithTos(
+        `${api()}/keyholders/branch-sign/${encodeURIComponent(item.proposal_id)}/${encodeURIComponent(item.allocation_id)}/broadcast`,
         { method: "POST" },
       );
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.ok) {
-        settleSuccess({
-          outcome: "settled",
-          txid: item.settle_txid,
-        });
-        return;
-      }
-      setMsg(body.error || "Failed");
+      const body = (await res.json().catch(() => ({}))) as { error?: string; settled?: boolean };
+      setMsg(
+        res.ok
+          ? body.settled
+            ? "Broadcast recorded."
+            : "Sent. Waiting for one confirmation."
+          : body.error === "transaction not confirmed yet"
+            ? "Sent. Waiting for one confirmation."
+            : body.error || "Broadcast failed.",
+      );
+      if (res.ok) void openBranchDetail(item.proposal_id, item.allocation_id);
     });
   };
 
@@ -2172,7 +2312,7 @@ export async function renderKeyholders(
       const panel = detailEl.querySelector<HTMLElement>("#kh-verify-panel");
       if (panel) panel.hidden = false;
       const ok = await confirmAction({
-        title: "Propose settle",
+        title: "Record txid",
         body: `Confirm this txid pays every output listed (${item.outputs.length} outputs).${
           data.requires_dual_settle
             ? " A second keyholder must confirm before status becomes settled."
@@ -2208,7 +2348,7 @@ export async function renderKeyholders(
 
     detailEl.querySelector("#kh-confirm")?.addEventListener("click", async () => {
       const ok = await confirmAction({
-        title: "Confirm settle",
+        title: "Confirm txid",
         body: "Second keyholder confirmation. Re-verifies the txid on-chain.",
         confirmLabel: "Confirm",
         danger: true,
@@ -2294,15 +2434,12 @@ export async function renderKeyholders(
     if (el) {
       el.hidden = false;
       el.textContent = res.ok
-        ? "Checked. This browser can upload signatures for 15 minutes."
+        ? "Checked. This wallet matches the seat. It does not unlock signing or Broadcast."
         : body.error || "Could not check that signature.";
     }
     const state = app.querySelector<HTMLElement>("#kh-session-state");
-    if (state) {
-      state.dataset.live = res.ok ? "active" : "";
-      state.textContent = res.ok
-        ? "This browser can upload signatures for 15 minutes."
-        : "Before an upload, confirm the wallet saved for this seat.";
+    if (state && res.ok) {
+      state.textContent = "Wallet check passed. Signing still uses a Ledger or SeedSigner.";
     }
     if (res.ok) closeSignSession();
   });
@@ -2665,30 +2802,31 @@ export async function renderKeyholders(
     btn.textContent = n > 0 ? `${label} (${n})` : label;
   };
   const loadQueueCounts = async () => {
-    const [disburse, branch] = await Promise.all([
+    const [disburse, signing] = await Promise.all([
       authFetch(`${api()}/disburse/queue?summary=1`).then(async (r) =>
         r.ok
-          ? ((await r.json()) as { release?: number; bond_refund?: number; contrib_refund?: number })
+          ? ((await r.json()) as { bond_refund?: number; contrib_refund?: number })
           : {},
       ),
-      authFetch(`${api()}/keyholders/branch-queue?summary=1`).then(async (r) =>
+      authFetch(`${api()}/keyholders/signing-queue?summary=1`).then(async (r) =>
         r.ok ? ((await r.json()) as { count?: number }) : {},
       ),
     ]);
-    paintQueueCount("release", disburse.release || 0);
+    paintQueueCount("signing", signing.count || 0);
     paintQueueCount("bond_refund", disburse.bond_refund || 0);
     paintQueueCount("contrib_refund", disburse.contrib_refund || 0);
-    paintQueueCount("branch", branch.count || 0);
   };
 
   void loadSignerNames().finally(() => {
-    const resumeTab = resume?.tab && resume.tab !== "release" ? resume.tab : "";
+    const resumeRaw = resume?.tab || "";
+    const resumeTab =
+      resumeRaw === "release" || resumeRaw === "branch" ? "signing" : resumeRaw;
     const resumeBtn = resumeTab
       ? app.querySelector<HTMLButtonElement>(`[data-kh-tab="${resumeTab}"]`)
       : null;
     if (resumeBtn) {
       setTab(resumeTab, resumeBtn);
-    } else if (start && initial !== "release") {
+    } else if (start) {
       setTab(initial, start);
     } else {
       void loadQueue();

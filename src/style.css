@@ -8861,6 +8861,21 @@ a.claim-app-bond:hover {
   margin: 0;
 }
 
+.kh-match-k {
+  margin: 0.75rem 0 0.2rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.kh-match-address {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  letter-spacing: 0.03em;
+}
+
 .kh-outputs {
   width: 100%;
   border-collapse: collapse;
