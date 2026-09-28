@@ -258,52 +258,18 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       rail === "lightning"
         ? { proposal_id: match.id, swap_id, refund_address }
         : { proposal_id: match.id, txid, vout, refund_address };
-    const claimBody =
-      rail === "lightning"
-        ? { proposal_id: match.id, swap_id }
-        : { proposal_id: match.id, txid, vout };
     try {
-      const tryRegister = () =>
-        authFetch(`${api}/refunds/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(registerBody),
-        });
-      let res = await tryRegister();
-      let body = (await res.json()) as {
+      const res = await authFetch(`${api}/refunds/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerBody),
+      });
+      const body = (await res.json()) as {
         error?: string;
         code?: string;
         package_error?: boolean;
         note?: string;
       };
-      if (
-        res.status === 409 &&
-        (body.code === "link_required" || body.error === "link_required")
-      ) {
-        const claimRes = await authFetch(`${api}/contributions/claim`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(claimBody),
-        });
-        const claimBodyJson = (await claimRes.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        if (!claimRes.ok) {
-          showRefundMsg(
-            claimBodyJson.error ||
-              "Could not link contribution — sign in and try again.",
-            "error",
-          );
-          return;
-        }
-        res = await tryRegister();
-        body = (await res.json()) as {
-          error?: string;
-          code?: string;
-          package_error?: boolean;
-          note?: string;
-        };
-      }
       if (res.ok || body.package_error) {
         showRefundMsg(
           body.package_error

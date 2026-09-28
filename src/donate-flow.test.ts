@@ -371,7 +371,8 @@ describe("donate credit UX (signed out)", () => {
     expect(document.body.textContent).toContain("Nostr");
     expect(document.querySelector(".donate-credit-advisory")).toBeTruthy();
     expect(document.body.textContent).toContain("Anonymous gifts still fund");
-    expect(document.body.textContent).toContain("sign in first");
+    expect(document.body.textContent).toContain("Sign in now");
+    expect(document.body.textContent).toContain("gifts stay anonymous once sent");
     expect(document.querySelector("#donate-credit-public")).toBeNull();
     expect(document.querySelector("#donate-credit-continue")?.textContent).toContain(
       "Continue anonymously",

@@ -121,7 +121,7 @@ function donateCreditStepHtml(signedIn: boolean): string {
         <p class="donate-lede">Sign in to appear on the funder list and get updates. Amounts stay private unless you opt in.</p>
       </div>
       <aside class="donate-credit-advisory" role="note">
-        <p>Anonymous gifts still fund the project. <button type="button" class="donate-credit-signin" id="donate-credit-signin-credit">sign in first</button> if you want credit later.</p>
+        <p>Anonymous gifts still fund the project. <button type="button" class="donate-credit-signin" id="donate-credit-signin-credit">Sign in now</button> if you want credit — gifts stay anonymous once sent.</p>
       </aside>
       <div class="donate-credit-login">
         ${loginChoicesHtml(undefined, currentReturnPath())}
@@ -167,7 +167,7 @@ function donatePayStepHtml(
              <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
              <p class="muted donate-legal-hint">Private. Used for a receipt after confirmation.</p>`
           : `<aside class="donate-credit-advisory" role="note">
-               <p>Giving anonymously. <button type="button" class="donate-credit-signin" id="donate-credit-signin">sign in first</button> for credit or a later refund.</p>
+               <p>Giving anonymously. <button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in now</button> if you want credit.</p>
              </aside>`
       }
     </div>`;
@@ -955,7 +955,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       /* ignore */
     }
     claimWrap.hidden = false;
-    claimWrap.innerHTML = `<p class="donate-credit-seen">Save this receipt for refunds (sign in later to register):</p>
+    claimWrap.innerHTML = `<p class="donate-credit-seen">Save this receipt. Refunds need this outpoint and a signed proof of the payment.</p>
       <ul class="donate-credit-utxos"><li>
         <span class="mono" title="${escapeHtml(outpoint)}">${escapeHtml(utxo.txid.slice(0, 12))}…:${utxo.vout}</span>
         <span>${escapeHtml(formatSats(utxo.value))}</span>
@@ -1180,7 +1180,7 @@ async function linkLightningCredit(
   } catch (e) {
     setDonateCreditStatus(
       panel,
-      `${(e as Error).message} You can retry from Funders after the swap indexes.`,
+      `${(e as Error).message} Try again after the swap indexes.`,
       "bad",
     );
   }

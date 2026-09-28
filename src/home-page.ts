@@ -990,7 +990,7 @@ export async function renderHome(
     const gapTicker = app.querySelector("#gap-ticker");
     if (gapTicker) gapTicker.innerHTML = gapTickerHtml(proposals, CLAIM_FLOOR_SATS);
     void bindActivityStrip(app);
-    void bindDonationsLive(app, { signedIn: Boolean(opts?.signedIn) });
+    void bindDonationsLive(app);
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
       const openBounties = bounties.filter(

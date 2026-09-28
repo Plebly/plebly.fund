@@ -1,8 +1,4 @@
 import { WORKERS_API } from "./config";
-import {
-  bindDonationClaimActions,
-  donationClaimActionHtml,
-} from "./donation-claim";
 import { applySeo, href, proposalHref, projectsHref, seoForRoute } from "./router";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
@@ -17,8 +13,6 @@ export type PublicDonation = {
   donated_at: string;
   anonymous: boolean;
   donor_display: string | null;
-  /** Unlinked confirmed outpoint — eligible for POST /contributions/claim. */
-  claimable?: boolean;
 };
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -66,10 +60,9 @@ export function donationRowCopy(d: PublicDonation): {
   };
 }
 
-function rowHtml(d: PublicDonation, opts: { signedIn: boolean }): string {
+function rowHtml(d: PublicDonation): string {
   const { donor, amount, target } = donationRowCopy(d);
   const when = timeAgoHtml(d.donated_at);
-  const claim = donationClaimActionHtml(d, opts);
   return `<li class="donations-row" data-donation-id="${escapeHtml(d.id)}">
     <span class="donations-donor">${escapeHtml(donor)}</span>
     <span class="donations-verb">donated</span>
@@ -77,17 +70,12 @@ function rowHtml(d: PublicDonation, opts: { signedIn: boolean }): string {
     <span class="donations-verb">to</span>
     <a class="donations-target" href="${donationTargetHref(d)}">${escapeHtml(target)}</a>
     ${when ? `<span class="donations-when muted">${when}</span>` : ""}
-    ${claim ? `<div class="donations-claim">${claim}</div>` : ""}
   </li>`;
 }
 
-export async function renderDonations(
-  shell: DonationsShell,
-  opts?: { signedIn?: boolean },
-): Promise<void> {
+export async function renderDonations(shell: DonationsShell): Promise<void> {
   applySeo(seoForRoute({ name: "donations" }));
   const app = document.querySelector<HTMLDivElement>("#app")!;
-  const signedIn = Boolean(opts?.signedIn);
   const params = new URLSearchParams(location.search);
   const page = Math.max(1, Math.floor(Number(params.get("page") || 1)));
   const offset = (page - 1) * PAGE_SIZE;
@@ -110,7 +98,7 @@ export async function renderDonations(
     });
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const list = donations.length
-      ? `<ul class="donations-list">${donations.map((d) => rowHtml(d, { signedIn })).join("")}</ul>`
+      ? `<ul class="donations-list">${donations.map((d) => rowHtml(d)).join("")}</ul>`
       : `<div class="empty-state">
           <p class="empty-state-title">No confirmed donations yet</p>
           <p class="empty-state-body"><a href="${projectsHref()}">Fund a project</a> or <a href="${href("/endowment")}">give to the endowment</a>.</p>
@@ -146,7 +134,6 @@ export async function renderDonations(
         ${pager}
       </section>
     `);
-    bindDonationClaimActions(app);
   } catch {
     app.innerHTML = shell(`
       <section class="wrap-wide declined-page donations-page">

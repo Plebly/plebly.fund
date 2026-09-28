@@ -1,8 +1,4 @@
 import {
-  bindDonationClaimActions,
-  donationClaimActionHtml,
-} from "./donation-claim";
-import {
   donationRowCopy,
   donationTargetHref,
   fetchPublicDonations,
@@ -13,14 +9,9 @@ import { escapeHtml, timeAgoHtml } from "./util";
 
 const POLL_MS = 15_000;
 
-function liveRowHtml(
-  d: PublicDonation,
-  isNew: boolean,
-  opts: { signedIn: boolean },
-): string {
+function liveRowHtml(d: PublicDonation, isNew: boolean): string {
   const { donor, amount, target } = donationRowCopy(d);
   const when = timeAgoHtml(d.donated_at);
-  const claim = donationClaimActionHtml(d, opts);
   return `<li class="donations-live-row${isNew ? " is-new" : ""}" data-donation-id="${escapeHtml(d.id)}">
     <p class="donations-live-copy">
       <span class="donations-live-donor">${escapeHtml(donor)}</span>
@@ -30,20 +21,13 @@ function liveRowHtml(
       <a class="donations-live-target" href="${donationTargetHref(d)}">${escapeHtml(target)}</a>
     </p>
     ${when ? `<p class="donations-live-when muted">${when}</p>` : ""}
-    ${claim ? `<div class="donations-claim">${claim}</div>` : ""}
   </li>`;
 }
 
-function panelHtml(
-  rows: PublicDonation[],
-  knownIds: Set<string>,
-  opts: { signedIn: boolean },
-): string {
+function panelHtml(rows: PublicDonation[], knownIds: Set<string>): string {
   const list = rows.length
     ? `<ul class="donations-live-list">${rows
-        .map((d) =>
-          liveRowHtml(d, knownIds.size > 0 && !knownIds.has(d.id), opts),
-        )
+        .map((d) => liveRowHtml(d, knownIds.size > 0 && !knownIds.has(d.id)))
         .join("")}</ul>`
     : `<div class="donations-live-empty">
         <p>No confirmed gifts yet — be the first.</p>
@@ -63,13 +47,9 @@ function panelHtml(
   </section>`;
 }
 
-export async function bindDonationsLive(
-  root: ParentNode,
-  opts?: { signedIn?: boolean },
-): Promise<void> {
+export async function bindDonationsLive(root: ParentNode): Promise<void> {
   const mount = root.querySelector<HTMLElement>("#donations-live-mount");
   if (!mount) return;
-  const signedIn = Boolean(opts?.signedIn);
 
   let known = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -78,14 +58,8 @@ export async function bindDonationsLive(
   const paint = async (initial: boolean) => {
     try {
       const { donations } = await fetchPublicDonations({ limit: 10, offset: 0 });
-      mount.innerHTML = panelHtml(
-        donations,
-        initial ? new Set() : known,
-        { signedIn },
-      );
+      mount.innerHTML = panelHtml(donations, initial ? new Set() : known);
       known = new Set(donations.map((d) => d.id));
-      bindDonationClaimActions(mount);
-      // Clear enter animation class after it plays.
       window.setTimeout(() => {
         mount
           .querySelectorAll(".donations-live-row.is-new")

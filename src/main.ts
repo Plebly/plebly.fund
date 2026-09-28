@@ -340,7 +340,7 @@ async function render() {
   }
   if (r.name === "donations") {
     applySeo(seoForRoute(r));
-    await renderDonations(shell, { signedIn: Boolean(currentUser) });
+    await renderDonations(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;
