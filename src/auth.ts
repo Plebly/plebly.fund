@@ -131,9 +131,13 @@ function oauthReturnTo(returnPath?: string): string {
   return `${window.location.origin}${href(pathname, search)}`;
 }
 
-/** Build GitHub OAuth URL; return_to is a full path URL (e.g. https://plebly.fund/propose). */
+/** Build GitHub OAuth URL; return_to is a full path URL (e.g. https://plebly.fund/propose).
+ * `n` busts a cached 302 from an older redirect_uri (browser redirect cache
+ * is keyed by the API URL and is not cleared by refreshing the SPA).
+ */
 export function githubLoginUrl(returnPath?: string): string {
-  return `${API()}/auth/github?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}`;
+  const n = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return `${API()}/auth/github?return_to=${encodeURIComponent(oauthReturnTo(returnPath))}&n=${encodeURIComponent(n)}`;
 }
 
 /** Start Account org-link OAuth (Bearer session → GitHub authorize URL). */
@@ -401,6 +405,18 @@ export function loginMenuHtml(returnPath?: string): string {
 
 /** Wire NIP-07 Nostr login buttons after each render. */
 export function bindLoginHandlers(onAuthed: () => void): void {
+  document.querySelectorAll<HTMLAnchorElement>('a[href*="/auth/github"]').forEach((el) => {
+    if (el.dataset.githubBound === "1") return;
+    el.dataset.githubBound = "1";
+    el.addEventListener("click", (ev) => {
+      if (ev.defaultPrevented) return;
+      if (ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) {
+        return;
+      }
+      ev.preventDefault();
+      window.location.assign(githubLoginUrl(currentReturnPath()));
+    });
+  });
   document.querySelectorAll<HTMLElement>("[data-nostr-login]").forEach((el) => {
     if (el.dataset.nostrBound === "1") return;
     el.dataset.nostrBound = "1";

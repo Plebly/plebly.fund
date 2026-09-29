@@ -67,8 +67,12 @@ beforeEach(() => {
 
 describe("login UX helpers", () => {
   it("builds GitHub OAuth URL with return_to", () => {
-    expect(githubLoginUrl("/account")).toContain("/auth/github?return_to=");
+    const url = githubLoginUrl("/account");
+    expect(url).toContain("/auth/github?");
+    expect(url).toContain("return_to=");
+    expect(url).toMatch(/[?&]n=/);
     expect(decodeURIComponent(githubLoginUrl("/propose"))).toContain("/propose");
+    expect(githubLoginUrl("/account")).not.toBe(githubLoginUrl("/account"));
   });
 
   it("loginChoicesHtml offers GitHub and Nostr (not X)", () => {
