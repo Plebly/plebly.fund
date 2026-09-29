@@ -25,6 +25,7 @@ import {
   ballotPanelHtml,
   refundRegisterHtml,
   shareSlotHtml,
+  sectionBodyHtml,
   statusClass,
   projectOutcomeHtml,
   statusLabel,
@@ -835,5 +836,34 @@ describe("proposal UI critical render helpers", () => {
     expect(body).toContain("escrow in");
     expect(body).not.toContain("CLAIM BOND");
     expect(body).not.toContain("DONATE / ESCROW ADDRESS");
+  });
+});
+
+describe("sectionBodyHtml verification checklist", () => {
+  it("renders numbered and bulleted checks as a list", () => {
+    const bullets = sectionBodyHtml(
+      "Verification",
+      "- Suite green\n- Docs updated\n- Changelog listed",
+      (s) => s,
+    );
+    expect(bullets).toContain("verify-steps");
+    expect(bullets).toContain("Suite green");
+    expect(bullets).not.toContain("prose-rich");
+
+    const numbered = sectionBodyHtml(
+      "Verification",
+      "1. tests\n2. docs\n3. changelog",
+      (s) => s,
+    );
+    expect(numbered).toContain("verify-steps");
+    expect(numbered).toContain("tests");
+
+    const prose = sectionBodyHtml(
+      "Verification",
+      "A reader opens the report and confirms a yes/no conclusion.",
+      (s) => `MD:${s}`,
+    );
+    expect(prose).toContain("prose-rich");
+    expect(prose).toContain("MD:");
   });
 });

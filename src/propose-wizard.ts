@@ -1,5 +1,9 @@
 import { formatSats, escapeHtml } from "./util";
 import { CLAIM_FLOOR_SATS } from "./config";
+import {
+  bountyVerificationFieldError,
+  namedRequirementLines,
+} from "./acceptance-lines";
 import type { DependsOnEntry, RelatedWorkEntry } from "./types";
 import type { MilestoneDraft } from "./propose-milestones";
 import { tosAckCardHtml } from "./tos-modal";
@@ -130,6 +134,7 @@ export type ScopeDraft = {
   deliverable: string;
   verification: string;
   out_of_scope: string;
+  proposal_type?: "bounty" | "direct";
 };
 
 /** Named form control error (matches `name=` on the propose form). */
@@ -213,6 +218,14 @@ export function validateScopeDraft(
       field: "verification",
       message: "Needs at least 40 characters.",
     });
+  } else if ((draft.proposal_type || "bounty") !== "direct") {
+    const lineErr = bountyVerificationFieldError(draft.verification);
+    if (lineErr) {
+      errors.push({
+        field: "verification",
+        message: lineErr,
+      });
+    }
   }
   if (draft.out_of_scope.trim().length < 10) {
     errors.push({
@@ -374,6 +387,21 @@ function clip(text: string, max = 160): string {
   return `${t.slice(0, max - 1)}…`;
 }
 
+function verificationReviewHtml(
+  proposalType: "bounty" | "direct",
+  verification: string,
+): string {
+  if (proposalType !== "direct") {
+    const lines = namedRequirementLines(verification);
+    if (lines.length >= 3) {
+      return `<ol class="propose-review-checks">${lines
+        .map((line) => `<li>${escapeHtml(line)}</li>`)
+        .join("")}</ol>`;
+    }
+  }
+  return `<p>${escapeHtml(clip(verification))}</p>`;
+}
+
 export function proposeReviewSummaryHtml(input: ReviewSummaryInput): string {
   const typeLabel = input.proposal_type === "direct" ? "Campaign" : "Bounty";
   const tags =
@@ -452,7 +480,7 @@ export function proposeReviewSummaryHtml(input: ReviewSummaryInput): string {
         </section>
         <section>
           <h4>Verification</h4>
-          <p>${escapeHtml(clip(input.verification))}</p>
+          ${verificationReviewHtml(input.proposal_type, input.verification)}
         </section>
         <section>
           <h4>Out of scope</h4>

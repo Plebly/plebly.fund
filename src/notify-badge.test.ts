@@ -74,6 +74,14 @@ describe("notificationNavBadgeHtml", () => {
     expect(html).toContain("data-nav-notify-dropdown");
     expect(notificationNavBadgeHtml(120)).toContain(">99+<");
   });
+
+  it("keeps the count in a button so the mobile drawer does not stretch it like a nav link", () => {
+    document.body.innerHTML = `<nav class="nav">${notificationNavBadgeHtml(99)}</nav>`;
+    const badge = document.querySelector("[data-nav-notify-badge]");
+    expect(badge?.tagName).toBe("BUTTON");
+    expect(badge?.textContent).toBe("99");
+    expect(badge?.textContent).not.toMatch(/\s/);
+  });
 });
 
 describe("updateNavUnreadBadge", () => {

@@ -318,11 +318,29 @@ html.pwa-standalone body {
     min-height: 44px;
     justify-content: flex-start;
   }
-  .site-header .nav-account-wrap,
   .site-header .nav-ops,
   .site-header .login-menu {
     display: block;
     width: 100%;
+  }
+  .site-header .nav-account-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    width: 100%;
+  }
+  .site-header .nav-account-wrap .nav-account {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .site-header .nav-notify {
+    display: contents;
+  }
+  .site-header .nav-notify-badge {
+    flex-shrink: 0;
+    align-self: center;
   }
   .site-header .login-menu-panel,
   .site-header .nav-notify-dropdown {
@@ -331,7 +349,11 @@ html.pwa-standalone body {
     min-width: 0;
     right: auto;
     top: auto;
+    left: auto;
     box-shadow: none;
+  }
+  .site-header .nav-notify-dropdown {
+    flex: 1 1 100%;
   }
 }
 
@@ -398,21 +420,27 @@ html.pwa-standalone body {
 .nav-account-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .nav-account {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
 }
 
 .nav-notify-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
   min-width: 1.2rem;
   height: 1.2rem;
   padding: 0 0.35rem;
+  border: none;
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-on);
@@ -422,7 +450,9 @@ html.pwa-standalone body {
   letter-spacing: 0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   text-decoration: none;
+  cursor: pointer;
   transition:
     transform 0.15s ease,
     background 0.15s ease;
@@ -4189,22 +4219,7 @@ a.project-card-by:hover .project-card-by-text {
   position: relative;
   display: inline-flex;
   align-items: center;
-}
-
-.nav-notify-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.4rem;
-  height: 1.4rem;
-  padding: 0 0.35rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-on);
-  font-size: 0.7rem;
-  font-family: var(--mono);
-  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .nav-notify-dropdown {
@@ -4291,6 +4306,13 @@ a.project-card-by:hover .project-card-by-text {
     right: 0.75rem;
     width: auto;
     top: 3.5rem;
+  }
+  .site-header .nav-notify-dropdown {
+    position: static;
+    left: auto;
+    right: auto;
+    width: 100%;
+    top: auto;
   }
 }
 
@@ -8257,11 +8279,16 @@ a.claim-app-bond:hover {
   text-transform: uppercase;
 }
 
-.propose-review-sections section p {
+.propose-review-sections section p,
+.propose-review-checks {
   margin: 0;
   color: var(--ink-secondary);
   font-size: 0.875rem;
   line-height: 1.45;
+}
+
+.propose-review-checks {
+  padding-left: 1.2rem;
 }
 
 @media (max-width: 640px) {
@@ -10891,6 +10918,41 @@ a.proposal-comment-author:hover {
   .site-header .login-menu-panel {
     margin-top: 0.2rem;
     background: var(--bg-hover);
+  }
+
+  .site-header .nav-account-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    width: 100%;
+  }
+
+  .site-header .nav-account-wrap .nav-account {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  .site-header .nav-notify {
+    display: contents;
+  }
+
+  .site-header .nav-notify-badge {
+    flex-shrink: 0;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  .site-header .nav-notify-dropdown {
+    flex: 1 1 100%;
+    position: static;
+    width: 100%;
+    min-width: 0;
+    left: auto;
+    right: auto;
+    top: auto;
+    box-shadow: none;
   }
 
   .site-header .login-menu-panel a,

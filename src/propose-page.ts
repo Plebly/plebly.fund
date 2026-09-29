@@ -51,7 +51,11 @@ import {
   type MilestoneDraft,
 } from "./propose-milestones";
 import { freshLinkedOrgs } from "./github-orgs-client";
-import { parseTagList } from "./proposal-tags";
+import {
+  BOUNTY_VERIFICATION_PLACEHOLDER,
+  bountyVerificationScoreHint,
+  CAMPAIGN_VERIFICATION_HINT,
+} from "./acceptance-lines";
 import { PROPOSAL_TEMPLATES } from "./proposal-templates";
 import {
   applyNamedFieldErrors,
@@ -542,8 +546,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             </label>
             <label class="field">
               <span>Verification</span>
-              <textarea name="verification" required minlength="40" rows="5" placeholder="Steps a reviewer can follow to confirm completion: commands, URLs, acceptance criteria.">${escapeHtml(prefill?.verification || "")}</textarea>
-              <span class="field-hint">Two independent reviewers should reach the same yes/no conclusion. Numbered steps (1. 2.) render as a checklist on the project page.</span>
+              <textarea name="verification" required minlength="40" rows="5" placeholder="${escapeHtml(BOUNTY_VERIFICATION_PLACEHOLDER).replace(/\n/g, "&#10;")}">${escapeHtml(prefill?.verification || "")}</textarea>
+              <span class="field-hint" id="propose-verification-hint">${CAMPAIGN_VERIFICATION_HINT}</span>
             </label>
             <label class="field">
               <span>Out of scope</span>
@@ -725,10 +729,28 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       });
     }
   };
+  const syncVerificationHint = () => {
+    const hint = form.querySelector<HTMLElement>("#propose-verification-hint");
+    const area = form.querySelector<HTMLTextAreaElement>(
+      'textarea[name="verification"]',
+    );
+    if (!hint || !area) return;
+    const campaign = readNamedValue(form, "proposal_type") === "direct";
+    hint.textContent = campaign
+      ? CAMPAIGN_VERIFICATION_HINT
+      : bountyVerificationScoreHint(area.value);
+  };
   form
     .querySelectorAll('input[name="proposal_type"], input[name="claim_mode"]')
     .forEach((el) => el.addEventListener("change", syncClaimModeFields));
+  form
+    .querySelectorAll('input[name="proposal_type"]')
+    .forEach((el) => el.addEventListener("change", syncVerificationHint));
+  form
+    .querySelector('textarea[name="verification"]')
+    ?.addEventListener("input", syncVerificationHint);
   syncClaimModeFields();
+  syncVerificationHint();
 
   const syncProposeOrgSlot = () => {
     if (isEdit) return;
@@ -971,6 +993,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         deliverable: readNamedValue(form, "deliverable"),
         verification: readNamedValue(form, "verification"),
         out_of_scope: readNamedValue(form, "out_of_scope"),
+        proposal_type:
+          readNamedValue(form, "proposal_type") === "direct"
+            ? "direct"
+            : "bounty",
       });
       if (!checked.ok) return showNamedFieldErrors(checked.errors);
       return true;
@@ -1578,6 +1604,10 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       deliverable: readNamedValue(form, "deliverable"),
       verification: readNamedValue(form, "verification"),
       out_of_scope: readNamedValue(form, "out_of_scope"),
+      proposal_type:
+        readNamedValue(form, "proposal_type") === "direct"
+          ? "direct"
+          : "bounty",
     });
     if (!scope.ok) {
       setWizardStep("scope");

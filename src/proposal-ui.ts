@@ -26,6 +26,7 @@ import {
   watchNewUtxos,
   type CreditPreferences,
 } from "./funder-credit";
+import { namedRequirementLines } from "./acceptance-lines";
 import { btnWithIcon, solidIcon } from "./icons";
 import {
   BITCOIN_NETWORK,
@@ -2516,12 +2517,7 @@ export function canEditProposal(
 }
 
 function verificationStepsHtml(body: string): string | null {
-  const items = body
-    .trim()
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => /^\d+\.\s+/.test(l))
-    .map((l) => l.replace(/^\d+\.\s+/, "").trim());
+  const items = namedRequirementLines(body);
   if (items.length < 2) return null;
   return `<ol class="verify-steps">${items
     .map((item) => `<li>${linkifyText(item)}</li>`)

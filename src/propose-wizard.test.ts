@@ -13,6 +13,12 @@ import {
   validateScopeDraft,
 } from "./propose-wizard";
 
+const NUMBERED_VERIFICATION = [
+  "1. Clone the public repository at the submitted commit.",
+  "2. Run the documented build and test commands.",
+  "3. Confirm two reviewers independently get the same yes/no.",
+].join("\n");
+
 describe("propose wizard steps", () => {
   it("orders five guided steps", () => {
     expect(PROPOSE_WIZARD_STEPS.map((s) => s.id)).toEqual([
@@ -109,8 +115,9 @@ describe("propose wizard validation", () => {
     const short = validateScopeDraft({
       problem: "too short",
       deliverable: "x".repeat(40),
-      verification: "x".repeat(40),
+      verification: NUMBERED_VERIFICATION,
       out_of_scope: "long enough",
+      proposal_type: "bounty",
     });
     expect(short.ok).toBe(false);
     if (!short.ok) {
@@ -123,6 +130,7 @@ describe("propose wizard validation", () => {
       deliverable: "short",
       verification: "short",
       out_of_scope: "x",
+      proposal_type: "bounty",
     });
     expect(many.ok).toBe(false);
     if (!many.ok) {
@@ -140,8 +148,54 @@ describe("propose wizard validation", () => {
         deliverable: "x".repeat(40),
         verification: "x".repeat(40),
         out_of_scope: "not included",
+        proposal_type: "bounty",
+      }),
+    ).toEqual({ ok: false, errors: expect.any(Array), error: expect.any(String), focus: "verification" });
+
+    expect(
+      validateScopeDraft({
+        problem: "x".repeat(40),
+        deliverable: "x".repeat(40),
+        verification: NUMBERED_VERIFICATION,
+        out_of_scope: "not included",
+        proposal_type: "bounty",
       }),
     ).toEqual({ ok: true });
+
+    expect(
+      validateScopeDraft({
+        problem: "x".repeat(40),
+        deliverable: "x".repeat(40),
+        verification: "x".repeat(40),
+        out_of_scope: "not included",
+        proposal_type: "direct",
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("requires 3–12 one-per-line checks on bounties", () => {
+    const two = validateScopeDraft({
+      problem: "x".repeat(40),
+      deliverable: "x".repeat(40),
+      verification: "1. first check here is long enough\n2. second check here is long enough",
+      out_of_scope: "not included",
+      proposal_type: "bounty",
+    });
+    expect(two.ok).toBe(false);
+    if (!two.ok) expect(two.focus).toBe("verification");
+
+    const thirteen = Array.from({ length: 13 }, (_, i) => `${i + 1}. check ${i + 1}`).join(
+      "\n",
+    );
+    const overflow = validateScopeDraft({
+      problem: "x".repeat(40),
+      deliverable: "x".repeat(40),
+      verification: thirteen,
+      out_of_scope: "not included",
+      proposal_type: "bounty",
+    });
+    expect(overflow.ok).toBe(false);
+    if (!overflow.ok) expect(overflow.error).toMatch(/At most 12/);
   });
 
   it("rejects target_sats below the claim floor", () => {
@@ -209,7 +263,7 @@ describe("propose review summary", () => {
       cover_image: "https://example.com/c.jpg",
       problem: "Operators lack a clear guide. ".repeat(8),
       deliverable: "Publish a guide with examples and an OSI license.",
-      verification: "1. Open the URL. 2. Follow setup from clean env.",
+      verification: NUMBERED_VERIFICATION,
       out_of_scope: "Hosted ops and translations.",
       notes: "See related work.",
       target_sats: 2_000_000,
@@ -235,6 +289,8 @@ describe("propose review summary", () => {
     expect(html).toContain("1 link");
     expect(html).toContain("Submission fee");
     expect(html).toContain("10,000 sats");
+    expect(html).toContain("propose-review-checks");
+    expect(html).toContain("Clone the public repository");
     expect(html).toContain("…");
   });
 
