@@ -534,7 +534,7 @@ describe("listing ballot status chrome", () => {
     expect(isDemotedAiOutcome("pass")).toBe(false);
     const html = aiReviewCardHtml({
       outcome: "bypass",
-      reasoning: "AI Reviewer skipped: listing tags are outside competence.",
+      reasoning: "AI Reviewer skipped for campaign (direct) listings",
     });
     expect(html).toContain("<details");
     expect(html).toContain("is-tucked");

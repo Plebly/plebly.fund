@@ -126,7 +126,7 @@ export function aiReviewCardHtml(
     shown.outcome === "unavailable"
       ? `<p class="ai-next">Intelligence was unavailable. Humans continue the review.</p>`
       : shown.outcome === "bypass"
-        ? `<p class="ai-next">This listing is outside the AI Reviewer's competence. Humans continue.</p>`
+        ? `<p class="ai-next">Campaign listings skip the AI Reviewer. Humans continue.</p>`
         : shown.outcome === "ambiguous"
           ? `<p class="ai-next">Needs humans. Escalate keeps the ballot open for reviewers.</p>`
           : `<p class="ai-next">Hybrid seat: confident pass/fail is a decisive vote. Challenge AI to escalate to humans. Never releases funds.</p>`;
