@@ -197,6 +197,144 @@ html.pwa-standalone body {
   justify-content: flex-end;
 }
 
+.nav-toggle {
+  display: none;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.nav-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.nav-toggle-pancake {
+  position: relative;
+  display: block;
+  width: 1.125rem;
+  height: 0.875rem;
+}
+
+.nav-toggle-pancake span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+  transition:
+    transform 0.15s ease,
+    top 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.nav-toggle-pancake span:nth-child(1) {
+  top: 0;
+}
+
+.nav-toggle-pancake span:nth-child(2) {
+  top: 50%;
+  margin-top: -1px;
+}
+
+.nav-toggle-pancake span:nth-child(3) {
+  top: auto;
+  bottom: 0;
+}
+
+.nav-toggle[aria-expanded="true"] .nav-toggle-pancake span:nth-child(1) {
+  top: 50%;
+  margin-top: -1px;
+  transform: rotate(45deg);
+}
+
+.nav-toggle[aria-expanded="true"] .nav-toggle-pancake span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle[aria-expanded="true"] .nav-toggle-pancake span:nth-child(3) {
+  top: 50%;
+  bottom: auto;
+  margin-top: -1px;
+  transform: rotate(-45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-toggle-pancake span {
+    transition: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+  .site-header {
+    position: relative;
+    z-index: 20;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .header-end {
+    display: none;
+    flex-basis: 100%;
+    width: 100%;
+    overflow: visible;
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .site-header.is-nav-open .header-end {
+    display: flex;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0 0.75rem;
+    border-top: 1px solid var(--line-soft);
+    background: var(--bg);
+  }
+  .nav {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0.15rem;
+  }
+  .nav-divider {
+    display: none;
+  }
+  .nav a,
+  .nav .link-btn,
+  .site-header .login-menu > summary {
+    width: 100%;
+    min-height: 44px;
+    justify-content: flex-start;
+  }
+  .site-header .nav-account-wrap,
+  .site-header .nav-ops,
+  .site-header .login-menu {
+    display: block;
+    width: 100%;
+  }
+  .site-header .login-menu-panel,
+  .site-header .nav-notify-dropdown {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    right: auto;
+    top: auto;
+    box-shadow: none;
+  }
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -879,7 +1017,7 @@ html.pwa-standalone body {
 .site-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8446,25 +8584,6 @@ a.claim-app-bond:hover {
 /* profile link Remove uses .editor-remove */
 
 @media (max-width: 640px) {
-  .site-header {
-    flex-wrap: nowrap;
-    gap: 0.5rem;
-  }
-  .header-end {
-    width: auto;
-    min-width: 0;
-    flex: 1;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    justify-content: flex-start;
-    scrollbar-width: none;
-  }
-  .header-end::-webkit-scrollbar {
-    display: none;
-  }
-  .nav {
-    flex-wrap: nowrap;
-  }
   .link-row,
   .account-profile-main .link-row {
     grid-template-columns: 1fr;
@@ -8474,7 +8593,7 @@ a.claim-app-bond:hover {
   .how-grid,
   .how-inline,
   .trust-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
   .about-param {
     grid-template-columns: 1fr;
@@ -8510,6 +8629,9 @@ a.claim-app-bond:hover {
   }
   .proposal-donate-slot {
     display: none;
+  }
+  .proposal-layout {
+    padding-bottom: 5.5rem;
   }
   .proposal-mobile-cta {
     display: block;
@@ -8614,6 +8736,7 @@ a.claim-app-bond:hover {
 }
 
 .btn:focus-visible,
+.nav-toggle:focus-visible,
 .site-modal-close:focus-visible,
 .account-tab:focus-visible,
 .donate-rail:focus-visible,
@@ -8627,13 +8750,14 @@ a.claim-app-bond:hover {
 /* —— Review / AI / login (resolution layer) —— */
 .login-menu {
   position: relative;
-  display: flex;
-  align-items: center;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .login-menu > summary {
   list-style: none;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .login-menu > summary::-webkit-details-marker {
@@ -10732,5 +10856,204 @@ a.proposal-comment-author:hover {
   .path-card:hover,
   .project-card:hover {
     transform: none;
+  }
+}
+
+/* —— Mobile pass (must follow component rules so drawer/login win cascade) —— */
+@media (max-width: 768px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .brand {
+    min-height: 44px;
+  }
+
+  .signet-banner-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    padding: 0.7rem 0;
+  }
+
+  .signet-banner-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0.15rem;
+  }
+
+  .signet-banner-links-label {
+    flex: 1 0 100%;
+  }
+
+  .site-header .login-menu-panel {
+    margin-top: 0.2rem;
+    background: var(--bg-hover);
+  }
+
+  .site-header .login-menu-panel a,
+  .site-header .login-menu-panel .login-menu-item {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .footer-col a,
+  .footer-col-follow .social-accounts a {
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .account-tab {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 640px) {
+  .btn,
+  .link-btn.btn {
+    min-height: 44px;
+  }
+
+  .landing-cta-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+  }
+
+  .landing-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .landing-cta-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    align-self: stretch;
+  }
+
+  .login-choices-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .login-choices-actions .btn {
+    width: 100%;
+  }
+
+  .auth-gate {
+    padding: 1rem 0 1.5rem;
+  }
+
+  .auth-gate-card {
+    width: 100%;
+    padding: 1.25rem 1rem 1.15rem;
+  }
+
+  .discover-controls,
+  .discover-more-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .discover-search,
+  .discover-sort,
+  .discover-filter,
+  .discover-search input,
+  .discover-sort select,
+  .discover-filter select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .discover-search input,
+  .discover-sort select,
+  .discover-filter select,
+  .discover-more summary {
+    min-height: 44px;
+  }
+
+  .discover-more summary {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+  }
+
+  .field input:not([type="radio"]):not([type="checkbox"]),
+  .field textarea,
+  .field select,
+  .form-block textarea,
+  .form-block input[type="text"],
+  .form-block input[type="url"],
+  .form-block input[type="number"],
+  .form-block input[type="date"],
+  .form-block select {
+    font-size: 16px;
+  }
+
+  .site-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .site-modal-card,
+  .donate-modal-card {
+    width: 100%;
+    max-height: min(92dvh, 48rem);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .site-modal-close {
+    width: 2.75rem;
+    height: 2.75rem;
+    top: 0.45rem;
+    right: 0.45rem;
+  }
+
+  body.modal-open .proposal-mobile-cta {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .donate-modal-card .donate-step-actions .btn,
+  .donate-modal-card .login-choices-actions .btn {
+    width: 100%;
+  }
+
+  .endowment-cta-row {
+    gap: 0.45rem 1rem;
+  }
+
+  .endowment-donate-btn {
+    min-height: 44px;
+  }
+
+  .endowment-secondary-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .about-cta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .about-cta .btn {
+    width: 100%;
+  }
+
+  .gov-card-actions .btn,
+  .form-actions .btn {
+    min-height: 44px;
+  }
+
+  .stats-primary-label,
+  .stats-metric dt {
+    white-space: nowrap;
   }
 }

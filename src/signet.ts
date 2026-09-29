@@ -36,7 +36,7 @@ export function signetSiteBannerHtml(): string {
         <strong>Signet</strong> — test coins only. Listed projects share one test escrow; balances are not separate pots.
       </p>
       <p class="signet-banner-links">
-        Get free signet sats:
+        <span class="signet-banner-links-label">Get free signet sats:</span>
         ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
         <span aria-hidden="true"> · </span>
         <a href="${SIGNET_EXPLORER}" target="_blank" rel="noreferrer noopener">Signet explorer</a>

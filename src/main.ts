@@ -40,6 +40,7 @@ import { renderStats } from "./stats-page";
 import { renderWanted } from "./wanted-page";
 import { syncStoredCreditPreferencesFromProfile } from "./funder-credit";
 import { pleblySocialAccountsHtml } from "./icons";
+import { SITE_NAV_ID, bindMobileNav, mobileNavToggleHtml } from "./nav-menu";
 import { findListedProposalById } from "./github";
 import {
   applySeo,
@@ -193,7 +194,8 @@ function shell(inner: string): string {
         <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="Plebly" width="28" height="28" />
         <span>Plebly</span>
       </a>
-      <div class="header-end">
+      ${mobileNavToggleHtml()}
+      <div class="header-end" id="${SITE_NAV_ID}">
         <nav class="nav" aria-label="Primary">
           <a href="${projectsHref()}" class="${listing.bounties ? "active" : ""}"${listing.bounties ? ' aria-current="page"' : ""}>Bounties</a>
           <a href="${campaignsHref()}" class="${listing.campaigns ? "active" : ""}"${listing.campaigns ? ' aria-current="page"' : ""}>Campaigns</a>
@@ -217,6 +219,7 @@ function bindAuthHandlers() {
   });
   bindLoginHandlers(() => void render());
   bindNotificationDropdown();
+  bindMobileNav();
 }
 
 function scrollToHashTarget(): void {
