@@ -1,6 +1,6 @@
 /* App shell SW — cache hashed Vite assets for fast cold start; never cache HTML
    so deploys never point at stale chunk names. Handles Web Push for installed PWA. */
-const CACHE = "plebly-assets-v1";
+const CACHE = "plebly-assets-v2";
 
 function isHashedAsset(pathname) {
   return (
@@ -88,6 +88,8 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const { pathname } = new URL(event.request.url);
   if (!isHashedAsset(pathname)) return;
+  // Never cache-first JS: a stale bundle kept the old GitHub login URL.
+  if (/\.js$/i.test(pathname)) return;
   event.respondWith(cacheFirst(event.request));
 });
 
