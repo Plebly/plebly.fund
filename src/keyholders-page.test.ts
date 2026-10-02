@@ -11,6 +11,7 @@ import {
   keyholderReceiveAddress,
   keyholderSessionStale,
   keyholderSessionNeedsReauth,
+  paintKeyholderRelogin,
   KEYHOLDER_SESSION_MAX_AGE_MS,
   KEYHOLDER_REAUTH_WARN_MS,
   saveSettleDraft,
@@ -555,6 +556,23 @@ describe("keyholderPackageSentence", () => {
     expect(readSettleDraft("prop-2", store)).toBeNull();
     clearSettleDraft("prop-1", store);
     expect(readSettleDraft("prop-1", store)).toBeNull();
+  });
+
+  it("paintKeyholderRelogin unhides banner and sets hrefs", () => {
+    document.body.innerHTML = `
+      <div id="kh-relogin" hidden>
+        <a id="kh-relogin-link" href="#">Log in with GitHub</a>
+      </div>
+      <a id="kh-relogin-inline" href="#" hidden>Log in with GitHub</a>
+    `;
+    paintKeyholderRelogin(document.body, "/auth/github?return=%2Fkeyholders");
+    const box = document.querySelector<HTMLElement>("#kh-relogin");
+    const link = document.querySelector<HTMLAnchorElement>("#kh-relogin-link");
+    const inline = document.querySelector<HTMLAnchorElement>("#kh-relogin-inline");
+    expect(box?.hidden).toBe(false);
+    expect(link?.href).toContain("/auth/github");
+    expect(inline?.hidden).toBe(false);
+    expect(inline?.href).toContain("/auth/github");
   });
 
   it("asks for re-login inside the warn window and not on a fresh login", () => {

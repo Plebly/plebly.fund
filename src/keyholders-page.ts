@@ -400,6 +400,19 @@ export function keyholderSessionNeedsReauth(
   return now - issued >= KEYHOLDER_SESSION_MAX_AGE_MS - KEYHOLDER_REAUTH_WARN_MS;
 }
 
+/** Unhide relogin chrome; does not logout. Same gate Propose uses. */
+export function paintKeyholderRelogin(app: ParentNode, href: string): void {
+  const box = app.querySelector<HTMLElement>("#kh-relogin");
+  const link = app.querySelector<HTMLAnchorElement>("#kh-relogin-link");
+  const inline = app.querySelector<HTMLAnchorElement>("#kh-relogin-inline");
+  if (link) link.href = href;
+  if (inline) {
+    inline.href = href;
+    inline.hidden = false;
+  }
+  if (box) box.hidden = false;
+}
+
 export function saveSettleDraft(draft: SettleDraft, storage: Storage = localStorage): void {
   const txid = draft.txid.trim();
   if (!draft.proposalId || !draft.disburseId || !/^[0-9a-fA-F]{64}$/.test(txid)) return;
@@ -2319,15 +2332,7 @@ export async function renderKeyholders(
       const token = sessionStorage.getItem("plebly_session");
       if (keyholderSessionNeedsReauth(token)) {
         const href = githubLoginUrl(currentReturnPath());
-        const box = app.querySelector<HTMLElement>("#kh-relogin");
-        const link = app.querySelector<HTMLAnchorElement>("#kh-relogin-link");
-        const inline = app.querySelector<HTMLAnchorElement>("#kh-relogin-inline");
-        if (link) link.href = href;
-        if (inline) {
-          inline.href = href;
-          inline.hidden = false;
-        }
-        if (box) box.hidden = false;
+        paintKeyholderRelogin(app, href);
         captureReturn();
         setMsg("This login is about to expire for keyholder actions. Log in again — the settle txid stays on this proposal.");
         return;
@@ -2840,6 +2845,10 @@ export async function renderKeyholders(
     paintQueueCount("bond_refund", disburse.bond_refund || 0);
     paintQueueCount("contrib_refund", disburse.contrib_refund || 0);
   };
+
+  if (keyholderSessionNeedsReauth(sessionStorage.getItem("plebly_session"))) {
+    paintKeyholderRelogin(app, githubLoginUrl(currentReturnPath()));
+  }
 
   void loadSignerNames().finally(() => {
     const resumeRaw = resume?.tab || "";
