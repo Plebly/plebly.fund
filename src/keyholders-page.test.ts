@@ -12,6 +12,7 @@ import {
   keyholderSessionStale,
   keyholderSessionNeedsReauth,
   paintKeyholderRelogin,
+  keyholderSeatedDeskNeedsRelogin,
   KEYHOLDER_SESSION_MAX_AGE_MS,
   KEYHOLDER_REAUTH_WARN_MS,
   saveSettleDraft,
@@ -575,6 +576,40 @@ describe("keyholderPackageSentence", () => {
     expect(inline?.href).toContain("/auth/github");
   });
 
+  it("seated desk with no token paints #kh-relogin", () => {
+    document.body.innerHTML = `
+      <div id="kh-relogin" hidden>
+        <a id="kh-relogin-link" href="#">Log in with GitHub</a>
+      </div>
+      <a id="kh-relogin-inline" href="#" hidden>Log in with GitHub</a>
+    `;
+    // keyholderSessionNeedsReauth(null) stays false for other callers; seated gate paints.
+    expect(keyholderSessionNeedsReauth(null)).toBe(false);
+    expect(keyholderSeatedDeskNeedsRelogin(null)).toBe(true);
+    if (keyholderSeatedDeskNeedsRelogin(null)) {
+      paintKeyholderRelogin(document.body, "/auth/github?return=%2Fkeyholders");
+    }
+    expect(document.querySelector<HTMLElement>("#kh-relogin")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLAnchorElement>("#kh-relogin-inline")?.hidden).toBe(false);
+  });
+
+  it("seated desk with a fresh token leaves #kh-relogin hidden", () => {
+    document.body.innerHTML = `
+      <div id="kh-relogin" hidden>
+        <a id="kh-relogin-link" href="#">Log in with GitHub</a>
+      </div>
+      <a id="kh-relogin-inline" href="#" hidden>Log in with GitHub</a>
+    `;
+    const header = btoa(JSON.stringify({ alg: "none" })).replace(/=+$/, "");
+    const fresh = `${header}.${btoa(JSON.stringify({ iat: Math.floor(Date.now() / 1000) })).replace(/=+$/, "")}.sig`;
+    expect(keyholderSeatedDeskNeedsRelogin(fresh)).toBe(false);
+    if (keyholderSeatedDeskNeedsRelogin(fresh)) {
+      paintKeyholderRelogin(document.body, "/auth/github?return=%2Fkeyholders");
+    }
+    expect(document.querySelector<HTMLElement>("#kh-relogin")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLAnchorElement>("#kh-relogin-inline")?.hidden).toBe(true);
+  });
+
   it("asks for re-login inside the warn window and not on a fresh login", () => {
     const header = btoa(JSON.stringify({ alg: "none" })).replace(/=+$/, "");
     const fresh = `${header}.${btoa(JSON.stringify({ iat: Math.floor(Date.now() / 1000) })).replace(/=+$/, "")}.sig`;
@@ -588,6 +623,10 @@ describe("keyholderPackageSentence", () => {
     expect(keyholderSessionNeedsReauth(fresh)).toBe(false);
     expect(keyholderSessionNeedsReauth(near)).toBe(true);
     expect(keyholderSessionNeedsReauth(null)).toBe(false);
+    // Seated early-paint: missing token still needs the banner (null ≠ "no reauth" for desk).
+    expect(keyholderSeatedDeskNeedsRelogin(null)).toBe(true);
+    expect(keyholderSeatedDeskNeedsRelogin(fresh)).toBe(false);
+    expect(keyholderSeatedDeskNeedsRelogin(near)).toBe(true);
     expect(receiveAddressUnchanged("tb1qabc", "tb1qabc")).toBe(true);
     expect(receiveAddressUnchanged("TB1QABC", "tb1qabc")).toBe(true);
     expect(receiveAddressUnchanged("tb1qchanged", "tb1qabc")).toBe(false);
