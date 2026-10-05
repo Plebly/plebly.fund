@@ -752,6 +752,62 @@ describe("listing ballot status chrome", () => {
     );
   });
 
+  it("in_review + closed ballot says disputed only when donor status is flagged", () => {
+    const closedApprove = {
+      id: "d-closed-approve",
+      proposal_id: "PLEBLY-2026-001",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-01-02T00:00:00Z",
+      status: "closed",
+      counts: { yes: 3, no: 0, abstain: 0 },
+      vote_count: 3,
+      passed: true,
+      result: "approve",
+    };
+    const ctx = (donorReviewStatus: string | null) => ({
+      state: "in_review",
+      status: "in_review",
+      donorReviewStatus,
+      listingStatus: "in_review",
+    });
+    expect(listingBallotStatusLabel(closedApprove, ctx("flagged"))).toBe(
+      "Flagged — disputed",
+    );
+    expect(listingBallotStatusLabel(closedApprove, ctx("FLAGGED"))).toBe(
+      "Flagged — disputed",
+    );
+    for (const donor of ["window_open", "auto_completed", null]) {
+      const label = listingBallotStatusLabel(closedApprove, ctx(donor));
+      expect(label).toBe("In review");
+      expect(label).not.toMatch(/disputed/i);
+    }
+    // No donor field at all (clean settle before donor_reviews hydrate).
+    expect(
+      listingBallotStatusLabel(closedApprove, {
+        state: "in_review",
+        status: "in_review",
+      }),
+    ).toBe("In review");
+
+    document.body.innerHTML = `
+      <div class="proposal-hero-top"><span class="pill-status">In review</span></div>
+      <div class="proposal-funding-bar"><span class="funding-meter-label">In review</span></div>
+      <a id="review-side-link" href="#proposal-review">In review</a>
+      <div id="review-panel"></div>`;
+    syncListingBallotChrome(document.body, closedApprove, ctx("window_open"));
+    expect(document.querySelector(".pill-status")?.textContent).toBe("In review");
+    expect(document.querySelector(".funding-meter-label")?.textContent).toBe(
+      "In review",
+    );
+    expect(document.querySelector("#review-side-link")?.textContent).toBe(
+      "In review",
+    );
+    reapplyListingBallotChrome(document.body);
+    expect(document.querySelector(".pill-status")?.textContent).toBe("In review");
+  });
+
   it("closed reject paints Closed when claim/listing is actually rejected", () => {
     document.body.innerHTML = `
       <div class="proposal-hero-top"><span class="pill-status">Rejected</span></div>

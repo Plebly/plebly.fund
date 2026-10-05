@@ -261,7 +261,8 @@ const LISTING_CLOSED_STATES = new Set([
 
 /**
  * True when listing chrome may paint "Closed — …" from a tallied ballot.
- * API claim still in_review / donor flagged is disputed — not a closed listing.
+ * API claim still in_review (or donor flagged) is live — not a closed listing.
+ * Only donor_review_status === "flagged" means disputed.
  */
 export function claimAllowsClosedBallotListingChrome(
   ctx?: ListingBallotClaimCtx | null,
@@ -302,10 +303,12 @@ export function listingBallotStatusLabel(
 ): string {
   if (d.status === "open") return primaryBallotStatusLabel(d);
   if (!claimAllowsClosedBallotListingChrome(ctx)) {
+    // Only an active donor flag is a dispute. window_open / auto_completed /
+    // null (clean settle, window merely open) stays plain lifecycle copy.
     if (String(ctx?.donorReviewStatus || "").toLowerCase() === "flagged") {
       return flaggedDisputedListingLabel();
     }
-    return "In review — disputed";
+    return "In review";
   }
   return closedBallotSummary(d);
 }
