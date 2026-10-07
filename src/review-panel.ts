@@ -535,6 +535,23 @@ export function reapplyListingBallotChrome(root: ParentNode = document): void {
   if (sentence) sentence.textContent = label;
 }
 
+/**
+ * Apply visual + accessible state to vote buttons reflecting the user's
+ * recorded vote. Adds `is-selected` class and `aria-pressed="true"` to
+ * the matching button; clears state from all others.
+ */
+function applyVoteButtonState(
+  actions: HTMLElement,
+  myVote: "yes" | "no" | "abstain" | null | undefined,
+): void {
+  actions.querySelectorAll<HTMLButtonElement>("[data-rev-vote]").forEach((btn) => {
+    const vote = btn.dataset.revVote;
+    const selected = Boolean(myVote) && vote === myVote;
+    btn.classList.toggle("is-selected", selected);
+    btn.setAttribute("aria-pressed", String(selected));
+  });
+}
+
 /** Paint open/closed decision UI. Exported for fulfiller gate tests. */
 export function renderDecision(
   root: ParentNode,
@@ -596,6 +613,7 @@ export function renderDecision(
       actions.innerHTML = `<p class="review-fulfiller-blocked muted" role="status">${escapeHtml(FULFILLER_CANNOT_VOTE)}</p>`;
     } else {
       actions.hidden = !(d.status === "open" && isReviewer);
+      applyVoteButtonState(actions, d.my_vote);
     }
   }
   if (dissent) dissent.hidden = fulfillerBlocked ? true : !(isReviewer && !mine);

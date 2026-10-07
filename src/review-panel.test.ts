@@ -438,6 +438,109 @@ describe("closed ballot / fulfiller copy", () => {
 });
 
 
+describe("ballot vote state display", () => {
+  function mountReviewPanel(): HTMLElement {
+    document.body.innerHTML = reviewPanelHtml("p1");
+    return document.body.querySelector("#review-panel")!;
+  }
+
+  function decisionWithVote(
+    myVote: "yes" | "no" | "abstain" | null,
+  ): Parameters<typeof renderDecision>[1] {
+    return {
+      id: "d-vote",
+      proposal_id: "p1",
+      kind: "deliverable_confirm",
+      round: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      closes_at: "2026-01-08T00:00:00Z",
+      status: "open",
+      counts: { yes: myVote === "yes" ? 1 : 0, no: myVote === "no" ? 1 : 0, abstain: myVote === "abstain" ? 1 : 0 },
+      vote_count: myVote ? 1 : 0,
+      my_vote: myVote,
+    };
+  }
+
+  it("marks yes button selected when my_vote is yes", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, decisionWithVote("yes"), true, "github:1", false);
+    const yesBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="yes"]')!;
+    const noBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="no"]')!;
+    const abstainBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="abstain"]')!;
+
+    expect(yesBtn.classList.contains("is-selected")).toBe(true);
+    expect(yesBtn.getAttribute("aria-pressed")).toBe("true");
+
+    expect(noBtn.classList.contains("is-selected")).toBe(false);
+    expect(noBtn.getAttribute("aria-pressed")).toBe("false");
+
+    expect(abstainBtn.classList.contains("is-selected")).toBe(false);
+    expect(abstainBtn.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("marks no button selected when my_vote is no", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, decisionWithVote("no"), true, "github:1", false);
+    const yesBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="yes"]')!;
+    const noBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="no"]')!;
+    const abstainBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="abstain"]')!;
+
+    expect(yesBtn.classList.contains("is-selected")).toBe(false);
+    expect(yesBtn.getAttribute("aria-pressed")).toBe("false");
+
+    expect(noBtn.classList.contains("is-selected")).toBe(true);
+    expect(noBtn.getAttribute("aria-pressed")).toBe("true");
+
+    expect(abstainBtn.classList.contains("is-selected")).toBe(false);
+    expect(abstainBtn.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("marks abstain button selected when my_vote is abstain", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, decisionWithVote("abstain"), true, "github:1", false);
+    const yesBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="yes"]')!;
+    const noBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="no"]')!;
+    const abstainBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="abstain"]')!;
+
+    expect(yesBtn.classList.contains("is-selected")).toBe(false);
+    expect(yesBtn.getAttribute("aria-pressed")).toBe("false");
+
+    expect(noBtn.classList.contains("is-selected")).toBe(false);
+    expect(noBtn.getAttribute("aria-pressed")).toBe("false");
+
+    expect(abstainBtn.classList.contains("is-selected")).toBe(true);
+    expect(abstainBtn.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("no button selected when my_vote is null", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, decisionWithVote(null), true, "github:1", false);
+    const yesBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="yes"]')!;
+    const noBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="no"]')!;
+    const abstainBtn = panel.querySelector<HTMLButtonElement>('[data-rev-vote="abstain"]')!;
+
+    expect(yesBtn.classList.contains("is-selected")).toBe(false);
+    expect(yesBtn.getAttribute("aria-pressed")).toBe("false");
+
+    expect(noBtn.classList.contains("is-selected")).toBe(false);
+    expect(noBtn.getAttribute("aria-pressed")).toBe("false");
+
+    expect(abstainBtn.classList.contains("is-selected")).toBe(false);
+    expect(abstainBtn.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("vote state updates when re-rendered with different my_vote (simulates reload)", () => {
+    const panel = mountReviewPanel();
+    renderDecision(panel, decisionWithVote("yes"), true, "github:1", false);
+    expect(panel.querySelector('[data-rev-vote="yes"]')?.classList.contains("is-selected")).toBe(true);
+
+    renderDecision(panel, decisionWithVote("no"), true, "github:1", false);
+    expect(panel.querySelector('[data-rev-vote="yes"]')?.classList.contains("is-selected")).toBe(false);
+    expect(panel.querySelector('[data-rev-vote="no"]')?.classList.contains("is-selected")).toBe(true);
+  });
+});
+
+
 describe("listing ballot status chrome", () => {
   it("primaryBallotStatusLabel unifies open extension and closed tallies", () => {
     expect(

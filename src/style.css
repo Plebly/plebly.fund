@@ -10211,6 +10211,25 @@ a.proposal-comment-author:hover {
   margin-top: 0.75rem;
 }
 
+.review-actions [data-rev-vote].is-selected {
+  pointer-events: auto;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.review-actions [data-rev-vote="yes"].is-selected {
+  box-shadow: inset 0 0 0 2px var(--good);
+  background: rgba(var(--good-rgb), 0.12);
+  color: var(--good);
+}
+
+.review-actions [data-rev-vote="no"].is-selected {
+  box-shadow: inset 0 0 0 2px var(--bad);
+  background: rgba(var(--bad-rgb), 0.12);
+  color: var(--bad);
+}
+
 .review-dissent {
   margin-top: 1rem;
   padding-top: 0.875rem;
