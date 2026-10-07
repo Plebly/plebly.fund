@@ -11,6 +11,7 @@ import {
   removeWatch,
   watchStorageId,
 } from "./builder";
+import { isDonateBlocked } from "./next-action";
 import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
@@ -387,6 +388,7 @@ export function proposalCardHtml(
   watching: boolean,
 ): string {
   const status = String(p.status);
+  const donateBlocked = isDonateBlocked(p, null);
   const proposer = projectCardProposerHtml(p, {
     profileHref,
     orgHref,
@@ -463,7 +465,7 @@ export function proposalCardHtml(
       <div class="project-card-actions">
         ${proposer}
         ${watchCtrl}
-        <a class="btn project-donate-btn" href="${donateHref}">Donate</a>
+        ${donateBlocked ? "" : `<a class="btn project-donate-btn" href="${donateHref}">Donate</a>`}
       </div>
     </article>`;
 }

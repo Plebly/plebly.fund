@@ -52,7 +52,7 @@ import {
   statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
-import { resolveNextAction } from "./next-action";
+import { isDonateBlocked, resolveNextAction } from "./next-action";
 import {
   bindListingReportControl,
   listingReportControlHtml,
@@ -527,10 +527,12 @@ export async function renderProposalPage(
       match.id,
     );
 
+    const donateBlocked = isDonateBlocked(match, null);
     const escrowOk =
       Boolean(match.escrow_address) &&
       escrowAddressMatchesNetwork(String(match.escrow_address)) &&
-      isDonateChromeStatus(String(match.status));
+      isDonateChromeStatus(String(match.status)) &&
+      !donateBlocked;
     const wantsDonate =
       escrowOk &&
       (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||

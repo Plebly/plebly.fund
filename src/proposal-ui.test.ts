@@ -3,6 +3,7 @@ import {
   bindStructuredFunding,
   canEditProposal,
   deliverableChipHtml,
+  donateModalHtml,
   donatePanelHtml,
   fundingBarScale,
   fundingBarTrackHtml,
@@ -1047,5 +1048,71 @@ describe("proposal UI critical render helpers", () => {
     expect(body).toContain("escrow in");
     expect(body).not.toContain("CLAIM BOND");
     expect(body).not.toContain("DONATE / ESCROW ADDRESS");
+  });
+
+  it("donateModalHtml returns empty when structured_state is voided", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      structured_state: "voided",
+      milestones: [],
+    } as Proposal);
+    expect(html).toBe("");
+  });
+
+  it("donateModalHtml returns empty when accepting_funds is false", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      accepting_funds: false,
+      milestones: [],
+    } as Proposal);
+    expect(html).toBe("");
+  });
+
+  it("donateModalHtml returns empty when structured_state is unknown", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      structured_state: "some_unknown_state",
+      milestones: [],
+    } as Proposal);
+    expect(html).toBe("");
+  });
+
+  it("donateModalHtml returns content when structured_state is awaiting_funds", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      structured_state: "awaiting_funds",
+      milestones: [],
+    } as Proposal);
+    expect(html).toContain("donate-modal");
+    expect(html).toContain("tb1qtest");
+  });
+
+  it("donateModalHtml returns content when no blocking fields set", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      milestones: [],
+    } as Proposal);
+    expect(html).toContain("donate-modal");
+    expect(html).toContain("tb1qtest");
   });
 });

@@ -58,6 +58,7 @@ import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
 import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
+import { isDonateBlocked } from "./next-action";
 import type { GithubOrgAttestation } from "./types";
 import {
   bitcoinUri,
@@ -522,6 +523,7 @@ export function donateModalHtml(
   opts?: { signedIn?: boolean },
 ): string {
   if (!p.escrow_address) return "";
+  if (isDonateBlocked(p, null)) return "";
   return `<div class="site-modal donate-modal" id="donate-modal" hidden>
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
     <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
@@ -1803,6 +1805,7 @@ export async function ensureDonateModalMounted(
     if (!path && !id) return modal;
     const status = await fetchClaimStatus(path, id).catch(() => null);
     if (!status?.escrow_address) return modal;
+    if (isDonateBlocked(null, status)) return modal;
     const addr0 = String(status.escrow_address).trim();
     if (!escrowAddressMatchesNetwork(addr0)) return modal;
     const synthetic: DonateChromeContext = {
@@ -1826,8 +1829,17 @@ export async function ensureDonateModalMounted(
     ctx = synthetic;
   }
 
+  type ResolvedClaimStatus = {
+    escrow_address?: string | null;
+    state?: string | null;
+    status?: string | null;
+    psbt?: { structured_state?: string } | null;
+  } | null;
+  let resolvedClaimStatus: ResolvedClaimStatus = null;
   if (ctx.claimStatusPromise) {
-    applyClaimEscrow(ctx, await ctx.claimStatusPromise.catch(() => null));
+    const awaited = await ctx.claimStatusPromise.catch(() => null);
+    resolvedClaimStatus = awaited as ResolvedClaimStatus;
+    applyClaimEscrow(ctx, resolvedClaimStatus);
   }
 
   let addr = String(
@@ -1840,9 +1852,10 @@ export async function ensureDonateModalMounted(
       String(ctx.proposal.path || ctx.panelOpts.proposalPath || locKeys.path || "").trim();
     const id = ctx.proposal.id || ctx.panelOpts.proposalId || locKeys.id || null;
     if (path || id) {
+      resolvedClaimStatus = await fetchClaimStatus(path, id).catch(() => null);
       applyClaimEscrow(
         ctx,
-        await fetchClaimStatus(path, id).catch(() => null),
+        resolvedClaimStatus,
       );
       addr = String(
         ctx.proposal.escrow_address || ctx.panelOpts.address || "",
@@ -1851,6 +1864,7 @@ export async function ensureDonateModalMounted(
   }
 
   if (!addr || !escrowAddressMatchesNetwork(addr)) return modal;
+  if (isDonateBlocked(ctx.proposal, resolvedClaimStatus)) return modal;
 
   await mountDonateChromeWhenEscrowKnown(
     ctx.root,
@@ -2018,6 +2032,7 @@ export async function mountDonateChromeWhenEscrowKnown(
 ): Promise<boolean> {
   const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
+  if (isDonateBlocked(proposal, null)) return false;
   if (
     !opts?.ignoreStatusGate &&
     !isDonateChromeStatus(String(proposal.status || ""))

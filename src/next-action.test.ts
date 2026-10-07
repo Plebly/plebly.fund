@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  isDonateBlocked,
   isStructuredTerminalOrUnknown,
   nextActionCardHtml,
   nextActionPrimaryHtml,
@@ -1004,6 +1005,63 @@ describe("isStructuredTerminalOrUnknown", () => {
 
   it("returns false for empty string (treated as no state)", () => {
     expect(isStructuredTerminalOrUnknown("")).toBe(false);
+  });
+});
+
+describe("isDonateBlocked", () => {
+  it("returns false when both proposal and claim are null", () => {
+    expect(isDonateBlocked(null, null)).toBe(false);
+  });
+
+  it("returns false when proposal has no blocking fields", () => {
+    expect(isDonateBlocked({}, null)).toBe(false);
+    expect(isDonateBlocked({ accepting_funds: true }, null)).toBe(false);
+    expect(isDonateBlocked({ structured_state: "awaiting_funds" }, null)).toBe(false);
+  });
+
+  it("returns true when proposal.accepting_funds is false", () => {
+    expect(isDonateBlocked({ accepting_funds: false }, null)).toBe(true);
+  });
+
+  it("returns true when proposal.structured_state is voided", () => {
+    expect(isDonateBlocked({ structured_state: "voided" }, null)).toBe(true);
+  });
+
+  it("returns true when proposal.structured_state is unknown", () => {
+    expect(isDonateBlocked({ structured_state: "some_unknown_state" }, null)).toBe(true);
+  });
+
+  it("returns true when claim.psbt.structured_state is voided", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "voided" } })).toBe(true);
+  });
+
+  it("returns true when claim.psbt.structured_state is unknown", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "future_state" } })).toBe(true);
+  });
+
+  it("returns false when claim.psbt.structured_state is healthy", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" } })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" } })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" } })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" } })).toBe(false);
+  });
+
+  it("proposal-level accepting_funds=false overrides healthy claim state", () => {
+    expect(
+      isDonateBlocked(
+        { accepting_funds: false },
+        { psbt: { structured_state: "awaiting_funds" } },
+      ),
+    ).toBe(true);
+  });
+
+  it("proposal-level structured_state=voided overrides healthy claim state", () => {
+    expect(
+      isDonateBlocked(
+        { structured_state: "voided" },
+        { psbt: { structured_state: "awaiting_funds" } },
+      ),
+    ).toBe(true);
   });
 });
 

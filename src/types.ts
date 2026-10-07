@@ -190,6 +190,10 @@ export type Proposal = {
   endowment_funded?: boolean;
   /** Settle txid when release/settle has been broadcast (from catalog or claims). */
   settle_txid?: string | null;
+  /** Catalog-level signal: false blocks Donate/Apply (workers #40). */
+  accepting_funds?: boolean | null;
+  /** Catalog-level structured state (workers #40). */
+  structured_state?: string | null;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */

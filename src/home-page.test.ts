@@ -202,3 +202,104 @@ describe("proposalCardHtml settle txid chrome", () => {
     expect(html).toContain("deadbeef");
   });
 });
+
+describe("proposalCardHtml voided/accepting_funds gate", () => {
+  it("hides Donate button when structured_state is voided", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        structured_state: "voided",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("Donate");
+    expect(html).not.toContain("project-donate-btn");
+  });
+
+  it("hides Donate button when accepting_funds is false", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        accepting_funds: false,
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("Donate");
+    expect(html).not.toContain("project-donate-btn");
+  });
+
+  it("hides Donate button when structured_state is unknown", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        structured_state: "some_unknown_future_state",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("Donate");
+    expect(html).not.toContain("project-donate-btn");
+  });
+
+  it("shows Donate button when structured_state is awaiting_funds", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        structured_state: "awaiting_funds",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("Donate");
+    expect(html).toContain("project-donate-btn");
+  });
+
+  it("shows Donate button when structured_state is absent", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "listed",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("Donate");
+    expect(html).toContain("project-donate-btn");
+  });
+
+  it("shows Donate button when accepting_funds is true or absent", () => {
+    const htmlTrue = proposalCardHtml(
+      proposal({
+        status: "listed",
+        accepting_funds: true,
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlTrue).toContain("Donate");
+
+    const htmlAbsent = proposalCardHtml(
+      proposal({
+        status: "listed",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlAbsent).toContain("Donate");
+  });
+});

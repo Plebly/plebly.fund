@@ -73,6 +73,7 @@ import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
+  isDonateBlocked,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
@@ -1418,11 +1419,13 @@ export async function bindBuilderPanel(
       const donateSlot = root.querySelector<HTMLElement>(".proposal-donate-slot");
       if (donateSlot) {
         const structured = String(claimStructuredState(status) || "");
+        const donateBlocked = isDonateBlocked(opts.proposal, status);
         const sideDonateOk =
+          !donateBlocked &&
           next.button !== "donate" &&
           (isFundableStatus(String(opts.proposal.status || "")) ||
             structured === "awaiting_funds");
-        if (next.button === "donate") {
+        if (donateBlocked || next.button === "donate") {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
         } else if (sideDonateOk) {
@@ -1456,8 +1459,10 @@ export async function bindBuilderPanel(
       }
       void hydrateAvatarSlots(body);
       const claimBtn = body.querySelector<HTMLButtonElement>("#builder-claim");
-      if (claimBtn && apps?.mine_application_id) {
-        claimBtn.hidden = true;
+      if (claimBtn) {
+        if (apps?.mine_application_id || isDonateBlocked(opts.proposal, status)) {
+          claimBtn.hidden = true;
+        }
       }
       if (apps?.award_reason) {
         const reasonEl = body.querySelector<HTMLElement>("#claim-award-reason");

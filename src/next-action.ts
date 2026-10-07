@@ -96,6 +96,30 @@ export function isStructuredTerminalOrUnknown(state: string | null): boolean {
   );
 }
 
+/**
+ * True when donations/applications are blocked by catalog or claim signals.
+ * Checks:
+ * - Catalog-level `accepting_funds === false`
+ * - Catalog-level `structured_state === "voided"` or unknown
+ * - Claim-level `psbt.structured_state` voided or unknown
+ *
+ * Missing fields are treated as allowed. Explicit false/voided blocks.
+ */
+export function isDonateBlocked(
+  proposal: {
+    accepting_funds?: boolean | null;
+    structured_state?: string | null;
+  } | null,
+  claim?: { psbt?: { structured_state?: string | null } | null } | null,
+): boolean {
+  if (proposal?.accepting_funds === false) return true;
+  if (isStructuredTerminalOrUnknown(proposal?.structured_state ?? null)) {
+    return true;
+  }
+  const claimState = claim?.psbt?.structured_state ?? null;
+  return isStructuredTerminalOrUnknown(claimState);
+}
+
 function selectedBranchesSettled(claim?: ClaimStatus | null): boolean {
   const selected = Object.keys(claim?.psbt?.selected || {});
   if (!selected.length) return false;
