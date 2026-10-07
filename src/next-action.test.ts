@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   isDonateBlocked,
   isStructuredTerminalOrUnknown,
+  isUnknownClaimState,
   nextActionCardHtml,
   nextActionPrimaryHtml,
   resolveNextAction,
@@ -855,9 +856,27 @@ describe("resolveNextAction", () => {
       sentence: "Voided, not accepting funds.",
       button: null,
     },
-    // Settled bounty tests (workers#41)
     {
-      name: "settled claim.state blocks donate",
+      name: "unknown catalog status shows Unavailable",
+      input: {
+        proposal: proposal({ status: "some_future_status" as never }),
+      },
+      sentence: "Unavailable.",
+      button: null,
+    },
+    {
+      name: "unknown claim state shows Unavailable",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({ state: "some_future_state" as never }),
+      },
+      sentence: "Unavailable.",
+      button: null,
+    },
+    // Settled bounty tests (workers#41)
+    // state='settled' or claim_phase='settled' without active claimant → "Bounty paid."
+    {
+      name: "settled claim.state blocks donate (no active claimant)",
       input: {
         proposal: proposal({ status: "claimable" }),
         claim: claim({ state: "settled" as never }),
@@ -866,7 +885,7 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
-      name: "settled claim.claim_phase blocks donate",
+      name: "settled claim.claim_phase blocks donate (no active claimant)",
       input: {
         proposal: proposal({ status: "claimable" }),
         claim: claim({ state: "open", claim_phase: "settled" } as never),
@@ -874,22 +893,67 @@ describe("resolveNextAction", () => {
       sentence: "Bounty paid.",
       button: null,
     },
+    // bounty_settled=true with active claimant: keep claimant actions, no Donate/Apply
     {
-      name: "bounty_settled true on claimed keeps builder mark-done but no donate",
+      name: "bounty_settled true on claimed builder gets deliverable",
       input: {
         proposal: proposal({ status: "claimed", claimer: "bob" }),
         claim: claim({
           state: "claimed",
           claimer: "bob",
           bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
         } as never),
         user: builder,
       },
-      sentence: "Bounty settled.",
-      button: null,
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
     },
     {
-      name: "bounty_settled true on claimable (reserve open, status claimable) blocks apply",
+      name: "bounty_settled true on in_review proposer gets mark done",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "bounty_settled true on in_review window_open donor gets flag",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_flag_close: true,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "bounty_settled true on claimable blocks apply",
       input: {
         proposal: proposal({ status: "claimable" }),
         claim: claim({
@@ -902,7 +966,7 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
-      name: "settled state on in_review blocks donate for donor",
+      name: "settled state on in_review (no active claimant match)",
       input: {
         proposal: proposal({ status: "in_review", claimer: "bob" }),
         claim: claim({
@@ -1092,6 +1156,30 @@ describe("in_review pooling donate", () => {
     });
     expect(action.button).toBe("done");
     expect(nextActionPrimaryHtml(action)).not.toContain("data-open-donate");
+  });
+});
+
+describe("isUnknownClaimState", () => {
+  it("returns false for null/undefined", () => {
+    expect(isUnknownClaimState(null)).toBe(false);
+    expect(isUnknownClaimState(undefined)).toBe(false);
+  });
+
+  it("returns false for known claim states", () => {
+    expect(isUnknownClaimState("open")).toBe(false);
+    expect(isUnknownClaimState("below_floor")).toBe(false);
+    expect(isUnknownClaimState("claim_pending")).toBe(false);
+    expect(isUnknownClaimState("claimed")).toBe(false);
+    expect(isUnknownClaimState("in_review")).toBe(false);
+    expect(isUnknownClaimState("completed")).toBe(false);
+    expect(isUnknownClaimState("unavailable")).toBe(false);
+    expect(isUnknownClaimState("settled")).toBe(false);
+  });
+
+  it("returns true for unknown claim states (fail closed)", () => {
+    expect(isUnknownClaimState("some_future_state")).toBe(true);
+    expect(isUnknownClaimState("unknown")).toBe(true);
+    expect(isUnknownClaimState("blocked")).toBe(true);
   });
 });
 

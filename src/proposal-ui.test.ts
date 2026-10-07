@@ -1023,19 +1023,56 @@ describe("proposal UI critical render helpers", () => {
     expect(voidReasonLabel("")).toBe("");
   });
 
-  it("void_reason with HTML renders as literal text, no element created", () => {
+  it("void_reason with HTML renders as literal text in bindStructuredFunding", async () => {
     const xss = '<img src=x onerror=alert(1)>';
-    const label = voidReasonLabel(xss);
-    // Label returns reason without prefix (sentence provides context)
-    expect(label).toBe(xss);
-    const sentence = structuredFundingStageSentence("voided", "Type 1 (single bounty)", xss);
-    expect(sentence).toContain(xss);
-    const el = document.createElement("p");
-    el.textContent = sentence;
-    expect(el.textContent).toContain(xss);
-    expect(el.querySelector("img")).toBeNull();
-    expect(el.innerHTML).not.toContain("<img");
-    expect(el.innerHTML).toContain("&lt;img");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/structured-funding")) {
+          return new Response(
+            JSON.stringify({
+              psbt_kind: "single",
+              structured: {
+                state: "voided",
+                void_reason: xss,
+                voided_at: "2026-10-07T12:00:00.000Z",
+              },
+            }),
+          );
+        }
+        if (String(url).includes("/branches")) {
+          return new Response("[]", { status: 404 });
+        }
+        return new Response("Not found", { status: 404 });
+      }),
+    );
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-XSS-TEST",
+      path: "proposals/listed/xss-test.md",
+      title: "XSS Test",
+      status: "listed",
+      escrow_address: "tb1qxss",
+      target_sats: null,
+      submission_fee_txid: null,
+      created_at: null,
+      escrow_index: null,
+      body: "",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-XSS-TEST");
+    await vi.waitFor(() => {
+      expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
+    });
+    const status = document.querySelector("#structured-funding-status")?.textContent || "";
+    expect(status).toContain("Structure voided");
+    // The malicious HTML must appear as literal text, not as an element
+    expect(status).toContain(xss);
+    expect(document.querySelector("#structured-funding-status img")).toBeNull();
+    const innerHTML = document.querySelector("#structured-funding-status")?.innerHTML || "";
+    expect(innerHTML).not.toContain("<img");
+    expect(innerHTML).toContain("&lt;img");
+    vi.unstubAllGlobals();
   });
 
   it("branchSignoffStageLabel shows progress and settled states", () => {

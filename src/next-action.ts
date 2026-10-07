@@ -11,6 +11,24 @@ import { escapeHtml } from "./util";
 /** States that are always blocked (terminal or errored). */
 const ALWAYS_BLOCKED_STATES = ["voided", "unreadable"] as const;
 
+/** Known claim states for fail-closed allowlist (unknown → blocked). */
+export const KNOWN_CLAIM_STATES = [
+  "open",
+  "below_floor",
+  "claim_pending",
+  "claimed",
+  "in_review",
+  "completed",
+  "unavailable",
+  "settled",
+] as const;
+
+/** True when claim state is unknown (not in allowlist). */
+export function isUnknownClaimState(state: string | null | undefined): boolean {
+  if (!state) return false;
+  return !KNOWN_CLAIM_STATES.includes(state as (typeof KNOWN_CLAIM_STATES)[number]);
+}
+
 export type NextButton =
   | "donate"
   | "apply"
@@ -192,23 +210,35 @@ export function isDonateBlocked(
 }
 
 /**
- * True when the claim view indicates a state that should block all actions
- * (voided/unreadable/unknown structure, not accepting funds, or settled bounty).
+ * True when the claim view indicates a state that should block ALL actions
+ * (voided/unreadable/unknown structure, unknown claim state, or accepting_funds:false without bounty_settled).
  * Used at the top of resolveNextAction to exit early.
  *
  * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
  * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
  * their respective UI actions (Donate, Register, etc.).
  *
- * NOTE: bounty_settled is NOT checked here because it allows mark-done/flag actions
- * for the claimant. It's checked separately in isClaimViewDonateAllowed and resolveNextAction.
+ * NOTE: When bounty_settled===true with healthy psbt, we do NOT block here —
+ * the claim branches (in_review/claimed) should still render their actions
+ * (Mark done, Flag, Submit deliverable). Donate/Apply are blocked separately
+ * via isClaimViewDonateAllowed.
  */
 export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
   if (!claim) return false;
-  if (claim.accepting_funds === false) return true;
-  // Settled bounty blocks most actions (but not mark-done/flag for claimant)
-  if (claim.state === "settled" || claim.claim_phase === "settled") return true;
   const structured = claim.psbt?.structured_state ?? null;
+  // When bounty_settled is true with healthy psbt, let claim branches run
+  // (Donate/Apply are blocked separately via isClaimViewDonateAllowed)
+  if (claim.bounty_settled === true) {
+    if (!structured || !isStructuredTerminalOrUnknown(structured)) {
+      return false;
+    }
+  }
+  // accepting_funds:false without bounty_settled blocks everything
+  if (claim.accepting_funds === false) return true;
+  // Settled state (no active claimant) blocks everything
+  if (claim.state === "settled" || claim.claim_phase === "settled") return true;
+  // Unknown claim state blocks (fail closed allowlist)
+  if (isUnknownClaimState(claim.state)) return true;
   if (structured && isStructuredTerminalOrUnknown(structured)) return true;
   return false;
 }
@@ -278,9 +308,16 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   const moreIds: NextMoreId[] = [];
 
   // FIRST: check catalog status "voided" or unknown — terminal, no actions at all.
-  if (status === "voided" || !isKnownProposalStatus(status)) {
+  if (status === "voided") {
     return {
       sentence: "Voided, not accepting funds.",
+      button: null,
+      moreIds,
+    };
+  }
+  if (!isKnownProposalStatus(status)) {
+    return {
+      sentence: "Unavailable.",
       button: null,
       moreIds,
     };
@@ -293,6 +330,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
 
   // Check catalog-level blocking (structured_state voided/unknown, accepting_funds:false)
   const catalogBlocked = isCatalogDonateBlocked(p);
+
+  // Unknown claim state blocks (fail closed allowlist)
+  if (isUnknownClaimState(claim?.state)) {
+    return { sentence: "Unavailable.", button: null, moreIds };
+  }
 
   // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
   // Exception: "rejected" status should still allow rebuttal action.
@@ -527,10 +569,7 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
-    // bounty_settled on active claim hides deliverable (workers#41)
-    if (claim?.bounty_settled === true) {
-      return { sentence: "Bounty settled.", button: null, moreIds };
-    }
+    // bounty_settled: builder still gets deliverable, just no Donate (blocked via isClaimViewDonateAllowed)
     if (isBuilder) {
       return {
         sentence:

@@ -1472,6 +1472,18 @@ export async function bindBuilderPanel(
         if (onchainEscrowRow) onchainEscrowRow.remove();
       }
 
+      // ?donate and ?rail=lightning deep links: open modal now that claim check passed
+      const chromeCtx = getDonateChromeContext();
+      if (donateAllowed && chromeCtx?.wantsDonateOpen) {
+        // Clear the flag so we don't re-open on subsequent refreshes
+        setDonateChromeContext({ ...chromeCtx, wantsDonateOpen: false });
+        // Trigger the modal open by clicking the donate button or dispatching event
+        const donateBtn = document.querySelector<HTMLButtonElement>("[data-open-donate]");
+        if (donateBtn) {
+          donateBtn.click();
+        }
+      }
+
       if (donateSlot) {
         const loadingEl = donateSlot.querySelector("#donate-loading");
         const errorEl = donateSlot.querySelector("#donate-error");
