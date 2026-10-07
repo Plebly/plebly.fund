@@ -332,6 +332,7 @@ export {
   structuredFundingStageSentence,
   structureOutRoleLabel,
   voidReasonLabel,
+  STRUCTURED_FUNDING_KNOWN_STATES,
   type StructuredFundingView,
 } from "./proposal-structured-funding";
 

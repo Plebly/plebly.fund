@@ -5,6 +5,15 @@ import { bindProposalCopyButtons } from "./proposal-copy-buttons";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
+/** Known structured funding states from Workers API (psbt-template.ts). */
+export const STRUCTURED_FUNDING_KNOWN_STATES = [
+  "awaiting_funds",
+  "psbt_ready",
+  "broadcast",
+  "confirmed",
+  "voided",
+] as const;
+
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
     ? "https://mempool.space/signet"
@@ -101,11 +110,13 @@ export function bindStructuredFunding(
                 ? "Structure · voided"
                 : state === "psbt_ready"
                   ? "Structure · ready for keyholders"
-                  : "Structure · unknown state";
+                  : state === "broadcast"
+                    ? "Structure · broadcast, awaiting confirmation"
+                    : "Structure · unknown state";
       }
       const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
       statusEl.textContent = structuredFundingStageSentence(state, kind, voidReason);
-      const isVoidedOrUnknown = state === "voided" || !["awaiting_funds", "confirmed", "psbt_ready"].includes(state);
+      const isVoidedOrUnknown = state === "voided" || !STRUCTURED_FUNDING_KNOWN_STATES.includes(state as typeof STRUCTURED_FUNDING_KNOWN_STATES[number]);
       if (isVoidedOrUnknown) {
         bodyEl.innerHTML = "";
       } else {
@@ -289,6 +300,9 @@ export function structuredFundingStageSentence(
   }
   if (state === "psbt_ready") {
     return `${kind} — Structure · unsigned PSBT ready. Keyholders cosign in Sparrow; this site does not broadcast.`;
+  }
+  if (state === "broadcast") {
+    return `${kind} — Structure · broadcast, awaiting confirmation. Settle txid shown below.`;
   }
   return `${kind} — Structure · unknown state. This record cannot be signed.`;
 }

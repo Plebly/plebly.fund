@@ -15,6 +15,7 @@ import {
   structuredFundingStageSentence,
   structureOutRoleLabel,
   voidReasonLabel,
+  STRUCTURED_FUNDING_KNOWN_STATES,
   branchSignoffStageLabel,
   proposalContextHtml,
   proposalFundingBarHtml,
@@ -864,6 +865,65 @@ describe("proposal UI critical render helpers", () => {
     vi.unstubAllGlobals();
   });
 
+  it("bindStructuredFunding shows broadcast state with body and branches", async () => {
+    let branchesFetched = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/structured-funding")) {
+          return new Response(
+            JSON.stringify({
+              psbt_kind: "single",
+              structured: {
+                state: "broadcast",
+                sha256: "bb".repeat(32),
+                settle_txid: "cc".repeat(32),
+              },
+            }),
+          );
+        }
+        if (String(url).includes("/branches")) {
+          branchesFetched = true;
+          return new Response(
+            JSON.stringify({
+              branches: { state: "ready", items: [] },
+              selected: {},
+              signoff: {},
+            }),
+          );
+        }
+        return new Response(JSON.stringify({}));
+      }),
+    );
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-2026-003",
+      escrow_address: "tb1qtest",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-2026-003");
+    await vi.waitFor(() => {
+      expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
+    });
+    const status = document.querySelector("#structured-funding-status")?.textContent || "";
+    expect(status).toMatch(/broadcast/i);
+    expect(status).toMatch(/awaiting confirmation/i);
+    expect(status).not.toMatch(/unknown state/i);
+    expect(status).not.toMatch(/ready for keyholders/i);
+    expect(document.body.innerHTML).toContain("STRUCTURE OUTPUTS");
+    expect(branchesFetched).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("STRUCTURED_FUNDING_KNOWN_STATES includes all Workers API states", () => {
+    expect(STRUCTURED_FUNDING_KNOWN_STATES).toContain("awaiting_funds");
+    expect(STRUCTURED_FUNDING_KNOWN_STATES).toContain("psbt_ready");
+    expect(STRUCTURED_FUNDING_KNOWN_STATES).toContain("broadcast");
+    expect(STRUCTURED_FUNDING_KNOWN_STATES).toContain("confirmed");
+    expect(STRUCTURED_FUNDING_KNOWN_STATES).toContain("voided");
+    expect(STRUCTURED_FUNDING_KNOWN_STATES).toHaveLength(5);
+  });
+
   it("structure outs hard-label roles and never invite bond/donate sends", () => {
     expect(structureOutRoleLabel("")).toBe("structure out");
     expect(structureOutRoleLabel("bounty")).toBe("bounty / allocation");
@@ -906,6 +966,14 @@ describe("proposal UI critical render helpers", () => {
     expect(
       structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
     ).not.toMatch(/ready for keyholders/i);
+  });
+
+  it("broadcast state shows awaiting confirmation, not ready for keyholders", () => {
+    const sentence = structuredFundingStageSentence("broadcast", "Type 1 (single bounty)");
+    expect(sentence).toMatch(/broadcast/i);
+    expect(sentence).toMatch(/awaiting confirmation/i);
+    expect(sentence).not.toMatch(/ready for keyholders/i);
+    expect(sentence).not.toMatch(/unknown state/i);
   });
 
   it("voidReasonLabel returns correct messages for known reasons", () => {
