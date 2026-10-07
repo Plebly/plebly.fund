@@ -790,7 +790,7 @@ export async function bindBuilderPanel(
         : CLAIM_BOND_SATS;
     bondSlot.innerHTML = `<p class="muted">Issuing your bond address…</p>`;
     try {
-      const intent = await fetchPayIntent("claim_bond");
+      const intent = await fetchPayIntent("claim_bond", opts.proposal.id);
       const feeAddr = intent.address.trim();
       if (!feeAddr || !escrowAddressMatchesNetwork(feeAddr)) {
         bondSlot.innerHTML =
