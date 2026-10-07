@@ -732,7 +732,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure voided, not accepting funds.",
+      sentence: "Structure unavailable, not accepting funds.",
       button: null,
     },
     {
@@ -746,7 +746,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure voided, not accepting funds.",
+      sentence: "Structure unavailable, not accepting funds.",
       button: null,
     },
     {
@@ -758,7 +758,7 @@ describe("resolveNextAction", () => {
           psbt: { structured_state: "voided" },
         }),
       },
-      sentence: "Structure voided, not accepting funds.",
+      sentence: "Structure unavailable, not accepting funds.",
       button: null,
     },
     {
@@ -772,7 +772,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure voided, not accepting funds.",
+      sentence: "Structure unavailable, not accepting funds.",
       button: null,
     },
     {
@@ -786,7 +786,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure voided, not accepting funds.",
+      sentence: "Structure unavailable, not accepting funds.",
       button: null,
     },
     {
@@ -798,7 +798,15 @@ describe("resolveNextAction", () => {
           psbt: { structured_state: "some_future_state" },
         }),
       },
-      sentence: "Structure voided, not accepting funds.",
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "catalog status voided no donate",
+      input: {
+        proposal: proposal({ status: "voided" }),
+      },
+      sentence: "Voided, not accepting funds.",
       button: null,
     },
   ];
@@ -1008,27 +1016,24 @@ describe("isStructuredTerminalOrUnknown", () => {
   });
 });
 
-describe("isDonateBlocked", () => {
-  it("returns false when both proposal and claim are null", () => {
-    expect(isDonateBlocked(null, null)).toBe(false);
-  });
-
-  it("returns false when proposal has no blocking fields", () => {
-    expect(isDonateBlocked({}, null)).toBe(false);
-    expect(isDonateBlocked({ accepting_funds: true }, null)).toBe(false);
-    expect(isDonateBlocked({ structured_state: "awaiting_funds" }, null)).toBe(false);
+describe("isDonateBlocked (claim-view-first)", () => {
+  it("returns true when claim view is null (claim-view-first requires loaded claim)", () => {
+    expect(isDonateBlocked(null, null)).toBe(true);
+    expect(isDonateBlocked({}, null)).toBe(true);
+    expect(isDonateBlocked({ accepting_funds: true }, null)).toBe(true);
+    expect(isDonateBlocked({ structured_state: "awaiting_funds" }, null)).toBe(true);
   });
 
   it("returns true when proposal.accepting_funds is false", () => {
-    expect(isDonateBlocked({ accepting_funds: false }, null)).toBe(true);
+    expect(isDonateBlocked({ accepting_funds: false }, { accepting_funds: true })).toBe(true);
   });
 
   it("returns true when proposal.structured_state is voided", () => {
-    expect(isDonateBlocked({ structured_state: "voided" }, null)).toBe(true);
+    expect(isDonateBlocked({ structured_state: "voided" }, { accepting_funds: true })).toBe(true);
   });
 
   it("returns true when proposal.structured_state is unknown", () => {
-    expect(isDonateBlocked({ structured_state: "some_unknown_state" }, null)).toBe(true);
+    expect(isDonateBlocked({ structured_state: "some_unknown_state" }, { accepting_funds: true })).toBe(true);
   });
 
   it("returns true when claim.psbt.structured_state is voided", () => {
@@ -1039,18 +1044,30 @@ describe("isDonateBlocked", () => {
     expect(isDonateBlocked({}, { psbt: { structured_state: "future_state" } })).toBe(true);
   });
 
-  it("returns false when claim.psbt.structured_state is healthy", () => {
-    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" } })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" } })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" } })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" } })).toBe(false);
+  it("returns false when claim view allows and has healthy structured state", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" }, accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" }, accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" }, accepting_funds: true })).toBe(false);
+  });
+
+  it("returns false when claim view has no psbt but accepting_funds is true", () => {
+    expect(isDonateBlocked({}, { accepting_funds: true })).toBe(false);
+  });
+
+  it("returns true when claim state is unavailable", () => {
+    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when claim accepting_funds is false", () => {
+    expect(isDonateBlocked({}, { accepting_funds: false })).toBe(true);
   });
 
   it("proposal-level accepting_funds=false overrides healthy claim state", () => {
     expect(
       isDonateBlocked(
         { accepting_funds: false },
-        { psbt: { structured_state: "awaiting_funds" } },
+        { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true },
       ),
     ).toBe(true);
   });
@@ -1059,7 +1076,7 @@ describe("isDonateBlocked", () => {
     expect(
       isDonateBlocked(
         { structured_state: "voided" },
-        { psbt: { structured_state: "awaiting_funds" } },
+        { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true },
       ),
     ).toBe(true);
   });
@@ -1096,11 +1113,13 @@ describe("project-page chrome contracts", () => {
 
   it("omits donate-open from the slot when the card owns Donate", () => {
     expect(src).toContain("proposal-donate-slot");
-    expect(src).toMatch(/proposal-donate-slot" hidden/);
+    // Donate slot starts hidden; claim-view-first reveals after check passes
+    expect(src).toMatch(/proposal-donate-slot".*hidden/);
   });
 
   it("mounts donate chrome for claimed/in_review pooling statuses", () => {
     expect(src).toContain("isDonateChromeStatus");
-    expect(src).toContain("isFundableStatus(String(match.status))");
+    // Donate chrome mounting moved to claim-view-first flow in builder-panel.ts
+    expect(src).toContain("showDonatePlaceholder");
   });
 });

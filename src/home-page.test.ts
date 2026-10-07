@@ -203,12 +203,11 @@ describe("proposalCardHtml settle txid chrome", () => {
   });
 });
 
-describe("proposalCardHtml voided/accepting_funds gate", () => {
-  it("hides Donate button when structured_state is voided", () => {
+describe("proposalCardHtml uses View link (not embedded Donate)", () => {
+  it("shows View link and no Donate for voided proposals", () => {
     const html = proposalCardHtml(
       proposal({
-        status: "listed",
-        structured_state: "voided",
+        status: "voided",
         escrow_address: "bc1qtest",
       }),
       10_000,
@@ -217,10 +216,40 @@ describe("proposalCardHtml voided/accepting_funds gate", () => {
     );
     expect(html).not.toContain("Donate");
     expect(html).not.toContain("project-donate-btn");
+    expect(html).toContain("View");
+    expect(html).toContain("project-view-btn");
   });
 
-  it("hides Donate button when accepting_funds is false", () => {
+  it("shows Voided status badge for voided proposals", () => {
     const html = proposalCardHtml(
+      proposal({
+        status: "voided",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("Voided");
+    expect(html).toContain("status-bad");
+  });
+
+  it("shows Unavailable badge for unknown status", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "some_unknown_future_status",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("Unavailable");
+    expect(html).toContain("status-neutral");
+  });
+
+  it("always uses View link regardless of accepting_funds", () => {
+    const htmlBlocked = proposalCardHtml(
       proposal({
         status: "listed",
         accepting_funds: false,
@@ -230,56 +259,11 @@ describe("proposalCardHtml voided/accepting_funds gate", () => {
       false,
       false,
     );
-    expect(html).not.toContain("Donate");
-    expect(html).not.toContain("project-donate-btn");
-  });
+    expect(htmlBlocked).not.toContain("Donate");
+    expect(htmlBlocked).toContain("View");
+    expect(htmlBlocked).toContain("project-view-btn");
 
-  it("hides Donate button when structured_state is unknown", () => {
-    const html = proposalCardHtml(
-      proposal({
-        status: "listed",
-        structured_state: "some_unknown_future_state",
-        escrow_address: "bc1qtest",
-      }),
-      10_000,
-      false,
-      false,
-    );
-    expect(html).not.toContain("Donate");
-    expect(html).not.toContain("project-donate-btn");
-  });
-
-  it("shows Donate button when structured_state is awaiting_funds", () => {
-    const html = proposalCardHtml(
-      proposal({
-        status: "listed",
-        structured_state: "awaiting_funds",
-        escrow_address: "bc1qtest",
-      }),
-      10_000,
-      false,
-      false,
-    );
-    expect(html).toContain("Donate");
-    expect(html).toContain("project-donate-btn");
-  });
-
-  it("shows Donate button when structured_state is absent", () => {
-    const html = proposalCardHtml(
-      proposal({
-        status: "listed",
-        escrow_address: "bc1qtest",
-      }),
-      10_000,
-      false,
-      false,
-    );
-    expect(html).toContain("Donate");
-    expect(html).toContain("project-donate-btn");
-  });
-
-  it("shows Donate button when accepting_funds is true or absent", () => {
-    const htmlTrue = proposalCardHtml(
+    const htmlAllowed = proposalCardHtml(
       proposal({
         status: "listed",
         accepting_funds: true,
@@ -289,17 +273,36 @@ describe("proposalCardHtml voided/accepting_funds gate", () => {
       false,
       false,
     );
-    expect(htmlTrue).toContain("Donate");
+    expect(htmlAllowed).not.toContain("Donate");
+    expect(htmlAllowed).toContain("View");
+    expect(htmlAllowed).toContain("project-view-btn");
+  });
 
-    const htmlAbsent = proposalCardHtml(
+  it("always uses View link regardless of structured_state", () => {
+    const htmlVoided = proposalCardHtml(
       proposal({
         status: "listed",
+        structured_state: "voided",
         escrow_address: "bc1qtest",
       }),
       10_000,
       false,
       false,
     );
-    expect(htmlAbsent).toContain("Donate");
+    expect(htmlVoided).toContain("View");
+    expect(htmlVoided).not.toContain("project-donate-btn");
+
+    const htmlHealthy = proposalCardHtml(
+      proposal({
+        status: "listed",
+        structured_state: "awaiting_funds",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlHealthy).toContain("View");
+    expect(htmlHealthy).not.toContain("project-donate-btn");
   });
 });

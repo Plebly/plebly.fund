@@ -86,6 +86,8 @@ export type ClaimStatus = {
   }[];
   can_mark_done?: boolean;
   can_flag_close?: boolean;
+  /** Claim-level accepting_funds signal from Workers#40 (false blocks donations). */
+  accepting_funds?: boolean | null;
   escrow_address?: string | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
@@ -210,6 +212,8 @@ export type ClaimApplicationsResponse = {
 
 const CLAIMABLE_STATUSES = new Set(["listed", "funding", "claimable"]);
 const TAKEN_STATUSES = new Set(["claimed", "in_review", "rejected"]);
+/** Terminal/blocked statuses that should never appear in open listings. */
+const BLOCKED_STATUSES = new Set(["voided", "declined", "declined_fundable", "underfunded", "refunding", "redirected", "redirect_pending"]);
 
 function authHeaders(): HeadersInit {
   try {
@@ -224,22 +228,27 @@ export function isTakenStatus(status: string): boolean {
   return TAKEN_STATUSES.has(status);
 }
 
+/** True when status is voided or otherwise blocked from funding/claiming. */
+export function isBlockedStatus(status: string): boolean {
+  return BLOCKED_STATUSES.has(String(status || "").toLowerCase());
+}
+
 export function isDirectProposal(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
 }
 
 export function isOpenToClaim(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
-  const status = String(p.status);
-  if (isTakenStatus(status) || p.claimer) return false;
+  const status = String(p.status).toLowerCase();
+  if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   return (p.balance_sats ?? 0) >= floor;
 }
 
 export function isNearFloor(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
-  const status = String(p.status);
-  if (isTakenStatus(status) || p.claimer) return false;
+  const status = String(p.status).toLowerCase();
+  if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   const bal = p.balance_sats ?? 0;
   return bal >= floor * 0.5 && bal < floor;
@@ -254,10 +263,10 @@ export function claimFloorShortfall(
   let projectCount = 0;
   let fundedTowardFloor = 0;
   for (const p of proposals) {
-    const status = String(p.status);
-    if (status === "completed") continue;
+    const status = String(p.status).toLowerCase();
+    if (status === "completed" || status === "voided") continue;
     if (isDirectProposal(p)) continue;
-    if (isTakenStatus(status) || p.claimer) continue;
+    if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) continue;
     const bal = Math.max(0, p.balance_sats ?? 0);
     const need = Math.max(0, floor - bal);
     if (need <= 0) continue;

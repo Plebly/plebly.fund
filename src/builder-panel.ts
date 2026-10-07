@@ -73,7 +73,8 @@ import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
-  isDonateBlocked,
+  isCatalogDonateBlocked,
+  isClaimViewDonateAllowed,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
@@ -84,8 +85,10 @@ import {
   sessionMatchesPendingClaim,
 } from "./claimer-match";
 import {
+  donateMobileCtaHtml,
   donateTriggerHtml,
   mountDonateChromeWhenEscrowKnown,
+  onChainEscrowRowHtml,
   setDonateChromeContext,
   bindDonateModal,
   projectOutcomeHtml,
@@ -1249,6 +1252,22 @@ export async function bindBuilderPanel(
     const reviewerActive = Boolean(reviewerMe?.active);
     if (!status && body) {
       syncHeroClaimChip(apps);
+
+      // Claim-view-first: fetch failed/503 → hide donate elements, show error
+      const donateSlotErr = root.querySelector<HTMLElement>(".proposal-donate-slot");
+      const mobileCtaSlotErr = root.querySelector<HTMLElement>("#mobile-cta-slot");
+      if (donateSlotErr) {
+        donateSlotErr.hidden = false;
+        donateSlotErr.innerHTML = `<p class="muted donate-error">Donate unavailable right now. <button type="button" class="btn ghost donate-retry" id="donate-retry">Retry</button></p>`;
+        donateSlotErr.querySelector("#donate-retry")?.addEventListener("click", () => {
+          void refreshStatus();
+        });
+      }
+      if (mobileCtaSlotErr) {
+        mobileCtaSlotErr.hidden = true;
+        mobileCtaSlotErr.innerHTML = "";
+      }
+
       const runtimeStatus = String(opts.proposal.status || "");
       // Catalog/runtime may already be in_review while /claims misses. Keep the
       // in_review next-action (never fall back to Still raising / Fund).
@@ -1318,7 +1337,10 @@ export async function bindBuilderPanel(
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
       // so #donate-open / [data-open-donate] from next-action actually open it.
-      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts);
+      // Claim-view-first: pass status so we can close modal if blocked.
+      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts, {
+        claimStatus: status,
+      });
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const listingBallotChromeOwned = (): boolean => {
@@ -1417,15 +1439,28 @@ export async function bindBuilderPanel(
         isBuilder: asFulfiller,
       });
       const donateSlot = root.querySelector<HTMLElement>(".proposal-donate-slot");
+      const mobileCtaSlot = root.querySelector<HTMLElement>("#mobile-cta-slot");
+      const onchainPanel = root.querySelector<HTMLElement>(".proposal-onchain .onchain-panel");
+      const catalogBlocked = isCatalogDonateBlocked(opts.proposal);
+      const claimAllowed = isClaimViewDonateAllowed(status);
+      const structured = String(claimStructuredState(status) || "");
+      const sideDonateOk =
+        !catalogBlocked &&
+        claimAllowed &&
+        next.button !== "donate" &&
+        (isFundableStatus(String(opts.proposal.status || "")) ||
+          structured === "awaiting_funds");
+
       if (donateSlot) {
-        const structured = String(claimStructuredState(status) || "");
-        const donateBlocked = isDonateBlocked(opts.proposal, status);
-        const sideDonateOk =
-          !donateBlocked &&
-          next.button !== "donate" &&
-          (isFundableStatus(String(opts.proposal.status || "")) ||
-            structured === "awaiting_funds");
-        if (donateBlocked || next.button === "donate") {
+        const loadingEl = donateSlot.querySelector("#donate-loading");
+        const errorEl = donateSlot.querySelector("#donate-error");
+        if (loadingEl) loadingEl.remove();
+        if (errorEl) errorEl.remove();
+
+        if (catalogBlocked || !claimAllowed) {
+          donateSlot.hidden = true;
+          donateSlot.innerHTML = "";
+        } else if (next.button === "donate") {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
         } else if (sideDonateOk) {
@@ -1436,6 +1471,20 @@ export async function bindBuilderPanel(
         } else {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
+        }
+      }
+
+      if (mobileCtaSlot && !catalogBlocked && claimAllowed) {
+        mobileCtaSlot.hidden = false;
+        mobileCtaSlot.innerHTML = donateMobileCtaHtml();
+      } else if (mobileCtaSlot) {
+        mobileCtaSlot.hidden = true;
+        mobileCtaSlot.innerHTML = "";
+      }
+
+      if (onchainPanel && !catalogBlocked && claimAllowed && opts.proposal.escrow_address) {
+        if (!onchainPanel.querySelector("#onchain-escrow-row")) {
+          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));
         }
       }
       body.querySelector("#next-rebuttal")?.addEventListener("click", () => {
@@ -1460,7 +1509,7 @@ export async function bindBuilderPanel(
       void hydrateAvatarSlots(body);
       const claimBtn = body.querySelector<HTMLButtonElement>("#builder-claim");
       if (claimBtn) {
-        if (apps?.mine_application_id || isDonateBlocked(opts.proposal, status)) {
+        if (apps?.mine_application_id || catalogBlocked || !claimAllowed) {
           claimBtn.hidden = true;
         }
       }

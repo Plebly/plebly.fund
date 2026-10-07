@@ -108,15 +108,17 @@ export function bindStructuredFunding(
               ? "Structure · confirmed"
               : state === "voided"
                 ? "Structure · voided"
-                : state === "psbt_ready"
-                  ? "Structure · ready for keyholders"
-                  : state === "broadcast"
-                    ? "Structure · broadcast, awaiting confirmation"
-                    : "Structure · unknown state";
+                : state === "unreadable"
+                  ? "Structure · unavailable"
+                  : state === "psbt_ready"
+                    ? "Structure · ready for keyholders"
+                    : state === "broadcast"
+                      ? "Structure · broadcast, awaiting confirmation"
+                      : "Structure · unavailable";
       }
       const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
       statusEl.textContent = structuredFundingStageSentence(state, kind, voidReason);
-      const isVoidedOrUnknown = state === "voided" || !STRUCTURED_FUNDING_KNOWN_STATES.includes(state as typeof STRUCTURED_FUNDING_KNOWN_STATES[number]);
+      const isVoidedOrUnknown = state === "voided" || state === "unreadable" || !STRUCTURED_FUNDING_KNOWN_STATES.includes(state as typeof STRUCTURED_FUNDING_KNOWN_STATES[number]);
       if (isVoidedOrUnknown) {
         bodyEl.innerHTML = "";
       } else {
@@ -272,7 +274,7 @@ function branchListHtml(
   </div>`;
 }
 
-/** Human-readable reason for a voided structure. */
+/** Human-readable reason for a voided structure. Does NOT prefix with "Voided:" since callers already state that. */
 export function voidReasonLabel(reason?: string): string {
   if (reason === "clone_cleared") {
     return "Cleared: duplicate of another proposal's funding";
@@ -280,7 +282,8 @@ export function voidReasonLabel(reason?: string): string {
   if (reason === "inputs_spent") {
     return "Inputs already spent on-chain";
   }
-  if (reason) return `Voided: ${reason}`;
+  // Return the raw reason without "Voided:" prefix to avoid doubling
+  if (reason) return reason;
   return "";
 }
 
@@ -299,8 +302,14 @@ export function structuredFundingStageSentence(
   if (state === "voided") {
     const reasonText = voidReasonLabel(voidReason);
     return reasonText
-      ? `${kind} — Structure voided. ${reasonText}`
+      ? `${kind} — Structure voided. ${reasonText}.`
       : `${kind} — Structure voided.`;
+  }
+  if (state === "unreadable") {
+    const reasonText = voidReasonLabel(voidReason);
+    return reasonText
+      ? `${kind} — Structure unavailable. ${reasonText}.`
+      : `${kind} — Structure unavailable.`;
   }
   if (state === "psbt_ready") {
     return `${kind} — Structure · unsigned PSBT ready. Keyholders cosign in Sparrow; this site does not broadcast.`;
@@ -308,7 +317,8 @@ export function structuredFundingStageSentence(
   if (state === "broadcast") {
     return `${kind} — Structure · broadcast, awaiting confirmation. Settle txid shown below.`;
   }
-  return `${kind} — Structure · unknown state. This record cannot be signed.`;
+  // Unknown state = fail closed with 'Structure unavailable'
+  return `${kind} — Structure unavailable. This record cannot be signed.`;
 }
 
 /** Structure out role label — never imply claim-bond / Donate destinations. */

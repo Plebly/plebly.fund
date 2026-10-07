@@ -13,6 +13,7 @@ import {
   dedupeWantedRows,
   fetchClaimStatus,
   fetchPayIntent,
+  isBlockedStatus,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
@@ -45,6 +46,33 @@ describe("claim floor helpers", () => {
     expect(isTakenStatus("in_review")).toBe(true);
     expect(isTakenStatus("rejected")).toBe(true);
     expect(isTakenStatus("listed")).toBe(false);
+  });
+
+  it("isBlockedStatus covers voided and other terminal states", () => {
+    expect(isBlockedStatus("voided")).toBe(true);
+    expect(isBlockedStatus("declined")).toBe(true);
+    expect(isBlockedStatus("declined_fundable")).toBe(true);
+    expect(isBlockedStatus("refunding")).toBe(true);
+    expect(isBlockedStatus("redirected")).toBe(true);
+    expect(isBlockedStatus("listed")).toBe(false);
+    expect(isBlockedStatus("claimed")).toBe(false);
+  });
+
+  it("isOpenToClaim returns false for voided status", () => {
+    const floor = 100_000;
+    expect(
+      isOpenToClaim(
+        proposal({ status: "voided", balance_sats: floor }),
+        floor,
+      ),
+    ).toBe(false);
+  });
+
+  it("isNearFloor returns false for voided status", () => {
+    const floor = 100_000;
+    expect(
+      isNearFloor(proposal({ status: "voided", balance_sats: 50_000 }), floor),
+    ).toBe(false);
   });
 
   it("isOpenToClaim requires claimable status, no claimer, and floor", () => {

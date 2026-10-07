@@ -145,6 +145,36 @@ describe("proposal UI critical render helpers", () => {
     expect(statusClass("rejected")).toBe("status-bad");
   });
 
+  it("statusLabel returns Voided for voided status", () => {
+    expect(statusLabel("voided")).toBe("Voided");
+    expect(statusLabel("VOIDED")).toBe("Voided");
+  });
+
+  it("statusClass returns status-bad for voided", () => {
+    expect(statusClass("voided")).toBe("status-bad");
+    expect(statusClass("VOIDED")).toBe("status-bad");
+  });
+
+  it("statusLabel returns Unavailable for unknown status", () => {
+    expect(statusLabel("some_unknown_future_status")).toBe("Unavailable");
+    expect(statusLabel("xyzzy")).toBe("Unavailable");
+  });
+
+  it("statusClass returns status-neutral for unknown status", () => {
+    expect(statusClass("some_unknown_future_status")).toBe("status-neutral");
+    expect(statusClass("xyzzy")).toBe("status-neutral");
+  });
+
+  it("statusPillHtml shows Voided for voided status", () => {
+    expect(statusPillHtml("voided")).toContain("Voided");
+    expect(statusPillHtml("voided")).toContain("status-bad");
+  });
+
+  it("statusPillHtml shows Unavailable for unknown status", () => {
+    expect(statusPillHtml("some_unknown_status")).toContain("Unavailable");
+    expect(statusPillHtml("some_unknown_status")).toContain("status-neutral");
+  });
+
   it("states a closed project in one sentence", () => {
     expect(projectOutcomeHtml("listed")).toBe("");
     expect(projectOutcomeHtml("completed")).toContain("Shipped.");
@@ -858,7 +888,7 @@ describe("proposal UI critical render helpers", () => {
       expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
     });
     const status = document.querySelector("#structured-funding-status")?.textContent || "";
-    expect(status).toMatch(/unknown state/i);
+    expect(status).toMatch(/Structure unavailable/i);
     expect(status).toMatch(/cannot be signed/);
     expect(status).not.toMatch(/ready for keyholders/i);
     expect(document.querySelector("#branch-psbt-verify")).toBeFalsy();
@@ -956,11 +986,16 @@ describe("proposal UI critical render helpers", () => {
 
     expect(
       structuredFundingStageSentence("voided", "Type 1 (single bounty)", "some_other_reason"),
-    ).toContain("Voided: some_other_reason");
+    ).toContain("some_other_reason");
+    // Voided sentence includes reason without "Voided:" prefix (already says "Structure voided")
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)", "some_other_reason"),
+    ).toContain("Structure voided");
 
+    // Unknown states show "Structure unavailable"
     expect(
       structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
-    ).toMatch(/unknown state/i);
+    ).toMatch(/Structure unavailable/i);
     expect(
       structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
     ).toMatch(/cannot be signed/);
@@ -982,7 +1017,8 @@ describe("proposal UI critical render helpers", () => {
       "Cleared: duplicate of another proposal's funding",
     );
     expect(voidReasonLabel("inputs_spent")).toBe("Inputs already spent on-chain");
-    expect(voidReasonLabel("custom_reason")).toBe("Voided: custom_reason");
+    // Custom reasons returned without "Voided:" prefix (callers add context)
+    expect(voidReasonLabel("custom_reason")).toBe("custom_reason");
     expect(voidReasonLabel(undefined)).toBe("");
     expect(voidReasonLabel("")).toBe("");
   });
@@ -990,7 +1026,8 @@ describe("proposal UI critical render helpers", () => {
   it("void_reason with HTML renders as literal text, no element created", () => {
     const xss = '<img src=x onerror=alert(1)>';
     const label = voidReasonLabel(xss);
-    expect(label).toBe(`Voided: ${xss}`);
+    // Label returns reason without prefix (sentence provides context)
+    expect(label).toBe(xss);
     const sentence = structuredFundingStageSentence("voided", "Type 1 (single bounty)", xss);
     expect(sentence).toContain(xss);
     const el = document.createElement("p");

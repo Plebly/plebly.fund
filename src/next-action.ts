@@ -8,6 +8,9 @@ import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
 import type { Proposal } from "./types";
 import { escapeHtml } from "./util";
 
+/** States that are always blocked (terminal or errored). */
+const ALWAYS_BLOCKED_STATES = ["voided", "unreadable"] as const;
+
 export type NextButton =
   | "donate"
   | "apply"
@@ -85,39 +88,110 @@ function structuredState(claim?: ClaimStatus | null): string | null {
 }
 
 /**
- * True when structured state is voided or unknown — terminal states that
- * should never offer Donate, claim, or sign. Unknown states fail closed.
+ * True when structured state is voided, unreadable, or unknown — terminal
+ * states that should never offer Donate, claim, or sign. Unknown states fail closed.
  */
 export function isStructuredTerminalOrUnknown(state: string | null): boolean {
   if (!state) return false;
-  if (state === "voided") return true;
+  if (ALWAYS_BLOCKED_STATES.includes(state as (typeof ALWAYS_BLOCKED_STATES)[number])) {
+    return true;
+  }
   return !STRUCTURED_FUNDING_KNOWN_STATES.includes(
     state as (typeof STRUCTURED_FUNDING_KNOWN_STATES)[number],
   );
 }
 
 /**
- * True when donations/applications are blocked by catalog or claim signals.
+ * True when donations/applications are blocked by catalog signals.
+ * Catalog can only BLOCK, never ENABLE donations.
  * Checks:
  * - Catalog-level `accepting_funds === false`
  * - Catalog-level `structured_state === "voided"` or unknown
- * - Claim-level `psbt.structured_state` voided or unknown
+ */
+export function isCatalogDonateBlocked(
+  proposal: {
+    accepting_funds?: boolean | null;
+    structured_state?: string | null;
+  } | null,
+): boolean {
+  if (proposal?.accepting_funds === false) return true;
+  return isStructuredTerminalOrUnknown(proposal?.structured_state ?? null);
+}
+
+/**
+ * Full claim view shape used for claim-view-first gating.
+ * Mirrors fields from ClaimStatus that affect donate eligibility.
+ */
+export type ClaimViewForDonate = {
+  psbt?: { structured_state?: string | null } | null;
+  accepting_funds?: boolean | null;
+  state?: string | null;
+} | null;
+
+/**
+ * True when claim view allows donations.
+ * Claim view must be loaded and confirm:
+ * - State is not `unavailable`
+ * - `accepting_funds` is not explicitly `false`
+ * - `psbt.structured_state` is null/absent (no structure yet) or a known non-voided/non-unreadable state
  *
- * Missing fields are treated as allowed. Explicit false/voided blocks.
+ * Note: Legacy claims without `psbt` or `accepting_funds` are allowed (pre-Workers#40).
+ * The UNKNOWN blocking applies only when structured funding is present but in an unknown state.
+ */
+export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
+  if (!claim) return false;
+
+  // Claim state `unavailable` always blocks
+  if (claim.state === "unavailable") return false;
+
+  // Claim-level accepting_funds: false blocks
+  if (claim.accepting_funds === false) return false;
+
+  const claimState = claim.psbt?.structured_state ?? null;
+
+  // No structured state yet = allow (legacy claims or pre-structured-funding)
+  if (!claimState) return true;
+
+  // Voided or unreadable blocks
+  if (ALWAYS_BLOCKED_STATES.includes(claimState as (typeof ALWAYS_BLOCKED_STATES)[number])) {
+    return false;
+  }
+
+  // Unknown state = fail closed
+  return STRUCTURED_FUNDING_KNOWN_STATES.includes(
+    claimState as (typeof STRUCTURED_FUNDING_KNOWN_STATES)[number],
+  );
+}
+
+/**
+ * True when donations/applications are blocked.
+ * Catalog can only BLOCK (accepting_funds=false or voided/unreadable).
+ * Claim view must be loaded and confirm non-voided/non-unreadable to ENABLE.
+ * Workers#40: 503 on claim view = blocked (handled by caller passing null).
  */
 export function isDonateBlocked(
   proposal: {
     accepting_funds?: boolean | null;
     structured_state?: string | null;
   } | null,
-  claim?: { psbt?: { structured_state?: string | null } | null } | null,
+  claim: ClaimViewForDonate,
 ): boolean {
-  if (proposal?.accepting_funds === false) return true;
-  if (isStructuredTerminalOrUnknown(proposal?.structured_state ?? null)) {
-    return true;
-  }
-  const claimState = claim?.psbt?.structured_state ?? null;
-  return isStructuredTerminalOrUnknown(claimState);
+  if (isCatalogDonateBlocked(proposal)) return true;
+  return !isClaimViewDonateAllowed(claim);
+}
+
+/**
+ * True when the claim view indicates a state that should block all actions
+ * (voided/unreadable/unknown structure, unavailable state, or not accepting funds).
+ * Used at the top of resolveNextAction to exit early.
+ */
+export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
+  if (!claim) return false;
+  if (claim.state === "unavailable") return true;
+  if (claim.accepting_funds === false) return true;
+  const structured = claim.psbt?.structured_state ?? null;
+  if (structured && isStructuredTerminalOrUnknown(structured)) return true;
+  return false;
 }
 
 function selectedBranchesSettled(claim?: ClaimStatus | null): boolean {
@@ -179,10 +253,37 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   const p = input.proposal;
   const claim = input.claim;
   const { isProposer, isBuilder, user } = roles(input);
-  const status = String(p.status || "");
+  const status = String(p.status || "").toLowerCase();
   const donor = claim?.donor_review_status ?? p.donor_review_status ?? null;
   const donorExp = claim?.donor_review_expires_at ?? p.donor_review_expires_at;
   const moreIds: NextMoreId[] = [];
+
+  // FIRST: check catalog status "voided" — terminal, no actions at all.
+  if (status === "voided") {
+    return {
+      sentence: "Voided, not accepting funds.",
+      button: null,
+      moreIds,
+    };
+  }
+
+  // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
+  // Exception: "rejected" status should still allow rebuttal action.
+  const claimViewBlocked = isClaimViewBlocked(claim ?? null);
+  const claimStructured = structuredState(claim);
+  const structureBlocked = claimViewBlocked || (claimStructured && isStructuredTerminalOrUnknown(claimStructured));
+
+  // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
+  if (structureBlocked && status !== "rejected") {
+    // Exception: release_blocked_reason should still show for stalled releases
+    if (!p.release_blocked_reason) {
+      return {
+        sentence: "Structure unavailable, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
+  }
 
   if (p.release_blocked_reason) {
     const seats = (p.release_blocked_seats || [])

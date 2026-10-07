@@ -84,7 +84,34 @@ export type ProposalStatus =
   | "abandoned_vote"
   | "refunding"
   | "redirected"
-  | "redirect_pending";
+  | "redirect_pending"
+  | "voided";
+
+/** Known proposal statuses for exhaustive handling (fail closed on unknown). */
+export const KNOWN_PROPOSAL_STATUSES = new Set<string>([
+  "pr_open",
+  "unindexed",
+  "listed",
+  "declined",
+  "declined_fundable",
+  "funding",
+  "underfunded",
+  "claimable",
+  "claimed",
+  "in_review",
+  "rejected",
+  "completed",
+  "abandoned_vote",
+  "refunding",
+  "redirected",
+  "redirect_pending",
+  "voided",
+]);
+
+/** True when status is known; false means unknown and should be blocked. */
+export function isKnownProposalStatus(status: string | null | undefined): boolean {
+  return KNOWN_PROPOSAL_STATUSES.has(String(status || "").toLowerCase());
+}
 
 export type ProposalMilestone = {
   id?: string;

@@ -58,7 +58,8 @@ import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
 import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
-import { isDonateBlocked } from "./next-action";
+import { isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
+import type { ClaimViewForDonate } from "./next-action";
 import type { GithubOrgAttestation } from "./types";
 import {
   bitcoinUri,
@@ -523,7 +524,8 @@ export function donateModalHtml(
   opts?: { signedIn?: boolean },
 ): string {
   if (!p.escrow_address) return "";
-  if (isDonateBlocked(p, null)) return "";
+  // Catalog-only blocking for static HTML; claim-view check happens at runtime
+  if (isCatalogDonateBlocked(p)) return "";
   return `<div class="site-modal donate-modal" id="donate-modal" hidden>
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
     <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
@@ -1647,6 +1649,31 @@ function findDonateModal(root: ParentNode): HTMLElement | null {
   );
 }
 
+/**
+ * Close and unmount the donate modal when claim-view resolves blocked.
+ * Clears the escrow address display so the user sees no address during blocked state.
+ */
+export function closeDonateModalWhenBlocked(): void {
+  const modal = findDonateModal(document);
+  if (!modal) return;
+
+  // Clear escrow address so user doesn't see it
+  const addrEl = modal.querySelector<HTMLElement>("#donate-address");
+  if (addrEl) {
+    addrEl.textContent = "";
+    addrEl.removeAttribute("title");
+  }
+  const copyBtn = modal.querySelector<HTMLElement>("#donate-copy");
+  if (copyBtn) copyBtn.removeAttribute("data-copy");
+
+  // Close the modal
+  modal.hidden = true;
+  document.body.classList.remove("modal-open");
+
+  // Remove the modal from DOM entirely
+  modal.remove();
+}
+
 function currentDonateEscrowAddress(): string {
   return String(
     donateChromeContext?.proposal.escrow_address ||
@@ -1805,7 +1832,11 @@ export async function ensureDonateModalMounted(
     if (!path && !id) return modal;
     const status = await fetchClaimStatus(path, id).catch(() => null);
     if (!status?.escrow_address) return modal;
-    if (isDonateBlocked(null, status)) return modal;
+    // Claim-view-first: blocked claim closes modal
+    if (isDonateBlocked(null, status)) {
+      closeDonateModalWhenBlocked();
+      return null;
+    }
     const addr0 = String(status.escrow_address).trim();
     if (!escrowAddressMatchesNetwork(addr0)) return modal;
     const synthetic: DonateChromeContext = {
@@ -1834,6 +1865,7 @@ export async function ensureDonateModalMounted(
     state?: string | null;
     status?: string | null;
     psbt?: { structured_state?: string } | null;
+    accepting_funds?: boolean | null;
   } | null;
   let resolvedClaimStatus: ResolvedClaimStatus = null;
   if (ctx.claimStatusPromise) {
@@ -1864,7 +1896,12 @@ export async function ensureDonateModalMounted(
   }
 
   if (!addr || !escrowAddressMatchesNetwork(addr)) return modal;
-  if (isDonateBlocked(ctx.proposal, resolvedClaimStatus)) return modal;
+
+  // Claim-view-first: when claim resolves blocked, close/unmount any open modal
+  if (isDonateBlocked(ctx.proposal, resolvedClaimStatus)) {
+    closeDonateModalWhenBlocked();
+    return null;
+  }
 
   await mountDonateChromeWhenEscrowKnown(
     ctx.root,
@@ -1943,6 +1980,10 @@ export function bindDonateModal(
     void (async () => {
       try {
         const ensured = await ensureDonateModalMounted(bindRoot);
+        // ensured === null means claim-view resolved blocked — modal already closed
+        if (ensured === null) {
+          return;
+        }
         const host = ensured || findDonateModal(document);
         if (!host) {
           const stub = insertDonateModalShell(currentDonateEscrowAddress());
@@ -2023,16 +2064,30 @@ export function bindDonateModal(
  * escrow_address. Insert #donate-modal on document.body (survives
  * .proposal-page re-renders) and bind. No-op when modal already exists
  * or address invalid. Status gate skipped when ignoreStatusGate (Donate click).
+ * 
+ * Claim-view-first: when claimStatus is provided and indicates blocked,
+ * closes any open modal and returns false.
  */
 export async function mountDonateChromeWhenEscrowKnown(
   root: ParentNode,
   proposal: Proposal,
   panelOpts: DonateBindOpts,
-  opts?: { ignoreStatusGate?: boolean },
+  opts?: { ignoreStatusGate?: boolean; claimStatus?: ClaimViewForDonate },
 ): Promise<boolean> {
   const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
-  if (isDonateBlocked(proposal, null)) return false;
+
+  // Catalog-level blocking
+  if (isCatalogDonateBlocked(proposal)) return false;
+
+  // Claim-view-first: when claim status provided and indicates blocked, close modal
+  if (opts?.claimStatus !== undefined) {
+    if (!isClaimViewDonateAllowed(opts.claimStatus)) {
+      closeDonateModalWhenBlocked();
+      return false;
+    }
+  }
+
   if (
     !opts?.ignoreStatusGate &&
     !isDonateChromeStatus(String(proposal.status || ""))
@@ -2089,20 +2144,29 @@ export async function mountDonateChromeWhenEscrowKnown(
   return true;
 }
 
-export function onChainPanelHtml(p: Proposal): string {
+/** Escrow address row for on-chain panel (injected after claim view confirms). */
+export function onChainEscrowRowHtml(escrowAddress: string): string {
+  if (!escrowAddress) return "";
+  return `<div class="onchain-row" id="onchain-escrow-row">
+    <span class="onchain-label">Escrow address</span>
+    <div class="onchain-value">
+      <code class="mono">${escapeHtml(escrowAddress)}</code>
+      <span class="onchain-actions">
+        ${explorerLink(`${MEMPOOL_WEB}/address/${encodeURIComponent(escrowAddress)}`, "Explorer")}
+        ${copyBtn(escrowAddress, "address")}
+      </span>
+    </div>
+  </div>`;
+}
+
+export function onChainPanelHtml(
+  p: Proposal,
+  opts?: { hideEscrow?: boolean },
+): string {
   const rows: string[] = [];
 
-  if (p.escrow_address) {
-    rows.push(`<div class="onchain-row">
-      <span class="onchain-label">Escrow address</span>
-      <div class="onchain-value">
-        <code class="mono">${escapeHtml(p.escrow_address)}</code>
-        <span class="onchain-actions">
-          ${explorerLink(`${MEMPOOL_WEB}/address/${encodeURIComponent(p.escrow_address)}`, "Explorer")}
-          ${copyBtn(p.escrow_address, "address")}
-        </span>
-      </div>
-    </div>`);
+  if (p.escrow_address && !opts?.hideEscrow) {
+    rows.push(onChainEscrowRowHtml(p.escrow_address));
   }
 
   if (p.submission_fee_txid) {
