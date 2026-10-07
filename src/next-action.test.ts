@@ -554,6 +554,48 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
+      name: "claimed structured confirmed for builder",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "confirmed" },
+        }),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done. Funds are structured for release.",
+      button: "deliverable",
+    },
+    {
+      name: "claimed structured confirmed for donor — no pooling copy",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "confirmed" },
+        }),
+        user: donor,
+      },
+      sentence: "Funds are structured on-chain. Waiting on the builder.",
+      button: null,
+    },
+    {
+      name: "in_review structured confirmed for donor — no pooling copy",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "confirmed" },
+        }),
+        user: donor,
+      },
+      sentence: "Funds are structured. Waiting on the proposer to mark done.",
+      button: null,
+    },
+    {
       name: "listed awaiting frozen pot",
       input: {
         proposal: proposal({ status: "listed" }),

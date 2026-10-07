@@ -329,6 +329,13 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     const structured = structuredState(claim);
+    if (structured === "confirmed") {
+      return {
+        sentence: "Funds are structured. Waiting on the proposer to mark done.",
+        button: null,
+        moreIds,
+      };
+    }
     if (structured === "awaiting_funds") {
       return {
         sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
@@ -346,9 +353,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         sentence:
           structured === "psbt_ready"
             ? "Submit the work when it is done. Structured funding is ready for keyholders."
-            : structured === "awaiting_funds"
-              ? "Submit the work when it is done. The pot is still pooling."
-              : "Submit the work when it is done.",
+            : structured === "confirmed"
+              ? "Submit the work when it is done. Funds are structured for release."
+              : structured === "awaiting_funds"
+                ? "Submit the work when it is done. The pot is still pooling."
+                : "Submit the work when it is done.",
         button: "deliverable",
         moreIds: ["checkpoint", "extension", "collab", "workboard"],
       };
@@ -357,6 +366,13 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     if (structured === "psbt_ready") {
       return {
         sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
+        button: null,
+        moreIds,
+      };
+    }
+    if (structured === "confirmed") {
+      return {
+        sentence: "Funds are structured on-chain. Waiting on the builder.",
         button: null,
         moreIds,
       };
