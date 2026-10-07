@@ -90,6 +90,7 @@ import {
   projectOutcomeHtml,
   proposalStepperHtml,
   statusPillHtml,
+  updateProposalFundingBar,
   userMatchesProposer,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
@@ -1367,6 +1368,26 @@ export async function bindBuilderPanel(
         }
       };
       refreshStepper();
+      // When structure is confirmed, update funding bar with confirmed_balance_sats
+      // so the display reflects actual funded amount (not potentially reduced escrow).
+      const structuredState = status.psbt?.structured_state;
+      if (
+        (structuredState === "confirmed" || structuredState === "psbt_ready") &&
+        typeof status.confirmed_balance_sats === "number"
+      ) {
+        updateProposalFundingBar(
+          document,
+          status.confirmed_balance_sats,
+          status.claim_floor_sats ?? CLAIM_FLOOR_SATS,
+          opts.proposal.target_sats,
+          opts.proposal.milestones,
+          {
+            status: mergedProposal.status,
+            claimer: mergedProposal.claimer,
+            proposal_type: mergedProposal.proposal_type,
+          },
+        );
+      }
       syncHeroClaimChip(apps);
       const isProposer = userMatchesProposer(
         opts.user,
