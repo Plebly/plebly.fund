@@ -141,3 +141,64 @@ describe("proposalCardHtml lightning badge", () => {
     expect(html).not.toContain("project-card-ln");
   });
 });
+
+describe("proposalCardHtml settle txid chrome", () => {
+  it("shows settle txid chip with explorer link when settle_txid is present", () => {
+    const txid = "abcdef01" + "23".repeat(28);
+    const html = proposalCardHtml(
+      proposal({
+        status: "in_review",
+        settle_txid: txid,
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("project-card-settle");
+    expect(html).toContain("Settle:");
+    expect(html).toContain("abcdef01");
+    expect(html).toContain(`/tx/${txid}`);
+  });
+
+  it("hides settle txid chip when settle_txid is missing", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "in_review",
+        settle_txid: null,
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("project-card-settle");
+    expect(html).not.toContain("Settle:");
+  });
+
+  it("hides settle txid chip when txid is invalid (not 64 hex)", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "in_review",
+        settle_txid: "short",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("project-card-settle");
+  });
+
+  it("shows settle txid for completed projects with settle", () => {
+    const txid = "deadbeef" + "ff".repeat(28);
+    const html = proposalCardHtml(
+      proposal({
+        status: "completed",
+        settle_txid: txid,
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("project-card-settle");
+    expect(html).toContain("deadbeef");
+  });
+});
