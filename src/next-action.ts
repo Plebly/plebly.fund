@@ -5,7 +5,7 @@ import { btnWithIcon } from "./icons";
 import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import { userMatchesProposer } from "./proposal-ui";
 import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
-import type { Proposal } from "./types";
+import { isKnownProposalStatus, type Proposal } from "./types";
 import { escapeHtml } from "./util";
 
 /** States that are always blocked (terminal or errored). */
@@ -131,25 +131,26 @@ export type ClaimViewForDonate = {
 /**
  * True when claim view allows donations.
  * Claim view must be loaded and confirm:
- * - State is not `unavailable`
  * - `accepting_funds` is not explicitly `false`
- * - `psbt.structured_state` is null/absent (no structure yet) or a known non-voided/non-unreadable state
+ * - `psbt.structured_state` is null/absent or a known non-voided/non-unreadable state
  *
- * Note: Legacy claims without `psbt` or `accepting_funds` are allowed (pre-Workers#40).
- * The UNKNOWN blocking applies only when structured funding is present but in an unknown state.
+ * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
+ * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
+ * their respective UI actions (Donate, Register, etc.).
+ *
+ * No structured record (missing psbt AND missing accepting_funds) is ALLOWED — that's
+ * what a proposal without structured funding looks like. Workers#40 sends
+ * accepting_funds:false explicitly on unreadable records.
  */
 export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
   if (!claim) return false;
 
-  // Claim state `unavailable` always blocks
-  if (claim.state === "unavailable") return false;
-
-  // Claim-level accepting_funds: false blocks
+  // Claim-level accepting_funds: false blocks (workers#40 sends this for unreadable)
   if (claim.accepting_funds === false) return false;
 
   const claimState = claim.psbt?.structured_state ?? null;
 
-  // No structured state yet = allow (legacy claims or pre-structured-funding)
+  // No structured state yet = allow (no structured record, or pre-structured-funding)
   if (!claimState) return true;
 
   // Voided or unreadable blocks
@@ -182,12 +183,15 @@ export function isDonateBlocked(
 
 /**
  * True when the claim view indicates a state that should block all actions
- * (voided/unreadable/unknown structure, unavailable state, or not accepting funds).
+ * (voided/unreadable/unknown structure, or not accepting funds).
  * Used at the top of resolveNextAction to exit early.
+ *
+ * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
+ * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
+ * their respective UI actions (Donate, Register, etc.).
  */
 export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
   if (!claim) return false;
-  if (claim.state === "unavailable") return true;
   if (claim.accepting_funds === false) return true;
   const structured = claim.psbt?.structured_state ?? null;
   if (structured && isStructuredTerminalOrUnknown(structured)) return true;
@@ -258,8 +262,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   const donorExp = claim?.donor_review_expires_at ?? p.donor_review_expires_at;
   const moreIds: NextMoreId[] = [];
 
-  // FIRST: check catalog status "voided" — terminal, no actions at all.
-  if (status === "voided") {
+  // FIRST: check catalog status "voided" or unknown — terminal, no actions at all.
+  if (status === "voided" || !isKnownProposalStatus(status)) {
     return {
       sentence: "Voided, not accepting funds.",
       button: null,
@@ -267,11 +271,14 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     };
   }
 
+  // Check catalog-level blocking (structured_state voided/unknown, accepting_funds:false)
+  const catalogBlocked = isCatalogDonateBlocked(p);
+
   // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
   // Exception: "rejected" status should still allow rebuttal action.
   const claimViewBlocked = isClaimViewBlocked(claim ?? null);
   const claimStructured = structuredState(claim);
-  const structureBlocked = claimViewBlocked || (claimStructured && isStructuredTerminalOrUnknown(claimStructured));
+  const structureBlocked = catalogBlocked || claimViewBlocked || (claimStructured && isStructuredTerminalOrUnknown(claimStructured));
 
   // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
   if (structureBlocked && status !== "rejected") {

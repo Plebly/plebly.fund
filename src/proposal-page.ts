@@ -767,18 +767,17 @@ export async function renderProposalPage(
       root: app,
       proposal: match,
       panelOpts: donatePanelOpts,
+      wantsDonateOpen: wantsDonate,
+      wantsLnRail,
     });
+    // Claim-view-first: ?donate deep link and modal mount ONLY from builder-panel
+    // after isClaimViewDonateAllowed(status) passes and catalog isn't blocking.
+    // Just bind the click handler here; the actual open waits for claim check.
     bindDonateModal(document, {
-      // Claim-view-first: ?donate deep link waits until async claim check
-      open: wantsDonate && showDonatePlaceholder,
       rail: wantsLnRail ? "lightning" : undefined,
     });
-    // Body-mounted modal (not under .proposal-page) so claimer/builder DOM
-    // refreshes cannot wipe #donate-modal.
-    // Claim-view-first: mount only when catalog allows; claim check happens later
-    const donateReady = showDonatePlaceholder
-      ? mountDonateChromeWhenEscrowKnown(app, match, donatePanelOpts)
-      : Promise.resolve(false);
+    // Do NOT mount donate chrome here — builder-panel will mount after claim check passes.
+    const donateReady = Promise.resolve(false);
     // Comments must not wait on builder/claim network (placeholder is already
     // "Loading comments…" in the HTML). Start engagement alongside builder work.
     const reviewerMePromise = user

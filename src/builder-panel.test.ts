@@ -42,7 +42,9 @@ describe("builderPanelHtml proposal types", () => {
     expect(html).toContain("direct-deliverable-slot");
     expect(html).toContain("payout-status-slot");
     expect(html).toContain("Donate. Paid monthly.");
-    expect(html).toContain("data-open-donate");
+    // Claim-view-first: Donate button is NOT rendered at first paint.
+    // Button will be added after claim check passes in bindBuilderPanel.
+    expect(html).not.toContain("data-open-donate");
     expect(html).toContain('id="builder-watch"');
     expect(html).not.toContain("builder-title");
     expect(html).not.toContain("Direct funding");
@@ -689,31 +691,24 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     });
   });
 
-  it("opens modal when Donate is clicked before claim escrow arrives", async () => {
+  it("shows Donate button only after claim status allows (claim-view-first)", async () => {
     vi.resetModules();
     const escrow = "tb1qclickbeforeclaimxxxxxxxxxxxxxxxxx";
-    let resolveClaim!: (v: unknown) => void;
-    const claimGate = new Promise((r) => {
-      resolveClaim = r;
-    });
     vi.doMock("./builder", async (importOriginal) => {
       const actual = await importOriginal<typeof import("./builder")>();
       return {
         ...actual,
-        fetchClaimStatus: vi.fn(async () => {
-          await claimGate;
-          return {
-            proposal_id: "demo",
-            proposal_path: "proposals/listed/demo.md",
-            state: "in_review" as const,
-            status: "in_review",
-            confirmed_balance_sats: 15_000,
-            claim_floor_sats: 10_000,
-            claimer: "alice",
-            escrow_address: escrow,
-            psbt: { structured_state: "awaiting_funds" },
-          };
-        }),
+        fetchClaimStatus: vi.fn(async () => ({
+          proposal_id: "demo",
+          proposal_path: "proposals/listed/demo.md",
+          state: "in_review" as const,
+          status: "in_review",
+          confirmed_balance_sats: 15_000,
+          claim_floor_sats: 10_000,
+          claimer: "alice",
+          escrow_address: escrow,
+          psbt: { structured_state: "awaiting_funds" },
+        })),
         fetchClaimApplications: vi.fn(async () => null),
         fetchClaimParams: vi.fn(async () => ({
           claim_bond_sats: 10_000,
@@ -760,38 +755,26 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
       </article>
     </div>`;
 
+    // Claim-view-first: no Donate button at first paint
     expect(document.querySelector("#donate-modal")).toBeNull();
-    const donateBtn = document.querySelector<HTMLButtonElement>(
-      "[data-open-donate], #donate-open",
-    );
-    expect(donateBtn).toBeTruthy();
+    expect(document.querySelector("[data-open-donate]")).toBeNull();
 
-    // Start bind (claim fetch hanging) then click Donate immediately.
-    const bound = bindBuilderPanel(document.querySelector("#app")!, {
+    await bindBuilderPanel(document.querySelector("#app")!, {
       proposal: { ...p },
       balance: 15_000,
       user: null,
       watching: false,
     });
-    donateBtn!.click();
-    // Sync shell on body immediately — must not wait for /claims.
-    const shell = document.querySelector<HTMLElement>("#donate-modal");
-    expect(shell).toBeTruthy();
-    expect(shell!.parentElement).toBe(document.body);
-    expect(shell!.hidden).toBe(false);
-    expect(document.body.classList.contains("modal-open")).toBe(true);
 
-    resolveClaim(undefined);
-    await bound;
+    // After claim resolves, modal should be mounted with address
     await vi.waitFor(() => {
+      expect(document.querySelector("#donate-modal")).toBeTruthy();
       expect(document.querySelector("#donate-address")?.textContent).toBe(
         escrow,
       );
-      const modal = document.querySelector<HTMLElement>("#donate-modal");
-      expect(modal).toBeTruthy();
-      expect(modal!.hidden).toBe(false);
-      expect(modal!.parentElement).toBe(document.body);
     });
+    const modal = document.querySelector<HTMLElement>("#donate-modal")!;
+    expect(modal.parentElement).toBe(document.body);
   });
 
   it("keeps #donate-modal on body after .proposal-page innerHTML churn", async () => {

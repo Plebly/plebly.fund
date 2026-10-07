@@ -106,12 +106,14 @@ describe("Donate click capture — production listing DOM", () => {
     expect(document.body.classList.contains("modal-open")).toBe(true);
   });
 
-  it("shows catalog escrow on click without waiting on /claims", async () => {
+  it("shows catalog escrow on click with valid claim status", async () => {
     const { setDonateChromeContext, installDonateClickCapture } = await loadUi();
     const p = listedProposal({ escrow_address: ESCROW });
     document.body.innerHTML = `<div id="app">
       <button type="button" data-open-donate id="donate-open">Donate</button>
     </div>`;
+    // Claim-view-first: must provide a valid claim status to enable donations.
+    // Without a claim status, donations are blocked even if catalog has escrow.
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -122,16 +124,24 @@ describe("Donate click capture — production listing DOM", () => {
         proposalTitle: p.title,
         signedIn: true,
       },
-      claimStatusPromise: null,
+      claimStatusPromise: Promise.resolve({
+        proposal_id: p.id,
+        proposal_path: p.path,
+        escrow_address: ESCROW,
+        state: "listed",
+        accepting_funds: true,
+      }),
     });
     installDonateClickCapture();
     document.querySelector<HTMLButtonElement>("#donate-open")!.click();
 
-    const modal = document.querySelector<HTMLElement>("#donate-modal");
-    expect(modal).toBeTruthy();
-    expect(modal!.parentElement).toBe(document.body);
-    expect(modal!.hidden).toBe(false);
-    expect(document.querySelector("#donate-address")?.textContent).toBe(ESCROW);
+    // Wait for async ensureDonateModalMounted to complete and inject address
+    await vi.waitFor(() => {
+      expect(document.querySelector("#donate-address")?.textContent).toBe(ESCROW);
+    });
+    const modal = document.querySelector<HTMLElement>("#donate-modal")!;
+    expect(modal.parentElement).toBe(document.body);
+    expect(modal.hidden).toBe(false);
   });
 
   it("keeps #donate-modal when /claims returns no escrow", async () => {

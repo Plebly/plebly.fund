@@ -107,14 +107,14 @@ export function bindStructuredFunding(
             : state === "confirmed"
               ? "Structure · confirmed"
               : state === "voided"
-                ? "Structure · voided"
+                ? "Structure unavailable"
                 : state === "unreadable"
-                  ? "Structure · unavailable"
+                  ? "Structure unavailable"
                   : state === "psbt_ready"
                     ? "Structure · ready for keyholders"
                     : state === "broadcast"
                       ? "Structure · broadcast, awaiting confirmation"
-                      : "Structure · unavailable";
+                      : "Structure unavailable";
       }
       const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
       statusEl.textContent = structuredFundingStageSentence(state, kind, voidReason);

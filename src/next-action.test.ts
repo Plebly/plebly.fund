@@ -656,6 +656,52 @@ describe("resolveNextAction", () => {
       sentence: "Funds are moving to another project.",
       button: null,
     },
+    // Regression: claim.state=unavailable must NOT block these statuses' UI actions
+    {
+      name: "declined_fundable with claim state unavailable keeps Donate",
+      input: {
+        proposal: proposal({ status: "declined_fundable" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Listing declined. You can still fund.",
+      button: "donate",
+    },
+    {
+      name: "refunding with claim state unavailable keeps Register",
+      input: {
+        proposal: proposal({ status: "refunding" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Add a refund address.",
+      button: "register",
+    },
+    {
+      name: "underfunded with claim state unavailable keeps sentence",
+      input: {
+        proposal: proposal({ status: "underfunded", balance_sats: 50_000 }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Vote on remaining funds.",
+      button: null,
+    },
+    {
+      name: "abandoned_vote with claim state unavailable keeps sentence",
+      input: {
+        proposal: proposal({ status: "abandoned_vote" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Vote on remaining funds.",
+      button: null,
+    },
+    {
+      name: "redirected with claim state unavailable keeps sentence",
+      input: {
+        proposal: proposal({ status: "redirected" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Funds are moving to another project.",
+      button: null,
+    },
     {
       name: "direct funding visitor",
       input: {
@@ -1055,8 +1101,17 @@ describe("isDonateBlocked (claim-view-first)", () => {
     expect(isDonateBlocked({}, { accepting_funds: true })).toBe(false);
   });
 
-  it("returns true when claim state is unavailable", () => {
-    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true })).toBe(true);
+  it("returns false when claim has neither psbt nor accepting_funds (no structured record)", () => {
+    // No structured record = allowed; workers#40 sends accepting_funds:false on unreadable
+    expect(isDonateBlocked({}, { state: "open" })).toBe(false);
+    expect(isDonateBlocked({}, {})).toBe(false);
+  });
+
+  it("does NOT block on claim.state === unavailable (workers returns that for declined_fundable etc)", () => {
+    // Workers returns state: unavailable for declined_fundable, refunding, underfunded, etc.
+    // which still need their UI actions (Donate, Register, etc.)
+    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { state: "unavailable" })).toBe(false);
   });
 
   it("returns true when claim accepting_funds is false", () => {

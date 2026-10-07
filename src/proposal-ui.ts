@@ -1607,6 +1607,10 @@ export type DonateChromeContext = {
     state?: string | null;
     status?: string | null;
   } | null> | null;
+  /** True when ?donate query param was present — open modal after claim check. */
+  wantsDonateOpen?: boolean;
+  /** True when ?rail=lightning query param was present. */
+  wantsLnRail?: boolean;
 };
 
 let donateChromeContext: DonateChromeContext | null = null;
@@ -1615,6 +1619,10 @@ export function setDonateChromeContext(
   ctx: DonateChromeContext | null,
 ): void {
   donateChromeContext = ctx;
+}
+
+export function getDonateChromeContext(): DonateChromeContext | null {
+  return donateChromeContext;
 }
 
 /** Keep address / copy / wallet / explorer in sync after late escrow arrives. */
@@ -1719,8 +1727,8 @@ function replaceDonateModalHtml(html: string, opts?: { reveal?: boolean }): HTML
   return next;
 }
 
-function donateShellHtml(address = ""): string {
-  const addr = address.trim();
+function donateShellHtml(): string {
+  // Claim-view-first: shell NEVER includes escrow address; shows "Checking…" until claim allows.
   return `<div class="site-modal donate-modal" id="donate-modal" data-donate-shell="1">
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
     <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-pay-title">
@@ -1729,13 +1737,8 @@ function donateShellHtml(address = ""): string {
         <section class="donate-step" data-donate-step="pay" id="donate-step-pay">
           <div class="donate-panel-head">
             <h2 class="donate-title" id="donate-pay-title">Donate</h2>
-            <p class="muted" id="donate-escrow-pending">${addr ? "" : "Loading escrow address…"}</p>
+            <p class="muted" id="donate-escrow-pending">Checking…</p>
           </div>
-          ${donateEscrowHardLabelHtml()}
-          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
-          <button type="button" class="btn ghost" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy</button>
-          <a class="btn" id="donate-wallet" href="#">Open wallet</a>
-          <a class="donate-explorer-link" href="#" target="_blank" rel="noopener">Explorer</a>
         </section>
       </div>
     </div>
@@ -1743,31 +1746,18 @@ function donateShellHtml(address = ""): string {
 }
 
 /**
- * Sync body host for Donate clicks — must not wait on builder-panel /claims.
- * Full chrome is filled by ensureDonateModalMounted once escrow is known.
+ * Sync body host for Donate clicks — NEVER includes escrow address initially.
+ * Claim-view-first: full chrome is filled by ensureDonateModalMounted only after
+ * the claim check allows. The shell shows "Checking…" until then.
  */
-function insertDonateModalShell(address = ""): HTMLElement {
+function insertDonateModalShell(): HTMLElement {
   const existing = findDonateModal(document);
-  const addr = address.trim();
   if (existing) {
-    if (addr && escrowAddressMatchesNetwork(addr)) {
-      syncDonateModalEscrow(addr, document);
-    }
+    // Do NOT sync escrow address here — wait for claim check
     return existing;
   }
-  if (addr && escrowAddressMatchesNetwork(addr)) {
-    const signedIn = Boolean(donateChromeContext?.panelOpts.signedIn);
-    const html = donateModalHtml(
-      {
-        ...(donateChromeContext?.proposal || ({ id: "", path: "", title: "", status: "listed" } as Proposal)),
-        escrow_address: addr,
-      },
-      { signedIn },
-    );
-    const modal = html ? replaceDonateModalHtml(html, { reveal: true }) : null;
-    if (modal) return modal;
-  }
-  const modal = replaceDonateModalHtml(donateShellHtml(addr), { reveal: true });
+  // Claim-view-first: insert shell with NO escrow address
+  const modal = replaceDonateModalHtml(donateShellHtml(), { reveal: true });
   if (modal) return modal;
   const fallback = document.createElement("div");
   fallback.id = "donate-modal";
@@ -1784,24 +1774,16 @@ export function installDonateClickCapture(): void {
 
 /**
  * Mount #donate-modal if missing, waiting on claim-status escrow when needed.
- * Used by Donate clicks that fire before /claims finishes (first-paint CTA).
- * On click: may fetch /claims by proposal id and will not block solely on status
- * when a network-valid escrow address is available.
+ * Claim-view-first: ALWAYS runs the blocked check before injecting any escrow address.
+ * Null claim = blocked → close, unmount, return null.
  */
 export async function ensureDonateModalMounted(
   root: ParentNode = document,
 ): Promise<HTMLElement | null> {
   let modal = findDonateModal(root);
-  const shellOnly = Boolean(
-    modal?.hasAttribute("data-donate-shell") &&
-      !String(modal.querySelector("#donate-address")?.textContent || "").trim(),
-  );
-  if (modal && !shellOnly) {
-    const shown = String(
-      modal.querySelector("#donate-address")?.textContent || "",
-    ).trim();
-    if (shown && escrowAddressMatchesNetwork(shown)) return modal;
-  }
+
+  // Claim-view-first: do NOT early return when modal already shows address.
+  // Always run the blocked check to ensure voided proposals don't leak escrow.
 
   let ctx = donateChromeContext;
   const locKeys = proposalKeysFromLocation();
@@ -1829,16 +1811,31 @@ export async function ensureDonateModalMounted(
   if (!ctx) {
     const path = locKeys.path;
     const id = locKeys.id;
-    if (!path && !id) return modal;
+    if (!path && !id) {
+      // No context and no location keys — treat as blocked
+      closeDonateModalWhenBlocked();
+      return null;
+    }
     const status = await fetchClaimStatus(path, id).catch(() => null);
-    if (!status?.escrow_address) return modal;
+    // Claim-view-first: null claim = blocked
+    if (!status) {
+      closeDonateModalWhenBlocked();
+      return null;
+    }
     // Claim-view-first: blocked claim closes modal
     if (isDonateBlocked(null, status)) {
       closeDonateModalWhenBlocked();
       return null;
     }
+    if (!status.escrow_address) {
+      closeDonateModalWhenBlocked();
+      return null;
+    }
     const addr0 = String(status.escrow_address).trim();
-    if (!escrowAddressMatchesNetwork(addr0)) return modal;
+    if (!escrowAddressMatchesNetwork(addr0)) {
+      closeDonateModalWhenBlocked();
+      return null;
+    }
     const synthetic: DonateChromeContext = {
       root: document,
       proposal: {
@@ -1855,6 +1852,8 @@ export async function ensureDonateModalMounted(
         proposalTitle: status.title || "Project",
         signedIn: false,
       },
+      // Save resolved claim status so subsequent calls don't re-fetch
+      claimStatusPromise: Promise.resolve(status),
     };
     setDonateChromeContext(synthetic);
     ctx = synthetic;
@@ -1885,20 +1884,33 @@ export async function ensureDonateModalMounted(
     const id = ctx.proposal.id || ctx.panelOpts.proposalId || locKeys.id || null;
     if (path || id) {
       resolvedClaimStatus = await fetchClaimStatus(path, id).catch(() => null);
+      // Claim-view-first: null claim = blocked
+      if (!resolvedClaimStatus) {
+        closeDonateModalWhenBlocked();
+        return null;
+      }
       applyClaimEscrow(
         ctx,
         resolvedClaimStatus,
       );
+      // Save resolved claim status so subsequent calls don't re-fetch
+      setDonateChromeContext({
+        ...ctx,
+        claimStatusPromise: Promise.resolve(resolvedClaimStatus),
+      });
       addr = String(
         ctx.proposal.escrow_address || ctx.panelOpts.address || "",
       ).trim();
     }
   }
 
-  if (!addr || !escrowAddressMatchesNetwork(addr)) return modal;
-
-  // Claim-view-first: when claim resolves blocked, close/unmount any open modal
+  // Claim-view-first: ALWAYS run blocked check before returning or injecting address
   if (isDonateBlocked(ctx.proposal, resolvedClaimStatus)) {
+    closeDonateModalWhenBlocked();
+    return null;
+  }
+
+  if (!addr || !escrowAddressMatchesNetwork(addr)) {
     closeDonateModalWhenBlocked();
     return null;
   }
@@ -1959,18 +1971,16 @@ export function bindDonateModal(
     window.addEventListener("keydown", onEscape);
   };
 
-  // Sync body insert on every Donate click — never depend on builder-panel
-  // finishing /claims first. Async ensure fills escrow + full chrome.
+  // Claim-view-first: insert shell with NO escrow and "Checking…" note.
+  // Address is only injected after ensureDonateModalMounted confirms claim allows.
   const open = (ev?: Event) => {
     let modal: HTMLElement | null = null;
     try {
-      const known = currentDonateEscrowAddress();
-      modal = insertDonateModalShell(
-        known && escrowAddressMatchesNetwork(known) ? known : "",
-      );
+      // Claim-view-first: never include address in initial shell
+      modal = insertDonateModalShell();
       reveal(modal, ev);
     } catch {
-      modal = insertDonateModalShell("");
+      modal = insertDonateModalShell();
       try {
         reveal(modal, ev);
       } catch {
@@ -1986,10 +1996,10 @@ export function bindDonateModal(
         }
         const host = ensured || findDonateModal(document);
         if (!host) {
-          const stub = insertDonateModalShell(currentDonateEscrowAddress());
-          reveal(stub, ev);
+          // Claim check failed or modal removed — do not reveal
           return;
         }
+        // Only sync address AFTER claim check passes
         const addr = currentDonateEscrowAddress();
         if (addr) syncDonateModalEscrow(addr, bindRoot);
         reveal(host, ev);
@@ -2000,12 +2010,8 @@ export function bindDonateModal(
           });
         }
       } catch {
-        const host = findDonateModal(document) || insertDonateModalShell("");
-        try {
-          reveal(host, ev);
-        } catch {
-          /* Address reveal must not depend on panel bind. */
-        }
+        // Claim check failed — close modal, do not reveal address
+        closeDonateModalWhenBlocked();
       }
     })();
   };
@@ -2077,8 +2083,11 @@ export async function mountDonateChromeWhenEscrowKnown(
   const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
 
-  // Catalog-level blocking
-  if (isCatalogDonateBlocked(proposal)) return false;
+  // Catalog-level blocking — also close any open modal
+  if (isCatalogDonateBlocked(proposal)) {
+    closeDonateModalWhenBlocked();
+    return false;
+  }
 
   // Claim-view-first: when claim status provided and indicates blocked, close modal
   if (opts?.claimStatus !== undefined) {

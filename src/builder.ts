@@ -237,10 +237,20 @@ export function isDirectProposal(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
 }
 
+/** Check catalog-level voided signals (accepting_funds:false, structured_state voided/unreadable/unknown). */
+function isCatalogVoided(p: Proposal): boolean {
+  if (p.accepting_funds === false) return true;
+  const structured = p.structured_state;
+  if (!structured) return false;
+  const KNOWN_STATES = ["awaiting_funds", "psbt_ready", "broadcast", "confirmed"];
+  return structured === "voided" || structured === "unreadable" || !KNOWN_STATES.includes(structured);
+}
+
 export function isOpenToClaim(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
   const status = String(p.status).toLowerCase();
   if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
+  if (isCatalogVoided(p)) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   return (p.balance_sats ?? 0) >= floor;
 }
@@ -249,6 +259,7 @@ export function isNearFloor(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
   const status = String(p.status).toLowerCase();
   if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
+  if (isCatalogVoided(p)) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   const bal = p.balance_sats ?? 0;
   return bal >= floor * 0.5 && bal < floor;
@@ -267,6 +278,7 @@ export function claimFloorShortfall(
     if (status === "completed" || status === "voided") continue;
     if (isDirectProposal(p)) continue;
     if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) continue;
+    if (isCatalogVoided(p)) continue;
     const bal = Math.max(0, p.balance_sats ?? 0);
     const need = Math.max(0, floor - bal);
     if (need <= 0) continue;
