@@ -505,14 +505,19 @@ export type PayIntent = {
 
 export async function fetchPayIntent(
   purpose: "submission_fee" | "claim_bond",
+  proposalId?: string | null,
 ): Promise<PayIntent> {
   if (!WORKERS_API) {
     throw new Error("API is not configured");
   }
+  const payload: { purpose: string; proposal_id?: string } = { purpose };
+  if (proposalId) {
+    payload.proposal_id = proposalId;
+  }
   const res = await authFetch(`${API()}/payments/intent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ purpose }),
+    body: JSON.stringify(payload),
   });
   const body = (await res.json().catch(() => ({}))) as {
     address?: string;

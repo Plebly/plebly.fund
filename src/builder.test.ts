@@ -330,6 +330,80 @@ describe("fetchPayIntent", () => {
     );
   });
 
+  it("includes proposal_id in body when provided for claim_bond", async () => {
+    authFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          purpose: "claim_bond",
+          mode: "unique",
+          required_sats: 25_000,
+          unique: true,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await expect(fetchPayIntent("claim_bond", "PLEBLY-2026-042")).resolves.toEqual({
+      address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+      purpose: "claim_bond",
+      mode: "unique",
+      required_sats: 25_000,
+      unique: true,
+    });
+    expect(authFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/payments\/intent$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ purpose: "claim_bond", proposal_id: "PLEBLY-2026-042" }),
+      }),
+    );
+  });
+
+  it("omits proposal_id when null or empty", async () => {
+    authFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          purpose: "claim_bond",
+          mode: "shared",
+          required_sats: 25_000,
+          unique: false,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await fetchPayIntent("claim_bond", null);
+    expect(authFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/payments\/intent$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ purpose: "claim_bond" }),
+      }),
+    );
+
+    authFetch.mockClear();
+    authFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          purpose: "claim_bond",
+          mode: "shared",
+          required_sats: 25_000,
+          unique: false,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await fetchPayIntent("claim_bond", "");
+    expect(authFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/payments\/intent$/),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ purpose: "claim_bond" }),
+      }),
+    );
+  });
+
   it("throws on 401", async () => {
     authFetch.mockResolvedValue(
       new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
