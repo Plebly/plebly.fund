@@ -126,6 +126,10 @@ export type ClaimViewForDonate = {
   psbt?: { structured_state?: string | null } | null;
   accepting_funds?: boolean | null;
   state?: string | null;
+  /** Phase of the claim lifecycle (workers#41: 'settled' for paid bounties). */
+  claim_phase?: string | null;
+  /** True when bounty is settled — hide Donate/Apply but keep claimant's mark-done/flag. */
+  bounty_settled?: boolean | null;
 } | null;
 
 /**
@@ -147,6 +151,12 @@ export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
 
   // Claim-level accepting_funds: false blocks (workers#40 sends this for unreadable)
   if (claim.accepting_funds === false) return false;
+
+  // Settled bounty blocks donations (workers#41)
+  if (claim.state === "settled" || claim.claim_phase === "settled") return false;
+
+  // bounty_settled on active-claim view also blocks donations
+  if (claim.bounty_settled === true) return false;
 
   const claimState = claim.psbt?.structured_state ?? null;
 
@@ -183,16 +193,21 @@ export function isDonateBlocked(
 
 /**
  * True when the claim view indicates a state that should block all actions
- * (voided/unreadable/unknown structure, or not accepting funds).
+ * (voided/unreadable/unknown structure, not accepting funds, or settled bounty).
  * Used at the top of resolveNextAction to exit early.
  *
  * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
  * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
  * their respective UI actions (Donate, Register, etc.).
+ *
+ * NOTE: bounty_settled is NOT checked here because it allows mark-done/flag actions
+ * for the claimant. It's checked separately in isClaimViewDonateAllowed and resolveNextAction.
  */
 export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
   if (!claim) return false;
   if (claim.accepting_funds === false) return true;
+  // Settled bounty blocks most actions (but not mark-done/flag for claimant)
+  if (claim.state === "settled" || claim.claim_phase === "settled") return true;
   const structured = claim.psbt?.structured_state ?? null;
   if (structured && isStructuredTerminalOrUnknown(structured)) return true;
   return false;
@@ -269,6 +284,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       button: null,
       moreIds,
     };
+  }
+
+  // Settled bounty: check first to give correct message (workers#41)
+  if (claim?.state === "settled" || claim?.claim_phase === "settled") {
+    return { sentence: "Bounty paid.", button: null, moreIds };
   }
 
   // Check catalog-level blocking (structured_state voided/unknown, accepting_funds:false)
@@ -507,6 +527,10 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
+    // bounty_settled on active claim hides deliverable (workers#41)
+    if (claim?.bounty_settled === true) {
+      return { sentence: "Bounty settled.", button: null, moreIds };
+    }
     if (isBuilder) {
       return {
         sentence:
@@ -598,6 +622,14 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   }
 
   if (status === "claimable" || frontmatter === "claimable") {
+    // bounty_settled on active claim hides Apply/Donate but claimant keeps mark-done/flag
+    if (claim?.bounty_settled === true) {
+      return {
+        sentence: "Bounty settled.",
+        button: null,
+        moreIds,
+      };
+    }
     const mode = claimMode(p, input.apps);
     if (isProposer) {
       return {

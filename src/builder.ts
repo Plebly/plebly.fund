@@ -33,7 +33,10 @@ export type ClaimStatus = {
     | "claimed"
     | "in_review"
     | "completed"
-    | "unavailable";
+    | "unavailable"
+    | "settled";
+  /** Phase of the claim lifecycle (workers#41: 'settled' for paid bounties). */
+  claim_phase?: "settled" | string | null;
   confirmed_balance_sats: number | null;
   claim_floor_sats: number;
   pending?: {
@@ -88,6 +91,8 @@ export type ClaimStatus = {
   can_flag_close?: boolean;
   /** Claim-level accepting_funds signal from Workers#40 (false blocks donations). */
   accepting_funds?: boolean | null;
+  /** True when bounty is settled (paid) — hide Donate/Apply but keep claimant's mark-done/flag (workers#41). */
+  bounty_settled?: boolean | null;
   escrow_address?: string | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;

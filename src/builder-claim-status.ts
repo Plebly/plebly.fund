@@ -130,6 +130,9 @@ export function renderClaimStatusBody(
     case "completed":
       body.innerHTML = `${head}${track}${meta}`;
       break;
+    case "settled":
+      body.innerHTML = head || `<p class="builder-status muted">Paid.</p>`;
+      break;
     default:
       body.innerHTML = head || `<p class="builder-status muted">Not available for claim.</p>`;
   }

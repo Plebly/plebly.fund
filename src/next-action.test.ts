@@ -855,6 +855,65 @@ describe("resolveNextAction", () => {
       sentence: "Voided, not accepting funds.",
       button: null,
     },
+    // Settled bounty tests (workers#41)
+    {
+      name: "settled claim.state blocks donate",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "settled" as never }),
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    {
+      name: "settled claim.claim_phase blocks donate",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "open", claim_phase: "settled" } as never),
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    {
+      name: "bounty_settled true on claimed keeps builder mark-done but no donate",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+        } as never),
+        user: builder,
+      },
+      sentence: "Bounty settled.",
+      button: null,
+    },
+    {
+      name: "bounty_settled true on claimable (reserve open, status claimable) blocks apply",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({
+          state: "open",
+          bounty_settled: true,
+        } as never),
+        user: builder,
+      },
+      sentence: "Bounty settled.",
+      button: null,
+    },
+    {
+      name: "settled state on in_review blocks donate for donor",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "settled" as never,
+          claimer: "bob",
+        }),
+        user: donor,
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
   ];
 
   it.each(rows)("$name", ({ input, sentence, button, more }) => {
@@ -1134,6 +1193,18 @@ describe("isDonateBlocked (claim-view-first)", () => {
         { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true },
       ),
     ).toBe(true);
+  });
+
+  it("returns true when claim.state is settled (workers#41)", () => {
+    expect(isDonateBlocked({}, { state: "settled", accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when claim.claim_phase is settled (workers#41)", () => {
+    expect(isDonateBlocked({}, { claim_phase: "settled", accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when claim.bounty_settled is true (workers#41)", () => {
+    expect(isDonateBlocked({}, { bounty_settled: true, accepting_funds: true })).toBe(true);
   });
 });
 
