@@ -951,7 +951,7 @@ describe("proposal UI critical render helpers", () => {
 
     expect(
       structuredFundingStageSentence("voided", "Type 1 (single bounty)"),
-    ).toContain("Structure voided");
+    ).toBe("Type 1 (single bounty) — Structure voided.");
 
     expect(
       structuredFundingStageSentence("voided", "Type 1 (single bounty)", "some_other_reason"),
@@ -982,8 +982,22 @@ describe("proposal UI critical render helpers", () => {
     );
     expect(voidReasonLabel("inputs_spent")).toBe("Inputs already spent on-chain");
     expect(voidReasonLabel("custom_reason")).toBe("Voided: custom_reason");
-    expect(voidReasonLabel(undefined)).toBe("Structure voided");
-    expect(voidReasonLabel("")).toBe("Structure voided");
+    expect(voidReasonLabel(undefined)).toBe("");
+    expect(voidReasonLabel("")).toBe("");
+  });
+
+  it("void_reason with HTML renders as literal text, no element created", () => {
+    const xss = '<img src=x onerror=alert(1)>';
+    const label = voidReasonLabel(xss);
+    expect(label).toBe(`Voided: ${xss}`);
+    const sentence = structuredFundingStageSentence("voided", "Type 1 (single bounty)", xss);
+    expect(sentence).toContain(xss);
+    const el = document.createElement("p");
+    el.textContent = sentence;
+    expect(el.textContent).toContain(xss);
+    expect(el.querySelector("img")).toBeNull();
+    expect(el.innerHTML).not.toContain("<img");
+    expect(el.innerHTML).toContain("&lt;img");
   });
 
   it("branchSignoffStageLabel shows progress and settled states", () => {

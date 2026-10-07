@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  isStructuredTerminalOrUnknown,
   nextActionCardHtml,
   nextActionPrimaryHtml,
   resolveNextAction,
@@ -719,6 +720,86 @@ describe("resolveNextAction", () => {
       sentence: "Mark it done if the work is finished.",
       button: "done",
     },
+    {
+      name: "voided structure no donate (in_review)",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "voided" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure voided, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "voided structure no donate (claimed)",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "voided" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure voided, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "voided structure no donate (listed below_floor)",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({
+          state: "below_floor",
+          psbt: { structured_state: "voided" },
+        }),
+      },
+      sentence: "Structure voided, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown structured state no donate (in_review)",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "some_future_state" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure voided, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown structured state no donate (claimed)",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "some_future_state" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure voided, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown structured state no donate (listed below_floor)",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({
+          state: "below_floor",
+          psbt: { structured_state: "some_future_state" },
+        }),
+      },
+      sentence: "Structure voided, not accepting funds.",
+      button: null,
+    },
   ];
 
   it.each(rows)("$name", ({ input, sentence, button, more }) => {
@@ -897,6 +978,32 @@ describe("in_review pooling donate", () => {
     });
     expect(action.button).toBe("done");
     expect(nextActionPrimaryHtml(action)).not.toContain("data-open-donate");
+  });
+});
+
+describe("isStructuredTerminalOrUnknown", () => {
+  it("returns false for null (no structured state)", () => {
+    expect(isStructuredTerminalOrUnknown(null)).toBe(false);
+  });
+
+  it("returns false for known healthy states", () => {
+    expect(isStructuredTerminalOrUnknown("awaiting_funds")).toBe(false);
+    expect(isStructuredTerminalOrUnknown("psbt_ready")).toBe(false);
+    expect(isStructuredTerminalOrUnknown("broadcast")).toBe(false);
+    expect(isStructuredTerminalOrUnknown("confirmed")).toBe(false);
+  });
+
+  it("returns true for voided state", () => {
+    expect(isStructuredTerminalOrUnknown("voided")).toBe(true);
+  });
+
+  it("returns true for unknown states (fail closed)", () => {
+    expect(isStructuredTerminalOrUnknown("some_future_state")).toBe(true);
+    expect(isStructuredTerminalOrUnknown("unknown")).toBe(true);
+  });
+
+  it("returns false for empty string (treated as no state)", () => {
+    expect(isStructuredTerminalOrUnknown("")).toBe(false);
   });
 });
 

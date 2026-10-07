@@ -280,7 +280,8 @@ export function voidReasonLabel(reason?: string): string {
   if (reason === "inputs_spent") {
     return "Inputs already spent on-chain";
   }
-  return reason ? `Voided: ${reason}` : "Structure voided";
+  if (reason) return `Voided: ${reason}`;
+  return "";
 }
 
 /** Public Structure stage sentence (summary line). */
@@ -296,7 +297,10 @@ export function structuredFundingStageSentence(
     return `${kind} — Structure · confirmed on-chain. Release branches may follow for payout.`;
   }
   if (state === "voided") {
-    return `${kind} — Structure voided. ${voidReasonLabel(voidReason)}`;
+    const reasonText = voidReasonLabel(voidReason);
+    return reasonText
+      ? `${kind} — Structure voided. ${reasonText}`
+      : `${kind} — Structure voided.`;
   }
   if (state === "psbt_ready") {
     return `${kind} — Structure · unsigned PSBT ready. Keyholders cosign in Sparrow; this site does not broadcast.`;

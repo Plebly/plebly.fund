@@ -4,6 +4,7 @@ import { CLAIM_FLOOR_SATS, isFundableStatus } from "./config";
 import { btnWithIcon } from "./icons";
 import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import { userMatchesProposer } from "./proposal-ui";
+import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
 import type { Proposal } from "./types";
 import { escapeHtml } from "./util";
 
@@ -81,6 +82,18 @@ export function claimStructuredState(claim?: ClaimStatus | null): string | null 
 
 function structuredState(claim?: ClaimStatus | null): string | null {
   return claimStructuredState(claim);
+}
+
+/**
+ * True when structured state is voided or unknown — terminal states that
+ * should never offer Donate, claim, or sign. Unknown states fail closed.
+ */
+export function isStructuredTerminalOrUnknown(state: string | null): boolean {
+  if (!state) return false;
+  if (state === "voided") return true;
+  return !STRUCTURED_FUNDING_KNOWN_STATES.includes(
+    state as (typeof STRUCTURED_FUNDING_KNOWN_STATES)[number],
+  );
 }
 
 function selectedBranchesSettled(claim?: ClaimStatus | null): boolean {
@@ -329,6 +342,13 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     const structured = structuredState(claim);
+    if (isStructuredTerminalOrUnknown(structured)) {
+      return {
+        sentence: "Structure voided, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
     if (structured === "confirmed") {
       return {
         sentence: "Funds are structured. Waiting on the proposer to mark done.",
@@ -348,6 +368,13 @@ export function resolveNextAction(input: NextActionInput): NextAction {
 
   if (status === "claimed" || claim?.state === "claimed") {
     const structured = structuredState(claim);
+    if (isStructuredTerminalOrUnknown(structured)) {
+      return {
+        sentence: "Structure voided, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
     if (isBuilder) {
       return {
         sentence:
@@ -406,6 +433,13 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   ) {
     if (claim?.state === "below_floor") {
       const structured = structuredState(claim);
+      if (isStructuredTerminalOrUnknown(structured)) {
+        return {
+          sentence: "Structure voided, not accepting funds.",
+          button: null,
+          moreIds,
+        };
+      }
       if (structured === "psbt_ready") {
         return {
           sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
