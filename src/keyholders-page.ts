@@ -400,6 +400,16 @@ export function keyholderSessionNeedsReauth(
   return now - issued >= KEYHOLDER_SESSION_MAX_AGE_MS - KEYHOLDER_REAUTH_WARN_MS;
 }
 
+/** Early #kh-relogin on an active (seated) desk: missing token or warn/12h window.
+ *  Call only after kh.status === "active". Leaves keyholderSessionNeedsReauth null semantics alone. */
+export function keyholderSeatedDeskNeedsRelogin(
+  token: string | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!token) return true;
+  return keyholderSessionNeedsReauth(token, now);
+}
+
 /** Unhide relogin chrome; does not logout. Same gate Propose uses. */
 export function paintKeyholderRelogin(app: ParentNode, href: string): void {
   const box = app.querySelector<HTMLElement>("#kh-relogin");
@@ -2846,7 +2856,8 @@ export async function renderKeyholders(
     paintQueueCount("contrib_refund", disburse.contrib_refund || 0);
   };
 
-  if (keyholderSessionNeedsReauth(sessionStorage.getItem("plebly_session"))) {
+  // Active seat only (non-active returns earlier). Missing token or warn window.
+  if (keyholderSeatedDeskNeedsRelogin(sessionStorage.getItem("plebly_session"))) {
     paintKeyholderRelogin(app, githubLoginUrl(currentReturnPath()));
   }
 
