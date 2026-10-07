@@ -11,7 +11,7 @@ import {
   removeWatch,
   watchStorageId,
 } from "./builder";
-import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed } from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeCoverImageUrl } from "./media";
@@ -363,6 +363,22 @@ function progressHtml(p: Proposal, floor: number): string {
   </div>`;
 }
 
+/** Shorten a 64-hex settle txid for card chrome. */
+function shortSettleTxid(txid: string | undefined | null): string {
+  const t = (txid || "").trim();
+  if (t.length < 16) return t;
+  return `${t.slice(0, 8)}…${t.slice(-6)}`;
+}
+
+/** Settle txid chrome for card/listing (links to explorer). */
+export function settleTxidChipHtml(txid: string | undefined | null): string {
+  const t = (txid || "").trim();
+  if (!t || t.length !== 64) return "";
+  const short = shortSettleTxid(t);
+  const url = `${mempoolWeb()}/tx/${encodeURIComponent(t)}`;
+  return `<a class="project-card-settle" href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener" title="Settle txid: ${escapeHtml(t)}">Settle: <span class="mono">${escapeHtml(short)}</span></a>`;
+}
+
 /** Public card renderer — also used on `/endowment` funded grid. */
 export function proposalCardHtml(
   p: Proposal,
@@ -423,10 +439,12 @@ export function proposalCardHtml(
   const watchCtrl = p.id
     ? `<button type="button" class="project-card-watch-btn" data-card-watch="${escapeHtml(p.id)}" data-path="${escapeHtml(p.path)}" data-watching="${watching ? "1" : "0"}" aria-label="${watching ? "Unwatch" : "Watch"}" title="${watching ? "Unwatch" : "Watch"}"><span class="project-card-watch-icon" aria-hidden="true">${watching ? "★" : "☆"}</span><span class="mono project-card-watch-count">${watchCount}</span></button>`
     : "";
+  const settleChip = settleTxidChipHtml(p.settle_txid);
   return `
     <article class="project-card${rescue ? " is-rescue" : ""}">
       <div class="project-card-head">
         ${statusPillHtml(status)}
+        ${settleChip}
         ${typeBadge}
         ${endowmentBadge}
         ${secondaryBadge}

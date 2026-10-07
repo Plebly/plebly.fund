@@ -206,6 +206,29 @@ describe("applyClaimStatusToProposal", () => {
       rebuttal_reasoning: "Here is the reply.",
     });
   });
+
+  it("overlays settle_txid from claim status", () => {
+    const txid = "abcdef01" + "23".repeat(28);
+    const base = proposal({ status: "in_review", claimer: "bob" });
+    const merged = applyClaimStatusToProposal(base, {
+      proposal_id: "demo",
+      proposal_path: base.path,
+      state: "in_review",
+      confirmed_balance_sats: 50_000,
+      claim_floor_sats: 10_000,
+      settle_txid: txid,
+    });
+    expect(merged.settle_txid).toBe(txid);
+
+    const withoutSettle = applyClaimStatusToProposal(base, {
+      proposal_id: "demo",
+      proposal_path: base.path,
+      state: "in_review",
+      confirmed_balance_sats: 50_000,
+      claim_floor_sats: 10_000,
+    });
+    expect(withoutSettle.settle_txid).toBeUndefined();
+  });
 });
 
 describe("fetchClaimStatus", () => {

@@ -188,6 +188,8 @@ type CatalogProposal = {
   rescue?: boolean;
   rescue_gap_sats?: number | null;
   endowment_funded?: boolean;
+  /** Settle txid when release/settle has been broadcast. */
+  settle_txid?: string | null;
 };
 
 function proposalFromCatalog(entry: CatalogProposal): Proposal {
@@ -247,6 +249,7 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     rescue_gap_sats:
       typeof entry.rescue_gap_sats === "number" ? entry.rescue_gap_sats : null,
     endowment_funded: Boolean(entry.endowment_funded),
+    settle_txid: entry.settle_txid ?? null,
   };
 }
 

@@ -118,9 +118,12 @@ export type ClaimStatus = {
         state?: string;
         signed?: number;
         required_threshold?: number;
+        settle_txid?: string;
       }
     >;
   };
+  /** Settle txid when release/settle has been broadcast. */
+  settle_txid?: string | null;
 };
 
 export type ClaimLedgerView = {
@@ -426,6 +429,7 @@ export function applyClaimStatusToProposal(
     rebuttal_reasoning:
       status.rebuttal_reasoning ?? proposal.rebuttal_reasoning,
     ai_review: status.ai_review ?? proposal.ai_review,
+    settle_txid: status.settle_txid ?? proposal.settle_txid,
   };
 }
 

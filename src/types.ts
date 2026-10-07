@@ -188,6 +188,8 @@ export type Proposal = {
   watch_count?: number;
   /** Catalog enrich: marked endowment-funded by platform admins. */
   endowment_funded?: boolean;
+  /** Settle txid when release/settle has been broadcast (from catalog or claims). */
+  settle_txid?: string | null;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */
