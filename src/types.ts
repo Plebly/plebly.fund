@@ -85,7 +85,8 @@ export type ProposalStatus =
   | "refunding"
   | "redirected"
   | "redirect_pending"
-  | "voided";
+  | "voided"
+  | "bounty_settled";
 
 /** Known proposal statuses for exhaustive handling (fail closed on unknown). */
 export const KNOWN_PROPOSAL_STATUSES = new Set<string>([
@@ -106,6 +107,7 @@ export const KNOWN_PROPOSAL_STATUSES = new Set<string>([
   "redirected",
   "redirect_pending",
   "voided",
+  "bounty_settled",
 ]);
 
 /** True when status is known; false means unknown and should be blocked. */

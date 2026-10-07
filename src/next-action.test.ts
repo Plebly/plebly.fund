@@ -965,6 +965,126 @@ describe("resolveNextAction", () => {
       sentence: "Bounty settled.",
       button: null,
     },
+    // Catalog contract (workers#41): status='bounty_settled' with claim_phase='settled' and accepting_funds=false
+    {
+      name: "007 shape: catalog bounty_settled + in_review claim — proposer gets mark done",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "007 shape: catalog bounty_settled + in_review claim window_open — donor gets flag",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_flag_close: true,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "007 shape: catalog bounty_settled + claimed claim — builder gets deliverable",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
+    },
+    {
+      name: "007 shape: catalog bounty_settled + completed claim — settled on-chain",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "completed",
+          bounty_settled: true,
+          accepting_funds: false,
+        } as never),
+      },
+      sentence: "Approved. Keyholders sign the selected branch; broadcast stays in Sparrow.",
+      button: null,
+    },
+    {
+      name: "007 shape: catalog bounty_settled visitor sees no Donate",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    {
+      name: "007 shape: catalog bounty_settled no claim — Bounty paid",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
     {
       name: "settled state on in_review (no active claimant match)",
       input: {

@@ -218,7 +218,7 @@ export type ClaimApplicationsResponse = {
 const CLAIMABLE_STATUSES = new Set(["listed", "funding", "claimable"]);
 const TAKEN_STATUSES = new Set(["claimed", "in_review", "rejected"]);
 /** Terminal/blocked statuses that should never appear in open listings. */
-const BLOCKED_STATUSES = new Set(["voided", "declined", "declined_fundable", "underfunded", "refunding", "redirected", "redirect_pending"]);
+const BLOCKED_STATUSES = new Set(["voided", "declined", "declined_fundable", "underfunded", "refunding", "redirected", "redirect_pending", "bounty_settled"]);
 
 function authHeaders(): HeadersInit {
   try {
