@@ -14,6 +14,7 @@ import {
   structuredFundingBodyHtml,
   structuredFundingStageSentence,
   structureOutRoleLabel,
+  voidReasonLabel,
   branchSignoffStageLabel,
   proposalContextHtml,
   proposalFundingBarHtml,
@@ -781,6 +782,88 @@ describe("proposal UI critical render helpers", () => {
     vi.unstubAllGlobals();
   });
 
+  it("bindStructuredFunding shows voided state without signing affordances", async () => {
+    let branchesFetched = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/structured-funding")) {
+          return new Response(
+            JSON.stringify({
+              psbt_kind: "single",
+              structured: {
+                state: "voided",
+                void_reason: "clone_cleared",
+                voided_at: "2026-10-07T12:00:00.000Z",
+              },
+            }),
+          );
+        }
+        if (String(url).includes("/branches")) {
+          branchesFetched = true;
+        }
+        return new Response(JSON.stringify({}));
+      }),
+    );
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-2026-001",
+      escrow_address: "tb1qtest",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-2026-001");
+    await vi.waitFor(() => {
+      expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
+    });
+    const status = document.querySelector("#structured-funding-status")?.textContent || "";
+    expect(status).toContain("Structure voided");
+    expect(status).toContain("Cleared: duplicate of another proposal's funding");
+    expect(document.querySelector("#branch-psbt-verify")).toBeFalsy();
+    expect(document.querySelector("#branch-sign-ready")).toBeFalsy();
+    expect(document.body.innerHTML).not.toContain("STRUCTURE OUTPUTS");
+    expect(document.body.innerHTML).not.toContain("Release PSBT");
+    expect(branchesFetched).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("bindStructuredFunding shows unknown state as non-signable", async () => {
+    let branchesFetched = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/structured-funding")) {
+          return new Response(
+            JSON.stringify({
+              psbt_kind: "single",
+              structured: { state: "some_future_state" },
+            }),
+          );
+        }
+        if (String(url).includes("/branches")) {
+          branchesFetched = true;
+        }
+        return new Response(JSON.stringify({}));
+      }),
+    );
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-2026-002",
+      escrow_address: "tb1qtest",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-2026-002");
+    await vi.waitFor(() => {
+      expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
+    });
+    const status = document.querySelector("#structured-funding-status")?.textContent || "";
+    expect(status).toMatch(/unknown state/i);
+    expect(status).toMatch(/cannot be signed/);
+    expect(status).not.toMatch(/ready for keyholders/i);
+    expect(document.querySelector("#branch-psbt-verify")).toBeFalsy();
+    expect(branchesFetched).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
   it("structure outs hard-label roles and never invite bond/donate sends", () => {
     expect(structureOutRoleLabel("")).toBe("structure out");
     expect(structureOutRoleLabel("bounty")).toBe("bounty / allocation");
@@ -792,6 +875,50 @@ describe("proposal UI critical render helpers", () => {
     expect(
       structuredFundingStageSentence("psbt_ready", "Type 1 (single bounty)"),
     ).toMatch(/does not broadcast/);
+  });
+
+  it("voided state shows neutral label with reason, unknown states are non-signable", () => {
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)", "clone_cleared"),
+    ).toContain("Structure voided");
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)", "clone_cleared"),
+    ).toContain("Cleared: duplicate of another proposal's funding");
+
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)", "inputs_spent"),
+    ).toContain("Inputs already spent on-chain");
+
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)"),
+    ).toContain("Structure voided");
+
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)", "some_other_reason"),
+    ).toContain("Voided: some_other_reason");
+
+    expect(
+      structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
+    ).toMatch(/unknown state/i);
+    expect(
+      structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
+    ).toMatch(/cannot be signed/);
+    expect(
+      structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
+    ).not.toMatch(/ready for keyholders/i);
+  });
+
+  it("voidReasonLabel returns correct messages for known reasons", () => {
+    expect(voidReasonLabel("clone_cleared")).toBe(
+      "Cleared: duplicate of another proposal's funding",
+    );
+    expect(voidReasonLabel("inputs_spent")).toBe("Inputs already spent on-chain");
+    expect(voidReasonLabel("custom_reason")).toBe("Voided: custom_reason");
+    expect(voidReasonLabel(undefined)).toBe("Structure voided");
+    expect(voidReasonLabel("")).toBe("Structure voided");
+  });
+
+  it("branchSignoffStageLabel shows progress and settled states", () => {
     expect(branchSignoffStageLabel({ signed: 1, required_threshold: 3, state: "open" })).toMatch(
       /Needs 1\/3 signatures \(cosign/,
     );
@@ -810,6 +937,9 @@ describe("proposal UI critical render helpers", () => {
         settle_txid: "ab".repeat(32),
       }),
     ).toMatch(/Settled/);
+  });
+
+  it("structuredFundingBodyHtml shows STRUCTURE OUTPUTS without bond/donate copy", () => {
     const body = structuredFundingBodyHtml({
       pool_refund_address: "tb1qrefund",
       structured: {

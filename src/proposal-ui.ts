@@ -331,6 +331,7 @@ export {
   structuredFundingPanelHtml,
   structuredFundingStageSentence,
   structureOutRoleLabel,
+  voidReasonLabel,
   type StructuredFundingView,
 } from "./proposal-structured-funding";
 
