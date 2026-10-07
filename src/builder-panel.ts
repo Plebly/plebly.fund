@@ -1472,18 +1472,6 @@ export async function bindBuilderPanel(
         if (onchainEscrowRow) onchainEscrowRow.remove();
       }
 
-      // ?donate and ?rail=lightning deep links: open modal now that claim check passed
-      const chromeCtx = getDonateChromeContext();
-      if (donateAllowed && chromeCtx?.wantsDonateOpen) {
-        // Clear the flag so we don't re-open on subsequent refreshes
-        setDonateChromeContext({ ...chromeCtx, wantsDonateOpen: false });
-        // Trigger the modal open by clicking the donate button or dispatching event
-        const donateBtn = document.querySelector<HTMLButtonElement>("[data-open-donate]");
-        if (donateBtn) {
-          donateBtn.click();
-        }
-      }
-
       if (donateSlot) {
         const loadingEl = donateSlot.querySelector("#donate-loading");
         const errorEl = donateSlot.querySelector("#donate-error");
@@ -1513,6 +1501,19 @@ export async function bindBuilderPanel(
       } else if (mobileCtaSlot) {
         mobileCtaSlot.hidden = true;
         mobileCtaSlot.innerHTML = "";
+      }
+
+      // ?donate and ?rail=lightning deep links: open modal now that claim check passed
+      // and sidebar/mobile donate slots are filled.
+      const chromeCtx = getDonateChromeContext();
+      if (donateAllowed && chromeCtx?.wantsDonateOpen) {
+        // Clear the flag so we don't re-open on subsequent refreshes
+        setDonateChromeContext({ ...chromeCtx, wantsDonateOpen: false });
+        // Find donate button from any location (next-card, sidebar slot, or mobile slot)
+        const donateBtn = document.querySelector<HTMLButtonElement>("[data-open-donate]");
+        if (donateBtn) {
+          donateBtn.click();
+        }
       }
 
       if (onchainPanel && donateAllowed && opts.proposal.escrow_address) {

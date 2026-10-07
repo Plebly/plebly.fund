@@ -196,6 +196,11 @@ describe("proposal UI critical render helpers", () => {
     expect(statusPillHtml("funding")).toContain("pill-status");
   });
 
+  it("statusPillHtml shows Bounty paid for bounty_settled status", () => {
+    expect(statusPillHtml("bounty_settled")).toContain("Bounty paid");
+    expect(statusPillHtml("bounty_settled")).toContain("status-good");
+  });
+
   it("lifecycle banners skip in_review and rejected", () => {
     const review = proposalLifecycleBannersHtml({
       status: "in_review",

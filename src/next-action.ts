@@ -273,6 +273,33 @@ function claimMode(p: Proposal, apps?: NextActionInput["apps"]): string {
   return String(apps?.claim_mode || p.claim_mode || "proposer_select");
 }
 
+/**
+ * True when the bounty is settled (workers#41 contract shape).
+ * Used to suppress Donate/Apply while keeping claimant actions available.
+ * Checks:
+ * - claim.bounty_settled === true
+ * - proposal.bounty_settled === true (catalog row)
+ * - proposal.claim_phase === 'settled' (catalog row)
+ * - claim.claim_phase === 'settled'
+ * - claim.state === 'settled'
+ * - status === 'bounty_settled'
+ */
+export function isBountySettled(
+  proposal: Proposal,
+  claim: ClaimViewForDonate,
+  status: string,
+): boolean {
+  if (status === "bounty_settled") return true;
+  if (proposal.bounty_settled === true) return true;
+  const catalogPhase = String(proposal.claim_phase || "").toLowerCase();
+  if (catalogPhase === "settled") return true;
+  if (claim?.bounty_settled === true) return true;
+  if (claim?.state === "settled") return true;
+  const claimPhase = String(claim?.claim_phase || "").toLowerCase();
+  if (claimPhase === "settled") return true;
+  return false;
+}
+
 function roles(input: NextActionInput): {
   isProposer: boolean;
   isBuilder: boolean;
@@ -339,25 +366,29 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
   // Exception: "rejected" status should still allow rebuttal action.
   // Exception: "bounty_settled" status should let claim branches run (claimant actions stay available).
-  // Exception: bounty_settled:true or claim_phase:'settled' on catalog should only block Donate/Apply,
+  // Exception: bounty_settled:true or claim_phase:'settled' on catalog/claim should only block Donate/Apply,
   //   not claimant actions like Mark done/Flag/Submit deliverable.
+  // Exception: "completed" status should keep its settled/approved copy even with accepting_funds:false.
   const claimViewBlocked = isClaimViewBlocked(claim ?? null);
   const claimStructured = structuredState(claim);
-  const structureBlocked = catalogBlocked || claimViewBlocked || (claimStructured && isStructuredTerminalOrUnknown(claimStructured));
 
-  // Check if catalog is only bounty-settled blocked (not structure-voided/unreadable)
-  // Workers#41 adds bounty_settled:true + claim_phase:'settled' + accepting_funds:false to EVERY
-  // settled-bounty row, but keeps status as in_review/completed for active claimants.
-  const catalogPhase = String(p.claim_phase || "").toLowerCase();
-  const isCatalogOnlyBountySettled =
-    (p.bounty_settled === true || catalogPhase === "settled") &&
-    !isStructuredTerminalOrUnknown(p.structured_state ?? null);
+  // Check if bounty is settled (workers#41 contract shape)
+  const bountySettled = isBountySettled(p, claim ?? null, status);
+
+  // For bounty-settled rows, the catalog sends accepting_funds:false which makes catalogBlocked true.
+  // But we should NOT early-exit with "Structure unavailable" — we should let the real status drive the UI.
+  // Only use structure-blocking when it's NOT just a bounty-settled signal.
+  const psbTerminal = claimStructured && isStructuredTerminalOrUnknown(claimStructured);
+  const structureBlocked =
+    (!bountySettled && catalogBlocked) ||
+    (!bountySettled && claimViewBlocked) ||
+    psbTerminal;
 
   // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
   // For bounty_settled status (workers#41), skip so claim branches can render claimant actions.
-  // For catalog bounty_settled:true with non-bounty_settled status (e.g. in_review, completed),
-  // skip so the real status drives the UI (Mark done, Flag, etc.) — only Donate/Apply blocked.
-  if (structureBlocked && status !== "rejected" && status !== "bounty_settled" && !isCatalogOnlyBountySettled) {
+  // For bounty-settled rows with real status (in_review/completed), skip so real status drives the UI.
+  // For completed status with bounty_settled:true, skip so it keeps its normal copy.
+  if (structureBlocked && status !== "rejected" && status !== "bounty_settled" && status !== "completed" && !bountySettled) {
     // Exception: release_blocked_reason should still show for stalled releases
     if (!p.release_blocked_reason) {
       return {
@@ -565,9 +596,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (structured === "awaiting_funds") {
-      // Catalog bounty_settled blocks Donate even when claim is in_review
-      // (workers#41 adds bounty_settled:true but keeps status as in_review)
-      if (status === "bounty_settled" || p.bounty_settled === true) {
+      // Bounty settled blocks Donate even when claim is in_review (workers#41)
+      if (bountySettled) {
         return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
       }
       return {
@@ -576,9 +606,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
-    // Catalog bounty_settled: show "Bounty paid" instead of generic waiting message
-    // (workers#41 adds bounty_settled:true but keeps status as in_review)
-    if (status === "bounty_settled" || p.bounty_settled === true) {
+    // Bounty settled: show "Bounty paid" instead of generic waiting message (workers#41)
+    if (bountySettled) {
       return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
     }
     return { sentence: "Waiting on the proposer.", button: null, moreIds };
@@ -624,9 +653,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (structured === "awaiting_funds") {
-      // Catalog bounty_settled blocks Donate even when claim is claimed
-      // (workers#41 adds bounty_settled:true but keeps status as claimed)
-      if (status === "bounty_settled" || p.bounty_settled === true) {
+      // Bounty settled blocks Donate even when claim is claimed (workers#41)
+      if (bountySettled) {
         return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
       }
       return {
@@ -635,9 +663,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
-    // Catalog bounty_settled: show "Bounty paid" instead of generic waiting message
-    // (workers#41 adds bounty_settled:true but keeps status as claimed)
-    if (status === "bounty_settled" || p.bounty_settled === true) {
+    // Bounty settled: show "Bounty paid" instead of generic waiting message (workers#41)
+    if (bountySettled) {
       return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
     }
     return { sentence: "Waiting on the builder.", button: null, moreIds };
@@ -695,10 +722,10 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   }
 
   if (status === "claimable" || frontmatter === "claimable") {
-    // bounty_settled on active claim hides Apply/Donate but claimant keeps mark-done/flag
-    if (claim?.bounty_settled === true) {
+    // Bounty settled hides Apply/Donate (workers#41)
+    if (bountySettled) {
       return {
-        sentence: "Bounty settled.",
+        sentence: "Bounty paid.",
         button: null,
         moreIds,
       };

@@ -107,7 +107,7 @@ export function bindStructuredFunding(
             : state === "confirmed"
               ? "Structure · confirmed"
               : state === "voided"
-                ? "voided"
+                ? "Structure · voided"
                 : state === "unreadable"
                   ? "Structure unavailable"
                   : state === "psbt_ready"

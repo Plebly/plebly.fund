@@ -29,13 +29,14 @@ export function statusLabel(status: string): string {
   if (s === "claimable") return "Claimable";
   if (s === "in_review") return "In review";
   if (s === "voided") return "Voided";
+  if (s === "bounty_settled") return "Bounty paid";
   if (!isKnownProposalStatus(s)) return "Unavailable";
   return String(status || "").replace(/_/g, " ");
 }
 
 export function statusClass(status: string): string {
   const s = String(status || "").toLowerCase();
-  if (["listed", "claimable", "completed"].includes(s)) return "status-good";
+  if (["listed", "claimable", "completed", "bounty_settled"].includes(s)) return "status-good";
   if (
     ["claimed", "in_review", "funding", "abandoned_vote", "underfunded"].includes(s)
   ) {

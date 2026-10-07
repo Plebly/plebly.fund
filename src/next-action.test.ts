@@ -962,7 +962,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Bounty settled.",
+      sentence: "Bounty paid.",
       button: null,
     },
     // Catalog contract (workers#41): status='bounty_settled' with claim_phase='settled' and accepting_funds=false
