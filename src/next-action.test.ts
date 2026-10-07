@@ -1098,6 +1098,167 @@ describe("resolveNextAction", () => {
       sentence: "Bounty paid.",
       button: null,
     },
+    // Revised catalog contract (workers#41): status stays in_review/completed but bounty_settled:true on PROPOSAL
+    // 006 shape: status='in_review' + proposal.bounty_settled=true — claimant actions work, no Donate
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true — proposer gets mark done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true window_open — donor gets flag",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_flag_close: true,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true visitor — no Donate",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    // 009 shape: status='claimed' + proposal.bounty_settled=true — builder actions work, no Donate
+    {
+      name: "009 shape: status claimed + proposal.bounty_settled=true — builder gets deliverable",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
+    },
+    {
+      name: "009 shape: status claimed + proposal.bounty_settled=true visitor — no Donate",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: "Bounty paid. Waiting on the builder.",
+      button: null,
+    },
+    // Completed row with bounty_settled:true is unaffected (status completed stays completed)
+    {
+      name: "completed + proposal.bounty_settled=true — unaffected",
+      input: {
+        proposal: proposal({
+          status: "completed",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "completed",
+          bounty_settled: true,
+          accepting_funds: false,
+        } as never),
+      },
+      sentence: "Approved. Keyholders sign the selected branch; broadcast stays in Sparrow.",
+      button: null,
+    },
+    {
+      name: "completed + proposal.bounty_settled=true with settled branches — settled on-chain",
+      input: {
+        proposal: proposal({
+          status: "completed",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "completed",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: {
+            structured_state: "confirmed",
+            selected: { bounty: { kind: "clean" } },
+            signoff: { bounty: { state: "settled", signed: 2, required_threshold: 2 } },
+          },
+        } as never),
+      },
+      sentence: "Settled on-chain.",
+      button: null,
+    },
   ];
 
   it.each(rows)("$name", ({ input, sentence, button, more }) => {

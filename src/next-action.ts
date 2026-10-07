@@ -339,13 +339,25 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
   // Exception: "rejected" status should still allow rebuttal action.
   // Exception: "bounty_settled" status should let claim branches run (claimant actions stay available).
+  // Exception: bounty_settled:true or claim_phase:'settled' on catalog should only block Donate/Apply,
+  //   not claimant actions like Mark done/Flag/Submit deliverable.
   const claimViewBlocked = isClaimViewBlocked(claim ?? null);
   const claimStructured = structuredState(claim);
   const structureBlocked = catalogBlocked || claimViewBlocked || (claimStructured && isStructuredTerminalOrUnknown(claimStructured));
 
+  // Check if catalog is only bounty-settled blocked (not structure-voided/unreadable)
+  // Workers#41 adds bounty_settled:true + claim_phase:'settled' + accepting_funds:false to EVERY
+  // settled-bounty row, but keeps status as in_review/completed for active claimants.
+  const catalogPhase = String(p.claim_phase || "").toLowerCase();
+  const isCatalogOnlyBountySettled =
+    (p.bounty_settled === true || catalogPhase === "settled") &&
+    !isStructuredTerminalOrUnknown(p.structured_state ?? null);
+
   // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
   // For bounty_settled status (workers#41), skip so claim branches can render claimant actions.
-  if (structureBlocked && status !== "rejected" && status !== "bounty_settled") {
+  // For catalog bounty_settled:true with non-bounty_settled status (e.g. in_review, completed),
+  // skip so the real status drives the UI (Mark done, Flag, etc.) — only Donate/Apply blocked.
+  if (structureBlocked && status !== "rejected" && status !== "bounty_settled" && !isCatalogOnlyBountySettled) {
     // Exception: release_blocked_reason should still show for stalled releases
     if (!p.release_blocked_reason) {
       return {
@@ -554,7 +566,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     }
     if (structured === "awaiting_funds") {
       // Catalog bounty_settled blocks Donate even when claim is in_review
-      if (status === "bounty_settled") {
+      // (workers#41 adds bounty_settled:true but keeps status as in_review)
+      if (status === "bounty_settled" || p.bounty_settled === true) {
         return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
       }
       return {
@@ -564,7 +577,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     // Catalog bounty_settled: show "Bounty paid" instead of generic waiting message
-    if (status === "bounty_settled") {
+    // (workers#41 adds bounty_settled:true but keeps status as in_review)
+    if (status === "bounty_settled" || p.bounty_settled === true) {
       return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
     }
     return { sentence: "Waiting on the proposer.", button: null, moreIds };
@@ -611,7 +625,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     }
     if (structured === "awaiting_funds") {
       // Catalog bounty_settled blocks Donate even when claim is claimed
-      if (status === "bounty_settled") {
+      // (workers#41 adds bounty_settled:true but keeps status as claimed)
+      if (status === "bounty_settled" || p.bounty_settled === true) {
         return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
       }
       return {
@@ -621,7 +636,8 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     // Catalog bounty_settled: show "Bounty paid" instead of generic waiting message
-    if (status === "bounty_settled") {
+    // (workers#41 adds bounty_settled:true but keeps status as claimed)
+    if (status === "bounty_settled" || p.bounty_settled === true) {
       return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
     }
     return { sentence: "Waiting on the builder.", button: null, moreIds };

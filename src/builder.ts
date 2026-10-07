@@ -242,9 +242,11 @@ export function isDirectProposal(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
 }
 
-/** Check catalog-level voided/blocked signals (accepting_funds:false, structured_state voided/unreadable/unknown, claim_phase settled/unreadable). */
+/** Check catalog-level voided/blocked signals (accepting_funds:false, bounty_settled:true, structured_state voided/unreadable/unknown, claim_phase settled/unreadable). */
 function isCatalogVoided(p: Proposal): boolean {
   if (p.accepting_funds === false) return true;
+  // Catalog bounty_settled:true blocks (workers#41 adds this to all settled bounties)
+  if (p.bounty_settled === true) return true;
   // Catalog claim_phase 'settled' or 'unreadable' blocks (workers#41)
   const phase = String(p.claim_phase || "").toLowerCase();
   if (phase === "settled" || phase === "unreadable") return true;

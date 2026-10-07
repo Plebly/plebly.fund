@@ -223,6 +223,8 @@ export type Proposal = {
   accepting_funds?: boolean | null;
   /** Catalog-level structured state (workers #40). */
   structured_state?: string | null;
+  /** Catalog-level signal: true when bounty is settled (workers #41). Blocks Donate/Apply. */
+  bounty_settled?: boolean | null;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */
