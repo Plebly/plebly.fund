@@ -771,6 +771,14 @@ function setDonateCreditStatus(panel: Element, message: string | null, kind?: "o
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
 }
 
+/**
+ * Donate modal: record/claim did not link a deposit the watcher saw (any
+ * refusal, 5xx or offline). It claims neither ownership ("your gift") nor
+ * that the deposit is in escrow before it confirms. Copy: UI UX + Review.
+ */
+export const DONATE_LINK_REFUSED_COPY =
+  "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
+
 function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
 }
@@ -915,8 +923,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       );
       if (claimWrap) claimWrap.hidden = true;
       opts.onCreditLinked?.();
-    } catch (e) {
-      setDonateConfirmStatus(panel, (e as Error).message, "bad");
+    } catch {
+      // Never surface raw server text here ("already claimed by another
+      // user", etc.): it can name another donor's state. Same line for
+      // refusals, 5xx and network errors.
+      setDonateConfirmStatus(panel, DONATE_LINK_REFUSED_COPY, "bad");
       showClaimable([utxo]);
     } finally {
       linking = false;
