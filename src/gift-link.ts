@@ -38,7 +38,10 @@ export function giftKey(txid: string, vout: number): string {
   return `${txid}:${vout}`;
 }
 
-const runs = new Map<string, Promise<boolean>>();
+/** true: linked; false: stopped; "pending": /record answered 202 (no row yet). */
+export type GiftLinkResult = boolean | "pending";
+
+const runs = new Map<string, Promise<GiftLinkResult>>();
 const toasts = new Map<string, { el: HTMLElement; timer: ReturnType<typeof setTimeout> | null }>();
 let generation = 0;
 
@@ -133,7 +136,7 @@ export function showGiftToast(
  * error on a final refusal or exhausted retries. A second call for the same
  * gift while it runs returns the same run.
  */
-export function linkGift(input: GiftLinkInput): Promise<boolean> {
+export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
   const key = giftKey(input.record.txid, input.record.vout);
   const running = runs.get(key);
   if (running) return running;
@@ -144,16 +147,21 @@ export function linkGift(input: GiftLinkInput): Promise<boolean> {
   const session = currentSessionToken();
   const live = () => startedIn === generation;
   const stillLinking = () => live() && currentSessionToken() === session;
-  let run!: Promise<boolean>;
+  let run!: Promise<GiftLinkResult>;
   run = (async () => {
     try {
-      await recordContributionWithRetry(record, {
+      const outcome = await recordContributionWithRetry(record, {
         onRetry: () => {
           showGiftToast(key, title, "retrying");
           input.onRetry?.();
         },
         shouldContinue: stillLinking,
       });
+      if (outcome === "pending_index") {
+        // 202: nothing to link yet; the caller shows the neutral line. No toast.
+        if (live()) closeGiftToast(key);
+        return "pending";
+      }
       if (claim) {
         if (!stillLinking()) throw new RecordRetryCancelled();
         await claimContributionWithRetry(claim);

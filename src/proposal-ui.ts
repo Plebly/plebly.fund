@@ -22,6 +22,7 @@ import {
   loadStoredCreditPreferences,
   readCreditPreferences,
   recordContribution,
+  RECORD_PENDING_INDEX_COPY,
   RECORD_RETRY_STATUS_COPY,
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
@@ -939,6 +940,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         throw e;
       });
       if (!mine() || linked === null) return;
+      if (linked === "pending") {
+        // workers#91 202: no row yet. Neutral line, no Link button, no retry.
+        setDonateConfirmStatus(panel, RECORD_PENDING_INDEX_COPY);
+        return;
+      }
       if (!linked) {
         // Stopped (unload / session change): no failure line, no Link button.
         setDonateConfirmStatus(panel, null);
@@ -970,7 +976,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         address: opts.address,
         anonymous: true,
         public_credit: false,
-      }).catch(() => undefined);
+      })
+        .then((outcome) => {
+          if (outcome === "pending_index") setDonateConfirmStatus(panel, RECORD_PENDING_INDEX_COPY);
+        })
+        .catch(() => undefined);
     }
     if (!claimWrap) return;
     const outpoint = `${utxo.txid}:${utxo.vout}`;

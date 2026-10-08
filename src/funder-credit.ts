@@ -149,14 +149,16 @@ export async function recordContribution(input: {
   legal_name?: string;
   proposal_path?: string;
   proposal_title?: string;
-}): Promise<void> {
+}): Promise<RecordOutcome> {
   const res = await authFetch(`${api()}/contributions/record`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (res.status === 202) return "pending_index";
   if (!res.ok) throw new Error(data.error || "Could not record contribution.");
+  return "recorded";
 }
 
 export async function claimContribution(input: {
@@ -278,6 +280,15 @@ export const RECORD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_00
 /** No new attempt starts after this many ms from the first one. */
 export const RECORD_RETRY_WINDOW_MS = 60_000;
 
+/**
+ * workers#91: /record answers 202 (code pending_index) when it wrote no row
+ * yet; the indexer adds the gift at 2 confirmations. Not an error, not
+ * "Credit linked", never retried. (Main never returns 202.)
+ */
+export const RECORD_PENDING_INDEX_COPY =
+  "Thanks. Your gift will show on this proposal after 2 confirmations.";
+export type RecordOutcome = "recorded" | "pending_index";
+
 /** Thrown when the caller stops a /record retry loop (modal closed, stop(), session changed). */
 export class RecordRetryCancelled extends Error {
   constructor() {
@@ -300,7 +311,7 @@ export async function recordContributionWithRetry(
     /** Checked before and after each wait; false stops the loop with RecordRetryCancelled. */
     shouldContinue?: () => boolean;
   },
-): Promise<void> {
+): Promise<RecordOutcome> {
   const delays = opts?.delaysMs ?? RECORD_RETRY_DELAYS_MS;
   const windowMs = opts?.windowMs ?? RECORD_RETRY_WINDOW_MS;
   const started = Date.now();
@@ -318,7 +329,8 @@ export async function recordContributionWithRetry(
     }
     if (res) {
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (res.ok && data.ok === true) return;
+      if (res.status === 202) return "pending_index"; // workers#91: no row yet, final
+      if (res.ok && data.ok === true) return "recorded";
       lastError = new Error(data.error || "Could not record contribution.");
       // Final: 4xx (409 included) and an unaccepted 2xx are answers, not outages.
       if (res.status < 500) throw lastError;
