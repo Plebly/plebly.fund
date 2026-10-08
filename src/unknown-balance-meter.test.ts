@@ -19,7 +19,7 @@ import type { Proposal } from "./types";
 
 const SHARED = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";
 const UNIQUE = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
-const UNAVAILABLE = "Balance temporarily unavailable";
+const UNAVAILABLE = "Balance temporarily unavailable.";
 
 function row(over: Partial<Proposal>): Proposal {
   return {
@@ -50,6 +50,9 @@ function expectNoMeter(root: ParentNode): void {
   expect(root.querySelector(".funding-meter")).toBeNull();
   expect((root as HTMLElement).textContent || "").not.toMatch(/to open/i);
   expect(root.querySelector(".funding-balance-unknown")?.textContent).toBe(UNAVAILABLE);
+  // Static text, not a live region (UI UX): one per home card would be noise.
+  expect(root.querySelector(".funding-balance-unknown")?.hasAttribute("role")).toBe(false);
+  expect(root.querySelector(".funding-balance-unknown[aria-live]")).toBeNull();
 }
 
 describe("funding bar helpers: unknown balance draws no meter", () => {

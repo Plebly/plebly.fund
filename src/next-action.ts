@@ -153,6 +153,17 @@ export type ClaimViewForDonate = {
 } | null;
 
 /**
+ * The escrow address as a trimmed, non-empty string, or null. Anything else
+ * (null, number, object, array, blank) is no address: nothing renders it and
+ * Donate never opens on it.
+ */
+export function escrowAddressText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  return t ? t : null;
+}
+
+/**
  * True when claim view allows donations.
  * Claim view must be loaded and confirm:
  * - `accepting_funds === true` (false, null or missing all block: fail closed)
@@ -175,8 +186,9 @@ export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
   // the unresolved reply sends nothing).
   if (claim.accepting_funds !== true) return false;
 
-  // No claim-view escrow address: nothing to donate to.
-  if (!String(claim.escrow_address || "").trim()) return false;
+  // No claim-view escrow address: nothing to donate to. Must be a real,
+  // non-blank string; a truthy non-string (123, {}, [addr]) never opens Donate.
+  if (!escrowAddressText(claim.escrow_address)) return false;
 
   // Settled bounty blocks donations (workers#41)
   if (claim.state === "settled" || claim.claim_phase === "settled") return false;

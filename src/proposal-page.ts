@@ -745,6 +745,8 @@ export async function renderProposalPage(
           match.target_sats,
           match.milestones,
           fundingCtx,
+          // Own-address read on a non-shared row may replace the unknown line.
+          { recoverUnknown: balanceAddressFor(match) != null },
         );
         const needEl = app.querySelector(".builder-status.muted");
         if (

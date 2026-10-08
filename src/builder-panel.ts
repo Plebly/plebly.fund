@@ -75,12 +75,14 @@ import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
   isCatalogDonateBlocked,
+  escrowAddressText,
   isClaimViewDonateAllowed,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
   type NextButton,
 } from "./next-action";
+import { balanceAddressFor } from "./mempool";
 import {
   sessionIsClaimStatusFulfiller,
   sessionMatchesClaimer,
@@ -569,6 +571,18 @@ export async function bindBuilderPanel(
   const bondSlot = panel.querySelector<HTMLElement>("#claim-bond-slot");
   const finalize = panel.querySelector<HTMLElement>("#claim-finalize");
   const claimConfirm = panel.querySelector<HTMLButtonElement>("#claim-confirm");
+  // The page's hero updater (proposal-page onBalanceUpdate), carried over from
+  // the page's own Donate context for this proposal so the Donate watcher can
+  // still reach the hero once this panel replaces the context. Never taken
+  // from another proposal's context.
+  const pageBalanceUpdate = (() => {
+    const prev = getDonateChromeContext();
+    if (!prev) return undefined;
+    const sameProposal =
+      prev.panelOpts.proposalPath === opts.proposal.path ||
+      (Boolean(opts.proposal.id) && prev.panelOpts.proposalId === opts.proposal.id);
+    return sameProposal ? prev.panelOpts.onBalanceUpdate : undefined;
+  })();
 
   // Register Donate click context before any await so first-paint Donate works.
   let seededStatus = opts.initialStatus ?? null;
@@ -587,6 +601,7 @@ export async function bindBuilderPanel(
       escrowShared: opts.proposal.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: opts.proposal.target_sats,
+      onBalanceUpdate: pageBalanceUpdate,
       creditPrefs: opts.user?.funder_credit
         ? {
             public_credit: opts.user.funder_credit.public_credit !== false,
@@ -1345,6 +1360,7 @@ export async function bindBuilderPanel(
         escrowShared: opts.proposal.escrow_shared === true,
         claimFloorSats: CLAIM_FLOOR_SATS,
         targetSats: opts.proposal.target_sats,
+        onBalanceUpdate: pageBalanceUpdate,
         creditPrefs: opts.user?.funder_credit
           ? {
               public_credit: opts.user.funder_credit.public_credit !== false,
@@ -1440,6 +1456,8 @@ export async function bindBuilderPanel(
             claimer: mergedProposal.claimer,
             proposal_type: mergedProposal.proposal_type,
           },
+          // Non-shared row only: a shared address's total never draws a meter.
+          { recoverUnknown: balanceAddressFor(opts.proposal) != null },
         );
       }
       syncHeroClaimChip(apps);
@@ -1540,9 +1558,11 @@ export async function bindBuilderPanel(
         }
       }
 
-      if (onchainPanel && donateAllowed && opts.proposal.escrow_address) {
+      // Re-insert the row only for a real string address on this network.
+      const rowAddr = escrowAddressText(opts.proposal.escrow_address);
+      if (onchainPanel && donateAllowed && rowAddr && escrowAddressMatchesNetwork(rowAddr)) {
         if (!onchainPanel.querySelector("#onchain-escrow-row")) {
-          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));
+          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(rowAddr));
         }
       }
       body.querySelector("#next-rebuttal")?.addEventListener("click", () => {

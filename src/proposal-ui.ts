@@ -59,7 +59,7 @@ import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
 import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
-import { isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
+import { escrowAddressText, isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
 import type { ClaimViewForDonate } from "./next-action";
 import type { GithubOrgAttestation } from "./types";
 import {
@@ -2203,12 +2203,9 @@ export function onChainPanelHtml(
   const rows: string[] = [];
 
   // Declined, voided, refunding, …: never show the escrow address.
-  if (
-    p.escrow_address &&
-    !opts?.hideEscrow &&
-    !isClosedToFundsStatus(p.status)
-  ) {
-    rows.push(onChainEscrowRowHtml(p.escrow_address));
+  const escrowText = escrowAddressText(p.escrow_address);
+  if (escrowText && !opts?.hideEscrow && !isClosedToFundsStatus(p.status)) {
+    rows.push(onChainEscrowRowHtml(escrowText));
   }
 
   if (p.submission_fee_txid) {

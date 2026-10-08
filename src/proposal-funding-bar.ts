@@ -200,7 +200,7 @@ export function isKnownBalance(balance: number | null | undefined): balance is n
 
 /** Shown in place of the meter when the balance is unknown. Never a 0 meter. */
 export function balanceUnavailableHtml(): string {
-  return `<p class="funding-balance-unknown muted" role="status">Balance temporarily unavailable</p>`;
+  return `<p class="funding-balance-unknown muted">Balance temporarily unavailable.</p>`;
 }
 
 export function fundingProgressHtml(
@@ -281,13 +281,27 @@ export function proposalFundingBarHtml(
   if ("status" in ctx && isClosedToFundsStatus(ctx.status)) return "";
   // Unknown balance: no .proposal-funding-bar at all, so nothing later
   // (ballot chrome, claim-view confirmed balance) can paint a meter into it.
-  if (!isKnownBalance(balance)) return balanceUnavailableHtml();
+  // Only updateProposalFundingBar with `recoverUnknown` (a non-shared row's
+  // own good read) may swap this placeholder for the meter.
+  if (!isKnownBalance(balance)) {
+    return `<div class="proposal-funding-unknown">${balanceUnavailableHtml()}</div>`;
+  }
   return `<div class="proposal-funding-bar" data-milestones="${milestones.length}">
     ${fundingProgressHtml(balance, floor, target, milestones, ctx)}
   </div>`;
 }
 
-/** Replace the live funding bar when confirmed balance changes. */
+/**
+ * Replace the live funding bar when confirmed balance changes.
+ *
+ * When first paint had no balance (hero shows "Balance temporarily
+ * unavailable." and no bar), a later good read only draws the meter if the
+ * caller passes `recoverUnknown: true`, which callers do only for a non-shared
+ * row reading its own address (`balanceAddressFor` non-null). Shared,
+ * escrow_shared, missing-row and ambiguous rows never get a meter this way.
+ * The meter is the first-paint markup (proposalFundingBarHtml); this path
+ * writes no "added" text.
+ */
 export function updateProposalFundingBar(
   root: ParentNode,
   balance: number,
@@ -295,10 +309,18 @@ export function updateProposalFundingBar(
   target: number | null,
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
+  opts: { recoverUnknown?: boolean } = {},
 ): void {
   if (!isKnownBalance(balance)) return;
   const host = root.querySelector(".proposal-funding-bar");
-  if (!host) return;
+  if (!host) {
+    if (!opts.recoverUnknown) return;
+    const unknown = root.querySelector(".proposal-funding-unknown");
+    if (unknown) {
+      unknown.outerHTML = proposalFundingBarHtml(balance, floor, target, milestones, ctx);
+    }
+    return;
+  }
   const prevUnlocked = new Set(
     [...host.querySelectorAll(".funding-marker.is-unlocked")].map(
       (el) => (el as HTMLElement).style.left,

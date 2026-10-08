@@ -276,12 +276,36 @@ describe("(b) the address comes from the claim view, never the catalog", () => {
   });
 });
 
+describe("(b2) the claim view's escrow_address must be a non-blank string", () => {
+  for (const [label, bad] of [
+    ["number", 123],
+    ["object", {}],
+    ["array holding the address", [KNOTS]],
+    ["blank string", "   "],
+  ] as [string, unknown][]) {
+    it(`escrow_address ${label} + accepting_funds:true → no Donate, no escrow row, nothing rendered from it`, async () => {
+      const catalog = [catalogRow({ status: "claimable", escrow_address: CATALOG_ONLY })];
+      const app = await renderPage({
+        claim: claimView({ status: "claimable", accepting_funds: true, escrow_address: bad as string }),
+        catalog,
+      });
+      await claimSettled(app);
+      expect(donateShown(app)).toBe(false);
+      expect(app.querySelector("#onchain-escrow-row")).toBeNull();
+      expect(document.querySelector("#donate-modal")).toBeNull();
+      expect(pageHtml()).not.toContain("[object Object]");
+      expect(pageHtml()).not.toContain(CATALOG_ONLY);
+      expect(app.querySelector(".onchain-panel")?.textContent || "").not.toMatch(/\b123\b/);
+    });
+  }
+});
+
 describe("(c) missing catalog row is shared/unknown for its balance; accepting_funds:false still closes", () => {
   /**
    * Balance unknown → no meter: no funding bar, no sats/goal line, no track,
    * no "0 raised", no "… to open". The row is shared, so with #62 merged its
    * "Awaiting confirmation" pending block (`[data-shared-pending]`, no sats,
-   * no track) may stand in for "Balance temporarily unavailable".
+   * no track) may stand in for "Balance temporarily unavailable."
    */
   function expectNoMeter(app: HTMLElement): void {
     expect(app.querySelector(".proposal-funding-bar:not([data-shared-pending])")).toBeNull();
@@ -291,7 +315,7 @@ describe("(c) missing catalog row is shared/unknown for its balance; accepting_f
     const line =
       app.querySelector(".funding-balance-unknown")?.textContent ??
       app.querySelector("[data-shared-pending] .funding-meter-label")?.textContent;
-    expect(["Balance temporarily unavailable", "Awaiting confirmation"]).toContain(line);
+    expect(["Balance temporarily unavailable.", "Awaiting confirmation"]).toContain(line);
   }
 
   it("no catalog row: the page never reads or shows the address total, and draws no meter", async () => {
