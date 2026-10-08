@@ -888,7 +888,9 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   };
 
   let hintHiddenForOutage = false;
+  let watchUnavailable = false;
   const setWatchUnavailable = (unavailable: boolean) => {
+    watchUnavailable = unavailable;
     const line = panel.querySelector<HTMLElement>("#donate-watch-unavailable");
     if (line) line.hidden = !unavailable;
     const hint = panel.querySelector<HTMLElement>("#donate-watch-hint");
@@ -1145,7 +1147,14 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     setDonateStep(panel, "pay");
     setDonateCreditStatus(panel, null);
     setDonateConfirmStatus(panel, null);
-    setWatchHintVisible(true);
+    // Edit -> Continue during an outage: the can't-check line is still up, so
+    // "detected automatically" stays hidden until a good read.
+    if (watchUnavailable) {
+      setWatchHintVisible(false);
+      hintHiddenForOutage = true;
+    } else {
+      setWatchHintVisible(true);
+    }
     if (claimWrap) {
       claimWrap.hidden = true;
       claimWrap.innerHTML = "";

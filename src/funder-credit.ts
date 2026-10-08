@@ -233,6 +233,8 @@ export function watchNewUtxos(
     if (stopped) return;
     try {
       const utxos = await addressUtxos(address);
+      // stop() may have run while the read was in flight (modal closed).
+      if (stopped) return;
       if (known == null) {
         known = new Set(utxos.map(utxoKey));
         if (!stopped) opts?.onBaselineState?.("ready");

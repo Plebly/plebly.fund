@@ -92,5 +92,8 @@ export async function addressUtxos(address: string): Promise<AddressUtxo[]> {
   const res = await fetch(`${MEMPOOL_API}/address/${encodeURIComponent(address)}/utxo`);
   if (!res.ok) throw new Error(`mempool utxo ${res.status}`);
   const data = (await res.json()) as AddressUtxo[];
-  return Array.isArray(data) ? data : [];
+  // A 200 that isn't a list is an unreadable address, not an empty one: an
+  // empty baseline would turn every existing UTXO into "new" on the next read.
+  if (!Array.isArray(data)) throw new Error("mempool utxo: not a list");
+  return data;
 }
