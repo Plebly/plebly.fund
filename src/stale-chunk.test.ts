@@ -94,7 +94,7 @@ describe("installStaleChunkReload", () => {
   it("a second failure does not stack prompts", () => {
     window.dispatchEvent(rejection(new TypeError(RAW)));
     window.dispatchEvent(rejection(new TypeError("Importing a module script failed.")));
-    expect(app().querySelectorAll("[data-stale-build]")).toHaveLength(1);
+    expect(document.querySelectorAll("[data-stale-build]")).toHaveLength(1);
     app().querySelector<HTMLButtonElement>("[data-stale-reload]")!.click();
     expect(reload).toHaveBeenCalledTimes(1);
   });
