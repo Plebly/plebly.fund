@@ -33,7 +33,10 @@ export type ClaimStatus = {
     | "claimed"
     | "in_review"
     | "completed"
-    | "unavailable";
+    | "unavailable"
+    | "settled";
+  /** Phase of the claim lifecycle (workers#41: 'settled' for paid bounties). */
+  claim_phase?: "settled" | string | null;
   confirmed_balance_sats: number | null;
   claim_floor_sats: number;
   pending?: {
@@ -86,6 +89,10 @@ export type ClaimStatus = {
   }[];
   can_mark_done?: boolean;
   can_flag_close?: boolean;
+  /** Claim-level accepting_funds signal from Workers#40 (false blocks donations). */
+  accepting_funds?: boolean | null;
+  /** True when bounty is settled (paid) — hide Donate/Apply but keep claimant's mark-done/flag (workers#41). */
+  bounty_settled?: boolean | null;
   escrow_address?: string | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
@@ -210,6 +217,8 @@ export type ClaimApplicationsResponse = {
 
 const CLAIMABLE_STATUSES = new Set(["listed", "funding", "claimable"]);
 const TAKEN_STATUSES = new Set(["claimed", "in_review", "rejected"]);
+/** Terminal/blocked statuses that should never appear in open listings. */
+const BLOCKED_STATUSES = new Set(["voided", "declined", "declined_fundable", "underfunded", "refunding", "redirected", "redirect_pending", "bounty_settled"]);
 
 function authHeaders(): HeadersInit {
   try {
@@ -224,22 +233,43 @@ export function isTakenStatus(status: string): boolean {
   return TAKEN_STATUSES.has(status);
 }
 
+/** True when status is voided or otherwise blocked from funding/claiming. */
+export function isBlockedStatus(status: string): boolean {
+  return BLOCKED_STATUSES.has(String(status || "").toLowerCase());
+}
+
 export function isDirectProposal(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
 }
 
+/** Check catalog-level voided/blocked signals (accepting_funds:false, bounty_settled:true, structured_state voided/unreadable/unknown, claim_phase settled/unreadable). */
+function isCatalogVoided(p: Proposal): boolean {
+  if (p.accepting_funds === false) return true;
+  // Catalog bounty_settled:true blocks (workers#41 adds this to all settled bounties)
+  if (p.bounty_settled === true) return true;
+  // Catalog claim_phase 'settled' or 'unreadable' blocks (workers#41)
+  const phase = String(p.claim_phase || "").toLowerCase();
+  if (phase === "settled" || phase === "unreadable") return true;
+  const structured = p.structured_state;
+  if (!structured) return false;
+  const KNOWN_STATES = ["awaiting_funds", "psbt_ready", "broadcast", "confirmed"];
+  return structured === "voided" || structured === "unreadable" || !KNOWN_STATES.includes(structured);
+}
+
 export function isOpenToClaim(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
-  const status = String(p.status);
-  if (isTakenStatus(status) || p.claimer) return false;
+  const status = String(p.status).toLowerCase();
+  if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
+  if (isCatalogVoided(p)) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   return (p.balance_sats ?? 0) >= floor;
 }
 
 export function isNearFloor(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
-  const status = String(p.status);
-  if (isTakenStatus(status) || p.claimer) return false;
+  const status = String(p.status).toLowerCase();
+  if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
+  if (isCatalogVoided(p)) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   const bal = p.balance_sats ?? 0;
   return bal >= floor * 0.5 && bal < floor;
@@ -254,10 +284,11 @@ export function claimFloorShortfall(
   let projectCount = 0;
   let fundedTowardFloor = 0;
   for (const p of proposals) {
-    const status = String(p.status);
-    if (status === "completed") continue;
+    const status = String(p.status).toLowerCase();
+    if (status === "completed" || status === "voided") continue;
     if (isDirectProposal(p)) continue;
-    if (isTakenStatus(status) || p.claimer) continue;
+    if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) continue;
+    if (isCatalogVoided(p)) continue;
     const bal = Math.max(0, p.balance_sats ?? 0);
     const need = Math.max(0, floor - bal);
     if (need <= 0) continue;

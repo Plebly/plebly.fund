@@ -3,6 +3,7 @@ import {
   bindStructuredFunding,
   canEditProposal,
   deliverableChipHtml,
+  donateModalHtml,
   donatePanelHtml,
   fundingBarScale,
   fundingBarTrackHtml,
@@ -144,6 +145,36 @@ describe("proposal UI critical render helpers", () => {
     expect(statusClass("rejected")).toBe("status-bad");
   });
 
+  it("statusLabel returns Voided for voided status", () => {
+    expect(statusLabel("voided")).toBe("Voided");
+    expect(statusLabel("VOIDED")).toBe("Voided");
+  });
+
+  it("statusClass returns status-bad for voided", () => {
+    expect(statusClass("voided")).toBe("status-bad");
+    expect(statusClass("VOIDED")).toBe("status-bad");
+  });
+
+  it("statusLabel returns Unavailable for unknown status", () => {
+    expect(statusLabel("some_unknown_future_status")).toBe("Unavailable");
+    expect(statusLabel("xyzzy")).toBe("Unavailable");
+  });
+
+  it("statusClass returns status-neutral for unknown status", () => {
+    expect(statusClass("some_unknown_future_status")).toBe("status-neutral");
+    expect(statusClass("xyzzy")).toBe("status-neutral");
+  });
+
+  it("statusPillHtml shows Voided for voided status", () => {
+    expect(statusPillHtml("voided")).toContain("Voided");
+    expect(statusPillHtml("voided")).toContain("status-bad");
+  });
+
+  it("statusPillHtml shows Unavailable for unknown status", () => {
+    expect(statusPillHtml("some_unknown_status")).toContain("Unavailable");
+    expect(statusPillHtml("some_unknown_status")).toContain("status-neutral");
+  });
+
   it("states a closed project in one sentence", () => {
     expect(projectOutcomeHtml("listed")).toBe("");
     expect(projectOutcomeHtml("completed")).toContain("Shipped.");
@@ -163,6 +194,11 @@ describe("proposal UI critical render helpers", () => {
     expect(statusPillHtml("in_review")).toContain("In review");
     expect(statusPillHtml("funding")).toContain("funding");
     expect(statusPillHtml("funding")).toContain("pill-status");
+  });
+
+  it("statusPillHtml shows Bounty paid for bounty_settled status", () => {
+    expect(statusPillHtml("bounty_settled")).toContain("Bounty paid");
+    expect(statusPillHtml("bounty_settled")).toContain("status-good");
   });
 
   it("lifecycle banners skip in_review and rejected", () => {
@@ -857,7 +893,7 @@ describe("proposal UI critical render helpers", () => {
       expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
     });
     const status = document.querySelector("#structured-funding-status")?.textContent || "";
-    expect(status).toMatch(/unknown state/i);
+    expect(status).toMatch(/Structure unavailable/i);
     expect(status).toMatch(/cannot be signed/);
     expect(status).not.toMatch(/ready for keyholders/i);
     expect(document.querySelector("#branch-psbt-verify")).toBeFalsy();
@@ -951,15 +987,20 @@ describe("proposal UI critical render helpers", () => {
 
     expect(
       structuredFundingStageSentence("voided", "Type 1 (single bounty)"),
-    ).toContain("Structure voided");
+    ).toBe("Type 1 (single bounty) — Structure voided.");
 
     expect(
       structuredFundingStageSentence("voided", "Type 1 (single bounty)", "some_other_reason"),
-    ).toContain("Voided: some_other_reason");
+    ).toContain("some_other_reason");
+    // Voided sentence includes reason without "Voided:" prefix (already says "Structure voided")
+    expect(
+      structuredFundingStageSentence("voided", "Type 1 (single bounty)", "some_other_reason"),
+    ).toContain("Structure voided");
 
+    // Unknown states show "Structure unavailable"
     expect(
       structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
-    ).toMatch(/unknown state/i);
+    ).toMatch(/Structure unavailable/i);
     expect(
       structuredFundingStageSentence("unknown_state", "Type 1 (single bounty)"),
     ).toMatch(/cannot be signed/);
@@ -981,9 +1022,62 @@ describe("proposal UI critical render helpers", () => {
       "Cleared: duplicate of another proposal's funding",
     );
     expect(voidReasonLabel("inputs_spent")).toBe("Inputs already spent on-chain");
-    expect(voidReasonLabel("custom_reason")).toBe("Voided: custom_reason");
-    expect(voidReasonLabel(undefined)).toBe("Structure voided");
-    expect(voidReasonLabel("")).toBe("Structure voided");
+    // Custom reasons returned without "Voided:" prefix (callers add context)
+    expect(voidReasonLabel("custom_reason")).toBe("custom_reason");
+    expect(voidReasonLabel(undefined)).toBe("");
+    expect(voidReasonLabel("")).toBe("");
+  });
+
+  it("void_reason with HTML renders as literal text in bindStructuredFunding", async () => {
+    const xss = '<img src=x onerror=alert(1)>';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).includes("/structured-funding")) {
+          return new Response(
+            JSON.stringify({
+              psbt_kind: "single",
+              structured: {
+                state: "voided",
+                void_reason: xss,
+                voided_at: "2026-10-07T12:00:00.000Z",
+              },
+            }),
+          );
+        }
+        if (String(url).includes("/branches")) {
+          return new Response("[]", { status: 404 });
+        }
+        return new Response("Not found", { status: 404 });
+      }),
+    );
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-XSS-TEST",
+      path: "proposals/listed/xss-test.md",
+      title: "XSS Test",
+      status: "listed",
+      escrow_address: "tb1qxss",
+      target_sats: null,
+      submission_fee_txid: null,
+      created_at: null,
+      escrow_index: null,
+      body: "",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-XSS-TEST");
+    await vi.waitFor(() => {
+      expect(document.querySelector("#structured-funding")?.hidden).toBe(false);
+    });
+    const status = document.querySelector("#structured-funding-status")?.textContent || "";
+    expect(status).toContain("Structure voided");
+    // The malicious HTML must appear as literal text, not as an element
+    expect(status).toContain(xss);
+    expect(document.querySelector("#structured-funding-status img")).toBeNull();
+    const innerHTML = document.querySelector("#structured-funding-status")?.innerHTML || "";
+    expect(innerHTML).not.toContain("<img");
+    expect(innerHTML).toContain("&lt;img");
+    vi.unstubAllGlobals();
   });
 
   it("branchSignoffStageLabel shows progress and settled states", () => {
@@ -1033,5 +1127,71 @@ describe("proposal UI critical render helpers", () => {
     expect(body).toContain("escrow in");
     expect(body).not.toContain("CLAIM BOND");
     expect(body).not.toContain("DONATE / ESCROW ADDRESS");
+  });
+
+  it("donateModalHtml returns empty when structured_state is voided", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      structured_state: "voided",
+      milestones: [],
+    } as Proposal);
+    expect(html).toBe("");
+  });
+
+  it("donateModalHtml returns empty when accepting_funds is false", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      accepting_funds: false,
+      milestones: [],
+    } as Proposal);
+    expect(html).toBe("");
+  });
+
+  it("donateModalHtml returns empty when structured_state is unknown", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      structured_state: "some_unknown_state",
+      milestones: [],
+    } as Proposal);
+    expect(html).toBe("");
+  });
+
+  it("donateModalHtml returns content when structured_state is awaiting_funds", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      structured_state: "awaiting_funds",
+      milestones: [],
+    } as Proposal);
+    expect(html).toContain("donate-modal");
+    expect(html).toContain("tb1qtest");
+  });
+
+  it("donateModalHtml returns content when no blocking fields set", () => {
+    const html = donateModalHtml({
+      id: "PLEBLY-1",
+      path: "proposals/listed/PLEBLY-1.md",
+      title: "Test",
+      status: "listed",
+      escrow_address: "tb1qtest",
+      milestones: [],
+    } as Proposal);
+    expect(html).toContain("donate-modal");
+    expect(html).toContain("tb1qtest");
   });
 });

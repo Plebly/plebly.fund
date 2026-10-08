@@ -3,6 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  isDonateBlocked,
+  isStructuredTerminalOrUnknown,
+  isUnknownClaimState,
   nextActionCardHtml,
   nextActionPrimaryHtml,
   resolveNextAction,
@@ -654,6 +657,52 @@ describe("resolveNextAction", () => {
       sentence: "Funds are moving to another project.",
       button: null,
     },
+    // Regression: claim.state=unavailable must NOT block these statuses' UI actions
+    {
+      name: "declined_fundable with claim state unavailable keeps Donate",
+      input: {
+        proposal: proposal({ status: "declined_fundable" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Listing declined. You can still fund.",
+      button: "donate",
+    },
+    {
+      name: "refunding with claim state unavailable keeps Register",
+      input: {
+        proposal: proposal({ status: "refunding" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Add a refund address.",
+      button: "register",
+    },
+    {
+      name: "underfunded with claim state unavailable keeps sentence",
+      input: {
+        proposal: proposal({ status: "underfunded", balance_sats: 50_000 }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Vote on remaining funds.",
+      button: null,
+    },
+    {
+      name: "abandoned_vote with claim state unavailable keeps sentence",
+      input: {
+        proposal: proposal({ status: "abandoned_vote" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Vote on remaining funds.",
+      button: null,
+    },
+    {
+      name: "redirected with claim state unavailable keeps sentence",
+      input: {
+        proposal: proposal({ status: "redirected" }),
+        claim: claim({ state: "unavailable" }),
+      },
+      sentence: "Funds are moving to another project.",
+      button: null,
+    },
     {
       name: "direct funding visitor",
       input: {
@@ -718,6 +767,609 @@ describe("resolveNextAction", () => {
       },
       sentence: "Mark it done if the work is finished.",
       button: "done",
+    },
+    {
+      name: "voided structure no donate (in_review)",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "voided" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "voided structure no donate (claimed)",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "voided" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "voided structure no donate (listed below_floor)",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({
+          state: "below_floor",
+          psbt: { structured_state: "voided" },
+        }),
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown structured state no donate (in_review)",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          psbt: { structured_state: "some_future_state" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown structured state no donate (claimed)",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          psbt: { structured_state: "some_future_state" },
+        }),
+        user: donor,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown structured state no donate (listed below_floor)",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({
+          state: "below_floor",
+          psbt: { structured_state: "some_future_state" },
+        }),
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "catalog status voided no donate",
+      input: {
+        proposal: proposal({ status: "voided" }),
+      },
+      sentence: "Voided, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "unknown catalog status shows Unavailable",
+      input: {
+        proposal: proposal({ status: "some_future_status" as never }),
+      },
+      sentence: "Unavailable.",
+      button: null,
+    },
+    {
+      name: "unknown claim state shows Unavailable",
+      input: {
+        proposal: proposal({ status: "listed" }),
+        claim: claim({ state: "some_future_state" as never }),
+      },
+      sentence: "Unavailable.",
+      button: null,
+    },
+    // Settled bounty tests (workers#41)
+    // state='settled' or claim_phase='settled' without active claimant → "Bounty paid."
+    {
+      name: "settled claim.state blocks donate (no active claimant)",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "settled" as never }),
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    {
+      name: "settled claim.claim_phase blocks donate (no active claimant)",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({ state: "open", claim_phase: "settled" } as never),
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    // bounty_settled=true with active claimant: keep claimant actions, no Donate/Apply
+    {
+      name: "bounty_settled true on claimed builder gets deliverable",
+      input: {
+        proposal: proposal({ status: "claimed", claimer: "bob" }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
+    },
+    {
+      name: "bounty_settled true on in_review proposer gets mark done",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "bounty_settled true on in_review window_open donor gets flag",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_flag_close: true,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "bounty_settled true on claimable blocks apply",
+      input: {
+        proposal: proposal({ status: "claimable" }),
+        claim: claim({
+          state: "open",
+          bounty_settled: true,
+        } as never),
+        user: builder,
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    // Catalog contract (workers#41): status='bounty_settled' with claim_phase='settled' and accepting_funds=false
+    {
+      name: "007 shape: catalog bounty_settled + in_review claim — proposer gets mark done",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "007 shape: catalog bounty_settled + in_review claim window_open — donor gets flag",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_flag_close: true,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "007 shape: catalog bounty_settled + claimed claim — builder gets deliverable",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
+    },
+    {
+      name: "007 shape: catalog bounty_settled + completed claim — settled on-chain",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "completed",
+          bounty_settled: true,
+          accepting_funds: false,
+        } as never),
+      },
+      sentence: "Approved. Keyholders sign the selected branch; broadcast stays in Sparrow.",
+      button: null,
+    },
+    {
+      name: "007 shape: catalog bounty_settled visitor sees no Donate",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+          claimer: "bob",
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    {
+      name: "007 shape: catalog bounty_settled no claim — Bounty paid",
+      input: {
+        proposal: proposal({
+          status: "bounty_settled" as never,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    {
+      name: "settled state on in_review (no active claimant match)",
+      input: {
+        proposal: proposal({ status: "in_review", claimer: "bob" }),
+        claim: claim({
+          state: "settled" as never,
+          claimer: "bob",
+        }),
+        user: donor,
+      },
+      sentence: "Bounty paid.",
+      button: null,
+    },
+    // Revised catalog contract (workers#41): status stays in_review/completed but bounty_settled:true on PROPOSAL
+    // 006 shape: status='in_review' + proposal.bounty_settled=true — claimant actions work, no Donate
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true — proposer gets mark done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_mark_done: true,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
+    },
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true window_open — donor gets flag",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          can_flag_close: true,
+          donor_review_status: "window_open",
+          donor_review_expires_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: /Flag if the work is not finished\./,
+      button: "flag",
+    },
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true visitor — no Donate",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    {
+      name: "006 shape: status in_review + proposal.bounty_settled=true confirmed — donor sees Bounty paid",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "confirmed" },
+        } as never),
+        user: donor,
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    // 009 shape: status='in_review' (awarded) + proposal.bounty_settled=true — no Donate
+    {
+      name: "009 shape: status in_review (awarded) + proposal.bounty_settled=true visitor — no Donate",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    // Generic claimed + bounty_settled tests (not 009 shape)
+    {
+      name: "status claimed + proposal.bounty_settled=true — builder gets deliverable",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: builder,
+      },
+      sentence: "Submit the work when it is done. The pot is still pooling.",
+      button: "deliverable",
+      more: ["checkpoint", "extension", "collab", "workboard"],
+    },
+    {
+      name: "status claimed + proposal.bounty_settled=true visitor — no Donate",
+      input: {
+        proposal: proposal({
+          status: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "claimed",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: donor,
+      },
+      sentence: "Bounty paid. Waiting on the builder.",
+      button: null,
+    },
+    // Completed row with bounty_settled:true is unaffected (status completed stays completed)
+    {
+      name: "completed + proposal.bounty_settled=true — unaffected",
+      input: {
+        proposal: proposal({
+          status: "completed",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "completed",
+          bounty_settled: true,
+          accepting_funds: false,
+        } as never),
+      },
+      sentence: "Approved. Keyholders sign the selected branch; broadcast stays in Sparrow.",
+      button: null,
+    },
+    {
+      name: "completed + proposal.bounty_settled=true with settled branches — settled on-chain",
+      input: {
+        proposal: proposal({
+          status: "completed",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "completed",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: {
+            structured_state: "confirmed",
+            selected: { bounty: { kind: "clean" } },
+            signoff: { bounty: { state: "settled", signed: 2, required_threshold: 2 } },
+          },
+        } as never),
+      },
+      sentence: "Settled on-chain.",
+      button: null,
+    },
+    // psbt terminal ALWAYS blocks regardless of bountySettled — no Mark done
+    {
+      name: "settled + voided psbt → blocked, no Mark done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "voided" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "settled + unreadable psbt → blocked, no Mark done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "unreadable" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    // stale catalog settled row + claim-view block → blocked (catalog flags cannot override claim-view)
+    {
+      name: "stale catalog settled + claim accepting_funds:false (no claim.bounty_settled) → blocked",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          // claim.bounty_settled is NOT true — catalog flags cannot override
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
     },
   ];
 
@@ -900,6 +1552,143 @@ describe("in_review pooling donate", () => {
   });
 });
 
+describe("isUnknownClaimState", () => {
+  it("returns false for null/undefined", () => {
+    expect(isUnknownClaimState(null)).toBe(false);
+    expect(isUnknownClaimState(undefined)).toBe(false);
+  });
+
+  it("returns false for known claim states", () => {
+    expect(isUnknownClaimState("open")).toBe(false);
+    expect(isUnknownClaimState("below_floor")).toBe(false);
+    expect(isUnknownClaimState("claim_pending")).toBe(false);
+    expect(isUnknownClaimState("claimed")).toBe(false);
+    expect(isUnknownClaimState("in_review")).toBe(false);
+    expect(isUnknownClaimState("completed")).toBe(false);
+    expect(isUnknownClaimState("unavailable")).toBe(false);
+    expect(isUnknownClaimState("settled")).toBe(false);
+  });
+
+  it("returns true for unknown claim states (fail closed)", () => {
+    expect(isUnknownClaimState("some_future_state")).toBe(true);
+    expect(isUnknownClaimState("unknown")).toBe(true);
+    expect(isUnknownClaimState("blocked")).toBe(true);
+  });
+});
+
+describe("isStructuredTerminalOrUnknown", () => {
+  it("returns false for null (no structured state)", () => {
+    expect(isStructuredTerminalOrUnknown(null)).toBe(false);
+  });
+
+  it("returns false for known healthy states", () => {
+    expect(isStructuredTerminalOrUnknown("awaiting_funds")).toBe(false);
+    expect(isStructuredTerminalOrUnknown("psbt_ready")).toBe(false);
+    expect(isStructuredTerminalOrUnknown("broadcast")).toBe(false);
+    expect(isStructuredTerminalOrUnknown("confirmed")).toBe(false);
+  });
+
+  it("returns true for voided state", () => {
+    expect(isStructuredTerminalOrUnknown("voided")).toBe(true);
+  });
+
+  it("returns true for unknown states (fail closed)", () => {
+    expect(isStructuredTerminalOrUnknown("some_future_state")).toBe(true);
+    expect(isStructuredTerminalOrUnknown("unknown")).toBe(true);
+  });
+
+  it("returns false for empty string (treated as no state)", () => {
+    expect(isStructuredTerminalOrUnknown("")).toBe(false);
+  });
+});
+
+describe("isDonateBlocked (claim-view-first)", () => {
+  it("returns true when claim view is null (claim-view-first requires loaded claim)", () => {
+    expect(isDonateBlocked(null, null)).toBe(true);
+    expect(isDonateBlocked({}, null)).toBe(true);
+    expect(isDonateBlocked({ accepting_funds: true }, null)).toBe(true);
+    expect(isDonateBlocked({ structured_state: "awaiting_funds" }, null)).toBe(true);
+  });
+
+  it("returns true when proposal.accepting_funds is false", () => {
+    expect(isDonateBlocked({ accepting_funds: false }, { accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when proposal.structured_state is voided", () => {
+    expect(isDonateBlocked({ structured_state: "voided" }, { accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when proposal.structured_state is unknown", () => {
+    expect(isDonateBlocked({ structured_state: "some_unknown_state" }, { accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when claim.psbt.structured_state is voided", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "voided" } })).toBe(true);
+  });
+
+  it("returns true when claim.psbt.structured_state is unknown", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "future_state" } })).toBe(true);
+  });
+
+  it("returns false when claim view allows and has healthy structured state", () => {
+    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" }, accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" }, accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" }, accepting_funds: true })).toBe(false);
+  });
+
+  it("returns false when claim view has no psbt but accepting_funds is true", () => {
+    expect(isDonateBlocked({}, { accepting_funds: true })).toBe(false);
+  });
+
+  it("returns false when claim has neither psbt nor accepting_funds (no structured record)", () => {
+    // No structured record = allowed; workers#40 sends accepting_funds:false on unreadable
+    expect(isDonateBlocked({}, { state: "open" })).toBe(false);
+    expect(isDonateBlocked({}, {})).toBe(false);
+  });
+
+  it("does NOT block on claim.state === unavailable (workers returns that for declined_fundable etc)", () => {
+    // Workers returns state: unavailable for declined_fundable, refunding, underfunded, etc.
+    // which still need their UI actions (Donate, Register, etc.)
+    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { state: "unavailable" })).toBe(false);
+  });
+
+  it("returns true when claim accepting_funds is false", () => {
+    expect(isDonateBlocked({}, { accepting_funds: false })).toBe(true);
+  });
+
+  it("proposal-level accepting_funds=false overrides healthy claim state", () => {
+    expect(
+      isDonateBlocked(
+        { accepting_funds: false },
+        { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true },
+      ),
+    ).toBe(true);
+  });
+
+  it("proposal-level structured_state=voided overrides healthy claim state", () => {
+    expect(
+      isDonateBlocked(
+        { structured_state: "voided" },
+        { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true },
+      ),
+    ).toBe(true);
+  });
+
+  it("returns true when claim.state is settled (workers#41)", () => {
+    expect(isDonateBlocked({}, { state: "settled", accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when claim.claim_phase is settled (workers#41)", () => {
+    expect(isDonateBlocked({}, { claim_phase: "settled", accepting_funds: true })).toBe(true);
+  });
+
+  it("returns true when claim.bounty_settled is true (workers#41)", () => {
+    expect(isDonateBlocked({}, { bounty_settled: true, accepting_funds: true })).toBe(true);
+  });
+});
+
 describe("project-page chrome contracts", () => {
   const src = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), "proposal-page.ts"),
@@ -931,11 +1720,13 @@ describe("project-page chrome contracts", () => {
 
   it("omits donate-open from the slot when the card owns Donate", () => {
     expect(src).toContain("proposal-donate-slot");
-    expect(src).toMatch(/proposal-donate-slot" hidden/);
+    // Donate slot starts hidden; claim-view-first reveals after check passes
+    expect(src).toMatch(/proposal-donate-slot".*hidden/);
   });
 
   it("mounts donate chrome for claimed/in_review pooling statuses", () => {
     expect(src).toContain("isDonateChromeStatus");
-    expect(src).toContain("isFundableStatus(String(match.status))");
+    // Donate chrome mounting moved to claim-view-first flow in builder-panel.ts
+    expect(src).toContain("showDonatePlaceholder");
   });
 });

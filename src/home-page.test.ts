@@ -202,3 +202,107 @@ describe("proposalCardHtml settle txid chrome", () => {
     expect(html).toContain("deadbeef");
   });
 });
+
+describe("proposalCardHtml uses View link (not embedded Donate)", () => {
+  it("shows View link and no Donate for voided proposals", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "voided",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).not.toContain("Donate");
+    expect(html).not.toContain("project-donate-btn");
+    expect(html).toContain("View");
+    expect(html).toContain("project-view-btn");
+  });
+
+  it("shows Voided status badge for voided proposals", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "voided",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("Voided");
+    expect(html).toContain("status-bad");
+  });
+
+  it("shows Unavailable badge for unknown status", () => {
+    const html = proposalCardHtml(
+      proposal({
+        status: "some_unknown_future_status",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(html).toContain("Unavailable");
+    expect(html).toContain("status-neutral");
+  });
+
+  it("always uses View link regardless of accepting_funds", () => {
+    const htmlBlocked = proposalCardHtml(
+      proposal({
+        status: "listed",
+        accepting_funds: false,
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlBlocked).not.toContain("Donate");
+    expect(htmlBlocked).toContain("View");
+    expect(htmlBlocked).toContain("project-view-btn");
+
+    const htmlAllowed = proposalCardHtml(
+      proposal({
+        status: "listed",
+        accepting_funds: true,
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlAllowed).not.toContain("Donate");
+    expect(htmlAllowed).toContain("View");
+    expect(htmlAllowed).toContain("project-view-btn");
+  });
+
+  it("always uses View link regardless of structured_state", () => {
+    const htmlVoided = proposalCardHtml(
+      proposal({
+        status: "listed",
+        structured_state: "voided",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlVoided).toContain("View");
+    expect(htmlVoided).not.toContain("project-donate-btn");
+
+    const htmlHealthy = proposalCardHtml(
+      proposal({
+        status: "listed",
+        structured_state: "awaiting_funds",
+        escrow_address: "bc1qtest",
+      }),
+      10_000,
+      false,
+      false,
+    );
+    expect(htmlHealthy).toContain("View");
+    expect(htmlHealthy).not.toContain("project-donate-btn");
+  });
+});

@@ -11,6 +11,8 @@ import {
   removeWatch,
   watchStorageId,
 } from "./builder";
+import { isKnownProposalStatus } from "./types";
+import { isCatalogDonateBlocked } from "./next-action";
 import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
@@ -393,7 +395,7 @@ export function proposalCardHtml(
     escapeHtml,
     orgAvatarSlotHtml,
   });
-  const donateHref = `${proposalHref(p.path, p.id)}?donate`;
+  const viewHref = proposalHref(p.path, p.id);
   const isDirect = isDirectProposal(p);
   const typeBadge = isDirect
     ? `<span class="project-card-type" title="Organizer receives donations">Campaign</span>`
@@ -463,7 +465,7 @@ export function proposalCardHtml(
       <div class="project-card-actions">
         ${proposer}
         ${watchCtrl}
-        <a class="btn project-donate-btn" href="${donateHref}">Donate</a>
+        <a class="btn project-view-btn" href="${viewHref}">View</a>
       </div>
     </article>`;
 }
@@ -957,9 +959,16 @@ export async function renderHome(
     if (wantedRail) wantedRail.innerHTML = wantedRailHtml(wanted);
     const pinned = new Set<string>(); // Ops may populate this later from public config.
     const excluded = new Set<string>();
+    // Exclude voided, unknown status, and catalog-blocked from rails
+    const isRailExcluded = (p: Proposal): boolean => {
+      const status = String(p.status || "").toLowerCase();
+      if (status === "voided" || !isKnownProposalStatus(status)) return true;
+      if (isCatalogDonateBlocked(p)) return true;
+      return false;
+    };
     const { campaigns: campaignList } = partitionListings(proposals);
     const campaigns = campaignList
-      .filter((proposal) => String(proposal.status) !== "completed")
+      .filter((proposal) => String(proposal.status) !== "completed" && !isRailExcluded(proposal))
       .sort((a, b) => (b.balance_sats ?? 0) - (a.balance_sats ?? 0))
       .slice(0, 8);
     const campaignsRail = app.querySelector("#campaigns-rail");
@@ -986,7 +995,8 @@ export async function renderHome(
       .filter(
         (proposal) =>
           String(proposal.status) !== "completed" &&
-          !excluded.has(proposal.id || ""),
+          !excluded.has(proposal.id || "") &&
+          !isRailExcluded(proposal),
       )
       .sort((a, b) => {
         const aPinned = pinned.has(a.id || "") ? 1 : 0;
@@ -1014,7 +1024,8 @@ export async function renderHome(
       const openBounties = bounties.filter(
         (proposal) =>
           String(proposal.status) !== "completed" &&
-          !excluded.has(proposal.id || ""),
+          !excluded.has(proposal.id || "") &&
+          !isRailExcluded(proposal),
       );
       const hideFeatured = featuredDuplicatesOpenList(featured, openBounties);
       featuredRail.innerHTML = hideFeatured

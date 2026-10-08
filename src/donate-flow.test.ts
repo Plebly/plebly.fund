@@ -63,14 +63,17 @@ import {
   bindDonatePanel,
   donateModalHtml,
   donateTriggerHtml,
+  setDonateChromeContext,
 } from "./proposal-ui";
 import { nextActionPrimaryHtml } from "./next-action";
 
 const proposal = {
   id: "PLEBLY-42",
   path: "proposals/demo.md",
-  escrow_address: "bc1qdonateescrowxxxxxxxxxxxxxxxxxxxx",
+  // Use tb1 (signet/testnet) prefix since the underlying BITCOIN_NETWORK default is signet
+  escrow_address: "tb1qdonateescrowxxxxxxxxxxxxxxxxxxxx",
   title: "Demo",
+  status: "listed",
 } as Proposal;
 
 const storage = new Map<string, string>();
@@ -80,6 +83,26 @@ function mountDonate(opts?: { signedIn?: boolean; open?: boolean }) {
     ${donateTriggerHtml()}
     ${donateModalHtml(proposal, { signedIn: Boolean(opts?.signedIn) })}
   `;
+  // Set chrome context with valid claim status so ensureDonateModalMounted passes claim-view check.
+  // Claim-view-first requires non-null claim status with escrow_address to allow donations.
+  setDonateChromeContext({
+    root: document,
+    proposal,
+    panelOpts: {
+      address: proposal.escrow_address!,
+      proposalId: proposal.id,
+      proposalPath: proposal.path,
+      proposalTitle: proposal.title,
+      signedIn: Boolean(opts?.signedIn),
+    },
+    claimStatusPromise: Promise.resolve({
+      proposal_id: proposal.id,
+      proposal_path: proposal.path,
+      escrow_address: proposal.escrow_address,
+      state: "listed",
+      accepting_funds: true,
+    }),
+  });
   bindDonateModal(document, {
     open: opts?.open,
   });
@@ -158,6 +181,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllTimers();
   vi.unstubAllGlobals();
+  setDonateChromeContext(null);
   document.body.innerHTML = "";
 });
 

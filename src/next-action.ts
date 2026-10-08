@@ -4,8 +4,30 @@ import { CLAIM_FLOOR_SATS, isFundableStatus } from "./config";
 import { btnWithIcon } from "./icons";
 import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import { userMatchesProposer } from "./proposal-ui";
-import type { Proposal } from "./types";
+import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
+import { isKnownProposalStatus, type Proposal } from "./types";
 import { escapeHtml } from "./util";
+
+/** States that are always blocked (terminal or errored). */
+const ALWAYS_BLOCKED_STATES = ["voided", "unreadable"] as const;
+
+/** Known claim states for fail-closed allowlist (unknown → blocked). */
+export const KNOWN_CLAIM_STATES = [
+  "open",
+  "below_floor",
+  "claim_pending",
+  "claimed",
+  "in_review",
+  "completed",
+  "unavailable",
+  "settled",
+] as const;
+
+/** True when claim state is unknown (not in allowlist). */
+export function isUnknownClaimState(state: string | null | undefined): boolean {
+  if (!state) return false;
+  return !KNOWN_CLAIM_STATES.includes(state as (typeof KNOWN_CLAIM_STATES)[number]);
+}
 
 export type NextButton =
   | "donate"
@@ -83,6 +105,144 @@ function structuredState(claim?: ClaimStatus | null): string | null {
   return claimStructuredState(claim);
 }
 
+/**
+ * True when structured state is voided, unreadable, or unknown — terminal
+ * states that should never offer Donate, claim, or sign. Unknown states fail closed.
+ */
+export function isStructuredTerminalOrUnknown(state: string | null): boolean {
+  if (!state) return false;
+  if (ALWAYS_BLOCKED_STATES.includes(state as (typeof ALWAYS_BLOCKED_STATES)[number])) {
+    return true;
+  }
+  return !STRUCTURED_FUNDING_KNOWN_STATES.includes(
+    state as (typeof STRUCTURED_FUNDING_KNOWN_STATES)[number],
+  );
+}
+
+/**
+ * True when donations/applications are blocked by catalog signals.
+ * Catalog can only BLOCK, never ENABLE donations.
+ * Checks:
+ * - Catalog-level `accepting_funds === false`
+ * - Catalog-level `structured_state === "voided"` or unknown
+ */
+export function isCatalogDonateBlocked(
+  proposal: {
+    accepting_funds?: boolean | null;
+    structured_state?: string | null;
+  } | null,
+): boolean {
+  if (proposal?.accepting_funds === false) return true;
+  return isStructuredTerminalOrUnknown(proposal?.structured_state ?? null);
+}
+
+/**
+ * Full claim view shape used for claim-view-first gating.
+ * Mirrors fields from ClaimStatus that affect donate eligibility.
+ */
+export type ClaimViewForDonate = {
+  psbt?: { structured_state?: string | null } | null;
+  accepting_funds?: boolean | null;
+  state?: string | null;
+  /** Phase of the claim lifecycle (workers#41: 'settled' for paid bounties). */
+  claim_phase?: string | null;
+  /** True when bounty is settled — hide Donate/Apply but keep claimant's mark-done/flag. */
+  bounty_settled?: boolean | null;
+} | null;
+
+/**
+ * True when claim view allows donations.
+ * Claim view must be loaded and confirm:
+ * - `accepting_funds` is not explicitly `false`
+ * - `psbt.structured_state` is null/absent or a known non-voided/non-unreadable state
+ *
+ * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
+ * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
+ * their respective UI actions (Donate, Register, etc.).
+ *
+ * No structured record (missing psbt AND missing accepting_funds) is ALLOWED — that's
+ * what a proposal without structured funding looks like. Workers#40 sends
+ * accepting_funds:false explicitly on unreadable records.
+ */
+export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
+  if (!claim) return false;
+
+  // Claim-level accepting_funds: false blocks (workers#40 sends this for unreadable)
+  if (claim.accepting_funds === false) return false;
+
+  // Settled bounty blocks donations (workers#41)
+  if (claim.state === "settled" || claim.claim_phase === "settled") return false;
+
+  // bounty_settled on active-claim view also blocks donations
+  if (claim.bounty_settled === true) return false;
+
+  const claimState = claim.psbt?.structured_state ?? null;
+
+  // No structured state yet = allow (no structured record, or pre-structured-funding)
+  if (!claimState) return true;
+
+  // Voided or unreadable blocks
+  if (ALWAYS_BLOCKED_STATES.includes(claimState as (typeof ALWAYS_BLOCKED_STATES)[number])) {
+    return false;
+  }
+
+  // Unknown state = fail closed
+  return STRUCTURED_FUNDING_KNOWN_STATES.includes(
+    claimState as (typeof STRUCTURED_FUNDING_KNOWN_STATES)[number],
+  );
+}
+
+/**
+ * True when donations/applications are blocked.
+ * Catalog can only BLOCK (accepting_funds=false or voided/unreadable).
+ * Claim view must be loaded and confirm non-voided/non-unreadable to ENABLE.
+ * Workers#40: 503 on claim view = blocked (handled by caller passing null).
+ */
+export function isDonateBlocked(
+  proposal: {
+    accepting_funds?: boolean | null;
+    structured_state?: string | null;
+  } | null,
+  claim: ClaimViewForDonate,
+): boolean {
+  if (isCatalogDonateBlocked(proposal)) return true;
+  return !isClaimViewDonateAllowed(claim);
+}
+
+/**
+ * True when the claim view indicates a state that should block ALL actions
+ * (voided/unreadable/unknown structure, unknown claim state, or accepting_funds:false without bounty_settled).
+ * Used at the top of resolveNextAction to exit early.
+ *
+ * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
+ * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
+ * their respective UI actions (Donate, Register, etc.).
+ *
+ * NOTE: When bounty_settled===true with healthy psbt, we do NOT block here —
+ * the claim branches (in_review/claimed) should still render their actions
+ * (Mark done, Flag, Submit deliverable). Donate/Apply are blocked separately
+ * via isClaimViewDonateAllowed.
+ */
+export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
+  if (!claim) return false;
+  const structured = claim.psbt?.structured_state ?? null;
+  // When bounty_settled is true with healthy psbt, let claim branches run
+  // (Donate/Apply are blocked separately via isClaimViewDonateAllowed)
+  if (claim.bounty_settled === true) {
+    if (!structured || !isStructuredTerminalOrUnknown(structured)) {
+      return false;
+    }
+  }
+  // accepting_funds:false without bounty_settled blocks everything
+  if (claim.accepting_funds === false) return true;
+  // Settled state (no active claimant) blocks everything
+  if (claim.state === "settled" || claim.claim_phase === "settled") return true;
+  // Unknown claim state blocks (fail closed allowlist)
+  if (isUnknownClaimState(claim.state)) return true;
+  if (structured && isStructuredTerminalOrUnknown(structured)) return true;
+  return false;
+}
+
 function selectedBranchesSettled(claim?: ClaimStatus | null): boolean {
   const selected = Object.keys(claim?.psbt?.selected || {});
   if (!selected.length) return false;
@@ -111,6 +271,33 @@ function pendingDoneAllocations(
 
 function claimMode(p: Proposal, apps?: NextActionInput["apps"]): string {
   return String(apps?.claim_mode || p.claim_mode || "proposer_select");
+}
+
+/**
+ * True when the bounty is settled (workers#41 contract shape).
+ * Used to suppress Donate/Apply while keeping claimant actions available.
+ * Checks:
+ * - claim.bounty_settled === true
+ * - proposal.bounty_settled === true (catalog row)
+ * - proposal.claim_phase === 'settled' (catalog row)
+ * - claim.claim_phase === 'settled'
+ * - claim.state === 'settled'
+ * - status === 'bounty_settled'
+ */
+export function isBountySettled(
+  proposal: Proposal,
+  claim: ClaimViewForDonate,
+  status: string,
+): boolean {
+  if (status === "bounty_settled") return true;
+  if (proposal.bounty_settled === true) return true;
+  const catalogPhase = String(proposal.claim_phase || "").toLowerCase();
+  if (catalogPhase === "settled") return true;
+  if (claim?.bounty_settled === true) return true;
+  if (claim?.state === "settled") return true;
+  const claimPhase = String(claim?.claim_phase || "").toLowerCase();
+  if (claimPhase === "settled") return true;
+  return false;
 }
 
 function roles(input: NextActionInput): {
@@ -142,10 +329,81 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   const p = input.proposal;
   const claim = input.claim;
   const { isProposer, isBuilder, user } = roles(input);
-  const status = String(p.status || "");
+  const status = String(p.status || "").toLowerCase();
   const donor = claim?.donor_review_status ?? p.donor_review_status ?? null;
   const donorExp = claim?.donor_review_expires_at ?? p.donor_review_expires_at;
   const moreIds: NextMoreId[] = [];
+
+  // FIRST: check catalog status "voided" or unknown — terminal, no actions at all.
+  if (status === "voided") {
+    return {
+      sentence: "Voided, not accepting funds.",
+      button: null,
+      moreIds,
+    };
+  }
+  if (!isKnownProposalStatus(status)) {
+    return {
+      sentence: "Unavailable.",
+      button: null,
+      moreIds,
+    };
+  }
+
+  // Settled bounty: check first to give correct message (workers#41)
+  if (claim?.state === "settled" || claim?.claim_phase === "settled") {
+    return { sentence: "Bounty paid.", button: null, moreIds };
+  }
+
+  // Check catalog-level blocking (structured_state voided/unknown, accepting_funds:false)
+  const catalogBlocked = isCatalogDonateBlocked(p);
+
+  // Unknown claim state blocks (fail closed allowlist)
+  if (isUnknownClaimState(claim?.state)) {
+    return { sentence: "Unavailable.", button: null, moreIds };
+  }
+
+  // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
+  // Exception: "rejected" status should still allow rebuttal action.
+  // Exception: "completed" status should keep its settled/approved copy.
+  const claimViewBlocked = isClaimViewBlocked(claim ?? null);
+  const claimStructured = structuredState(claim);
+
+  // Check if bounty is settled (workers#41 contract shape)
+  const bountySettled = isBountySettled(p, claim ?? null, status);
+  // Only claim.bounty_settled can override claim-view blocks; catalog flags cannot
+  const claimBountySettled = claim?.bounty_settled === true;
+
+  // psbt voided/unreadable/unknown ALWAYS blocks, no override from anything
+  const psbTerminal = claimStructured && isStructuredTerminalOrUnknown(claimStructured);
+  if (psbTerminal && status !== "rejected" && status !== "completed") {
+    if (!p.release_blocked_reason) {
+      return {
+        sentence: "Structure unavailable, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
+  }
+
+  // Claim-view blocked: only claim.bounty_settled can override (catalog flags cannot)
+  // Catalog blocked: any bountySettled can override (catalog-level signals)
+  const claimViewBlockedNotOverridden = claimViewBlocked && !claimBountySettled;
+  const catalogBlockedNotOverridden = catalogBlocked && !bountySettled;
+  const structureBlocked = claimViewBlockedNotOverridden || catalogBlockedNotOverridden;
+
+  // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
+  // For completed status, skip so it keeps its normal copy.
+  if (structureBlocked && status !== "rejected" && status !== "completed") {
+    // Exception: release_blocked_reason should still show for stalled releases
+    if (!p.release_blocked_reason) {
+      return {
+        sentence: "Structure unavailable, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
+  }
 
   if (p.release_blocked_reason) {
     const seats = (p.release_blocked_seats || [])
@@ -329,6 +587,18 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     const structured = structuredState(claim);
+    if (isStructuredTerminalOrUnknown(structured)) {
+      return {
+        sentence: "Structure voided, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
+    // Bounty settled: show "Bounty paid" BEFORE confirmed/awaiting_funds checks
+    // so settled donors on confirmed records see 'Bounty paid' (workers#41)
+    if (bountySettled) {
+      return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
+    }
     if (structured === "confirmed") {
       return {
         sentence: "Funds are structured. Waiting on the proposer to mark done.",
@@ -348,6 +618,14 @@ export function resolveNextAction(input: NextActionInput): NextAction {
 
   if (status === "claimed" || claim?.state === "claimed") {
     const structured = structuredState(claim);
+    if (isStructuredTerminalOrUnknown(structured)) {
+      return {
+        sentence: "Structure voided, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
+    // bounty_settled: builder still gets deliverable, just no Donate (blocked via isClaimViewDonateAllowed)
     if (isBuilder) {
       return {
         sentence:
@@ -363,6 +641,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (claim?.can_challenge_abandoned) moreIds.push("challenge");
+    // Bounty settled: show "Bounty paid" BEFORE psbt_ready/confirmed/awaiting_funds checks
+    // so settled donors on confirmed records see 'Bounty paid' (workers#41)
+    if (bountySettled) {
+      return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
+    }
     if (structured === "psbt_ready") {
       return {
         sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
@@ -406,6 +689,13 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   ) {
     if (claim?.state === "below_floor") {
       const structured = structuredState(claim);
+      if (isStructuredTerminalOrUnknown(structured)) {
+        return {
+          sentence: "Structure voided, not accepting funds.",
+          button: null,
+          moreIds,
+        };
+      }
       if (structured === "psbt_ready") {
         return {
           sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
@@ -432,6 +722,14 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   }
 
   if (status === "claimable" || frontmatter === "claimable") {
+    // Bounty settled hides Apply/Donate (workers#41)
+    if (bountySettled) {
+      return {
+        sentence: "Bounty paid.",
+        button: null,
+        moreIds,
+      };
+    }
     const mode = claimMode(p, input.apps);
     if (isProposer) {
       return {
@@ -450,6 +748,12 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       return { sentence: "Apply with a bond.", button: "apply", moreIds };
     }
     return { sentence: "Open for builders.", button: "donate", moreIds };
+  }
+
+  // Catalog contract (workers#41): status='bounty_settled' blocks Donate/Apply but claimant actions stay
+  // If we reach here without matching a claim branch, the bounty is settled with no active claimant actions.
+  if (status === "bounty_settled") {
+    return { sentence: "Bounty paid.", button: null, moreIds };
   }
 
   return {

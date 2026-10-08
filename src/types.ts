@@ -84,7 +84,36 @@ export type ProposalStatus =
   | "abandoned_vote"
   | "refunding"
   | "redirected"
-  | "redirect_pending";
+  | "redirect_pending"
+  | "voided"
+  | "bounty_settled";
+
+/** Known proposal statuses for exhaustive handling (fail closed on unknown). */
+export const KNOWN_PROPOSAL_STATUSES = new Set<string>([
+  "pr_open",
+  "unindexed",
+  "listed",
+  "declined",
+  "declined_fundable",
+  "funding",
+  "underfunded",
+  "claimable",
+  "claimed",
+  "in_review",
+  "rejected",
+  "completed",
+  "abandoned_vote",
+  "refunding",
+  "redirected",
+  "redirect_pending",
+  "voided",
+  "bounty_settled",
+]);
+
+/** True when status is known; false means unknown and should be blocked. */
+export function isKnownProposalStatus(status: string | null | undefined): boolean {
+  return KNOWN_PROPOSAL_STATUSES.has(String(status || "").toLowerCase());
+}
 
 export type ProposalMilestone = {
   id?: string;
@@ -190,6 +219,12 @@ export type Proposal = {
   endowment_funded?: boolean;
   /** Settle txid when release/settle has been broadcast (from catalog or claims). */
   settle_txid?: string | null;
+  /** Catalog-level signal: false blocks Donate/Apply (workers #40). */
+  accepting_funds?: boolean | null;
+  /** Catalog-level structured state (workers #40). */
+  structured_state?: string | null;
+  /** Catalog-level signal: true when bounty is settled (workers #41). Blocks Donate/Apply. */
+  bounty_settled?: boolean | null;
 };
 
 /** Statuses editable in-app after the file is on main (pre-claim). */

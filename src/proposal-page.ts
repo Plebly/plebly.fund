@@ -52,7 +52,11 @@ import {
   statusPillHtml,
   userMatchesProposer,
 } from "./proposal-ui";
-import { resolveNextAction } from "./next-action";
+import {
+  isCatalogDonateBlocked,
+  isClaimViewDonateAllowed,
+  resolveNextAction,
+} from "./next-action";
 import {
   bindListingReportControl,
   listingReportControlHtml,
@@ -527,12 +531,14 @@ export async function renderProposalPage(
       match.id,
     );
 
-    const escrowOk =
+    const catalogBlocked = isCatalogDonateBlocked(match);
+    const hasEscrow =
       Boolean(match.escrow_address) &&
-      escrowAddressMatchesNetwork(String(match.escrow_address)) &&
-      isDonateChromeStatus(String(match.status));
+      escrowAddressMatchesNetwork(String(match.escrow_address));
+    const statusOk = isDonateChromeStatus(String(match.status));
+    const showDonatePlaceholder = hasEscrow && statusOk && !catalogBlocked;
     const wantsDonate =
-      escrowOk &&
+      showDonatePlaceholder &&
       (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
         /(?:^|[?&])rail=lightning(?:&|$)/.test(location.search));
     const wantsLnRail =
@@ -665,15 +671,11 @@ export async function renderProposalPage(
               ${builderPanelHtml({ ...match, balance_sats: balance }, balance, watching, user)}
               </div>
               ${
-                escrowOk
-                  ? resolveNextAction({
-                        proposal: { ...match, balance_sats: balance },
-                        user,
-                      }).button === "donate"
-                    ? `<div class="proposal-donate-slot" hidden></div>`
-                    : isFundableStatus(String(match.status))
-                      ? `<div class="proposal-donate-slot">${donateTriggerHtml()}</div>`
-                      : `<div class="proposal-donate-slot" hidden></div>`
+                showDonatePlaceholder
+                  ? `<div class="proposal-donate-slot" id="donate-slot-pending" hidden>
+                      <p class="muted donate-loading" id="donate-loading">Checking donation status…</p>
+                      <p class="muted donate-error" id="donate-error" hidden>Donate unavailable right now. <button type="button" class="btn ghost donate-retry" id="donate-retry">Retry</button></p>
+                    </div>`
                   : ""
               }
               ${shareSlotHtml(match.title, match.path, match.id)}
@@ -695,10 +697,10 @@ export async function renderProposalPage(
                   </div>`
                 : ""
             }
-            ${onChainPanelHtml(match)}
+            ${onChainPanelHtml(match, { hideEscrow: showDonatePlaceholder })}
           </aside>
         </div>
-        ${escrowOk ? donateMobileCtaHtml() : ""}
+        ${showDonatePlaceholder ? `<div id="mobile-cta-slot" hidden></div>` : ""}
       </article>
     `);
 
@@ -765,16 +767,17 @@ export async function renderProposalPage(
       root: app,
       proposal: match,
       panelOpts: donatePanelOpts,
+      wantsDonateOpen: wantsDonate,
+      wantsLnRail,
     });
+    // Claim-view-first: ?donate deep link and modal mount ONLY from builder-panel
+    // after isClaimViewDonateAllowed(status) passes and catalog isn't blocking.
+    // Just bind the click handler here; the actual open waits for claim check.
     bindDonateModal(document, {
-      open: wantsDonate && escrowOk,
       rail: wantsLnRail ? "lightning" : undefined,
     });
-    // Body-mounted modal (not under .proposal-page) so claimer/builder DOM
-    // refreshes cannot wipe #donate-modal.
-    const donateReady = escrowOk
-      ? mountDonateChromeWhenEscrowKnown(app, match, donatePanelOpts)
-      : Promise.resolve(false);
+    // Do NOT mount donate chrome here — builder-panel will mount after claim check passes.
+    const donateReady = Promise.resolve(false);
     // Comments must not wait on builder/claim network (placeholder is already
     // "Loading comments…" in the HTML). Start engagement alongside builder work.
     const reviewerMePromise = user

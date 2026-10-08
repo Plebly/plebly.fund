@@ -73,9 +73,12 @@ import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
+  isCatalogDonateBlocked,
+  isClaimViewDonateAllowed,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
+  type NextButton,
 } from "./next-action";
 import {
   sessionIsClaimStatusFulfiller,
@@ -83,8 +86,12 @@ import {
   sessionMatchesPendingClaim,
 } from "./claimer-match";
 import {
+  closeDonateModalWhenBlocked,
+  donateMobileCtaHtml,
   donateTriggerHtml,
+  getDonateChromeContext,
   mountDonateChromeWhenEscrowKnown,
+  onChainEscrowRowHtml,
   setDonateChromeContext,
   bindDonateModal,
   projectOutcomeHtml,
@@ -178,7 +185,10 @@ export function builderPanelHtml(
     user,
   });
   const isDirect = String(p.proposal_type || "bounty") === "direct";
-  const firstPaint = `${nextActionCardHtml(first)}
+  // Claim-view-first: suppress Donate button at first paint — claim view hasn't loaded yet.
+  // The Donate button will be added after claim check passes in bindBuilderPanel.
+  const firstPaintAction = first.button === "donate" ? { ...first, button: null as NextButton | null } : first;
+  const firstPaint = `${nextActionCardHtml(firstPaintAction)}
       ${isDirect ? `<div id="direct-deliverable-slot"></div>` : `<div id="claim-apps-host"></div>`}`;
 
   if (isDirect) {
@@ -578,11 +588,14 @@ export async function bindBuilderPanel(
           }
         : null,
     };
+    const prevEarlyCtx = getDonateChromeContext();
     setDonateChromeContext({
       root,
       proposal: opts.proposal,
       panelOpts: earlyOpts,
       claimStatusPromise,
+      wantsDonateOpen: prevEarlyCtx?.wantsDonateOpen,
+      wantsLnRail: prevEarlyCtx?.wantsLnRail,
     });
     bindDonateModal(document);
   }
@@ -1248,6 +1261,27 @@ export async function bindBuilderPanel(
     const reviewerActive = Boolean(reviewerMe?.active);
     if (!status && body) {
       syncHeroClaimChip(apps);
+
+      // Claim-view-first: fetch failed/503 → close modal, hide donate elements, show error
+      closeDonateModalWhenBlocked();
+      const donateSlotErr = root.querySelector<HTMLElement>(".proposal-donate-slot");
+      const mobileCtaSlotErr = root.querySelector<HTMLElement>("#mobile-cta-slot");
+      const onchainEscrowRow = root.querySelector<HTMLElement>("#onchain-escrow-row");
+      if (donateSlotErr) {
+        donateSlotErr.hidden = false;
+        donateSlotErr.innerHTML = `<p class="muted donate-error">Donate unavailable right now. <button type="button" class="btn ghost donate-retry" id="donate-retry">Retry</button></p>`;
+        donateSlotErr.querySelector("#donate-retry")?.addEventListener("click", () => {
+          void refreshStatus();
+        });
+      }
+      if (mobileCtaSlotErr) {
+        mobileCtaSlotErr.hidden = true;
+        mobileCtaSlotErr.innerHTML = "";
+      }
+      if (onchainEscrowRow) {
+        onchainEscrowRow.remove();
+      }
+
       const runtimeStatus = String(opts.proposal.status || "");
       // Catalog/runtime may already be in_review while /claims misses. Keep the
       // in_review next-action (never fall back to Still raising / Fund).
@@ -1310,14 +1344,24 @@ export async function bindBuilderPanel(
             }
           : null,
       };
+      const prevCtx = getDonateChromeContext();
       setDonateChromeContext({
         root,
         proposal: opts.proposal,
         panelOpts: donatePanelOpts,
+        // Preserve claim status promise from earlier context for click-time re-checks,
+        // or wrap the resolved status so subsequent ensureDonateModalMounted calls can use it.
+        claimStatusPromise: status ? Promise.resolve(status) : prevCtx?.claimStatusPromise,
+        // Preserve deep link flags from earlier context
+        wantsDonateOpen: prevCtx?.wantsDonateOpen,
+        wantsLnRail: prevCtx?.wantsLnRail,
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
       // so #donate-open / [data-open-donate] from next-action actually open it.
-      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts);
+      // Claim-view-first: pass status so we can close modal if blocked.
+      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts, {
+        claimStatus: status,
+      });
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const listingBallotChromeOwned = (): boolean => {
@@ -1416,13 +1460,35 @@ export async function bindBuilderPanel(
         isBuilder: asFulfiller,
       });
       const donateSlot = root.querySelector<HTMLElement>(".proposal-donate-slot");
+      const mobileCtaSlot = root.querySelector<HTMLElement>("#mobile-cta-slot");
+      const onchainPanel = root.querySelector<HTMLElement>(".proposal-onchain .onchain-panel");
+      const catalogBlocked = isCatalogDonateBlocked(opts.proposal);
+      const claimAllowed = isClaimViewDonateAllowed(status);
+      const structured = String(claimStructuredState(status) || "");
+      const donateAllowed = !catalogBlocked && claimAllowed;
+      const sideDonateOk =
+        donateAllowed &&
+        next.button !== "donate" &&
+        (isFundableStatus(String(opts.proposal.status || "")) ||
+          structured === "awaiting_funds");
+
+      // Claim-view-first: when blocked, close modal and remove escrow elements
+      if (!donateAllowed) {
+        closeDonateModalWhenBlocked();
+        const onchainEscrowRow = root.querySelector<HTMLElement>("#onchain-escrow-row");
+        if (onchainEscrowRow) onchainEscrowRow.remove();
+      }
+
       if (donateSlot) {
-        const structured = String(claimStructuredState(status) || "");
-        const sideDonateOk =
-          next.button !== "donate" &&
-          (isFundableStatus(String(opts.proposal.status || "")) ||
-            structured === "awaiting_funds");
-        if (next.button === "donate") {
+        const loadingEl = donateSlot.querySelector("#donate-loading");
+        const errorEl = donateSlot.querySelector("#donate-error");
+        if (loadingEl) loadingEl.remove();
+        if (errorEl) errorEl.remove();
+
+        if (!donateAllowed) {
+          donateSlot.hidden = true;
+          donateSlot.innerHTML = "";
+        } else if (next.button === "donate") {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
         } else if (sideDonateOk) {
@@ -1433,6 +1499,33 @@ export async function bindBuilderPanel(
         } else {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
+        }
+      }
+
+      if (mobileCtaSlot && donateAllowed) {
+        mobileCtaSlot.hidden = false;
+        mobileCtaSlot.innerHTML = donateMobileCtaHtml();
+      } else if (mobileCtaSlot) {
+        mobileCtaSlot.hidden = true;
+        mobileCtaSlot.innerHTML = "";
+      }
+
+      // ?donate and ?rail=lightning deep links: open modal now that claim check passed
+      // and sidebar/mobile donate slots are filled.
+      const chromeCtx = getDonateChromeContext();
+      if (donateAllowed && chromeCtx?.wantsDonateOpen) {
+        // Clear the flag so we don't re-open on subsequent refreshes
+        setDonateChromeContext({ ...chromeCtx, wantsDonateOpen: false });
+        // Find donate button from any location (next-card, sidebar slot, or mobile slot)
+        const donateBtn = document.querySelector<HTMLButtonElement>("[data-open-donate]");
+        if (donateBtn) {
+          donateBtn.click();
+        }
+      }
+
+      if (onchainPanel && donateAllowed && opts.proposal.escrow_address) {
+        if (!onchainPanel.querySelector("#onchain-escrow-row")) {
+          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));
         }
       }
       body.querySelector("#next-rebuttal")?.addEventListener("click", () => {
@@ -1456,8 +1549,10 @@ export async function bindBuilderPanel(
       }
       void hydrateAvatarSlots(body);
       const claimBtn = body.querySelector<HTMLButtonElement>("#builder-claim");
-      if (claimBtn && apps?.mine_application_id) {
-        claimBtn.hidden = true;
+      if (claimBtn) {
+        if (apps?.mine_application_id || catalogBlocked || !claimAllowed) {
+          claimBtn.hidden = true;
+        }
       }
       if (apps?.award_reason) {
         const reasonEl = body.querySelector<HTMLElement>("#claim-award-reason");
