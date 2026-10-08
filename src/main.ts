@@ -11,7 +11,6 @@ import { fetchAdminMe, renderAdmin } from "./admin-page";
 import { renderArchive } from "./archive-page";
 import { renderDonations } from "./donations-page";
 import { renderEndowment } from "./endowment-page";
-import { renderKeyholders } from "./keyholders-page";
 import { WORKERS_API, assertParametersNetwork } from "./config";
 
 assertParametersNetwork();
@@ -58,6 +57,7 @@ import {
 import type { Route } from "./types";
 import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
+import { installStaleChunkReload } from "./stale-chunk";
 import { escapeHtml } from "./util";
 import { syncWebPushIfEnabled } from "./web-push";
 
@@ -68,6 +68,9 @@ void registerPwaServiceWorker();
 // Capture Donate clicks before any route finishes — modal mount must not wait
 // on builder-panel /claims.
 installDonateClickCapture();
+// A deploy while this tab is open removes the old chunks: prompt a reload
+// instead of leaving a blank view when a lazy import fails.
+installStaleChunkReload();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -350,6 +353,8 @@ async function render() {
   }
   if (r.name === "keyholders") {
     applySeo(seoForRoute(r));
+    // Keyholder desk is only for signers: load it on demand (own chunk).
+    const { renderKeyholders } = await import("./keyholders-page");
     await renderKeyholders(shell, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();

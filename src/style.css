@@ -11076,3 +11076,26 @@ a.proposal-comment-author:hover {
     white-space: nowrap;
   }
 }
+
+/* Stale build after a deploy: a fixed banner that keeps the page (and any typed input). */
+.stale-build-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 110;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.stale-build-banner p {
+  margin: 0;
+}
