@@ -20,6 +20,9 @@ describe("renderMarkdown", () => {
     expect(renderMarkdown("   ")).toBe("");
   });
 
+  // happy-dom does not run DOMPurify faithfully (it drops the first node and
+  // passes the rest through), so these only prove the leading-payload case.
+  // The sanitizer allowlist is checked in Chromium: e2e/markdown-sanitize.spec.ts.
   it("strips script tags (no executable markup)", () => {
     const html = renderMarkdown("<script>alert(1)</script>Hello");
     expect(html).not.toMatch(/<script/i);
