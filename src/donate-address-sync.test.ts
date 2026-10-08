@@ -77,9 +77,12 @@ async function expectAllShow(addr: string, amountBtc?: string) {
   const wallet = $<HTMLAnchorElement>("#donate-wallet");
   expect(wallet.hidden).toBe(false);
   expect(wallet.getAttribute("href")).toBe(uri);
+  expect(document.querySelector("#donate-paused")).toBeNull();
+  for (const el of pausedControls()) expect(isShown(el)).toBe(true);
   const qr = $<HTMLImageElement>("#donate-qr");
-  expect(qr.hidden).toBe(false);
   await vi.waitFor(() => expect(qrUriOf(qr)).toBe(uri));
+  expect(isShown(qr)).toBe(true);
+  expect(document.querySelector("[data-qr-placeholder]")).toBeNull();
   // Unchunked, byte-exact URI: no whitespace, no markup.
   for (const u of [wallet.getAttribute("href")!, qrUriOf(qr)]) expect(u).not.toMatch(/\s|\u00a0|</);
 }
@@ -97,8 +100,35 @@ function expectAllHidden() {
   const qr = $<HTMLImageElement>("#donate-qr");
   expect(qr.hidden).toBe(true);
   expect(qr.hasAttribute("src")).toBe(false);
+  expect(document.querySelector("[data-qr-placeholder]")).toBeNull();
+  // The paused line sits where the address was; amount box and presets are gone.
+  const paused = document.querySelector<HTMLElement>("#donate-paused");
+  expect(paused?.textContent).toBe(PAUSED);
+  expect(paused && isShown(paused)).toBe(true);
+  expect(paused?.nextElementSibling).toBe(code);
+  for (const el of pausedControls()) expect(isShown(el)).toBe(false);
   expect($(".donate-explorer-link").hidden).toBe(true);
   expect($(".donate-explorer-link").hasAttribute("href")).toBe(false);
+}
+
+const PAUSED = "Donations are paused for this proposal right now.";
+/**
+ * Visible within the on-chain pane: neither it nor an ancestor up to the pane
+ * carries `hidden` (the modal / pay step are closed in these unit tests).
+ */
+function isShown(el: Element): boolean {
+  for (let n: Element | null = el; n && !n.matches(".donate-pane-onchain"); n = n.parentElement) {
+    if ((n as HTMLElement).hidden) return false;
+  }
+  return true;
+}
+/** Amount box, presets and the QR box: only shown with a payable address. */
+function pausedControls(): HTMLElement[] {
+  return [
+    $("#donate-amount"),
+    ...document.querySelectorAll<HTMLElement>('.donate-preset[data-rail="onchain"]'),
+    $(".donate-pane-onchain .donate-qr-wrap"),
+  ];
 }
 
 function typeAmount(sats: number) {
@@ -227,5 +257,75 @@ describe("re-open (each Donate open re-binds the panel)", () => {
     typeAmount(1_000);
     await new Promise((r) => setTimeout(r, 20));
     expect(qrPayloads).toEqual([`bitcoin:${A}?amount=0.00001`]);
+  });
+});
+
+describe("paused while the modal is open (UI UX)", () => {
+  it("valid → invalid → valid: paused line and hidden controls, then line gone and controls back on the new address", async () => {
+    const ui = await mount(A);
+    await expectAllShow(A);
+    expect(pausedControls().length).toBeGreaterThan(2); // amount, ≥1 preset, QR box
+    ui.syncDonateModalEscrow("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", document);
+    expectAllHidden();
+    expect(document.querySelectorAll("#donate-paused")).toHaveLength(1);
+    // Paused twice still shows one line.
+    ui.syncDonateModalEscrow("", document);
+    expect(document.querySelectorAll("#donate-paused")).toHaveLength(1);
+    ui.syncDonateModalEscrow(B, document);
+    await expectAllShow(B);
+    typeAmount(2_000);
+    await expectAllShow(B, "0.00002");
+  });
+
+  it("restores only what pausing hid (an already-hidden watch hint stays hidden)", async () => {
+    const ui = await mount(A);
+    await expectAllShow(A);
+    $("#donate-watch-hint").hidden = true; // e.g. replaced by a confirm status
+    ui.syncDonateModalEscrow("", document);
+    ui.syncDonateModalEscrow(A, document);
+    await expectAllShow(A);
+    expect($("#donate-watch-hint").hidden).toBe(true);
+  });
+});
+
+describe("QR placeholder while a new QR renders (UI UX nit)", () => {
+  it("'Loading QR…' fills the QR box before the render and is replaced by the image after", async () => {
+    qrDelay = (uri) => (uri.includes(B) ? 60 : 0);
+    const ui = await mount(A);
+    await expectAllShow(A);
+    ui.syncDonateModalEscrow(B, document);
+    const qr = $<HTMLImageElement>("#donate-qr");
+    const ph = document.querySelector<HTMLElement>("[data-qr-placeholder]");
+    expect(ph?.textContent).toBe("Loading QR…");
+    expect(ph && isShown(ph)).toBe(true);
+    expect(ph?.parentElement).toBe(qr.parentElement); // same box as the image
+    expect(ph?.classList.contains("donate-qr-placeholder")).toBe(true);
+    // No empty / broken <img> on screen meanwhile.
+    expect(qr.hidden).toBe(true);
+    expect(qr.hasAttribute("src")).toBe(false);
+    await expectAllShow(B); // image shown, placeholder gone
+  });
+
+  it("first paint: placeholder until the first QR lands", async () => {
+    qrDelay = () => 60;
+    const ui = await import("./proposal-ui");
+    document.body.innerHTML = ui.donateModalHtml(proposal(A), { signedIn: false });
+    const bound = ui.bindDonatePanel(document, { address: A, proposalId: "X", proposalPath: "proposals/listed/x.md", signedIn: false });
+    await vi.waitFor(() => expect(document.querySelector("[data-qr-placeholder]")?.textContent).toBe("Loading QR…"));
+    expect($<HTMLImageElement>("#donate-qr").hidden).toBe(true);
+    await bound;
+    await expectAllShow(A);
+  });
+
+  it("same-address amount change keeps the current image (no placeholder flash)", async () => {
+    const ui = await mount(A);
+    await expectAllShow(A);
+    qrDelay = () => 60;
+    typeAmount(3_000);
+    expect(document.querySelector("[data-qr-placeholder]")).toBeNull();
+    expect(isShown($("#donate-qr"))).toBe(true);
+    expect(qrUriOf($<HTMLImageElement>("#donate-qr"))).toBe(`bitcoin:${A}`);
+    await expectAllShow(A, "0.00003");
+    void ui;
   });
 });

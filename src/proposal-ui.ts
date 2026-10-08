@@ -1640,6 +1640,28 @@ function donateAmountSats(panel: Element): number | null {
   return raw !== "" && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 }
 
+export const DONATE_QR_LOADING = "Loading QR…";
+export const DONATE_QR_FAILED = "QR unavailable. Copy the address instead.";
+
+/** Fixed-size box shown in place of the QR image; `null` removes it. */
+function setDonateQrPlaceholder(qrImg: HTMLImageElement, text: string | null): void {
+  const wrap = qrImg.parentElement;
+  if (!wrap) return;
+  let ph = wrap.querySelector<HTMLElement>("[data-qr-placeholder]");
+  if (text == null) {
+    ph?.remove();
+    return;
+  }
+  if (!ph) {
+    ph = document.createElement("span");
+    ph.className = "donate-qr-placeholder";
+    ph.setAttribute("data-qr-placeholder", "");
+    ph.setAttribute("role", "status");
+    wrap.insertBefore(ph, qrImg);
+  }
+  ph.textContent = text;
+}
+
 /**
  * Wallet link + QR for the panel's current address and amount. Both use the
  * exact address (never the chunked display). No address → both hidden and
@@ -1661,6 +1683,7 @@ function renderDonatePaymentTargets(panel: Element): Promise<void> {
       qrImg.removeAttribute("data-qr-uri");
       qrImg.removeAttribute("data-qr-address");
       qrImg.hidden = true;
+      setDonateQrPlaceholder(qrImg, null);
     }
     const done = Promise.resolve();
     donateQrPending.set(panel, done);
@@ -1679,7 +1702,15 @@ function renderDonatePaymentTargets(panel: Element): Promise<void> {
     qrImg.removeAttribute("data-qr-uri");
     qrImg.removeAttribute("data-qr-address");
   }
-  qrImg.hidden = false;
+  // No image yet: a fixed-size "Loading QR…" box instead of an empty/broken
+  // <img>, so nothing jumps. Same-address re-renders (amount) keep the old
+  // image until the new one lands.
+  if (qrImg.hasAttribute("src")) {
+    qrImg.hidden = false;
+  } else {
+    qrImg.hidden = true;
+    setDonateQrPlaceholder(qrImg, DONATE_QR_LOADING);
+  }
   const done = (async () => {
     try {
       const src = await QRCode.toDataURL(uri, {
@@ -1691,8 +1722,12 @@ function renderDonatePaymentTargets(panel: Element): Promise<void> {
       qrImg.src = src;
       qrImg.setAttribute("data-qr-uri", uri);
       qrImg.setAttribute("data-qr-address", addr);
+      qrImg.hidden = false;
+      setDonateQrPlaceholder(qrImg, null);
     } catch {
-      /* ignore */
+      if (donateQrSeq.get(panel) === seq && !qrImg.hasAttribute("src")) {
+        setDonateQrPlaceholder(qrImg, DONATE_QR_FAILED);
+      }
     }
   })();
   donateQrPending.set(panel, done);
@@ -1731,10 +1766,55 @@ export function syncDonateModalEscrow(
   }
 }
 
+export const DONATE_PAUSED_LINE = "Donations are paused for this proposal right now.";
+
+/** On-chain controls that only make sense with a payable address. */
+const DONATE_PAUSED_HIDES = [
+  ".donate-pane-onchain .donate-qr-wrap",
+  'label[for="donate-amount"]',
+  ".donate-pane-onchain .donate-amount-row",
+  ".donate-pane-onchain .donate-presets",
+  "#donate-escrow-label",
+  "#donate-escrow-contrast",
+  "#donate-watch-hint",
+  ".donate-pane-onchain .escrow-addr-note", // #84's signet-only line, when present
+];
+
+/**
+ * hidden=true: no valid address. Address, Copy and explorer are hidden, the
+ * paused line takes the address's spot, and the amount box, presets, QR box
+ * and "send any amount here" lines are hidden. hidden=false undoes exactly
+ * that (only what this function hid comes back).
+ */
 function setDonateAddressTargetsHidden(root: ParentNode, hidden: boolean): void {
   for (const sel of ["#donate-address", "#donate-copy", ".donate-explorer-link"]) {
     const el = root.querySelector<HTMLElement>(sel);
     if (el) el.hidden = hidden;
+  }
+  const code = root.querySelector<HTMLElement>("#donate-address");
+  let paused = root.querySelector<HTMLElement>("#donate-paused");
+  if (hidden) {
+    for (const sel of DONATE_PAUSED_HIDES) {
+      root.querySelectorAll<HTMLElement>(sel).forEach((el) => {
+        if (el.hidden) return;
+        el.hidden = true;
+        el.setAttribute("data-paused-hidden", "");
+      });
+    }
+    if (!paused && code?.parentElement) {
+      paused = document.createElement("p");
+      paused.id = "donate-paused";
+      paused.className = "donate-paused";
+      paused.setAttribute("role", "status");
+      code.parentElement.insertBefore(paused, code);
+    }
+    if (paused) paused.textContent = DONATE_PAUSED_LINE;
+  } else {
+    root.querySelectorAll<HTMLElement>("[data-paused-hidden]").forEach((el) => {
+      el.hidden = false;
+      el.removeAttribute("data-paused-hidden");
+    });
+    paused?.remove();
   }
 }
 
