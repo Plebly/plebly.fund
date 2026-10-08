@@ -301,6 +301,8 @@ describe("title safety and capture", () => {
     const inp = input(A, "Signet faucet");
     const done = linkGift(inp);
     inp.proposalTitle = "Changed";
+    await vi.advanceTimersByTimeAsync(10);
+    expect(toastText(A)).toBe(`Gift to Signet faucet: ${RETRYING}`);
     await vi.advanceTimersByTimeAsync(5_000);
     await done;
     expect(toastText(A)).toBe("Gift to Signet faucet: Credit linked for 7,000 sats.");
