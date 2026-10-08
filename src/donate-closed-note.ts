@@ -33,12 +33,16 @@ export function donateClosedReason(
   return DONATE_CLOSED_OTHER;
 }
 
-/** Muted note for the Donate slot (same styling as the slot's loading/error notes). */
+/**
+ * Reason note for the Donate slot. Uses `.donate-closed-note` (`--ink-secondary`),
+ * not `.muted`: it is the only explanation a donor gets when Donate disappears,
+ * and `--muted` is below AA 4.5:1 on the page and card backgrounds.
+ */
 export function donateClosedNoteHtml(reason: string): string {
-  return `<p class="muted donate-closed-note" id="donate-closed-note">${escapeHtml(reason)}</p>`;
+  return `<p class="donate-closed-note" id="donate-closed-note">${escapeHtml(reason)}</p>`;
 }
 
-/** Muted note that takes the escrow address row's place in the on-chain panel. */
+/** Reason note (same `.donate-closed-note` styling) in the escrow address row's place. */
 export function escrowClosedNoteHtml(reason: string): string {
-  return `<p class="muted donate-closed-note" id="onchain-escrow-closed-note">${escapeHtml(reason)}</p>`;
+  return `<p class="donate-closed-note" id="onchain-escrow-closed-note">${escapeHtml(reason)}</p>`;
 }

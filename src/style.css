@@ -6633,6 +6633,12 @@ a.claim-app-bond:hover {
   border-top: 1px solid var(--line-soft);
 }
 
+/* Funds-closed reason (workers#51): the only explanation when Donate is hidden,
+   so --ink-secondary (AA on bg and cards), not --muted. */
+.donate-closed-note {
+  color: var(--ink-secondary);
+}
+
 .proposal-share-slot {
   padding-top: 0.75rem;
   border-top: 1px solid var(--line-soft);

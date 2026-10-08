@@ -1507,7 +1507,7 @@ export async function bindBuilderPanel(
         if (errorEl) errorEl.remove();
 
         if (!donateAllowed) {
-          // workers#51 funds-closed row: short muted reason, not a blank slot.
+          // workers#51 funds-closed row: short reason note, not a blank slot.
           const closedReason = donateClosedReason(String(opts.proposal.status || ""), status);
           donateSlot.hidden = !closedReason;
           donateSlot.innerHTML = closedReason ? donateClosedNoteHtml(closedReason) : "";

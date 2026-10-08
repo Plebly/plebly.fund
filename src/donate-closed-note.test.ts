@@ -1,5 +1,8 @@
 // workers#51 pairing: where accepting_funds:false hides Donate and the escrow
-// address, show a short muted reason in that spot (plain text, no live region).
+// address, show a short reason note in that spot (plain text, no live region).
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaimStatus } from "./builder";
 import {
@@ -8,6 +11,7 @@ import {
   DONATE_CLOSED_REFUNDING,
   donateClosedNoteHtml,
   donateClosedReason,
+  escrowClosedNoteHtml,
 } from "./donate-closed-note";
 import type { Proposal } from "./types";
 
@@ -54,11 +58,21 @@ describe("donateClosedReason copy", () => {
     expect(donateClosedReason("claimed", { state: "claimed" })).toBeNull();
     expect(donateClosedReason("claimed", null)).toBeNull();
   });
-  it("note is plain muted text, no live region", () => {
+  it("note is plain text styled by .donate-closed-note (not .muted), no live region", () => {
     const html = donateClosedNoteHtml(DONATE_CLOSED_OTHER);
-    expect(html).toContain('class="muted donate-closed-note"');
+    expect(html).toContain('class="donate-closed-note"');
+    expect(html).not.toMatch(/class="[^"]*\bmuted\b/);
+    expect(escrowClosedNoteHtml(DONATE_CLOSED_REFUNDING)).toContain('class="donate-closed-note"');
+    expect(escrowClosedNoteHtml(DONATE_CLOSED_REFUNDING)).not.toMatch(/class="[^"]*\bmuted\b/);
     expect(html).toContain(">This listing isn't accepting funds.</p>");
     expect(html).not.toMatch(/role=|aria-live/);
+  });
+  it("style.css: .donate-closed-note uses --ink-secondary (AA), not --muted", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "style.css"), "utf8");
+    const rule = css.match(/(?:^|\n)\.donate-closed-note\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toMatch(/color:\s*var\(--ink-secondary\)/);
+    expect(rule![1]).not.toMatch(/--muted/);
   });
 });
 
@@ -148,7 +162,8 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
       expect(slot.hidden).toBe(false);
       const note = slot.querySelector<HTMLElement>("#donate-closed-note")!;
       expect(note.textContent).toBe("Funding is closed while this is being built.");
-      expect(note.classList.contains("muted")).toBe(true);
+      expect(note.classList.contains("donate-closed-note")).toBe(true);
+      expect(note.classList.contains("muted")).toBe(false);
       expect(slot.innerHTML).not.toMatch(/role="status"|aria-live/);
     });
     assertNoDonateOrAddress();
@@ -177,7 +192,8 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     await vi.waitFor(() => {
       const note = document.querySelector<HTMLElement>(".onchain-panel #onchain-escrow-closed-note");
       expect(note?.textContent).toBe("Refunds in progress.");
-      expect(note!.classList.contains("muted")).toBe(true);
+      expect(note!.classList.contains("donate-closed-note")).toBe(true);
+      expect(note!.classList.contains("muted")).toBe(false);
       expect(note!.outerHTML).not.toMatch(/role=|aria-live/);
     });
     assertNoDonateOrAddress();
