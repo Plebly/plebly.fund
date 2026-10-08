@@ -1,0 +1,176 @@
+/**
+ * App-level gift linking: one /record retry run per gift (txid:vout), kept in
+ * memory outside the Donate modal and the proposal view, so closing the modal
+ * or navigating inside the app never kills it. Only stopGiftLinks() (page
+ * unload) and a session change stop a run. Each gift gets one toast in a
+ * single bottom region that never takes focus. No stored state.
+ */
+import { currentSessionToken } from "./auth";
+import {
+  claimContributionWithRetry,
+  recordContributionWithRetry,
+  RecordRetryCancelled,
+  RECORD_RETRY_STATUS_COPY,
+} from "./funder-credit";
+import { formatSats } from "./util";
+
+/** #94's refusal / failure line, word for word (DONATE_LINK_REFUSED_COPY). */
+export const GIFT_LINK_FAILED_COPY =
+  "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
+
+/** The linked toast closes itself after this long; the failure toast never does. */
+export const GIFT_LINKED_AUTO_CLOSE_MS = 10_000;
+
+export type GiftToastState = "retrying" | "linked" | "failed";
+
+export type GiftLinkInput = {
+  /** Captured from the gift's own proposal when the run starts; never re-read. */
+  proposalTitle: string;
+  record: Parameters<typeof recordContributionWithRetry>[0];
+  /** null for the endowment (no claim step). */
+  claim: Parameters<typeof claimContributionWithRetry>[0] | null;
+  valueSats: number;
+  /** Per-caller hook for each retry wait (the modal updates its own line). */
+  onRetry?: () => void;
+};
+
+export function giftKey(txid: string, vout: number): string {
+  return `${txid}:${vout}`;
+}
+
+const runs = new Map<string, Promise<boolean>>();
+const toasts = new Map<string, { el: HTMLElement; timer: ReturnType<typeof setTimeout> | null }>();
+let generation = 0;
+
+/** Stop every in-flight run (page unload). Stopped runs never touch a toast again. */
+export function stopGiftLinks(): void {
+  generation += 1;
+  runs.clear();
+  // A stopped run's "Keep this page open" would be a lie (e.g. a bfcache restore).
+  for (const [key, t] of [...toasts]) {
+    if (t.el.dataset.giftState === "retrying") closeGiftToast(key);
+  }
+}
+
+/** Remove every toast (page teardown / tests). */
+export function closeAllGiftToasts(): void {
+  for (const key of [...toasts.keys()]) closeGiftToast(key);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", stopGiftLinks);
+}
+
+function toastRegion(): HTMLElement {
+  let region = document.getElementById("gift-toasts");
+  if (!region) {
+    region = document.createElement("div");
+    region.id = "gift-toasts";
+    region.className = "gift-toasts";
+    document.body.appendChild(region);
+  }
+  return region;
+}
+
+export function closeGiftToast(key: string): void {
+  const t = toasts.get(key);
+  if (!t) return;
+  if (t.timer) clearTimeout(t.timer);
+  t.el.remove();
+  toasts.delete(key);
+}
+
+function giftToastLine(state: GiftToastState, valueSats: number): string {
+  if (state === "retrying") return RECORD_RETRY_STATUS_COPY;
+  if (state === "linked") return `Credit linked for ${formatSats(valueSats)}.`;
+  return GIFT_LINK_FAILED_COPY;
+}
+
+/** One toast per gift. The title only ever goes in through textContent. */
+export function showGiftToast(
+  key: string,
+  title: string,
+  state: GiftToastState,
+  valueSats = 0,
+): HTMLElement {
+  let t = toasts.get(key);
+  if (!t) {
+    const el = document.createElement("div");
+    el.className = "gift-toast";
+    el.dataset.giftKey = key;
+    t = { el, timer: null };
+    toasts.set(key, t);
+  }
+  const { el } = t;
+  if (t.timer) clearTimeout(t.timer);
+  t.timer = null;
+  el.dataset.giftState = state;
+  el.setAttribute("role", state === "failed" ? "alert" : "status");
+  el.replaceChildren();
+  const text = document.createElement("p");
+  text.className = "gift-toast-text";
+  text.textContent = `Gift to ${title}: ${giftToastLine(state, valueSats)}`;
+  el.appendChild(text);
+  if (state !== "retrying") {
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "gift-toast-close";
+    close.textContent = "Close";
+    close.addEventListener("click", () => closeGiftToast(key));
+    el.appendChild(close);
+  }
+  if (state === "linked") {
+    t.timer = setTimeout(() => closeGiftToast(key), GIFT_LINKED_AUTO_CLOSE_MS);
+  }
+  const region = toastRegion();
+  if (el.parentElement !== region) region.appendChild(el);
+  return el;
+}
+
+/**
+ * Record (with bounded retries) then claim one gift. Resolves true when
+ * linked, false when stopped (unload / session change); rejects with the
+ * error on a final refusal or exhausted retries. A second call for the same
+ * gift while it runs returns the same run.
+ */
+export function linkGift(input: GiftLinkInput): Promise<boolean> {
+  const key = giftKey(input.record.txid, input.record.vout);
+  const running = runs.get(key);
+  if (running) return running;
+  const title = input.proposalTitle;
+  const record = { ...input.record };
+  const claim = input.claim ? { ...input.claim } : null;
+  const startedIn = generation;
+  const session = currentSessionToken();
+  const live = () => startedIn === generation;
+  const stillLinking = () => live() && currentSessionToken() === session;
+  let run!: Promise<boolean>;
+  run = (async () => {
+    try {
+      await recordContributionWithRetry(record, {
+        onRetry: () => {
+          showGiftToast(key, title, "retrying");
+          input.onRetry?.();
+        },
+        shouldContinue: stillLinking,
+      });
+      if (claim) {
+        if (!stillLinking()) throw new RecordRetryCancelled();
+        await claimContributionWithRetry(claim);
+      }
+      if (live()) showGiftToast(key, title, "linked", input.valueSats);
+      return true;
+    } catch (e) {
+      if (e instanceof RecordRetryCancelled) {
+        if (live()) closeGiftToast(key);
+        return false;
+      }
+      if (live()) showGiftToast(key, title, "failed");
+      throw e;
+    } finally {
+      if (runs.get(key) === run) runs.delete(key);
+    }
+  })();
+  runs.set(key, run);
+  return run;
+}

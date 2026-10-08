@@ -3,10 +3,10 @@ import {
   authFetch,
   bindLoginHandlers,
   currentReturnPath,
-  currentSessionToken,
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
+import { giftKey, linkGift } from "./gift-link";
 import {
   fetchClaimStatus,
   isDirectProposal,
@@ -22,8 +22,6 @@ import {
   loadStoredCreditPreferences,
   readCreditPreferences,
   recordContribution,
-  recordContributionWithRetry,
-  RecordRetryCancelled,
   RECORD_RETRY_STATUS_COPY,
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
@@ -870,12 +868,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   const claimWrap = panel.querySelector<HTMLElement>("#donate-credit-claim");
   let utxoStop: (() => void) | null = null;
   let balanceStop: (() => void) | null = null;
-  let linking = false;
-  // stop() bumps this so an in-flight /record retry loop gives up.
-  let linkGeneration = 0;
+  // The gift whose result this panel's status line shows (txid:vout). Runs
+  // themselves live in gift-link.ts, outside the modal and the view.
+  let shownGift: string | null = null;
 
   const stopWatchers = () => {
-    linkGeneration += 1;
     utxoStop?.();
     balanceStop?.();
     utxoStop = null;
@@ -894,61 +891,58 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     vout: number;
     value: number;
   }) => {
-    if (!opts.proposalId || !opts.signedIn || linking) return;
-    linking = true;
+    if (!opts.proposalId || !opts.signedIn) return;
+    const key = giftKey(utxo.txid, utxo.vout);
+    shownGift = key;
+    const mine = () => shownGift === key;
     setWatchHintVisible(false);
     setDonateConfirmStatus(panel, "Linking funder credit…", "live");
     setDonateCreditStatus(panel, null);
-    // Retries stop when the modal closes, on stop(), or when the session
-    // changes, so a gift is never recorded under an account that signed in
-    // after it was seen.
-    const generation = linkGeneration;
-    const sessionAtStart = currentSessionToken();
-    const modal = panel.closest<HTMLElement>("#donate-modal");
-    const modalWasOpen = Boolean(modal && !modal.hidden);
-    const stillLinking = () =>
-      generation === linkGeneration &&
-      currentSessionToken() === sessionAtStart &&
-      !(modalWasOpen && modal?.hidden);
     try {
       const prefs = activeCreditPreferences(panel);
-      // Transient record failures (busy / 5xx / offline) retry for a bounded
-      // window before the modal gives up; 4xx and 409 stay final.
-      const recorded = await recordContributionWithRetry({
-        proposal_id: opts.proposalId,
-        txid: utxo.txid,
-        vout: utxo.vout,
-        address: opts.address,
-        anonymous: prefs.anonymous || !prefs.public_credit,
-        public_credit: prefs.public_credit && !prefs.anonymous,
-        legal_name: readLegalName(panel),
-        proposal_path: opts.proposalPath,
-        proposal_title: opts.proposalTitle,
-      }, {
-        onRetry: () => setDonateConfirmStatus(panel, RECORD_RETRY_STATUS_COPY, "live"),
-        shouldContinue: stillLinking,
-      }).then(
-        () => true,
-        (e: unknown) => {
-          if (e instanceof RecordRetryCancelled) return false;
-          throw e;
-        },
-      );
-      if (!recorded) {
-        // Stopped on purpose: no failure line, no Link button, nothing recorded.
-        setDonateConfirmStatus(panel, null);
-        return;
-      }
-      if (opts.mode !== "endowment") {
-        await claimContributionWithRetry({
+      // App-level run (gift-link.ts): transient record failures retry for a
+      // bounded window; 4xx and 409 stay final. Closing the modal or
+      // navigating doesn't stop it; unload and a session change do. Each
+      // gift's result lands on its own toast, and here only while this
+      // panel still shows that gift.
+      const linked = await linkGift({
+        proposalTitle: opts.proposalTitle || opts.proposalId,
+        record: {
           proposal_id: opts.proposalId,
           txid: utxo.txid,
           vout: utxo.vout,
+          address: opts.address,
+          anonymous: prefs.anonymous || !prefs.public_credit,
+          public_credit: prefs.public_credit && !prefs.anonymous,
           legal_name: readLegalName(panel),
           proposal_path: opts.proposalPath,
           proposal_title: opts.proposalTitle,
-          ...prefs,
-        });
+        },
+        claim:
+          opts.mode !== "endowment"
+            ? {
+                proposal_id: opts.proposalId,
+                txid: utxo.txid,
+                vout: utxo.vout,
+                legal_name: readLegalName(panel),
+                proposal_path: opts.proposalPath,
+                proposal_title: opts.proposalTitle,
+                ...prefs,
+              }
+            : null,
+        valueSats: utxo.value,
+        onRetry: () => {
+          if (mine()) setDonateConfirmStatus(panel, RECORD_RETRY_STATUS_COPY, "live");
+        },
+      }).catch((e: unknown) => {
+        if (!mine()) return null; // a newer gift owns this line; its toast has the result
+        throw e;
+      });
+      if (!mine() || linked === null) return;
+      if (!linked) {
+        // Stopped (unload / session change): no failure line, no Link button.
+        setDonateConfirmStatus(panel, null);
+        return;
       }
       setDonateConfirmStatus(
         panel,
@@ -960,8 +954,6 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     } catch (e) {
       setDonateConfirmStatus(panel, (e as Error).message, "bad");
       showClaimable([utxo]);
-    } finally {
-      linking = false;
     }
   };
 

@@ -11076,3 +11076,65 @@ a.proposal-comment-author:hover {
     white-space: nowrap;
   }
 }
+
+/* App-level gift-link toasts (gift-link.ts). Fixed to the bottom; never focused. */
+.gift-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(32rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.gift-toasts:empty {
+  display: none;
+}
+
+.gift-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--ink);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.875rem;
+}
+
+.gift-toast[data-gift-state="linked"] {
+  border-color: rgba(var(--good-rgb), 0.45);
+}
+
+.gift-toast[data-gift-state="failed"] {
+  border-color: rgba(var(--bad-rgb), 0.55);
+}
+
+.gift-toast-text {
+  margin: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.gift-toast-close {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-secondary);
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.gift-toast-close:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}

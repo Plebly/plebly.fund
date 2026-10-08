@@ -20,6 +20,7 @@ vi.mock("./config", async (importOriginal) => {
 });
 
 import { bindDonateModal, bindDonatePanel, donateModalHtml } from "./proposal-ui";
+import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
 import {
   RECORD_RETRY_DELAYS_MS,
   RECORD_RETRY_STATUS_COPY,
@@ -92,10 +93,10 @@ async function openAndDetect(
   o?: { modalOpen?: boolean },
 ): Promise<number> {
   vi.useFakeTimers({ shouldAdvanceTime: true });
-  document.body.innerHTML = donateModalHtml(
+  document.body.innerHTML = `<div id="app">${donateModalHtml(
     { id: PID, path: PATH, title: "U", status: "listed", escrow_address: ADDR } as never,
     { signedIn: true },
-  );
+  )}</div>`;
   if (o?.modalOpen) {
     document.querySelector<HTMLElement>("#donate-modal")!.hidden = false;
     bindDonateModal(document);
@@ -104,6 +105,7 @@ async function openAndDetect(
     address: ADDR,
     proposalId: PID,
     proposalPath: PATH,
+    proposalTitle: "U",
     signedIn: true,
     initialBalance: null,
     balancePollMs: 600_000,
@@ -118,6 +120,8 @@ async function openAndDetect(
 }
 
 afterEach(() => {
+  stopGiftLinks();
+  closeAllGiftToasts();
   for (const el of document.querySelectorAll<HTMLElement & { __stopDonateWatchers?: () => void }>("*")) {
     el.__stopDonateWatchers?.();
   }
@@ -276,23 +280,41 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     expect(statusEl().textContent ?? "").not.toMatch(/credit linked/i);
   }
 
-  it("closing the modal mid-retry stops further /record calls", async () => {
-    const h = stubFetch([], busy);
+  const toastText = () => document.querySelector("#gift-toasts .gift-toast-text")?.textContent ?? null;
+
+  it("closing the modal mid-retry does NOT stop the retries; the gift still links", async () => {
+    const h = stubFetch([busy, busy], ok);
     await openAndDetect(h, { modalOpen: true });
     expect(h.records()).toHaveLength(1);
-    expect(statusEl().textContent).toBe(RETRYING);
     document.querySelector<HTMLButtonElement>("#donate-close")!.click();
     expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(true);
-    await expectStopped(h, 1);
+    expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records()).toHaveLength(3);
+    expect(h.claims()).toHaveLength(1);
+    expect(toastText()).toBe("Gift to U: Credit linked for 7,000 sats.");
   });
 
-  it("stop() mid-retry stops further /record calls", async () => {
-    const h = stubFetch([], busy);
+  it("in-app navigation (view torn down, #app replaced) does NOT stop the retries", async () => {
+    const h = stubFetch([busy, busy], ok);
     await openAndDetect(h);
     await vi.advanceTimersByTimeAsync(1_200);
     expect(h.records()).toHaveLength(2);
     const panel = document.querySelector<HTMLElement & { __stopDonateWatchers?: () => void }>("#donate")!;
     panel.__stopDonateWatchers!();
+    document.querySelector("#app")!.innerHTML = "<main><h1>Another page</h1></main>";
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records()).toHaveLength(3);
+    expect(h.claims()).toHaveLength(1);
+    expect(toastText()).toBe("Gift to U: Credit linked for 7,000 sats.");
+  });
+
+  it("page unload (stopGiftLinks / pagehide) mid-retry stops further /record calls", async () => {
+    const h = stubFetch([], busy);
+    await openAndDetect(h);
+    await vi.advanceTimersByTimeAsync(1_200);
+    expect(h.records()).toHaveLength(2);
+    window.dispatchEvent(new Event("pagehide"));
     await expectStopped(h, 2);
   });
 
@@ -309,6 +331,7 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
       else sessionStorage.removeItem("plebly_session");
       await expectStopped(h, 1);
       expect(h.records().map((r) => r.auth)).toEqual(["Bearer token-alice"]);
+      expect(toastText()).toBeNull();
     });
   }
 
