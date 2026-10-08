@@ -2183,7 +2183,13 @@ export function onChainPanelHtml(
 ): string {
   const rows: string[] = [];
 
-  if (p.escrow_address && !opts?.hideEscrow) {
+  // Only an address on this network is painted: a wrong-network address
+  // (e.g. bc1… on signet) from the doc or catalog never shows.
+  if (
+    p.escrow_address &&
+    escrowAddressMatchesNetwork(String(p.escrow_address)) &&
+    !opts?.hideEscrow
+  ) {
     rows.push(onChainEscrowRowHtml(p.escrow_address));
   }
 
