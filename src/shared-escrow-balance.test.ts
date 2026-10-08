@@ -257,3 +257,58 @@ describe("router JSON-LD", () => {
     expect(campaign(36_030).amount).toMatchObject({ value: "0.00036030" });
   });
 });
+
+describe("home card: escrow_shared row without confirmed own funding", () => {
+  const shared = (over: Partial<Proposal>) =>
+    row({ escrow_shared: true, balance_sats: undefined, structured_state: "awaiting_funds", accepting_funds: true, ...over } as Partial<Proposal>);
+  async function card(p: Proposal) {
+    const { proposalCardHtml } = await import("./home-page");
+    const el = document.createElement("div");
+    el.innerHTML = proposalCardHtml(p, CLAIM_FLOOR_SATS, false, false);
+    return el;
+  }
+
+  it("fundable: 'Awaiting confirmation', no sats line and no bar", async () => {
+    const el = await card(shared({ status: "listed" }));
+    expect(el.textContent).toContain("Awaiting confirmation");
+    expect(el.querySelector(".project-card-meter .sats")).toBeNull();
+    expect(el.textContent).not.toMatch(/0 sats|to open/);
+  });
+
+  it("terminal (voided, settled, declined, completed, catalog-blocked): no balance at all", async () => {
+    const terminal: Partial<Proposal>[] = [
+      { status: "voided" },
+      { status: "completed" },
+      { status: "declined" },
+      { status: "in_review", structured_state: "voided", accepting_funds: false },
+      { status: "claimable", bounty_settled: true } as Partial<Proposal>,
+      { status: "listed", accepting_funds: false },
+    ];
+    for (const over of terminal) {
+      const el = await card(shared(over));
+      expect(el.querySelector(".project-card-meter")).toBeNull();
+      expect(el.textContent).not.toContain("Awaiting confirmation");
+      expect(el.textContent).not.toMatch(/\b0 sats\b/);
+    }
+  });
+
+  it("shared row with its own confirmed amount still shows the normal meter", async () => {
+    const el = await card(shared({ status: "claimable", balance_sats: 16_576 }));
+    expect(el.querySelector(".project-card-meter .sats")).toBeTruthy();
+    expect(el.textContent).not.toContain("Awaiting confirmation");
+  });
+
+  it("neither case adds to the home shortfall/total", async () => {
+    const { claimFloorShortfall } = await import("./builder");
+    const base = claimFloorShortfall([row({ id: "u", escrow_address: UNIQUE, balance_sats: 1_000 })], CLAIM_FLOOR_SATS);
+    const withShared = claimFloorShortfall(
+      [
+        row({ id: "u", escrow_address: UNIQUE, balance_sats: 1_000 }),
+        shared({ id: "demo", status: "listed" }),
+        shared({ id: "v", status: "voided" }),
+      ],
+      CLAIM_FLOOR_SATS,
+    );
+    expect(withShared).toEqual(base);
+  });
+});
