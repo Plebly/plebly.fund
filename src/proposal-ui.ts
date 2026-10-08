@@ -8,6 +8,7 @@ import {
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
 import {
   fetchClaimStatus,
+  isClosedToFundsStatus,
   isDirectProposal,
   isOpenToClaim,
   isTakenStatus,
@@ -2183,7 +2184,12 @@ export function onChainPanelHtml(
 ): string {
   const rows: string[] = [];
 
-  if (p.escrow_address && !opts?.hideEscrow) {
+  // Declined, voided, refunding, …: never show the escrow address.
+  if (
+    p.escrow_address &&
+    !opts?.hideEscrow &&
+    !isClosedToFundsStatus(String(p.status || ""))
+  ) {
     rows.push(onChainEscrowRowHtml(p.escrow_address));
   }
 

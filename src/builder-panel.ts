@@ -17,6 +17,7 @@ import {
   requestClaimExtension,
   searchGithubUsers,
   flagProposalClose,
+  isClosedToFundsStatus,
   markProposalDone,
   submitAbandonedChallenge,
   submitCheckpoint,
@@ -557,6 +558,9 @@ export async function bindBuilderPanel(
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
+  // Catalog status as painted (declined, voided, refunding, …), read before the
+  // claim view merges its status into opts.proposal: no escrow row, no Donate.
+  const closedToFunds = isClosedToFundsStatus(String(opts.proposal.status || ""));
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
@@ -1467,7 +1471,7 @@ export async function bindBuilderPanel(
       const catalogBlocked = isCatalogDonateBlocked(opts.proposal);
       const claimAllowed = isClaimViewDonateAllowed(status);
       const structured = String(claimStructuredState(status) || "");
-      const donateAllowed = !catalogBlocked && claimAllowed;
+      const donateAllowed = !closedToFunds && !catalogBlocked && claimAllowed;
       const sideDonateOk =
         donateAllowed &&
         next.button !== "donate" &&

@@ -4,6 +4,7 @@ import {
   CLAIM_FLOOR_SATS,
   SUBMISSION_FEE_SATS,
   WORKERS_API,
+  isFundableStatus,
 } from "./config";
 import type { Proposal } from "./types";
 import { claimsProposalPath } from "./util";
@@ -236,6 +237,16 @@ export function isTakenStatus(status: string): boolean {
 /** True when status is voided or otherwise blocked from funding/claiming. */
 export function isBlockedStatus(status: string): boolean {
   return BLOCKED_STATUSES.has(String(status || "").toLowerCase());
+}
+
+/**
+ * Blocked and not fundable (declined, voided, underfunded, refunding,
+ * redirected, redirect_pending, bounty_settled). The detail page shows no
+ * escrow address, no funding meter and no Donate for these rows.
+ * declined_fundable is blocked but still fundable, so it is not closed.
+ */
+export function isClosedToFundsStatus(status: string): boolean {
+  return isBlockedStatus(status) && !isFundableStatus(String(status || "").toLowerCase());
 }
 
 export function isDirectProposal(p: Proposal): boolean {
