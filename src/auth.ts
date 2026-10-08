@@ -790,18 +790,14 @@ export async function claimUsername(username: string): Promise<UserProfile> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
   });
-  const data = (await res.json()) as { user?: UserProfile; error?: string };
+  // A proxy/edge error page (502 HTML) must read as the status, not a JSON parse error.
+  const data = (await res.json().catch(() => ({}))) as {
+    user?: UserProfile;
+    error?: string;
+  };
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data.user!;
-}
-
-export async function checkUsernameAvailable(
-  username: string,
-): Promise<boolean> {
-  const res = await fetch(`${API()}/profile/check/${encodeURIComponent(username)}`);
-  if (!res.ok) return false;
-  const data = (await res.json()) as { available?: boolean };
-  return Boolean(data.available);
+  if (!data.user) throw new Error("Username claim failed — try again.");
+  return data.user;
 }
 
 export async function deleteAccount(): Promise<void> {
@@ -828,14 +824,6 @@ export function shortNostrPubkey(pubkey: string): string {
   const pk = pubkey.trim().toLowerCase();
   if (pk.length < 12) return pk || "nostr";
   return `${pk.slice(0, 8)}…${pk.slice(-4)}`;
-}
-
-export function userLabel(user: AuthUser): string {
-  if (user.username) return `@${user.username}`;
-  if (user.github) return `@${user.github}`;
-  if (user.nostr) return shortNostrPubkey(user.nostr);
-  if (user.x) return `@${user.x}`;
-  return user.id;
 }
 
 /** Nav label for the signed-in account link (no @ prefix). */
