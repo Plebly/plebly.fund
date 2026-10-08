@@ -21,6 +21,7 @@ import {
   loadStoredCreditPreferences,
   readCreditPreferences,
   recordContribution,
+  recordContributionWithRetry,
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
   watchNewUtxos,
@@ -894,7 +895,9 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     setDonateCreditStatus(panel, null);
     try {
       const prefs = activeCreditPreferences(panel);
-      await recordContribution({
+      // Transient record failures (busy / 5xx / offline) retry for a bounded
+      // window before the modal gives up; 4xx and 409 stay final.
+      await recordContributionWithRetry({
         proposal_id: opts.proposalId,
         txid: utxo.txid,
         vout: utxo.vout,

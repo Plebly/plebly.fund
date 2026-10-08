@@ -264,3 +264,48 @@ export async function claimContributionWithRetry(
   }
   throw lastError || new Error("Could not link funder credit.");
 }
+
+/**
+ * `/contributions/record` retry for the Donate modal.
+ *
+ * Retries only transient failures: 5xx (incl. workers' 503
+ * `contribution_busy`) and network errors. 4xx (incl. every 409) and a 2xx
+ * without `ok: true` are final. The whole window stays well inside one escrow
+ * indexer period (workers cron, every 5 minutes): once the indexer records the
+ * gift anonymously, a later session record is refused for good.
+ */
+export const RECORD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000] as const;
+/** No new attempt starts after this many ms from the first one. */
+export const RECORD_RETRY_WINDOW_MS = 60_000;
+
+export async function recordContributionWithRetry(
+  input: Parameters<typeof recordContribution>[0],
+  opts?: { delaysMs?: readonly number[]; windowMs?: number },
+): Promise<void> {
+  const delays = opts?.delaysMs ?? RECORD_RETRY_DELAYS_MS;
+  const windowMs = opts?.windowMs ?? RECORD_RETRY_WINDOW_MS;
+  const started = Date.now();
+  for (let attempt = 0; ; attempt += 1) {
+    let lastError: Error;
+    let res: Response | null = null;
+    try {
+      res = await authFetch(`${api()}/contributions/record`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error("Could not record contribution.");
+    }
+    if (res) {
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && data.ok === true) return;
+      lastError = new Error(data.error || "Could not record contribution.");
+      // Final: 4xx (409 included) and an unaccepted 2xx are answers, not outages.
+      if (res.status < 500) throw lastError;
+    }
+    const delay = delays[attempt];
+    if (delay == null || Date.now() - started + delay > windowMs) throw lastError!;
+    await new Promise((r) => setTimeout(r, delay));
+  }
+}
