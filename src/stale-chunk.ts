@@ -6,7 +6,7 @@
  * of a blank view or a raw error.
  */
 export const STALE_BUILD_MESSAGE =
-  "Plebly was updated while this tab was open. Reload to continue.";
+  "Plebly was updated while this tab was open. Please reload.";
 
 const CHUNK_ERROR =
   /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS|Loading (?:CSS )?chunk \S+ failed/i;
@@ -45,8 +45,10 @@ export function installStaleChunkReload(
   win: Window = window,
   reload: () => void = () => win.location.reload(),
 ): () => void {
-  const onPreload = (ev: Event) => {
-    ev.preventDefault();
+  // Not prevented on purpose: Vite then rethrows the original chunk error, so
+  // the awaiting code stops (instead of continuing with an undefined module)
+  // and the rejection lands in onRejection below.
+  const onPreload = () => {
     showStaleBuildPrompt(win.document, reload);
   };
   const onRejection = (ev: Event) => {

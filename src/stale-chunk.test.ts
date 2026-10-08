@@ -76,11 +76,11 @@ describe("installStaleChunkReload", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it("Vite's vite:preloadError shows the same prompt and is prevented (no throw)", () => {
+  it("Vite's vite:preloadError shows the same prompt and is not prevented (the import still rejects)", () => {
     const ev = new Event("vite:preloadError", { cancelable: true });
     Object.defineProperty(ev, "payload", { value: new Error("Unable to preload CSS for /assets/a.css") });
     window.dispatchEvent(ev);
-    expect(ev.defaultPrevented).toBe(true);
+    expect(ev.defaultPrevented).toBe(false);
     expect(app().textContent).toContain(EXACT);
     expect(app().textContent).not.toContain("Unable to preload");
   });
