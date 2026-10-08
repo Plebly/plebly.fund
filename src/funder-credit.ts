@@ -244,12 +244,22 @@ export function watchNewUtxos(
 /** Retry claim a few times while the indexer catches up (esp. Lightning). */
 export async function claimContributionWithRetry(
   input: Parameters<typeof claimContribution>[0],
-  opts?: { attempts?: number; delayMs?: number },
+  opts?: {
+    attempts?: number;
+    delayMs?: number;
+    /**
+     * Checked before each wait and before each retry; false (e.g. the session
+     * changed or ended) stops with RecordRetryCancelled: no further /claim.
+     */
+    shouldContinue?: () => boolean;
+  },
 ): Promise<void> {
   const attempts = opts?.attempts ?? 6;
   const delayMs = opts?.delayMs ?? 2500;
+  const stop = () => Boolean(opts?.shouldContinue && !opts.shouldContinue());
   let lastError: Error | null = null;
   for (let i = 0; i < attempts; i += 1) {
+    if (i > 0 && stop()) throw new RecordRetryCancelled();
     try {
       await claimContribution(input);
       return;
@@ -258,6 +268,7 @@ export async function claimContributionWithRetry(
       const msg = lastError.message.toLowerCase();
       if (msg.includes("already claimed")) throw lastError;
       if (i < attempts - 1) {
+        if (stop()) throw new RecordRetryCancelled();
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }

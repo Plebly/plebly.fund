@@ -92,6 +92,7 @@ import {
   donateTriggerHtml,
   getDonateChromeContext,
   mountDonateChromeWhenEscrowKnown,
+  donateResultIsCurrent,
   onChainEscrowRowHtml,
   setDonateChromeContext,
   bindDonateModal,
@@ -1264,6 +1265,10 @@ export async function bindBuilderPanel(
       ),
       opts.user ? fetchReviewerMe().catch(() => null) : Promise.resolve(null),
     ]);
+    // This claim check was started for opts.proposal. If another project is on
+    // screen now, drop the result: it must never set the Donate context,
+    // close, mount or fill the modal (or paint this detached page).
+    if (!donateResultIsCurrent(opts.proposal)) return;
     const reviewerActive = Boolean(reviewerMe?.active);
     if (!status && body) {
       syncHeroClaimChip(apps);
@@ -1373,6 +1378,7 @@ export async function bindBuilderPanel(
           claimStatus: status,
         });
       }
+      if (!donateResultIsCurrent(opts.proposal)) return;
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const listingBallotChromeOwned = (): boolean => {
@@ -1466,6 +1472,7 @@ export async function bindBuilderPanel(
         body.querySelectorAll("[data-open-donate]").forEach((btn) => btn.remove());
       }
       await syncHybridReviewUi(root, opts.proposal, status, opts.user);
+      if (!donateResultIsCurrent(opts.proposal)) return;
       const next = resolveNextAction({
         proposal: opts.proposal,
         claim: status,

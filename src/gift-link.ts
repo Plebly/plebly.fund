@@ -19,6 +19,10 @@ import { formatSats } from "./util";
 export const GIFT_LINK_FAILED_COPY =
   "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
 
+/** The session ended or changed mid-link (sign-out or another account): neutral, never the failure line. */
+export const GIFT_SESSION_CHANGED_COPY =
+  "Your sign-in changed, so this gift wasn't linked to an account. If you sent it, it will be held in escrow once it confirms.";
+
 /**
  * The linked and pending (202) toasts close themselves after this long; the
  * failure toast never does.
@@ -26,7 +30,7 @@ export const GIFT_LINK_FAILED_COPY =
 export const GIFT_LINKED_AUTO_CLOSE_MS = 10_000;
 
 /** "pending": /record answered 202 (workers#91); neutral, closes itself like "linked". */
-export type GiftToastState = "retrying" | "linked" | "pending" | "failed";
+export type GiftToastState = "retrying" | "linked" | "pending" | "session" | "failed";
 
 export type GiftLinkInput = {
   /** Captured from the gift's own proposal when the run starts; never re-read. */
@@ -49,8 +53,11 @@ export function giftKey(txid: string, vout: number): string {
   return `${txid}:${vout}`;
 }
 
-/** true: linked; false: stopped; "pending": /record answered 202 (no row yet). */
-export type GiftLinkResult = boolean | "pending";
+/**
+ * true: linked; false: stopped (page unload); "pending": /record answered 202
+ * (no row yet); "session_changed": the sign-in ended or changed mid-link.
+ */
+export type GiftLinkResult = boolean | "pending" | "session_changed";
 
 const runs = new Map<string, Promise<GiftLinkResult>>();
 /** Running gifts → show their "Linking…" toast if the inline line is gone. */
@@ -138,6 +145,7 @@ function giftToastLine(state: GiftToastState, valueSats: number): string {
   if (state === "retrying") return RECORD_RETRY_STATUS_COPY;
   if (state === "linked") return `Credit linked for ${formatSats(valueSats)}.`;
   if (state === "pending") return RECORD_PENDING_INDEX_COPY;
+  if (state === "session") return GIFT_SESSION_CHANGED_COPY;
   return GIFT_LINK_FAILED_COPY;
 }
 
@@ -223,14 +231,18 @@ export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
       }
       if (claim) {
         if (!stillLinking()) throw new RecordRetryCancelled();
-        await claimContributionWithRetry(claim);
+        await claimContributionWithRetry(claim, { shouldContinue: stillLinking });
       }
       toast("linked");
       return true;
     } catch (e) {
       if (e instanceof RecordRetryCancelled) {
-        if (live()) closeGiftToast(key);
-        return false;
+        // Page unload: stop quietly.
+        if (!live()) return false;
+        // Sign-out or another account: one neutral line (toast rule as
+        // always), never the failure line.
+        toast("session");
+        return "session_changed";
       }
       toast("failed");
       throw e;

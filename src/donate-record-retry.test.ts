@@ -502,7 +502,11 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
       else sessionStorage.removeItem("plebly_session");
       await expectStopped(h, 1);
       expect(h.records().map((r) => r.auth)).toEqual(["Bearer token-alice"]);
-      expect(toastText()).toBeNull();
+      // Modal closed: one neutral toast with the sign-in line, never the failure line.
+      expect(toastText()).toBe(
+        "Gift to U: Your sign-in changed, so this gift wasn't linked to an account. If you sent it, it will be held in escrow once it confirms.",
+      );
+      expect(document.querySelectorAll("#gift-toasts .gift-toast")).toHaveLength(1);
     });
   }
 
@@ -534,4 +538,22 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
       expect(statusEl().textContent).not.toBe(RETRYING);
     });
   }
+});
+
+describe("sign-in change mid-link with the modal open: the inline line, no toast", () => {
+  it("sign-out mid-retry, modal open: the inline line reads the sign-in line; no toast, no failure line", async () => {
+    sessionStorage.setItem("plebly_session", "token-alice");
+    const h = stubFetch([], busy);
+    await openAndDetect(h, { modalOpen: true });
+    expect(statusEl().textContent).toBe(RETRYING);
+    sessionStorage.removeItem("plebly_session");
+    await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS + 10_000);
+    expect(h.records()).toHaveLength(1);
+    expect(h.claims()).toHaveLength(0);
+    expect(statusEl().textContent).toBe(
+      "Your sign-in changed, so this gift wasn't linked to an account. If you sent it, it will be held in escrow once it confirms.",
+    );
+    expect(showsFailure()).toBe(false);
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBeNull();
+  });
 });

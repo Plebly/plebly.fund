@@ -51,7 +51,9 @@ import {
   projectOutcomeHtml,
   statusPillHtml,
   userMatchesProposer,
-  closeDonateModalOnProposalChange,
+  beginDonateProject,
+  donateResultIsCurrent,
+  noteDonateProject,
 } from "./proposal-ui";
 import {
   isCatalogEscrowHidden,
@@ -424,8 +426,9 @@ export async function renderProposalPage(
   onAuthed: () => void = () => undefined,
   preloaded: Proposal | null = null,
 ): Promise<void> {
-  // Another project's Donate modal never carries over (panel, address, watchers).
-  closeDonateModalOnProposalChange(path);
+  // Another project's Donate modal never carries over (panel, address,
+  // watchers), and results still in flight for it are dropped from now on.
+  beginDonateProject(path);
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(
     `<section class="wrap-wide detail proposal-page"><p class="loading">Loading…</p></section>`,
@@ -449,6 +452,7 @@ export async function renderProposalPage(
         match = proposalFromMarkdown(await res.text(), path);
       }
     }
+    noteDonateProject(path, match);
     if (match.id && WORKERS_API && match.endowment_funded == null) {
       try {
         const er = await fetch(
@@ -603,6 +607,9 @@ export async function renderProposalPage(
                 ? "Review"
                 : "";
 
+    // Another project page started while this one loaded: never paint it or
+    // set its Donate context over the newer page.
+    if (!donateResultIsCurrent(match)) return;
     app.innerHTML = shell(`
       <article class="wrap-wide detail proposal-page">
         <nav class="proposal-breadcrumbs" aria-label="Breadcrumb">
@@ -927,6 +934,8 @@ export async function renderProposalPage(
       });
     }
   } catch (e) {
+    // Another project page started while this one loaded: leave it alone.
+    if (!donateResultIsCurrent({ path })) return;
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
         <a class="back-link" href="${projectsHref()}">← Projects</a>

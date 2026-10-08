@@ -481,6 +481,8 @@ describe("donate credit UX (signed in, on-chain)", () => {
           show_amount: true,
           proposal_path: "proposals/demo.md",
         }),
+        // The claim retries stop when the session changes (fund#98).
+        expect.objectContaining({ shouldContinue: expect.any(Function) }),
       );
       expect(linked).toHaveBeenCalled();
       expect(document.querySelector("#donate-confirm-status")?.textContent).toContain(

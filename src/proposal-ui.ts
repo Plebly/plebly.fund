@@ -6,7 +6,13 @@ import {
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
-import { giftKey, linkGift, showGiftToast, surfaceGiftLinks } from "./gift-link";
+import {
+  GIFT_SESSION_CHANGED_COPY,
+  giftKey,
+  linkGift,
+  showGiftToast,
+  surfaceGiftLinks,
+} from "./gift-link";
 import {
   fetchClaimStatus,
   isDirectProposal,
@@ -954,8 +960,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         setDonateConfirmStatus(panel, RECORD_PENDING_INDEX_COPY);
         return;
       }
+      if (linked === "session_changed") {
+        // Sign-out or another account mid-link: neutral line, no Link button.
+        setDonateConfirmStatus(panel, GIFT_SESSION_CHANGED_COPY);
+        return;
+      }
       if (!linked) {
-        // Stopped (unload / session change): no failure line, no Link button.
+        // Stopped (page unload): no failure line, no Link button.
         setDonateConfirmStatus(panel, null);
         return;
       }
@@ -1956,12 +1967,76 @@ function donateModalOwnerAttrs(p: Proposal): string {
   }`;
 }
 
+type ProjectKeys = { id?: string | null; path?: string | null };
+
+function idFromPath(path: string): string {
+  return (path.split("/").pop() || "").replace(/\.md$/i, "");
+}
+
+/** Same project: same repo path, or the same id (from the id or the path's file name). */
+function sameDonateProject(a: ProjectKeys, b: ProjectKeys): boolean {
+  const ap = String(a.path || "").trim();
+  const bp = String(b.path || "").trim();
+  if (ap && bp && ap === bp) return true;
+  const ids = (k: ProjectKeys) =>
+    [String(k.id || "").trim(), idFromPath(String(k.path || "").trim())]
+      .filter(Boolean)
+      .map((x) => x.toLowerCase());
+  const bIds = new Set(ids(b));
+  return ids(a).some((x) => bIds.has(x));
+}
+
 function donateModalIsFor(modal: HTMLElement, path: string): boolean {
-  const ownPath = modal.dataset.donateProposalPath || "";
-  const ownId = modal.dataset.donateProposalId || "";
-  if (ownPath && ownPath === path) return true;
-  const base = (path.split("/").pop() || "").replace(/\.md$/i, "");
-  return Boolean(ownId) && ownId.toLowerCase() === base.toLowerCase();
+  return sameDonateProject(
+    { id: modal.dataset.donateProposalId, path: modal.dataset.donateProposalPath },
+    { path },
+  );
+}
+
+/** The modal is tagged for a different project than `p` (untagged: not foreign). */
+function donateModalIsForeign(modal: HTMLElement, p: ProjectKeys): boolean {
+  const own = { id: modal.dataset.donateProposalId, path: modal.dataset.donateProposalPath };
+  if (!own.id && !own.path) return false;
+  return !sameDonateProject(own, p);
+}
+
+/** The project page being shown, set when a project page starts rendering. */
+let activeDonateProject: { path: string; ids: string[] } | null = null;
+
+/**
+ * A project page starts rendering: another project's Donate modal is closed
+ * (see closeDonateModalOnProposalChange), and every async claim/escrow result
+ * started for another project is dropped from now on.
+ */
+export function beginDonateProject(path: string): void {
+  closeDonateModalOnProposalChange(path);
+  activeDonateProject = { path, ids: [] };
+}
+
+/** The page's proposal loaded: remember its id too (its path may differ from the route's). */
+export function noteDonateProject(path: string, p: ProjectKeys): void {
+  if (!activeDonateProject || activeDonateProject.path !== path) return;
+  const id = String(p.id || "").trim();
+  if (id) activeDonateProject.ids.push(id);
+  const pp = String(p.path || "").trim();
+  if (pp) activeDonateProject.ids.push(idFromPath(pp));
+}
+
+/**
+ * An async claim/escrow result started for project `p` may still touch the
+ * Donate context or modal: only while `p` is the project on screen (the
+ * route, and the project page being rendered). Otherwise it is dropped.
+ */
+export function donateResultIsCurrent(p: ProjectKeys): boolean {
+  const loc = proposalKeysFromLocation();
+  if ((loc.path || loc.id) && !sameDonateProject(p, loc)) return false;
+  const active = activeDonateProject;
+  if (active) {
+    const own = sameDonateProject(p, { path: active.path });
+    const byId = active.ids.some((id) => sameDonateProject(p, { id }));
+    if (!own && !byId) return false;
+  }
+  return true;
 }
 
 /**
@@ -1974,6 +2049,10 @@ function donateModalIsFor(modal: HTMLElement, path: string): boolean {
 export function closeDonateModalOnProposalChange(nextPath: string): void {
   const modal = findDonateModal(document);
   if (!modal || donateModalIsFor(modal, nextPath)) return;
+  closeForeignDonateModal(modal);
+}
+
+function closeForeignDonateModal(modal: HTMLElement): void {
   for (const panel of modal.querySelectorAll<HTMLElement & { __stopDonateWatchers?: () => void }>(
     ".donate-panel",
   )) {
@@ -2202,9 +2281,15 @@ export async function ensureDonateModalMounted(
     psbt?: { structured_state?: string } | null;
     accepting_funds?: boolean | null;
   } | null;
+  // A result for a project no longer on screen never touches the modal.
+  const ctxProject = { id: ctx.proposal.id, path: ctx.proposal.path };
+  const stale = () => !donateResultIsCurrent(ctxProject);
+  if (stale()) return null;
+
   let resolvedClaimStatus: ResolvedClaimStatus = null;
   if (ctx.claimStatusPromise) {
     const awaited = await ctx.claimStatusPromise.catch(() => null);
+    if (stale()) return null;
     resolvedClaimStatus = awaited as ResolvedClaimStatus;
     applyClaimEscrow(ctx, resolvedClaimStatus);
   }
@@ -2220,6 +2305,7 @@ export async function ensureDonateModalMounted(
     const id = ctx.proposal.id || ctx.panelOpts.proposalId || locKeys.id || null;
     if (path || id) {
       resolvedClaimStatus = await fetchClaimStatus(path, id).catch(() => null);
+      if (stale()) return null;
       // Claim-view-first: null claim = blocked
       if (!resolvedClaimStatus) {
         closeDonateModalWhenBlocked();
@@ -2260,8 +2346,11 @@ export async function ensureDonateModalMounted(
     },
     { ignoreStatusGate: true },
   );
+  if (stale()) return null;
   modal = findDonateModal(document) || modal;
-  if (modal) syncDonateModalEscrow(addr, document);
+  // Never write into a modal tagged for another project.
+  if (modal && donateModalIsForeign(modal, ctxProject)) return null;
+  if (modal) syncDonateModalEscrow(addr, modal);
   return modal;
 }
 
@@ -2422,6 +2511,8 @@ export async function mountDonateChromeWhenEscrowKnown(
 ): Promise<boolean> {
   const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
+  // Started for a project that is no longer on screen: touch nothing.
+  if (!donateResultIsCurrent(proposal)) return false;
 
   // Catalog-level blocking — also close any open modal
   if (isCatalogDonateBlocked(proposal)) {
@@ -2453,13 +2544,19 @@ export async function mountDonateChromeWhenEscrowKnown(
     wantsLnRail: donateChromeContext?.wantsLnRail,
   });
 
-  const existing = findDonateModal(root);
+  let existing = findDonateModal(root);
+  // Never reuse or write into a modal tagged for another project: close it
+  // (watchers stopped, a running link surfaces) and mount this project's own.
+  if (existing && donateModalIsForeign(existing, proposal)) {
+    closeForeignDonateModal(existing);
+    existing = null;
+  }
   if (existing && !existing.hasAttribute("data-donate-shell")) {
     // Prefer body host: move out of .proposal-page if a prior path nested it.
     if (existing.parentElement !== document.body) {
       document.body.appendChild(existing);
     }
-    syncDonateModalEscrow(addr, document);
+    syncDonateModalEscrow(addr, existing);
     bindDonateModal(document);
     return false;
   }
@@ -2491,7 +2588,8 @@ export async function mountDonateChromeWhenEscrowKnown(
   } catch {
     /* Reveal/address sync must not depend on panel bind (LN status, etc.). */
   }
-  syncDonateModalEscrow(addr, document);
+  // After the await: only this project's own modal, and only while it's on screen.
+  if (mounted.isConnected && donateResultIsCurrent(proposal)) syncDonateModalEscrow(addr, mounted);
   return true;
 }
 

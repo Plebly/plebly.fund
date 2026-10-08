@@ -24,6 +24,7 @@ import {
   closeAllGiftToasts,
   GIFT_LINK_FAILED_COPY,
   GIFT_LINKED_AUTO_CLOSE_MS,
+  GIFT_SESSION_CHANGED_COPY,
   giftKey,
   linkGift,
   showGiftToast,
@@ -34,6 +35,9 @@ import { bindDonatePanel, donateModalHtml } from "./proposal-ui";
 
 /** UI UX / Tester copy, pinned literally. */
 const RETRYING = "Linking your gift to your account\u2026 Keep this page open.";
+/** UI UX / Tester: sign-out or account switch mid-link, word for word. */
+const SESSION =
+  "Your sign-in changed, so this gift wasn't linked to an account. If you sent it, it will be held in escrow once it confirms.";
 /** #94's line, word for word. */
 const FAILED =
   "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
@@ -365,7 +369,7 @@ describe("runs", () => {
     expect(toastText(U0)).toBe("Gift to T: Credit linked for 3,000 sats.");
   });
 
-  it("a session change between /record and /claim: no claim under the new session, no toast", async () => {
+  it("a session change between /record and /claim: no claim under the new session; the sign-in line, not the failure line", async () => {
     vi.useFakeTimers();
     sessionStorage.setItem("plebly_session", "token-alice");
     const h = stubNet({
@@ -377,11 +381,11 @@ describe("runs", () => {
         },
       ],
     });
-    expect(await linkGift(input(A, "T"))).toBe(false);
+    expect(await linkGift(input(A, "T"))).toBe("session_changed");
     await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS);
     expect(h.records(A.txid)).toHaveLength(1);
     expect(h.claims()).toHaveLength(0);
-    expect(toastFor(A)).toBeNull();
+    expect(toastText(A)).toBe(`Gift to T: ${SESSION}`);
   });
 
   it("stopGiftLinks ends runs without a toast or further calls", async () => {
@@ -395,19 +399,22 @@ describe("runs", () => {
     expect(toastFor(A)).toBeNull();
   });
 
-  it("a session change ends the run and removes its toast", async () => {
+  it("a session change during /record retries ends the run; its toast becomes the sign-in line in place", async () => {
     vi.useFakeTimers();
     sessionStorage.setItem("plebly_session", "token-alice");
     const h = stubNet({}, busy);
     const done = linkGift(input(A, "T"));
     await vi.advanceTimersByTimeAsync(10);
     expect(toastText(A)).toBe(`Gift to T: ${RETRYING}`);
+    const el = toastFor(A);
     sessionStorage.setItem("plebly_session", "token-bob");
     await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS);
-    expect(await done).toBe(false);
+    expect(await done).toBe("session_changed");
     expect(h.records()).toHaveLength(1);
     expect(h.claims()).toHaveLength(0);
-    expect(toastFor(A)).toBeNull();
+    expect(toastText(A)).toBe(`Gift to T: ${SESSION}`);
+    expect(toastFor(A)).toBe(el);
+    expect(region()!.querySelectorAll(".gift-toast")).toHaveLength(1);
   });
 });
 
@@ -482,5 +489,79 @@ describe("two gifts in one modal", () => {
     // Both count toward the Worker's per-IP limit; the client schedule is unchanged.
     expect(RECORD_RETRY_DELAYS_MS).toEqual([1_000, 2_000, 4_000, 8_000, 15_000, 15_000]);
     expect(RECORD_RETRY_WINDOW_MS).toBe(60_000);
+  });
+});
+
+describe("claim retries follow the session (Review; UI UX/Tester sign-in line)", () => {
+  /** /record answers ok; /claim answers "not found yet" (retried every 2.5 s) until `claimOk`. */
+  function stubClaims(onClaim?: (n: number) => void) {
+    const claims: { auth: string | null; at: number }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/contributions/record")) return ok() as Response;
+        if (url.endsWith("/contributions/claim")) {
+          claims.push({ auth: new Headers(init?.headers).get("Authorization"), at: Date.now() });
+          onClaim?.(claims.length);
+          return Response.json({ error: "contribution not found" }, { status: 404 });
+        }
+        return Response.json({ ok: true });
+      }),
+    );
+    return claims;
+  }
+
+  function expectSessionLine(u: typeof A) {
+    expect(toastText(u)).toBe(`Gift to T: ${SESSION}`);
+    expect(toastFor(u)!.getAttribute("role")).toBe("status"); // neutral, not the alert
+    expect(toastFor(u)!.dataset.giftState).toBe("session");
+    expect(document.body.textContent).not.toContain(FAILED);
+    expect(region()!.querySelectorAll(".gift-toast")).toHaveLength(1);
+  }
+
+  it("the sign-in line is pinned word for word", () => {
+    expect(GIFT_SESSION_CHANGED_COPY).toBe(SESSION);
+  });
+
+  it("alice → bob during a claim retry wait: no /claim as bob, the sign-in line, not the failure line", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("plebly_session", "token-alice");
+    const claims = stubClaims();
+    const done = linkGift(input(A, "T"));
+    await vi.advanceTimersByTimeAsync(1_000); // first /claim failed; waiting 2.5 s
+    expect(claims).toHaveLength(1);
+    sessionStorage.setItem("plebly_session", "token-bob");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(await done).toBe("session_changed");
+    expect(claims.map((c) => c.auth)).toEqual(["Bearer token-alice"]);
+    expectSessionLine(A);
+  });
+
+  it("sign-out while a /claim is answering: stops before the 2.5 s wait, no more /claim, the sign-in line", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("plebly_session", "token-alice");
+    const claims = stubClaims(() => sessionStorage.removeItem("plebly_session"));
+    let settled = false;
+    const done = linkGift(input(A, "T")).finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(100); // well before the 2.5 s wait would end
+    expect(settled).toBe(true);
+    expect(await done).toBe("session_changed");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(claims).toHaveLength(1);
+    expectSessionLine(A);
+  });
+
+  it("an unchanged session keeps retrying the claim (the check isn't always false)", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("plebly_session", "token-alice");
+    const claims = stubClaims();
+    const done = linkGift(input(A, "T")).catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(claims.length).toBe(6);
+    expect(await done).toBeInstanceOf(Error);
+    expect(toastText(A)).toBe(`Gift to T: ${FAILED}`);
   });
 });
