@@ -394,13 +394,3 @@ describe("proposal detail page: escrow_shared row without confirmed own funding"
     expect(bar.textContent).not.toContain("Awaiting confirmation");
   });
 });
-
-describe("donateInitialBalance (watcher baseline)", () => {
-  it("shared + missing balance stays null; non-shared keeps ?? 0; numbers pass", async () => {
-    const { donateInitialBalance } = await import("./proposal-funding-bar");
-    expect(donateInitialBalance({ escrow_shared: true }, undefined)).toBeNull();
-    expect(donateInitialBalance({ escrow_shared: true, balance_sats: 16_576 }, undefined)).toBe(16_576);
-    expect(donateInitialBalance({}, undefined)).toBe(0);
-    expect(donateInitialBalance({ balance_sats: 5 }, 7)).toBe(7);
-  });
-});

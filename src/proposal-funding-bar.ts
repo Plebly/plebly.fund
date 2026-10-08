@@ -325,16 +325,3 @@ export function sharedEscrowPendingHtml(
     </div>
   </div>`;
 }
-
-/**
- * Donate-panel watcher baseline. escrow_shared rows never coerce a missing
- * balance to 0; other rows keep the existing `?? 0`.
- */
-export function donateInitialBalance(
-  p: Pick<Proposal, "balance_sats" | "escrow_shared">,
-  balance: number | null | undefined,
-): number | null {
-  const b = balance ?? p.balance_sats;
-  if (typeof b === "number") return b;
-  return p.escrow_shared === true ? null : 0;
-}

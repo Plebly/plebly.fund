@@ -21,7 +21,7 @@ import { promptText } from "./confirm-modal";
 import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
-import { donateInitialBalance, sharedEscrowPendingHtml } from "./proposal-funding-bar";
+import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { renderMarkdown } from "./markdown";
 import {
   bindDonateModal,
@@ -54,7 +54,7 @@ import {
   userMatchesProposer,
 } from "./proposal-ui";
 import {
-  isCatalogDonateBlocked,
+  isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
   resolveNextAction,
 } from "./next-action";
@@ -533,12 +533,14 @@ export async function renderProposalPage(
       match.id,
     );
 
-    const catalogBlocked = isCatalogDonateBlocked(match);
+    // Donate-blocked by the catalog, or voided/settled by status: no Donate chrome,
+    // no ?donate auto-open and no escrow row on first paint.
+    const catalogEscrowHidden = isCatalogEscrowHidden(match);
     const hasEscrow =
       Boolean(match.escrow_address) &&
       escrowAddressMatchesNetwork(String(match.escrow_address));
     const statusOk = isDonateChromeStatus(String(match.status));
-    const showDonatePlaceholder = hasEscrow && statusOk && !catalogBlocked;
+    const showDonatePlaceholder = hasEscrow && statusOk && !catalogEscrowHidden;
     const wantsDonate =
       showDonatePlaceholder &&
       (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
@@ -700,7 +702,9 @@ export async function renderProposalPage(
                   </div>`
                 : ""
             }
-            ${onChainPanelHtml(match, { hideEscrow: showDonatePlaceholder })}
+            ${onChainPanelHtml(match, {
+              hideEscrow: showDonatePlaceholder || catalogEscrowHidden,
+            })}
           </aside>
         </div>
         ${showDonatePlaceholder ? `<div id="mobile-cta-slot" hidden></div>` : ""}
@@ -719,7 +723,7 @@ export async function renderProposalPage(
       proposalPath: match.path,
       proposalTitle: match.title,
       signedIn: Boolean(user),
-      initialBalance: donateInitialBalance(match, balance),
+      initialBalance: balance ?? null,
       escrowShared: match.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: match.target_sats,

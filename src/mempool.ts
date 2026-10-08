@@ -28,10 +28,16 @@ export async function addressBalanceSats(address: string): Promise<number> {
 /**
  * Poll confirmed chain balance. Fires when the confirmed balance changes
  * (typically after a donation confirms). Mempool/unconfirmed sats are ignored.
+ *
+ * `baseline` is the caller's known balance. When it is unknown (omitted), the
+ * first successful read becomes the baseline and fires once with
+ * `previous: null` so callers can show the real balance, but never a delta:
+ * an unknown balance is not 0, and a failed first read must not turn the next
+ * good read into "N added".
  */
 export function watchConfirmedBalance(
   address: string,
-  onUpdate: (balance: number, meta: { previous: number }) => void,
+  onUpdate: (balance: number, meta: { previous: number | null }) => void,
   opts?: { intervalMs?: number; baseline?: number },
 ): { stop: () => void; ready: Promise<void> } {
   const intervalMs = opts?.intervalMs ?? 10_000;
@@ -42,12 +48,19 @@ export function watchConfirmedBalance(
       ? opts.baseline
       : null;
 
+  const setBaseline = (balance: number) => {
+    previous = balance;
+    if (!stopped) onUpdate(balance, { previous: null });
+  };
+
   const tick = async () => {
     if (stopped) return;
     try {
       const balance = await addressBalanceSats(address);
+      // stop() may land while the read is in flight; never report after it.
+      if (stopped) return;
       if (previous == null) {
-        previous = balance;
+        setBaseline(balance);
         return;
       }
       if (balance !== previous) {
@@ -63,9 +76,9 @@ export function watchConfirmedBalance(
   const ready = (async () => {
     if (previous == null) {
       try {
-        previous = await addressBalanceSats(address);
+        setBaseline(await addressBalanceSats(address));
       } catch {
-        previous = 0;
+        // Stay unknown: the next successful tick sets the baseline.
       }
     }
     if (!stopped) {

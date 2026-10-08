@@ -487,13 +487,3 @@ export function readNamedValue(
   }
   return String((el as HTMLInputElement | HTMLTextAreaElement).value || "");
 }
-
-export function focusFormField(form: HTMLFormElement, name: string): void {
-  const el = form.elements.namedItem(name);
-  const target =
-    el instanceof RadioNodeList
-      ? (el[0] as HTMLElement | undefined)
-      : (el as HTMLElement | null);
-  target?.focus?.();
-  target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-}

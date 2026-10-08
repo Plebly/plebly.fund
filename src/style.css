@@ -5,7 +5,7 @@
   --bg-hover: #1d1a27;
   --ink: #f2f0f6;
   --ink-secondary: #b5b0c2;
-  --muted: #78728a;
+  --muted: #8f89a1;
   --line: #2a2634;
   --line-soft: #201d28;
   /* Logo purple: fill for buttons, brighter text for AA contrast on dark */
@@ -1137,7 +1137,8 @@ html.pwa-standalone body {
   padding: 0.45rem;
 }
 
-.donate-modal-card .donate-qr {
+.donate-modal-card .donate-qr,
+.donate-modal-card .donate-qr-placeholder {
   width: 132px;
   height: 132px;
 }
@@ -1185,7 +1186,8 @@ html.pwa-standalone body {
     width: 100%;
   }
 
-  .donate-modal-card .donate-qr {
+  .donate-modal-card .donate-qr,
+  .donate-modal-card .donate-qr-placeholder {
     width: 120px;
     height: 120px;
   }
@@ -3673,21 +3675,6 @@ a.project-card-by:hover .project-card-by-text {
   flex-wrap: wrap;
 }
 
-.icon-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: var(--muted);
-  border-radius: var(--radius-sm);
-  transition: color 0.15s ease, background 0.15s ease;
-}
-.icon-link:hover {
-  color: var(--ink);
-  background: var(--bg-hover);
-}
-
 .social-account {
   display: inline-flex;
   align-items: center;
@@ -5253,6 +5240,28 @@ a.proposal-meta-chip-endowment:hover {
   width: 168px;
   height: 168px;
   image-rendering: pixelated;
+}
+
+/* Same box as the QR while it renders: no broken image, no layout jump. */
+.donate-qr-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 168px;
+  height: 168px;
+  padding: 0.5rem;
+  box-sizing: border-box;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--bg);
+}
+
+.donate-paused {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
 }
 
 .donate-amount-label {
@@ -11075,4 +11084,27 @@ a.proposal-comment-author:hover {
   .stats-metric dt {
     white-space: nowrap;
   }
+}
+
+/* Stale build after a deploy: a fixed banner that keeps the page (and any typed input). */
+.stale-build-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 110;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.stale-build-banner p {
+  margin: 0;
 }
