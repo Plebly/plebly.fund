@@ -77,7 +77,8 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
   applySeo(seoForRoute({ name: "donations" }));
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const params = new URLSearchParams(location.search);
-  const page = Math.max(1, Math.floor(Number(params.get("page") || 1)));
+  const pageParam = Math.floor(Number(params.get("page")));
+  const page = Number.isFinite(pageParam) && pageParam > 1 ? pageParam : 1;
   const offset = (page - 1) * PAGE_SIZE;
 
   app.innerHTML = shell(`
