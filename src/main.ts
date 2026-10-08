@@ -58,6 +58,7 @@ import {
 import type { Route } from "./types";
 import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
+import { installStaleChunkReload } from "./stale-chunk";
 import { escapeHtml } from "./util";
 import { syncWebPushIfEnabled } from "./web-push";
 
@@ -68,6 +69,9 @@ void registerPwaServiceWorker();
 // Capture Donate clicks before any route finishes — modal mount must not wait
 // on builder-panel /claims.
 installDonateClickCapture();
+// A deploy while this tab is open removes the old chunks: prompt a reload
+// instead of leaving a blank view when a lazy import fails.
+installStaleChunkReload();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
