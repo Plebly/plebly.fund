@@ -18,6 +18,7 @@ import {
   donateModalHtml,
   donateRefundRouteCopy,
   endowmentDonatePanelHtml,
+  SIGNED_REFUND_FORM_ANCHOR,
 } from "./proposal-ui";
 import type { Proposal } from "./types";
 
@@ -64,6 +65,21 @@ describe("signed-out Donate refund-route line", () => {
     expect(line?.textContent).not.toContain("refund route");
     const addr = document.querySelector("#donate-address")!;
     expect(line!.compareDocumentPosition(addr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("both lines link the signature words to the signed-refund form's stable anchor; the text is unchanged", () => {
+    expect(SIGNED_REFUND_FORM_ANCHOR).toBe("signed-refund");
+    for (const [shared, words, copy] of [
+      [false, "signing a message from the sending address", UNIQUE],
+      [true, "signed message from the sending address", SHARED],
+    ] as const) {
+      const line = render(shared, false)!;
+      const links = line.querySelectorAll("a");
+      expect(links).toHaveLength(1);
+      expect(links[0]!.getAttribute("href")).toBe("#signed-refund");
+      expect(links[0]!.textContent).toBe(words);
+      expect(line.textContent).toBe(copy);
+    }
   });
 
   it("signed in: no line, on either address kind", () => {

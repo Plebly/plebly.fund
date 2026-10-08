@@ -127,11 +127,32 @@ export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean })
   return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
 }
 
+/**
+ * Anchor id of the signed-refund form (separate fund PR). Must match that
+ * form's id; this PR merges with or after it.
+ */
+export const SIGNED_REFUND_FORM_ANCHOR = "signed-refund";
+
+/** The words that link to the signed-refund form, per copy variant. */
+const SIGNED_REFUND_LINK_PHRASES = [
+  "signing a message from the sending address",
+  "signed message from the sending address",
+];
+
 function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
   const copy = donateRefundRouteCopy(o);
-  return copy
-    ? `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${escapeHtml(copy)}</p>`
-    : "";
+  if (!copy) return "";
+  let html = escapeHtml(copy);
+  for (const phrase of SIGNED_REFUND_LINK_PHRASES) {
+    const esc = escapeHtml(phrase);
+    if (!html.includes(esc)) continue;
+    html = html.replace(
+      esc,
+      `<a class="donate-refund-route-link" href="#${SIGNED_REFUND_FORM_ANCHOR}">${esc}</a>`,
+    );
+    break;
+  }
+  return `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${html}</p>`;
 }
 
 function donateEscrowHardLabelHtml(): string {
