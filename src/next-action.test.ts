@@ -1171,9 +1171,53 @@ describe("resolveNextAction", () => {
       sentence: "Bounty paid. Waiting on the proposer.",
       button: null,
     },
-    // 009 shape: status='claimed' + proposal.bounty_settled=true — builder actions work, no Donate
     {
-      name: "009 shape: status claimed + proposal.bounty_settled=true — builder gets deliverable",
+      name: "006 shape: status in_review + proposal.bounty_settled=true confirmed — donor sees Bounty paid",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "confirmed" },
+        } as never),
+        user: donor,
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    // 009 shape: status='in_review' (awarded) + proposal.bounty_settled=true — no Donate
+    {
+      name: "009 shape: status in_review (awarded) + proposal.bounty_settled=true visitor — no Donate",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+      },
+      sentence: "Bounty paid. Waiting on the proposer.",
+      button: null,
+    },
+    // Generic claimed + bounty_settled tests (not 009 shape)
+    {
+      name: "status claimed + proposal.bounty_settled=true — builder gets deliverable",
       input: {
         proposal: proposal({
           status: "claimed",
@@ -1196,7 +1240,7 @@ describe("resolveNextAction", () => {
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
     {
-      name: "009 shape: status claimed + proposal.bounty_settled=true visitor — no Donate",
+      name: "status claimed + proposal.bounty_settled=true visitor — no Donate",
       input: {
         proposal: proposal({
           status: "claimed",
