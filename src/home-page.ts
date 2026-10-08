@@ -4,8 +4,6 @@ import {
   fetchWanted,
   fetchWatchMetaBatch,
   fetchWatches,
-  isBlockedStatus,
-  isCatalogVoided,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
@@ -15,13 +13,8 @@ import {
 } from "./builder";
 import { isKnownProposalStatus } from "./types";
 import { isCatalogDonateBlocked } from "./next-action";
-import {
-  CLAIM_FLOOR_SATS,
-  WORKERS_API,
-  isFundableStatus,
-  lightningUiAllowed,
-  mempoolWeb,
-} from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
+import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeCoverImageUrl } from "./media";
@@ -92,24 +85,6 @@ export function featuredDuplicatesOpenList(
 export function sharedEscrowNoteHtml(proposals: Proposal[]): string {
   if (!proposals.some((p) => p.escrow_shared === true)) return "";
   return `<p class="shared-escrow-note">These test listings share one escrow address. Each balance counts only that listing's own confirmed funding, so a block explorer will show a higher total for the address.</p>`;
-}
-
-/**
- * Shared-escrow row with no confirmed per-proposal funding yet (balance null):
- * still fundable → "Awaiting confirmation"; terminal → no balance at all.
- * Never a 0-sats meter, never counted in totals.
- */
-export function sharedEscrowPendingHtml(p: Proposal): string | null {
-  if (p.escrow_shared !== true || p.balance_sats != null) return null;
-  const status = String(p.status || "");
-  const fundable =
-    isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
-  if (!fundable) return "";
-  return `<div class="project-card-meter">
-    <div class="project-card-meter-top">
-      <span class="muted">Awaiting confirmation</span>
-    </div>
-  </div>`;
 }
 
 type SortKey = "funded" | "newest" | "floor";
@@ -330,7 +305,7 @@ function discoverToolbarHtml(count: number): string {
 }
 
 function progressHtml(p: Proposal, floor: number): string {
-  const sharedPending = sharedEscrowPendingHtml(p);
+  const sharedPending = sharedEscrowPendingHtml(p, "card");
   if (sharedPending != null) return sharedPending;
   const bal = p.balance_sats ?? 0;
   const remaining = Math.max(0, floor - bal);

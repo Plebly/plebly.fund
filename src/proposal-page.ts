@@ -21,6 +21,7 @@ import { promptText } from "./confirm-modal";
 import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
+import { donateInitialBalance, sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { renderMarkdown } from "./markdown";
 import {
   bindDonateModal,
@@ -624,7 +625,8 @@ export async function renderProposalPage(
 
         ${
           match.escrow_address
-            ? proposalFundingBarHtml(
+            ? (sharedEscrowPendingHtml({ ...match, balance_sats: balance }, "detail") ??
+              proposalFundingBarHtml(
                 balance,
                 CLAIM_FLOOR_SATS,
                 match.target_sats,
@@ -634,7 +636,7 @@ export async function renderProposalPage(
                   claimer: match.claimer,
                   proposal_type: match.proposal_type,
                 },
-              )
+              ))
             : ""
         }
 
@@ -717,7 +719,7 @@ export async function renderProposalPage(
       proposalPath: match.path,
       proposalTitle: match.title,
       signedIn: Boolean(user),
-      initialBalance: balance ?? 0,
+      initialBalance: donateInitialBalance(match, balance),
       escrowShared: match.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: match.target_sats,
