@@ -74,6 +74,7 @@ import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
   isCatalogDonateBlocked,
+  isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
   nextActionCardHtml,
   nextActionMoreHtml,
@@ -554,6 +555,9 @@ export async function bindBuilderPanel(
 ): Promise<void> {
   const panel = root.querySelector("#builder");
   if (!panel) return;
+  // Catalog row as painted. Read before the claim view merges its status into
+  // opts.proposal: a voided/settled catalog row never gets its escrow row back.
+  const catalogEscrowHidden = isCatalogEscrowHidden(opts.proposal);
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
@@ -1523,7 +1527,12 @@ export async function bindBuilderPanel(
         }
       }
 
-      if (onchainPanel && donateAllowed && opts.proposal.escrow_address) {
+      if (
+        onchainPanel &&
+        donateAllowed &&
+        opts.proposal.escrow_address &&
+        !catalogEscrowHidden
+      ) {
         if (!onchainPanel.querySelector("#onchain-escrow-row")) {
           onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));
         }

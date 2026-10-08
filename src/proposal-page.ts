@@ -54,6 +54,7 @@ import {
 } from "./proposal-ui";
 import {
   isCatalogDonateBlocked,
+  isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
   resolveNextAction,
 } from "./next-action";
@@ -697,7 +698,9 @@ export async function renderProposalPage(
                   </div>`
                 : ""
             }
-            ${onChainPanelHtml(match, { hideEscrow: showDonatePlaceholder })}
+            ${onChainPanelHtml(match, {
+              hideEscrow: showDonatePlaceholder || isCatalogEscrowHidden(match),
+            })}
           </aside>
         </div>
         ${showDonatePlaceholder ? `<div id="mobile-cta-slot" hidden></div>` : ""}

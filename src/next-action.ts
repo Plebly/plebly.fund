@@ -137,6 +137,27 @@ export function isCatalogDonateBlocked(
 }
 
 /**
+ * True when the catalog row must never show its escrow/donate address:
+ * donate-blocked (accepting_funds:false, voided/unreadable/unknown structure)
+ * or settled/voided by status. The claim view cannot override this.
+ */
+export function isCatalogEscrowHidden(
+  proposal: {
+    status?: string | null;
+    accepting_funds?: boolean | null;
+    structured_state?: string | null;
+    bounty_settled?: boolean | null;
+    claim_phase?: string | null;
+  } | null,
+): boolean {
+  if (isCatalogDonateBlocked(proposal)) return true;
+  const status = String(proposal?.status || "").toLowerCase();
+  if (status === "voided" || status === "bounty_settled") return true;
+  if (proposal?.bounty_settled === true) return true;
+  return String(proposal?.claim_phase || "").toLowerCase() === "settled";
+}
+
+/**
  * Full claim view shape used for claim-view-first gating.
  * Mirrors fields from ClaimStatus that affect donate eligibility.
  */
