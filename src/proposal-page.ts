@@ -446,6 +446,11 @@ export async function renderProposalPage(
         match = proposalFromMarkdown(await res.text(), path);
       }
     }
+    // A non-string escrow address (bad doc or catalog data) counts as none:
+    // no escrow row, and the page still loads.
+    if (match.escrow_address != null && typeof match.escrow_address !== "string") {
+      match = { ...match, escrow_address: null };
+    }
     if (match.id && WORKERS_API && match.endowment_funded == null) {
       try {
         const er = await fetch(

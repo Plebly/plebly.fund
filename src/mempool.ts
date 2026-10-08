@@ -10,7 +10,9 @@ export function balanceAddressFor(
   p: { escrow_address?: string | null; escrow_shared?: boolean | null } | null | undefined,
 ): string | null {
   if (!p || p.escrow_shared === true) return null;
-  const address = (p.escrow_address || "").trim();
+  // Non-string (bad data): no address to read, rather than a throw.
+  if (typeof p.escrow_address !== "string") return null;
+  const address = p.escrow_address.trim();
   return address || null;
 }
 
