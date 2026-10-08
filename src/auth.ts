@@ -830,14 +830,6 @@ export function shortNostrPubkey(pubkey: string): string {
   return `${pk.slice(0, 8)}…${pk.slice(-4)}`;
 }
 
-export function userLabel(user: AuthUser): string {
-  if (user.username) return `@${user.username}`;
-  if (user.github) return `@${user.github}`;
-  if (user.nostr) return shortNostrPubkey(user.nostr);
-  if (user.x) return `@${user.x}`;
-  return user.id;
-}
-
 /** Nav label for the signed-in account link (no @ prefix). */
 export function accountNavLabel(user: AuthUser): string {
   if (user.username) return user.username;

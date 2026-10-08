@@ -62,12 +62,6 @@ export function syncStoredCreditPreferencesFromProfile(input: {
   return prefs;
 }
 
-export function profileHasCreditPreferences(input: {
-  funder_credit?: { public_credit?: boolean; show_amount?: boolean } | null;
-} | null | undefined): boolean {
-  return Boolean(input?.funder_credit);
-}
-
 export function applyCreditPreferencesToFields(
   root: ParentNode,
   prefs: CreditPreferences,

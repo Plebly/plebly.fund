@@ -3673,21 +3673,6 @@ a.project-card-by:hover .project-card-by-text {
   flex-wrap: wrap;
 }
 
-.icon-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: var(--muted);
-  border-radius: var(--radius-sm);
-  transition: color 0.15s ease, background 0.15s ease;
-}
-.icon-link:hover {
-  color: var(--ink);
-  background: var(--bg-hover);
-}
-
 .social-account {
   display: inline-flex;
   align-items: center;
