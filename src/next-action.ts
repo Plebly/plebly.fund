@@ -8,6 +8,9 @@ import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
 import { isKnownProposalStatus, type Proposal } from "./types";
 import { escapeHtml } from "./util";
 
+/** Next-card copy for a row that is not fundable (UI UX agreed wording). */
+const NOT_ACCEPTING_FUNDS = "This listing isn't accepting funds.";
+
 /** States that are always blocked (terminal or errored). */
 const ALWAYS_BLOCKED_STATES = ["voided", "unreadable"] as const;
 
@@ -412,6 +415,18 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     const seatLine = seats.length ? ` Unsigned: ${seats.join(", ")}.` : "";
     return {
       sentence: `Release stalled.${seatLine}`,
+      button: null,
+      moreIds,
+    };
+  }
+
+  // Declined (not declined_fundable) is terminal and not fundable. Catalog
+  // `declined` wins over a runtime/frontmatter `listed` so the card never
+  // reads as still raising.
+  if (status === "declined") {
+    return {
+      sentence: "Listing declined.",
+      detail: NOT_ACCEPTING_FUNDS,
       button: null,
       moreIds,
     };
