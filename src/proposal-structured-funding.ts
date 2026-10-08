@@ -5,6 +5,15 @@ import { bindProposalCopyButtons } from "./proposal-copy-buttons";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
+/** Known structured funding states from Workers API (psbt-template.ts). */
+export const STRUCTURED_FUNDING_KNOWN_STATES = [
+  "awaiting_funds",
+  "psbt_ready",
+  "broadcast",
+  "confirmed",
+  "voided",
+] as const;
+
 const MEMPOOL_WEB =
   BITCOIN_NETWORK === "signet"
     ? "https://mempool.space/signet"
@@ -51,6 +60,8 @@ export type StructuredFundingView = {
     sha256?: string;
     psbt_base64?: string;
     settle_txid?: string;
+    void_reason?: string;
+    voided_at?: string;
     decode?: {
       version?: number;
       locktime?: number;
@@ -87,6 +98,7 @@ export function bindStructuredFunding(
       panel.hidden = false;
       if (panel instanceof HTMLDetailsElement) panel.open = false;
       const state = data.structured?.state || "awaiting_funds";
+      const voidReason = data.structured?.void_reason;
       if (jump) {
         jump.hidden = false;
         jump.textContent =
@@ -94,23 +106,34 @@ export function bindStructuredFunding(
             ? "Structure · waiting for funds"
             : state === "confirmed"
               ? "Structure · confirmed"
-              : "Structure · ready for keyholders";
+              : state === "voided"
+                ? "Structure · voided"
+                : state === "psbt_ready"
+                  ? "Structure · ready for keyholders"
+                  : state === "broadcast"
+                    ? "Structure · broadcast, awaiting confirmation"
+                    : "Structure · unknown state";
       }
       const kind = data.psbt_kind === "milestone" ? "Type 2 (milestones)" : "Type 1 (single bounty)";
-      statusEl.textContent = structuredFundingStageSentence(state, kind);
-      bodyEl.innerHTML = structuredFundingBodyHtml(data);
-      const branchRes = await fetch(
-        `${api}/proposals/${encodeURIComponent(proposalId)}/branches`,
-      );
-      if (branchRes.ok) {
-        const branches = (await branchRes.json()) as BranchPublicView;
-        bodyEl.insertAdjacentHTML(
-          "beforeend",
-          branchListHtml(branches.branches, branches.selected, branches.signoff),
+      statusEl.textContent = structuredFundingStageSentence(state, kind, voidReason);
+      const isVoidedOrUnknown = state === "voided" || !STRUCTURED_FUNDING_KNOWN_STATES.includes(state as typeof STRUCTURED_FUNDING_KNOWN_STATES[number]);
+      if (isVoidedOrUnknown) {
+        bodyEl.innerHTML = "";
+      } else {
+        bodyEl.innerHTML = structuredFundingBodyHtml(data);
+        const branchRes = await fetch(
+          `${api}/proposals/${encodeURIComponent(proposalId)}/branches`,
         );
-        bindBranchHashGate(bodyEl, branches);
+        if (branchRes.ok) {
+          const branches = (await branchRes.json()) as BranchPublicView;
+          bodyEl.insertAdjacentHTML(
+            "beforeend",
+            branchListHtml(branches.branches, branches.selected, branches.signoff),
+          );
+          bindBranchHashGate(bodyEl, branches);
+        }
+        bindProposalCopyButtons(bodyEl);
       }
-      bindProposalCopyButtons(bodyEl);
     } catch {
       /* public view is optional */
     }
@@ -249,10 +272,22 @@ function branchListHtml(
   </div>`;
 }
 
+/** Human-readable reason for a voided structure. */
+export function voidReasonLabel(reason?: string): string {
+  if (reason === "clone_cleared") {
+    return "Cleared: duplicate of another proposal's funding";
+  }
+  if (reason === "inputs_spent") {
+    return "Inputs already spent on-chain";
+  }
+  return reason ? `Voided: ${reason}` : "Structure voided";
+}
+
 /** Public Structure stage sentence (summary line). */
 export function structuredFundingStageSentence(
   state: string,
   kind: string,
+  voidReason?: string,
 ): string {
   if (state === "awaiting_funds") {
     return `${kind} — Structure · waiting for confirmed funds (allocation, reviewer reserve, miner fee). Do not send bond or Donate to Structure outs.`;
@@ -260,7 +295,16 @@ export function structuredFundingStageSentence(
   if (state === "confirmed") {
     return `${kind} — Structure · confirmed on-chain. Release branches may follow for payout.`;
   }
-  return `${kind} — Structure · unsigned PSBT ready. Keyholders cosign in Sparrow; this site does not broadcast.`;
+  if (state === "voided") {
+    return `${kind} — Structure voided. ${voidReasonLabel(voidReason)}`;
+  }
+  if (state === "psbt_ready") {
+    return `${kind} — Structure · unsigned PSBT ready. Keyholders cosign in Sparrow; this site does not broadcast.`;
+  }
+  if (state === "broadcast") {
+    return `${kind} — Structure · broadcast, awaiting confirmation. Settle txid shown below.`;
+  }
+  return `${kind} — Structure · unknown state. This record cannot be signed.`;
 }
 
 /** Structure out role label — never imply claim-bond / Donate destinations. */
