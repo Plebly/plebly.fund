@@ -21,19 +21,51 @@ export function isChunkLoadError(err: unknown): boolean {
   return CHUNK_ERROR.test(message);
 }
 
-/** Replace the view with the reload prompt (never the raw error). Idempotent. */
+/** Shown instead when the browser reports no network (the chunk may be fine). */
+export const STALE_BUILD_OFFLINE_MESSAGE = "You're offline. Reconnect, then reload.";
+
+/** True when the view has nothing worth keeping: empty, or only "Loading…". */
+function viewIsDisposable(view: HTMLElement): boolean {
+  const text = (view.textContent || "").replace(/\s+/g, " ").trim();
+  return text === "" || /^Loading(?:…|\.\.\.)$/.test(text);
+}
+
+/**
+ * Show the reload prompt (never the raw error). An empty or still-loading view
+ * is replaced with it; any other view is kept as is (typed input included) and
+ * the prompt shows as a fixed banner on top. Focus moves to Reload. Idempotent:
+ * a second chunk error while a prompt is up adds nothing.
+ */
 export function showStaleBuildPrompt(
   doc: Document = document,
   reload: () => void = () => location.reload(),
 ): void {
-  const app = doc.querySelector<HTMLElement>("#app") || doc.body;
-  app.innerHTML = `<section class="wrap-wide detail stale-build" data-stale-build role="alert">
-    <p class="lede">${STALE_BUILD_MESSAGE}</p>
+  if (doc.querySelector("[data-stale-build]")) return;
+  const offline = doc.defaultView?.navigator.onLine === false;
+  const message = offline ? STALE_BUILD_OFFLINE_MESSAGE : STALE_BUILD_MESSAGE;
+  const view =
+    doc.querySelector<HTMLElement>("#main-content") ||
+    doc.querySelector<HTMLElement>("#app") ||
+    doc.body;
+  let prompt: HTMLElement;
+  if (viewIsDisposable(view)) {
+    view.innerHTML = `<section class="wrap-wide detail stale-build" data-stale-build role="alert">
+    <p class="lede">${message}</p>
     <p><button type="button" class="btn" data-stale-reload>Reload</button></p>
   </section>`;
-  app
-    .querySelector<HTMLButtonElement>("[data-stale-reload]")
-    ?.addEventListener("click", () => reload());
+    prompt = view.querySelector<HTMLElement>("[data-stale-build]")!;
+  } else {
+    prompt = doc.createElement("div");
+    prompt.className = "stale-build-banner";
+    prompt.setAttribute("data-stale-build", "");
+    prompt.setAttribute("role", "alert");
+    prompt.innerHTML = `<p>${message}</p>
+    <button type="button" class="btn" data-stale-reload>Reload</button>`;
+    doc.body.appendChild(prompt);
+  }
+  const btn = prompt.querySelector<HTMLButtonElement>("[data-stale-reload]")!;
+  btn.addEventListener("click", () => reload());
+  btn.focus();
 }
 
 /**
