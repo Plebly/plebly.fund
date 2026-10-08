@@ -315,6 +315,10 @@ export {
 
 import { fundingBarTrackHtml } from "./proposal-funding-bar";
 
+/** Donate modal: record/claim did not link the gift (refused, 5xx or offline). */
+export const DONATE_LINK_REFUSED_COPY =
+  "Your gift reached escrow. This page couldn't link it to your account.";
+
 export {
   fundingBarScale,
   fundingBarTrackHtml,
@@ -923,8 +927,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       );
       if (claimWrap) claimWrap.hidden = true;
       opts.onCreditLinked?.();
-    } catch (e) {
-      setDonateConfirmStatus(panel, (e as Error).message, "bad");
+    } catch {
+      // Never surface raw server text here ("already claimed by another
+      // user", etc.): it can name another donor's state. Same line for
+      // refusals, 5xx and network errors.
+      setDonateConfirmStatus(panel, DONATE_LINK_REFUSED_COPY, "bad");
       showClaimable([utxo]);
     } finally {
       linking = false;
