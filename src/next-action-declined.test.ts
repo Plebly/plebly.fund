@@ -117,6 +117,40 @@ describe("resolveNextAction: declined row", () => {
   });
 });
 
+describe("resolveNextAction: earlier exits still win over declined", () => {
+  it("declined + voided structure reads Structure unavailable", () => {
+    const action = resolveNextAction({
+      proposal: proposal(),
+      claim: claim({ state: "open", psbt: { structured_state: "voided" } }),
+      user: visitor,
+    });
+    expect(action.sentence).toBe("Structure unavailable, not accepting funds.");
+    expect(action.button).toBeNull();
+  });
+
+  it("declined + settled bounty reads Bounty paid.", () => {
+    const action = resolveNextAction({
+      proposal: proposal(),
+      claim: claim({ state: "settled", claim_phase: "settled" }),
+      user: visitor,
+    });
+    expect(action.sentence).toBe("Bounty paid.");
+    expect(action.button).toBeNull();
+  });
+
+  it("declined + release_blocked_reason reads Release stalled", () => {
+    const action = resolveNextAction({
+      proposal: proposal({
+        release_blocked_reason: "keyholders_unsigned",
+        release_blocked_seats: [2, 4],
+      }),
+      user: visitor,
+    });
+    expect(action.sentence).toBe("Release stalled. Unsigned: seat 2, seat 4.");
+    expect(action.button).toBeNull();
+  });
+});
+
 describe("next card HTML: declined row", () => {
   it("renders declined copy with no Donate button", () => {
     const html = nextActionCardHtml(resolveNextAction({ proposal: proposal() }));
