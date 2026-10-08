@@ -795,15 +795,6 @@ export async function claimUsername(username: string): Promise<UserProfile> {
   return data.user;
 }
 
-export async function checkUsernameAvailable(
-  username: string,
-): Promise<boolean> {
-  const res = await fetch(`${API()}/profile/check/${encodeURIComponent(username)}`);
-  if (!res.ok) return false;
-  const data = (await res.json()) as { available?: boolean };
-  return Boolean(data.available);
-}
-
 export async function deleteAccount(): Promise<void> {
   if (!WORKERS_API) throw new Error("API not configured");
   let res: Response;
