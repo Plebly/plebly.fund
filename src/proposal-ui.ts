@@ -6,8 +6,6 @@ import {
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
-import { isSharedEscrow } from "./escrow-shared";
-import { loadedCatalogRows } from "./github";
 import {
   fetchClaimStatus,
   isDirectProposal,
@@ -54,6 +52,8 @@ import {
 } from "./lightning";
 import { balanceAddressFor, watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
+import { isSharedEscrow } from "./escrow-shared";
+import { loadedCatalogRows } from "./github";
 import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
