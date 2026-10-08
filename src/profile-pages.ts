@@ -642,7 +642,13 @@ export async function renderAccount(
                     );
                   return `<li>
                     <a href="${href}">${escapeHtml(title)}</a>
-                    <span class="pill">${open ? "Open to apply" : formatSats(bal ?? 0)}</span>
+                    <span class="pill">${
+                      open
+                        ? "Open to apply"
+                        : typeof bal === "number" && Number.isFinite(bal)
+                          ? formatSats(bal)
+                          : "Balance temporarily unavailable"
+                    }</span>
                     <button type="button" class="btn ghost btn-compact work-list-action" data-unwatch="${escapeHtml(w.proposal_path)}">Unwatch</button>
                   </li>`;
                 })
