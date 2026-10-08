@@ -372,6 +372,79 @@ describe("findListedProposalById overlays the id-matched row", () => {
 });
 
 /**
+ * Review low on 1822fb7 (github.ts ~463): on a doc miss with a lookup hit, the
+ * catalog row must be matched on the loaded doc's frontmatter id (`hit.id`),
+ * never on the route value. Here the route value is a pre-rename slug that the
+ * Worker's id→path index still maps to the ID-filename doc, and the catalog
+ * also holds a different row whose id is that slug.
+ */
+describe("doc miss + lookup hit: the row is matched on the doc's id, not the route value", () => {
+  const f = KNOTS;
+  const ALIAS = "knots-size-value-spam";
+  const DECOY = slugRow(f, {
+    id: ALIAS,
+    path: "proposals/listed/knots-size-value-spam-old.md",
+    status: "refunding",
+    balance_sats: WRONG_BALANCE,
+    escrow_address: WRONG_ESCROW,
+  });
+
+  function stubAliasLookup(rows: Record<string, unknown>[]) {
+    const md = markdown(f);
+    const lookups: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/proposals/catalog")) {
+          return Response.json({ scope: "listed", updated_at: "2026-10-08T04:02:54.146Z", proposals: rows });
+        }
+        const doc = url.match(/\/proposals\/doc\/(.+)$/);
+        if (doc) {
+          // The doc read takes the exact path only here: the alias misses.
+          if (decodeURIComponent(doc[1]!) !== f.idPath) return new Response("{}", { status: 404 });
+          return Response.json({ id: f.id, markdown: md, path: f.idPath });
+        }
+        const look = url.match(/\/proposals\/lookup\/(.+)$/);
+        if (look) {
+          const key = decodeURIComponent(look[1]!);
+          lookups.push(key);
+          if (key !== ALIAS) return Response.json({ id: key, path: null, found: false });
+          return Response.json({ id: key, path: f.idPath, found: true });
+        }
+        if (url.includes("raw.githubusercontent.com")) return new Response(md, { status: 200 });
+        return new Response("{}", { status: 404 });
+      }),
+    );
+    return lookups;
+  }
+
+  it("route alias → lookup → doc id PLEBLY-KNOTS-…: the KNOTS row applies, the alias-id row never does", async () => {
+    const lookups = stubAliasLookup([OTHER_ROW, DECOY, slugRow(f, { status: "claimable", balance_sats: 7_000 })]);
+    const { findListedProposalById } = await import("./github");
+    const p = await findListedProposalById(ALIAS);
+    expect(lookups).toEqual([ALIAS]);
+    expect(p?.id).toBe(f.id);
+    expect(p?.path).toBe(f.idPath);
+    expect(p?.status).toBe("claimable");
+    expect(p?.balance_sats).toBe(7_000);
+    expect(p?.escrow_address).toBe(f.escrow);
+    expect(p?.escrow_shared).toBeUndefined();
+  });
+
+  it("same lookup with no row for the doc's id → fails closed (shared), even though a row has the alias id", async () => {
+    stubAliasLookup([OTHER_ROW, DECOY]);
+    const { findListedProposalById } = await import("./github");
+    const p = await findListedProposalById(ALIAS);
+    expect(p?.path).toBe(f.idPath);
+    expect(p?.status).toBe("listed");
+    expect(p?.balance_sats).not.toBe(WRONG_BALANCE);
+    expect(p?.escrow_address).toBe(f.escrow);
+    expect(p?.escrow_shared).toBe(true);
+  });
+});
+
+/**
  * The live link is lower-case: router.ts turns `/p/plebly-knots-size-value-spam`
  * into `{ id: "plebly-knots-size-value-spam", stable: true }` (decoded,
  * trimmed, case kept), and main.ts calls findListedProposalById with it. The
