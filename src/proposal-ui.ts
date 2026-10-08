@@ -1757,13 +1757,30 @@ export function syncDonateModalEscrow(
   setDonateAddressTargetsHidden(root, false);
   const panel = donatePanelIn(root);
   if (panel) {
+    // "Copied." belonged to the previous address.
+    if (panel.getAttribute("data-donate-address") !== addr) hideDonateCopiedLine(panel);
     panel.setAttribute("data-donate-address", addr);
     void renderDonatePaymentTargets(panel);
   }
-  const explorer = root.querySelector<HTMLAnchorElement>(".donate-explorer-link");
+  // Class lookups stay inside the Donate panel: the bond / fee pay panel on
+  // the same page uses .donate-explorer-link too (fee-pay.ts).
+  const explorer = donateExplorerLink(root);
   if (explorer) {
     explorer.href = `${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`;
   }
+}
+
+/** The Donate modal's own explorer link (never the bond / fee panel's). */
+function donateExplorerLink(root: ParentNode): HTMLAnchorElement | null {
+  return donatePanelIn(root)?.querySelector<HTMLAnchorElement>(".donate-explorer-link") ?? null;
+}
+
+/** #84's "Copied. / Couldn't copy." line: stale once the address changes or pauses. */
+function hideDonateCopiedLine(panel: Element): void {
+  panel.querySelectorAll<HTMLElement>(".escrow-addr-copied").forEach((el) => {
+    el.hidden = true;
+    el.classList.remove("is-error");
+  });
 }
 
 export const DONATE_PAUSED_LINE = "Donations are paused for this proposal right now.";
@@ -1787,15 +1804,20 @@ const DONATE_PAUSED_HIDES = [
  * that (only what this function hid comes back).
  */
 function setDonateAddressTargetsHidden(root: ParentNode, hidden: boolean): void {
+  // Everything here is looked up inside the Donate panel only (never
+  // page-wide: other panels share these class names).
+  const box = donatePanelIn(root);
+  if (!box) return;
   for (const sel of ["#donate-address", "#donate-copy", ".donate-explorer-link"]) {
-    const el = root.querySelector<HTMLElement>(sel);
+    const el = box.querySelector<HTMLElement>(sel);
     if (el) el.hidden = hidden;
   }
-  const code = root.querySelector<HTMLElement>("#donate-address");
-  let paused = root.querySelector<HTMLElement>("#donate-paused");
+  const code = box.querySelector<HTMLElement>("#donate-address");
+  let paused = box.querySelector<HTMLElement>("#donate-paused");
   if (hidden) {
+    hideDonateCopiedLine(box);
     for (const sel of DONATE_PAUSED_HIDES) {
-      root.querySelectorAll<HTMLElement>(sel).forEach((el) => {
+      box.querySelectorAll<HTMLElement>(sel).forEach((el) => {
         if (el.hidden) return;
         el.hidden = true;
         el.setAttribute("data-paused-hidden", "");
@@ -1810,7 +1832,7 @@ function setDonateAddressTargetsHidden(root: ParentNode, hidden: boolean): void 
     }
     if (paused) paused.textContent = DONATE_PAUSED_LINE;
   } else {
-    root.querySelectorAll<HTMLElement>("[data-paused-hidden]").forEach((el) => {
+    box.querySelectorAll<HTMLElement>("[data-paused-hidden]").forEach((el) => {
       el.hidden = false;
       el.removeAttribute("data-paused-hidden");
     });
@@ -1828,7 +1850,7 @@ function clearDonateModalAddress(scope: ParentNode): void {
     code.removeAttribute("title");
   }
   root.querySelector<HTMLElement>("#donate-copy")?.removeAttribute("data-copy");
-  root.querySelector<HTMLAnchorElement>(".donate-explorer-link")?.removeAttribute("href");
+  donateExplorerLink(root)?.removeAttribute("href");
   setDonateAddressTargetsHidden(root, true);
   const panel = donatePanelIn(root);
   if (panel) {

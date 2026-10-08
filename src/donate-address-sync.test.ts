@@ -16,12 +16,14 @@ const C = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";
 /** Every QR payload rendered, and per-call control over when it resolves. */
 let qrPayloads: string[] = [];
 let qrDelay: (uri: string) => number = () => 0;
+let qrFails: (uri: string) => boolean = () => false;
 let clipboard: string[] = [];
 
 beforeEach(() => {
   vi.resetModules();
   qrPayloads = [];
   qrDelay = () => 0;
+  qrFails = () => false;
   clipboard = [];
   vi.doMock("qrcode", () => ({
     default: {
@@ -29,6 +31,7 @@ beforeEach(() => {
         qrPayloads.push(uri);
         const ms = qrDelay(uri);
         if (ms) await new Promise((r) => setTimeout(r, ms));
+        if (qrFails(uri)) throw new Error("qr render failed");
         return `data:image/png;base64,${btoa(uri)}`;
       }),
     },
@@ -67,7 +70,7 @@ async function mount(addr: string) {
 }
 
 /** All four targets show exactly `addr` (QR once it has rendered). */
-async function expectAllShow(addr: string, amountBtc?: string) {
+async function expectAllShow(addr: string, amountBtc?: string, except: Element[] = []) {
   const uri = `bitcoin:${addr}${amountBtc ? `?amount=${amountBtc}` : ""}`;
   const code = $("#donate-address");
   expect(code.hidden).toBe(false);
@@ -78,7 +81,7 @@ async function expectAllShow(addr: string, amountBtc?: string) {
   expect(wallet.hidden).toBe(false);
   expect(wallet.getAttribute("href")).toBe(uri);
   expect(document.querySelector("#donate-paused")).toBeNull();
-  for (const el of pausedControls()) expect(isShown(el)).toBe(true);
+  for (const el of pausedControls()) if (!except.includes(el)) expect(isShown(el)).toBe(true);
   const qr = $<HTMLImageElement>("#donate-qr");
   await vi.waitFor(() => expect(qrUriOf(qr)).toBe(uri));
   expect(isShown(qr)).toBe(true);
@@ -122,12 +125,27 @@ function isShown(el: Element): boolean {
   }
   return true;
 }
-/** Amount box, presets and the QR box: only shown with a payable address. */
+/**
+ * Only shown with a payable address: amount box + its label, presets, QR box,
+ * the "DONATE / ESCROW ADDRESS" label, the "Send any amount here" line and
+ * the "Payment is detected automatically." hint. Each must exist.
+ */
 function pausedControls(): HTMLElement[] {
+  const one = (sel: string) => {
+    const el = document.querySelector<HTMLElement>(`.donate-pane-onchain ${sel}`);
+    expect(el, sel).not.toBeNull();
+    return el!;
+  };
+  const presets = [...document.querySelectorAll<HTMLElement>('.donate-preset[data-rail="onchain"]')];
+  expect(presets.length).toBeGreaterThan(0);
   return [
-    $("#donate-amount"),
-    ...document.querySelectorAll<HTMLElement>('.donate-preset[data-rail="onchain"]'),
-    $(".donate-pane-onchain .donate-qr-wrap"),
+    one("#donate-amount"),
+    one('label[for="donate-amount"]'),
+    ...presets,
+    one(".donate-qr-wrap"),
+    one("#donate-escrow-label"),
+    one("#donate-escrow-contrast"),
+    one("#donate-watch-hint"),
   ];
 }
 
@@ -283,7 +301,7 @@ describe("paused while the modal is open (UI UX)", () => {
     $("#donate-watch-hint").hidden = true; // e.g. replaced by a confirm status
     ui.syncDonateModalEscrow("", document);
     ui.syncDonateModalEscrow(A, document);
-    await expectAllShow(A);
+    await expectAllShow(A, undefined, [$("#donate-watch-hint")]);
     expect($("#donate-watch-hint").hidden).toBe(true);
   });
 });
@@ -327,5 +345,143 @@ describe("QR placeholder while a new QR renders (UI UX nit)", () => {
     expect(qrUriOf($<HTMLImageElement>("#donate-qr"))).toBe(`bitcoin:${A}`);
     await expectAllShow(A, "0.00003");
     void ui;
+  });
+});
+
+describe("paused copy and labels (Review Q17/Q18)", () => {
+  it("pausing hides the escrow label, 'Send any amount here', the detection hint and the amount label; valid restores them", async () => {
+    const ui = await mount(A);
+    await expectAllShow(A);
+    expect($("#donate-escrow-label").textContent).toContain("DONATE / ESCROW ADDRESS");
+    expect($("#donate-escrow-contrast").textContent).toContain("Send any amount here");
+    expect($("#donate-watch-hint").textContent).toBe("Payment is detected automatically.");
+    expect($('label[for="donate-amount"]').textContent).toContain("Amount");
+    const lines = ["#donate-escrow-label", "#donate-escrow-contrast", "#donate-watch-hint", 'label[for="donate-amount"]'];
+    ui.syncDonateModalEscrow("not-an-address", document);
+    for (const sel of lines) expect(isShown($(sel)), sel).toBe(false);
+    // Nothing payable is left, and Copy does nothing.
+    $("#donate-copy").click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(clipboard).toEqual([]);
+    ui.syncDonateModalEscrow(B, document);
+    for (const sel of lines) expect(isShown($(sel)), sel).toBe(true);
+    await expectAllShow(B);
+  });
+});
+
+describe("QR render failure (Review Q11/Q12)", () => {
+  const FAILED = "QR unavailable. Copy the address instead.";
+  const placeholder = () => document.querySelector<HTMLElement>("[data-qr-placeholder]");
+
+  it("first paint: a failed render reads the failure line, image hidden with no src", async () => {
+    qrFails = () => true;
+    await mount(A);
+    await vi.waitFor(() => expect(placeholder()?.textContent).toBe(FAILED));
+    expect(isShown(placeholder()!)).toBe(true);
+    const qr = $<HTMLImageElement>("#donate-qr");
+    expect(qr.hidden).toBe(true);
+    expect(qr.hasAttribute("src")).toBe(false);
+    // Address, Copy and wallet link still work without the QR.
+    expect($("#donate-copy").getAttribute("data-copy")).toBe(A);
+    expect($<HTMLAnchorElement>("#donate-wallet").getAttribute("href")).toBe(`bitcoin:${A}`);
+  });
+
+  it("address change whose render fails: failure line, never the old address's QR", async () => {
+    const ui = await mount(A);
+    await expectAllShow(A);
+    qrFails = (uri) => uri.includes(B);
+    ui.syncDonateModalEscrow(B, document);
+    await vi.waitFor(() => expect(placeholder()?.textContent).toBe(FAILED));
+    const qr = $<HTMLImageElement>("#donate-qr");
+    expect(qr.hidden).toBe(true);
+    expect(qr.hasAttribute("src")).toBe(false);
+    expect(qr.hasAttribute("data-qr-address")).toBe(false);
+  });
+
+  it("a stale render that fails after a newer success leaves no failure line", async () => {
+    const ui = await mount(C);
+    await expectAllShow(C);
+    qrDelay = (uri) => (uri.includes(A) ? 60 : 0);
+    qrFails = (uri) => uri.includes(A);
+    ui.syncDonateModalEscrow(A, document); // slow, will fail
+    ui.syncDonateModalEscrow(B, document); // fast, succeeds
+    await expectAllShow(B);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(placeholder()).toBeNull();
+    await expectAllShow(B);
+  });
+});
+
+describe("Donate setter stays inside the Donate panel (Review F1)", () => {
+  const FEE = C; // bond / fee address on the same page
+
+  async function mountWithBondFirst(addr: string) {
+    const ui = await import("./proposal-ui");
+    const { feePayHtml } = await import("./fee-pay");
+    // Bond panel first in the document, as builder-panel mounts it before the body-level modal.
+    document.body.innerHTML =
+      `<div id="bond-slot">${feePayHtml({ id: "claim-bond", kind: "bond", address: FEE, amountSats: 10_000 })}</div>` +
+      ui.donateModalHtml(proposal(addr), { signedIn: false });
+    await ui.bindDonatePanel(document, { address: addr, proposalId: "X", proposalPath: "proposals/listed/x.md", signedIn: false });
+    const bond = document.querySelector<HTMLAnchorElement>("#bond-slot .donate-explorer-link")!;
+    const modal = document.querySelector<HTMLAnchorElement>("#donate .donate-explorer-link")!;
+    expect(bond).not.toBeNull();
+    expect(modal).not.toBeNull();
+    return { ui, bond, modal };
+  }
+  const explorerHref = (a: string) => `/address/${encodeURIComponent(a)}`;
+
+  it("address change moves only the modal's explorer link; the bond link is untouched", async () => {
+    const { ui, bond, modal } = await mountWithBondFirst(A);
+    const bondHref = bond.getAttribute("href");
+    expect(bondHref).toContain(explorerHref(FEE));
+    ui.syncDonateModalEscrow(B, document);
+    expect(modal.getAttribute("href")).toContain(explorerHref(B));
+    expect(bond.getAttribute("href")).toBe(bondHref);
+    expect(bond.hidden).toBe(false);
+  });
+
+  it("invalid address hides only the modal's explorer link; the bond link stays visible with its href", async () => {
+    const { ui, bond, modal } = await mountWithBondFirst(A);
+    const bondHref = bond.getAttribute("href");
+    ui.syncDonateModalEscrow("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", document);
+    expect(modal.hidden).toBe(true);
+    expect(modal.hasAttribute("href")).toBe(false);
+    expect(bond.hidden).toBe(false);
+    expect(bond.getAttribute("href")).toBe(bondHref);
+    // The bond panel's own address / copy / hint are untouched as well.
+    expect(document.querySelector("#bond-slot [data-paused-hidden]")).toBeNull();
+    expect(document.querySelector("#bond-slot #donate-paused")).toBeNull();
+    expect(document.querySelector("#claim-bond-address")?.textContent).toBe(FEE);
+  });
+});
+
+describe("#84's 'Copied.' line never outlives its address (Review F4)", () => {
+  /** #84 renders this under the Copy buttons; simulate it so the rule holds with or without #84. */
+  function addCopiedLine(): HTMLElement {
+    const p = document.createElement("p");
+    p.className = "escrow-addr-copied";
+    p.setAttribute("role", "status");
+    p.textContent = "Copied. Deposits show once they confirm.";
+    $("#donate-copy").closest(".donate-actions")!.after(p);
+    return p;
+  }
+
+  it("an address change hides it", async () => {
+    const ui = await mount(A);
+    const line = addCopiedLine();
+    ui.syncDonateModalEscrow(B, document);
+    expect(line.hidden).toBe(true);
+  });
+
+  it("pausing hides it and a valid address does not bring it back", async () => {
+    const ui = await mount(A);
+    const line = addCopiedLine();
+    line.classList.add("is-error");
+    ui.syncDonateModalEscrow("", document);
+    expect(line.hidden).toBe(true);
+    expect(line.classList.contains("is-error")).toBe(false);
+    ui.syncDonateModalEscrow(A, document);
+    expect(line.hidden).toBe(true);
   });
 });
