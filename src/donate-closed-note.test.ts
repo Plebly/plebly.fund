@@ -76,7 +76,9 @@ describe("donateClosedReason copy", () => {
   });
 });
 
-function mockBuilder(status: Partial<ClaimStatus>): void {
+/** `later` (if given) is what every fetch after the first returns (a refresh). */
+function mockBuilder(status: Partial<ClaimStatus>, later?: Partial<ClaimStatus>): void {
+  let calls = 0;
   vi.doMock("./builder", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./builder")>();
     return {
@@ -88,7 +90,7 @@ function mockBuilder(status: Partial<ClaimStatus>): void {
         claim_floor_sats: 10_000,
         escrow_address: ESCROW,
         title: "Demo",
-        ...status,
+        ...(calls++ > 0 && later ? later : status),
       })),
       fetchClaimApplications: vi.fn(async () => null),
       fetchClaimParams: vi.fn(async () => ({
@@ -213,6 +215,27 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
       );
     });
     assertNoDonateOrAddress();
+  });
+
+  it("funds reopen on refresh: the escrow-row note is removed (PR body: 'If funds reopen, the note is removed')", async () => {
+    vi.resetModules();
+    mockBuilder(
+      { state: "unavailable", status: "declined", accepting_funds: false },
+      { state: "unavailable", status: "declined_fundable", accepting_funds: true },
+    );
+    const p = proposal({ status: "declined_fundable", path: "proposals/declined/demo.md" });
+    paint(p, false);
+    await bind(p);
+    await vi.waitFor(() => {
+      expect(document.querySelector("#onchain-escrow-closed-note")?.textContent).toBe(
+        "This listing isn't accepting funds.",
+      );
+    });
+    // Tab becomes visible again -> bindBuilderPanel re-fetches the claim view.
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.waitFor(() => {
+      expect(document.querySelector("#onchain-escrow-closed-note")).toBeNull();
+    });
   });
 
   it("control: funds open on a pooling claimed row shows no closed note", async () => {

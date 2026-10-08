@@ -197,3 +197,32 @@ describe("fail closed for Workers without accepting_claims (pre-#44)", () => {
     expect(resolveNextAction(input).button).toBe("donate");
   });
 });
+
+// Review's CATALOG-1 drift probe (probes/f69/drift.test.ts), imports adapted.
+// Stale catalog row (claimable/listed, pre-refresh) next to a #44+#51 claim view
+// with accepting_funds:false and accepting_claims:true. Kills M4 (the
+// `accepting_claims == null` scoping of the pre-#44 fallback) and M10 (the
+// Donate strip in resolveNextAction).
+const P = (status: string): Proposal => ({ id: "p1", path: "proposals/listed/p1.md", title: "P", status, target_sats: 50000, escrow_address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx", submission_fee_txid: null, created_at: null, escrow_index: null, milestones: [], body: "", proposer: { id: "github:1", github: "alice", username: "alice" }, claimer: "bob" } as Proposal);
+const C = { proposal_id: "p1", proposal_path: "proposals/claimed/p1.md", state: "claimed", claimer: "bob", confirmed_balance_sats: 200000, claim_floor_sats: 10000, accepting_funds: false, accepting_claims: true, bounty_settled: false, psbt: { structured_state: "psbt_ready" } } as unknown as ClaimStatus;
+const builder = { id: "github:2", username: "bob", github: "bob" };
+for (const cat of ["claimable", "listed"]) {
+  it(`DRIFT catalog ${cat}, claim view claimed (af:false, ac:true): builder keeps Submit work`, () => {
+    const r = resolveNextAction({ proposal: P(cat), claim: C, user: builder, isBuilder: true } as never);
+    console.log(`DRIFT builder catalog=${cat}: ${r.sentence} [${r.button ?? "-"}]`);
+    expect(r.button).toBe("deliverable");
+  });
+  it(`DRIFT catalog ${cat}, claim view claimed (af:false, ac:true): anon gets no Donate button`, () => {
+    const r = resolveNextAction({ proposal: P(cat), claim: C } as never);
+    console.log(`DRIFT anon catalog=${cat}: ${r.sentence} [${r.button ?? "-"}]`);
+    expect(r.button).not.toBe("donate");
+  });
+}
+for (const cat of ["claimable", "listed"]) {
+  it(`DRIFT catalog ${cat}, runtime moved to refunding/declined (state unavailable, af:false, ac:true): no Donate button`, () => {
+    const c = { ...C, state: "unavailable", claimer: null, psbt: undefined } as unknown as ClaimStatus;
+    const r = resolveNextAction({ proposal: { ...P(cat), claimer: undefined } as Proposal, claim: c } as never);
+    console.log(`DRIFT2 anon catalog=${cat}: ${r.sentence} [${r.button ?? "-"}]`);
+    expect(r.button).not.toBe("donate");
+  });
+}
