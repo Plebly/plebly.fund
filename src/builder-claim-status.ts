@@ -5,6 +5,7 @@ import {
 } from "./builder";
 import { claimerTrackHtml } from "./claimer-track-ui";
 import {
+  isClaimViewDonateAllowed,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
@@ -60,7 +61,7 @@ export function renderClaimStatusBody(
 ): void {
   const proposalPath = proposal.path;
   const isYou = sessionIsClaimStatusFulfiller(user, status);
-  const action = resolveNextAction({
+  const resolved = resolveNextAction({
     proposal,
     claim: status,
     apps,
@@ -69,6 +70,13 @@ export function renderClaimStatusBody(
     isProposer,
     isBuilder: isYou,
   });
+  // The claim view alone opens Donate (accepting_funds === true and its own
+  // escrow address); a missing catalog row never does, nor does a null/absent
+  // accepting_funds. The sentence stays; only the button goes.
+  const action =
+    resolved.button === "donate" && !isClaimViewDonateAllowed(status)
+      ? { ...resolved, button: null }
+      : resolved;
   const track = claimerTrackHtml(status);
   const meta = metaBits(status);
   const wbSlot = `<div id="workboard-settings-host"></div>`;

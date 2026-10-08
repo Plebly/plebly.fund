@@ -280,7 +280,10 @@ export function applyCatalogRuntimeToProposal(
   doc: Proposal,
   catalog: Proposal | null | undefined,
 ): Proposal {
-  if (!catalog) return doc;
+  // No catalog row (KNOTS, 2026-10-08): sharing is unknown, so treat the
+  // escrow as shared for its balance (workers#50 fail-closed). The page never
+  // shows the address total; the claim view still decides Donate.
+  if (!catalog) return { ...doc, escrow_shared: true };
   if (catalog.escrow_shared === true) {
     // Shared escrow: only the catalog's per-proposal balance, never a fallback.
     doc = { ...doc, escrow_shared: true, balance_sats: catalog.balance_sats };
@@ -334,6 +337,7 @@ async function catalogEntryById(id: string): Promise<Proposal | null> {
       proposals.find(
         (p) =>
           p.id?.toLowerCase() === needle ||
+          p.path.toLowerCase() === needle ||
           p.path.toLowerCase().includes(`/${needle}.md`),
       ) || null
     );

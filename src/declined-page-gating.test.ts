@@ -252,3 +252,29 @@ describe("declined detail page after the claim view loads", () => {
     expect(app.querySelector("#donate-closed-note")).toBeNull();
   });
 });
+
+describe("refunding detail page after the claim view loads (UI UX: keep refunding in the gate)", () => {
+  for (const accepting of [false, true] as const) {
+    it(`claim view accepting_funds:${accepting}: no address row, meter or Donate`, async () => {
+      const app = await renderPage(
+        row({ status: "refunding" }),
+        claimView({ status: "refunding", state: "unavailable", accepting_funds: accepting, escrow_address: ESCROW }),
+      );
+      await vi.waitFor(() => {
+        const s = app.querySelector("#next-card-sentence")?.textContent || "";
+        if (!s || s === "…") throw new Error("next card not resolved");
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(app.querySelector("#onchain-escrow-row")).toBeNull();
+      expect(app.querySelector(".proposal-onchain")?.textContent || "").not.toContain(ESCROW);
+      expect(app.querySelector(".proposal-funding-bar")).toBeNull();
+      expect(app.querySelector("[data-open-donate]")).toBeNull();
+      const mobile = app.querySelector<HTMLElement>("#mobile-cta-slot");
+      if (mobile) expect(mobile.hidden).toBe(true);
+      // The refund action is the point of a refunding page. With
+      // accepting_funds:false main still exits early ("Structure unavailable");
+      // plebly.fund#69 keeps Register there too.
+      if (accepting) expect(app.querySelector("#next-register")).toBeTruthy();
+    });
+  }
+});

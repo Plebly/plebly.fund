@@ -1602,6 +1602,8 @@ describe("isStructuredTerminalOrUnknown", () => {
   });
 });
 
+const CLAIM_ESCROW = "tb1qf8agl2750ezeuwt7ys5ghzmul9wutls0cs9jyt";
+
 describe("isDonateBlocked (claim-view-first)", () => {
   it("returns true when claim view is null (claim-view-first requires loaded claim)", () => {
     expect(isDonateBlocked(null, null)).toBe(true);
@@ -1631,27 +1633,34 @@ describe("isDonateBlocked (claim-view-first)", () => {
   });
 
   it("returns false when claim view allows and has healthy structured state", () => {
-    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" }, accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" }, accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" }, accepting_funds: true })).toBe(false);
+    const e = CLAIM_ESCROW;
+    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true, escrow_address: e })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" }, accepting_funds: true, escrow_address: e })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" }, accepting_funds: true, escrow_address: e })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" }, accepting_funds: true, escrow_address: e })).toBe(false);
   });
 
   it("returns false when claim view has no psbt but accepting_funds is true", () => {
-    expect(isDonateBlocked({}, { accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { accepting_funds: true, escrow_address: CLAIM_ESCROW })).toBe(false);
   });
 
-  it("returns false when claim has neither psbt nor accepting_funds (no structured record)", () => {
-    // No structured record = allowed; workers#40 sends accepting_funds:false on unreadable
-    expect(isDonateBlocked({}, { state: "open" })).toBe(false);
-    expect(isDonateBlocked({}, {})).toBe(false);
+  it("returns true when claim view has no accepting_funds (unresolved reply; only true opens Donate)", () => {
+    // Every resolved Workers claim view sends accepting_funds; the unresolved
+    // reply (git file missing) omits it and must not open Donate.
+    expect(isDonateBlocked({}, { state: "open", escrow_address: CLAIM_ESCROW })).toBe(true);
+    expect(isDonateBlocked({}, { accepting_funds: null, escrow_address: CLAIM_ESCROW })).toBe(true);
+    expect(isDonateBlocked({}, {})).toBe(true);
+  });
+
+  it("returns true when claim view says accepting_funds:true but has no escrow_address of its own", () => {
+    expect(isDonateBlocked({}, { accepting_funds: true })).toBe(true);
+    expect(isDonateBlocked({}, { accepting_funds: true, escrow_address: "  " })).toBe(true);
   });
 
   it("does NOT block on claim.state === unavailable (workers returns that for declined_fundable etc)", () => {
     // Workers returns state: unavailable for declined_fundable, refunding, underfunded, etc.
     // which still need their UI actions (Donate, Register, etc.)
-    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { state: "unavailable" })).toBe(false);
+    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true, escrow_address: CLAIM_ESCROW })).toBe(false);
   });
 
   it("returns true when claim accepting_funds is false", () => {

@@ -141,6 +141,8 @@ export function isCatalogDonateBlocked(
  * Mirrors fields from ClaimStatus that affect donate eligibility.
  */
 export type ClaimViewForDonate = {
+  /** The only escrow address Donate may use (never the catalog's). */
+  escrow_address?: string | null;
   psbt?: { structured_state?: string | null } | null;
   accepting_funds?: boolean | null;
   state?: string | null;
@@ -153,22 +155,28 @@ export type ClaimViewForDonate = {
 /**
  * True when claim view allows donations.
  * Claim view must be loaded and confirm:
- * - `accepting_funds` is not explicitly `false`
+ * - `accepting_funds === true` (false, null or missing all block: fail closed)
+ * - an `escrow_address` of its own (Donate never falls back to the catalog's)
  * - `psbt.structured_state` is null/absent or a known non-voided/non-unreadable state
  *
  * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
  * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
  * their respective UI actions (Donate, Register, etc.).
  *
- * No structured record (missing psbt AND missing accepting_funds) is ALLOWED — that's
- * what a proposal without structured funding looks like. Workers#40 sends
- * accepting_funds:false explicitly on unreadable records.
+ * Every resolved Workers claim view sends `accepting_funds` (builder-claim.ts
+ * `accepting_funds: !structuredBlocked`). Only the unresolved reply (git file
+ * missing) omits it, and that one must not open Donate. A row missing from
+ * the catalog (KNOTS, 2026-10-08) is decided here, by the claim view alone.
  */
 export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
   if (!claim) return false;
 
-  // Claim-level accepting_funds: false blocks (workers#40 sends this for unreadable)
-  if (claim.accepting_funds === false) return false;
+  // Only an explicit true opens Donate (workers#40 sends false for unreadable;
+  // the unresolved reply sends nothing).
+  if (claim.accepting_funds !== true) return false;
+
+  // No claim-view escrow address: nothing to donate to.
+  if (!String(claim.escrow_address || "").trim()) return false;
 
   // Settled bounty blocks donations (workers#41)
   if (claim.state === "settled" || claim.claim_phase === "settled") return false;
