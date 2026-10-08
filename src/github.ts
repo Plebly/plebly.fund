@@ -171,6 +171,8 @@ type CatalogProposal = {
   target_sats?: number | null;
   escrow_address?: string | null;
   balance_sats?: number | null;
+  /** workers#50: escrow address shared with another catalog row. */
+  escrow_shared?: boolean;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
   claimer?: string | null;
@@ -209,6 +211,7 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     escrow_address: entry.escrow_address ?? null,
     balance_sats:
       typeof entry.balance_sats === "number" ? entry.balance_sats : undefined,
+    ...(entry.escrow_shared === true ? { escrow_shared: true } : {}),
     funding_window_ends_at: entry.funding_window_ends_at ?? null,
     delivery_window_ends_at: entry.delivery_window_ends_at ?? null,
     claimer: entry.claimer ?? null,
@@ -278,6 +281,10 @@ export function applyCatalogRuntimeToProposal(
   catalog: Proposal | null | undefined,
 ): Proposal {
   if (!catalog) return doc;
+  if (catalog.escrow_shared === true) {
+    // Shared escrow: only the catalog's per-proposal balance, never a fallback.
+    doc = { ...doc, escrow_shared: true, balance_sats: catalog.balance_sats };
+  }
   const catStatus = String(catalog.status || "");
   const docStatus = String(doc.status || "");
   if (!CATALOG_LIFECYCLE.has(catStatus) || catStatus === docStatus) {

@@ -1,5 +1,19 @@
 import { MEMPOOL_API } from "./config";
 
+/**
+ * Address to read a live chain balance from for this proposal, or null.
+ * Never the address of a row the catalog marks `escrow_shared` (workers#50):
+ * that address holds several proposals' coins, so its balance is not this
+ * proposal's. Those rows use the catalog's per-proposal balance_sats (null → 0).
+ */
+export function balanceAddressFor(
+  p: { escrow_address?: string | null; escrow_shared?: boolean | null } | null | undefined,
+): string | null {
+  if (!p || p.escrow_shared === true) return null;
+  const address = (p.escrow_address || "").trim();
+  return address || null;
+}
+
 export async function addressBalanceSats(address: string): Promise<number> {
   const res = await fetch(`${MEMPOOL_API}/address/${address}`);
   if (!res.ok) throw new Error(`mempool ${res.status}`);

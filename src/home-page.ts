@@ -17,7 +17,7 @@ import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from ".
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeCoverImageUrl } from "./media";
-import { addressBalanceSats } from "./mempool";
+import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
 import {
@@ -527,14 +527,15 @@ function bottomCtaHtml(): string {
   </section>`;
 }
 
-async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
+export async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (p) => {
-      if (!p.escrow_address) return p;
+      const address = balanceAddressFor(p);
+      if (!address) return p;
       // Catalog blob already includes balances from the Worker cron.
       if (typeof p.balance_sats === "number") return p;
       try {
-        const balance_sats = await addressBalanceSats(p.escrow_address);
+        const balance_sats = await addressBalanceSats(address);
         return { ...p, balance_sats };
       } catch {
         return p;
