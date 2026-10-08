@@ -11,7 +11,6 @@ import { fetchAdminMe, renderAdmin } from "./admin-page";
 import { renderArchive } from "./archive-page";
 import { renderDonations } from "./donations-page";
 import { renderEndowment } from "./endowment-page";
-import { renderKeyholders } from "./keyholders-page";
 import { WORKERS_API, assertParametersNetwork } from "./config";
 
 assertParametersNetwork();
@@ -350,6 +349,8 @@ async function render() {
   }
   if (r.name === "keyholders") {
     applySeo(seoForRoute(r));
+    // Keyholder desk is only for signers: load it on demand (own chunk).
+    const { renderKeyholders } = await import("./keyholders-page");
     await renderKeyholders(shell, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();
