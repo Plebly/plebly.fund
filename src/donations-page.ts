@@ -77,7 +77,8 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
   applySeo(seoForRoute({ name: "donations" }));
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const params = new URLSearchParams(location.search);
-  const page = Math.max(1, Math.floor(Number(params.get("page") || 1)));
+  const pageParam = Math.floor(Number(params.get("page")));
+  const page = Number.isFinite(pageParam) && pageParam > 1 ? pageParam : 1;
   const offset = (page - 1) * PAGE_SIZE;
 
   app.innerHTML = shell(`
@@ -97,6 +98,12 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
       offset,
     });
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    // ?page past the end (e.g. a stale link): go to the last real page instead
+    // of "Page 99 of 3" over an empty "No confirmed donations yet".
+    if (page > pages && total > 0) {
+      history.replaceState(history.state, "", href("/donations", pages > 1 ? `?page=${pages}` : ""));
+      return renderDonations(shell);
+    }
     const list = donations.length
       ? `<ul class="donations-list">${donations.map((d) => rowHtml(d)).join("")}</ul>`
       : `<div class="empty-state">

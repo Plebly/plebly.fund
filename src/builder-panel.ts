@@ -74,6 +74,7 @@ import { tosCheckboxHtml } from "./tos-modal";
 import {
   claimStructuredState,
   isCatalogDonateBlocked,
+  isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
   nextActionCardHtml,
   nextActionMoreHtml,
@@ -554,6 +555,9 @@ export async function bindBuilderPanel(
 ): Promise<void> {
   const panel = root.querySelector("#builder");
   if (!panel) return;
+  // Catalog row as painted. Read before the claim view merges its status into
+  // opts.proposal: a voided/settled catalog row never gets its escrow row back.
+  const catalogEscrowHidden = isCatalogEscrowHidden(opts.proposal);
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
@@ -577,7 +581,7 @@ export async function bindBuilderPanel(
       proposalPath: opts.proposal.path,
       proposalTitle: opts.proposal.title,
       signedIn: Boolean(opts.user),
-      initialBalance: opts.balance ?? opts.proposal.balance_sats ?? 0,
+      initialBalance: opts.balance ?? opts.proposal.balance_sats ?? null,
       escrowShared: opts.proposal.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: opts.proposal.target_sats,
@@ -597,6 +601,7 @@ export async function bindBuilderPanel(
       claimStatusPromise,
       wantsDonateOpen: prevEarlyCtx?.wantsDonateOpen,
       wantsLnRail: prevEarlyCtx?.wantsLnRail,
+      catalogEscrowHidden,
     });
     bindDonateModal(document);
   }
@@ -1334,7 +1339,7 @@ export async function bindBuilderPanel(
         proposalPath: opts.proposal.path,
         proposalTitle: opts.proposal.title,
         signedIn: Boolean(opts.user),
-        initialBalance: opts.balance ?? opts.proposal.balance_sats ?? 0,
+        initialBalance: opts.balance ?? opts.proposal.balance_sats ?? null,
         escrowShared: opts.proposal.escrow_shared === true,
         claimFloorSats: CLAIM_FLOOR_SATS,
         targetSats: opts.proposal.target_sats,
@@ -1357,13 +1362,17 @@ export async function bindBuilderPanel(
         // Preserve deep link flags from earlier context
         wantsDonateOpen: prevCtx?.wantsDonateOpen,
         wantsLnRail: prevCtx?.wantsLnRail,
+        catalogEscrowHidden,
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
       // so #donate-open / [data-open-donate] from next-action actually open it.
       // Claim-view-first: pass status so we can close modal if blocked.
-      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts, {
-        claimStatus: status,
-      });
+      // A voided/settled catalog row (flag read at bind) never mounts the modal.
+      if (!catalogEscrowHidden) {
+        await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts, {
+          claimStatus: status,
+        });
+      }
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const listingBallotChromeOwned = (): boolean => {
@@ -1451,6 +1460,11 @@ export async function bindBuilderPanel(
         apps,
         reviewerActive,
       );
+      // The next card is resolved from the merged claim-view status, so it can
+      // carry a Donate button for a voided/settled catalog row. Strip it at once.
+      if (catalogEscrowHidden) {
+        body.querySelectorAll("[data-open-donate]").forEach((btn) => btn.remove());
+      }
       await syncHybridReviewUi(root, opts.proposal, status, opts.user);
       const next = resolveNextAction({
         proposal: opts.proposal,
@@ -1467,7 +1481,9 @@ export async function bindBuilderPanel(
       const catalogBlocked = isCatalogDonateBlocked(opts.proposal);
       const claimAllowed = isClaimViewDonateAllowed(status);
       const structured = String(claimStructuredState(status) || "");
-      const donateAllowed = !catalogBlocked && claimAllowed;
+      // catalogEscrowHidden is read from the catalog row at bind time: a voided or
+      // settled row stays blocked even after the claim view merged its status.
+      const donateAllowed = !catalogEscrowHidden && !catalogBlocked && claimAllowed;
       const sideDonateOk =
         donateAllowed &&
         next.button !== "donate" &&

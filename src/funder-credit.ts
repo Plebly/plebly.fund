@@ -62,12 +62,6 @@ export function syncStoredCreditPreferencesFromProfile(input: {
   return prefs;
 }
 
-export function profileHasCreditPreferences(input: {
-  funder_credit?: { public_credit?: boolean; show_amount?: boolean } | null;
-} | null | undefined): boolean {
-  return Boolean(input?.funder_credit);
-}
-
 export function applyCreditPreferencesToFields(
   root: ParentNode,
   prefs: CreditPreferences,
@@ -155,8 +149,11 @@ export async function recordContribution(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(data.error || "Could not record contribution.");
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  // Accepted only on 2xx with `ok: true`; anything else is not a recorded gift.
+  if (!res.ok || data.ok !== true) {
+    throw new Error(data.error || "Could not record contribution.");
+  }
 }
 
 export async function claimContribution(input: {
@@ -173,8 +170,11 @@ export async function claimContribution(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(data.error || "Could not link funder credit.");
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  // Credit is linked only when the server accepts the claim (2xx + `ok: true`).
+  if (!res.ok || data.ok !== true) {
+    throw new Error(data.error || "Could not link funder credit.");
+  }
 }
 
 export async function updateCreditPreferences(input: {
