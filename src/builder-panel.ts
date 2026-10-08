@@ -600,6 +600,7 @@ export async function bindBuilderPanel(
       claimStatusPromise,
       wantsDonateOpen: prevEarlyCtx?.wantsDonateOpen,
       wantsLnRail: prevEarlyCtx?.wantsLnRail,
+      catalogEscrowHidden,
     });
     bindDonateModal(document);
   }
@@ -1359,13 +1360,17 @@ export async function bindBuilderPanel(
         // Preserve deep link flags from earlier context
         wantsDonateOpen: prevCtx?.wantsDonateOpen,
         wantsLnRail: prevCtx?.wantsLnRail,
+        catalogEscrowHidden,
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
       // so #donate-open / [data-open-donate] from next-action actually open it.
       // Claim-view-first: pass status so we can close modal if blocked.
-      await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts, {
-        claimStatus: status,
-      });
+      // A voided/settled catalog row (flag read at bind) never mounts the modal.
+      if (!catalogEscrowHidden) {
+        await mountDonateChromeWhenEscrowKnown(root, opts.proposal, donatePanelOpts, {
+          claimStatus: status,
+        });
+      }
       // Prefer document scope: root may be stale after a concurrent SPA re-render,
       // while the visible stepper always lives under .proposal-page.
       const listingBallotChromeOwned = (): boolean => {
@@ -1453,6 +1458,11 @@ export async function bindBuilderPanel(
         apps,
         reviewerActive,
       );
+      // The next card is resolved from the merged claim-view status, so it can
+      // carry a Donate button for a voided/settled catalog row. Strip it at once.
+      if (catalogEscrowHidden) {
+        body.querySelectorAll("[data-open-donate]").forEach((btn) => btn.remove());
+      }
       await syncHybridReviewUi(root, opts.proposal, status, opts.user);
       const next = resolveNextAction({
         proposal: opts.proposal,
@@ -1483,9 +1493,6 @@ export async function bindBuilderPanel(
         closeDonateModalWhenBlocked();
         const onchainEscrowRow = root.querySelector<HTMLElement>("#onchain-escrow-row");
         if (onchainEscrowRow) onchainEscrowRow.remove();
-        // The next card is resolved from the merged claim-view status, so it can
-        // still carry a Donate button for a voided/settled catalog row.
-        body.querySelectorAll("[data-open-donate]").forEach((btn) => btn.remove());
       }
 
       if (donateSlot) {

@@ -1611,6 +1611,11 @@ export type DonateChromeContext = {
   wantsDonateOpen?: boolean;
   /** True when ?rail=lightning query param was present. */
   wantsLnRail?: boolean;
+  /**
+   * isCatalogEscrowHidden(catalog row) read at page load. When true, Donate never
+   * opens or mounts, whatever the claim view later says.
+   */
+  catalogEscrowHidden?: boolean;
 };
 
 let donateChromeContext: DonateChromeContext | null = null;
@@ -1780,6 +1785,12 @@ export function installDonateClickCapture(): void {
 export async function ensureDonateModalMounted(
   root: ParentNode = document,
 ): Promise<HTMLElement | null> {
+  // Voided/settled catalog row: never mount or fill the modal.
+  if (donateChromeContext?.catalogEscrowHidden) {
+    closeDonateModalWhenBlocked();
+    return null;
+  }
+
   let modal = findDonateModal(root);
 
   // Claim-view-first: do NOT early return when modal already shows address.
@@ -1974,6 +1985,8 @@ export function bindDonateModal(
   // Claim-view-first: insert shell with NO escrow and "Checking…" note.
   // Address is only injected after ensureDonateModalMounted confirms claim allows.
   const open = (ev?: Event) => {
+    // Voided/settled catalog row: a stray Donate button opens nothing.
+    if (donateChromeContext?.catalogEscrowHidden) return;
     let modal: HTMLElement | null = null;
     try {
       // Claim-view-first: never include address in initial shell

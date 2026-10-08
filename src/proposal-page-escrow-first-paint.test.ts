@@ -76,6 +76,10 @@ describe("proposal page first paint: escrow row", () => {
       expect(panel.innerHTML).not.toContain(ESCROW);
       // Rest of the panel still renders.
       expect(panel.innerHTML).toContain(FEE_TXID);
+      // No Donate chrome either, and the escrow address appears nowhere.
+      expect(app.querySelector(".proposal-donate-slot")).toBeNull();
+      expect(app.querySelector("#mobile-cta-slot")).toBeNull();
+      expect(document.documentElement.outerHTML).not.toMatch(/tb1q/);
     });
   }
 
