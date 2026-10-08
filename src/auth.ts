@@ -785,9 +785,14 @@ export async function claimUsername(username: string): Promise<UserProfile> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
   });
-  const data = (await res.json()) as { user?: UserProfile; error?: string };
+  // A proxy/edge error page (502 HTML) must read as the status, not a JSON parse error.
+  const data = (await res.json().catch(() => ({}))) as {
+    user?: UserProfile;
+    error?: string;
+  };
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data.user!;
+  if (!data.user) throw new Error("Username claim failed — try again.");
+  return data.user;
 }
 
 export async function checkUsernameAvailable(
