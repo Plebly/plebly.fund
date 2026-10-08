@@ -103,6 +103,32 @@ test.describe("renderMarkdown sanitizer (Chromium)", () => {
     expect(html).not.toContain("data:text/html");
   });
 
+  test("removes non-http href/src whose value contains an apostrophe", async ({ page }) => {
+    // The string fallback after DOMPurify only matched values without a quote
+    // character inside, so with a lenient URL check these survived. The hook
+    // must drop them, and must not mark the <a> as an external link.
+    const html = await render(
+      page,
+      `Text <a href="mailto:o'neil@example.com">mail</a> and <img src="data:image/png;base64,AA'A" alt="pic">`,
+    );
+    const dom = await page.evaluate((h) => {
+      const t = document.createElement("template");
+      t.innerHTML = h;
+      const a = t.content.querySelector("a");
+      const img = t.content.querySelector("img");
+      return {
+        aAttrs: a ? a.getAttributeNames() : null,
+        imgAttrs: img ? img.getAttributeNames() : null,
+      };
+    }, html);
+    expect(html).not.toContain("mailto:");
+    expect(html).not.toContain("o'neil");
+    expect(html).not.toContain("data:image");
+    expect(dom.aAttrs).toEqual([]);
+    expect(dom.imgAttrs).toEqual(["alt"]);
+    expect(html).toContain("mail");
+  });
+
   test("raw http(s) anchors get target=_blank and rel=noreferrer noopener", async ({ page }) => {
     const html = await render(page, 'Text <a href="https://example.com/x">x</a>');
     expect(html).toContain('href="https://example.com/x"');
