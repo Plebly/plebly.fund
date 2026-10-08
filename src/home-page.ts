@@ -4,6 +4,8 @@ import {
   fetchWanted,
   fetchWatchMetaBatch,
   fetchWatches,
+  isBlockedStatus,
+  isCatalogVoided,
   isDirectProposal,
   isNearFloor,
   isOpenToClaim,
@@ -13,11 +15,17 @@ import {
 } from "./builder";
 import { isKnownProposalStatus } from "./types";
 import { isCatalogDonateBlocked } from "./next-action";
-import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
+import {
+  CLAIM_FLOOR_SATS,
+  WORKERS_API,
+  isFundableStatus,
+  lightningUiAllowed,
+  mempoolWeb,
+} from "./config";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeCoverImageUrl } from "./media";
-import { addressBalanceSats } from "./mempool";
+import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
 import {
@@ -80,20 +88,28 @@ export function featuredDuplicatesOpenList(
   );
 }
 
-/** True when two or more listings publish the same receive address. */
-export function listingsShareEscrow(proposals: Proposal[]): boolean {
-  const counts = new Map<string, number>();
-  for (const p of proposals) {
-    const addr = p.escrow_address?.trim();
-    if (!addr) continue;
-    counts.set(addr, (counts.get(addr) || 0) + 1);
-  }
-  return [...counts.values()].some((n) => n > 1);
+/** Shown when the catalog marks any listing escrow_shared (workers#50). */
+export function sharedEscrowNoteHtml(proposals: Proposal[]): string {
+  if (!proposals.some((p) => p.escrow_shared === true)) return "";
+  return `<p class="shared-escrow-note">These test listings share one escrow address. Each balance counts only that listing's own confirmed funding, so a block explorer will show a higher total for the address.</p>`;
 }
 
-export function sharedEscrowNoteHtml(proposals: Proposal[]): string {
-  if (!listingsShareEscrow(proposals)) return "";
-  return `<p class="shared-escrow-note" role="status">These listings share one test escrow. The balances are the same pot, not separate funds.</p>`;
+/**
+ * Shared-escrow row with no confirmed per-proposal funding yet (balance null):
+ * still fundable → "Awaiting confirmation"; terminal → no balance at all.
+ * Never a 0-sats meter, never counted in totals.
+ */
+export function sharedEscrowPendingHtml(p: Proposal): string | null {
+  if (p.escrow_shared !== true || p.balance_sats != null) return null;
+  const status = String(p.status || "");
+  const fundable =
+    isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
+  if (!fundable) return "";
+  return `<div class="project-card-meter">
+    <div class="project-card-meter-top">
+      <span class="muted">Awaiting confirmation</span>
+    </div>
+  </div>`;
 }
 
 type SortKey = "funded" | "newest" | "floor";
@@ -314,6 +330,8 @@ function discoverToolbarHtml(count: number): string {
 }
 
 function progressHtml(p: Proposal, floor: number): string {
+  const sharedPending = sharedEscrowPendingHtml(p);
+  if (sharedPending != null) return sharedPending;
   const bal = p.balance_sats ?? 0;
   const remaining = Math.max(0, floor - bal);
   const open = isOpenToClaim(p, floor);
@@ -527,14 +545,15 @@ function bottomCtaHtml(): string {
   </section>`;
 }
 
-async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
+export async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (p) => {
-      if (!p.escrow_address) return p;
+      const address = balanceAddressFor(p);
+      if (!address) return p;
       // Catalog blob already includes balances from the Worker cron.
       if (typeof p.balance_sats === "number") return p;
       try {
-        const balance_sats = await addressBalanceSats(p.escrow_address);
+        const balance_sats = await addressBalanceSats(address);
         return { ...p, balance_sats };
       } catch {
         return p;

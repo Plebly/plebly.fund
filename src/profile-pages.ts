@@ -51,7 +51,7 @@ import {
   proposalsForProfile,
 } from "./github";
 import { nostrAccountLink, socialAccountLink } from "./icons";
-import { addressBalanceSats } from "./mempool";
+import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import {
   notificationTargetHref,
   notificationTypeLabel,
@@ -553,9 +553,10 @@ export async function renderAccount(
         p = allProps.find((x) => x.id === w.proposal_id);
       }
       let bal = p?.balance_sats;
-      if (p?.escrow_address && bal == null) {
+      const balanceAddress = balanceAddressFor(p);
+      if (balanceAddress && bal == null) {
         try {
-          bal = await addressBalanceSats(p.escrow_address);
+          bal = await addressBalanceSats(balanceAddress);
         } catch {
           /* ignore */
         }

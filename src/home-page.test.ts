@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFloorShortfall } from "./builder";
-import { landingMarketingHtml, listingsShareEscrow, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList } from "./home-page";
+import { landingMarketingHtml, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList } from "./home-page";
 import type { Proposal } from "./types";
 
 function proposal(
@@ -88,23 +88,27 @@ describe("featuredDuplicatesOpenList", () => {
 });
 
 describe("shared escrow note", () => {
-  it("warns when two listings publish the same address", () => {
-    const addr = "tb1qsharedxxxxxxxxxxxxxxxxxxxxxxxxx";
-    const list = [
-      proposal({ status: "listed", id: "a", escrow_address: addr }),
-      proposal({ status: "listed", id: "b", escrow_address: addr }),
-    ];
-    expect(listingsShareEscrow(list)).toBe(true);
-    expect(sharedEscrowNoteHtml(list)).toContain("same pot");
+  const NOTE =
+    "These test listings share one escrow address. Each balance counts only that listing's own confirmed funding, so a block explorer will show a higher total for the address.";
+
+  it("shows when the catalog marks a listing escrow_shared, with no live-region role", () => {
+    const html = sharedEscrowNoteHtml([
+      proposal({ status: "listed", id: "a", escrow_address: "tb1qshared", escrow_shared: true }),
+      proposal({ status: "listed", id: "b", escrow_address: "tb1qother" }),
+    ]);
+    expect(html).toContain(NOTE);
+    expect(html).not.toContain("role=");
   });
 
-  it("stays quiet when addresses differ or only one listing has an address", () => {
+  it("follows escrow_shared, not address equality", () => {
+    const addr = "tb1qsharedxxxxxxxxxxxxxxxxxxxxxxxxx";
+    // Same address but catalog did not flag it: quiet.
     expect(
-      listingsShareEscrow([
-        proposal({ status: "listed", id: "a", escrow_address: "tb1qaaa" }),
-        proposal({ status: "listed", id: "b", escrow_address: "tb1qbbb" }),
+      sharedEscrowNoteHtml([
+        proposal({ status: "listed", id: "a", escrow_address: addr }),
+        proposal({ status: "listed", id: "b", escrow_address: addr }),
       ]),
-    ).toBe(false);
+    ).toBe("");
     expect(
       sharedEscrowNoteHtml([
         proposal({ status: "listed", id: "a", escrow_address: "tb1qonly" }),
@@ -112,6 +116,7 @@ describe("shared escrow note", () => {
     ).toBe("");
   });
 });
+
 
 describe("proposalCardHtml lightning badge", () => {
   it("marks listed projects when Lightning is live", () => {

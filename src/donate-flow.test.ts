@@ -19,7 +19,8 @@ vi.mock("./config", async (importOriginal) => {
 });
 
 const addressUtxos = vi.fn();
-vi.mock("./mempool", () => ({
+vi.mock("./mempool", async (importOriginal) => ({
+  balanceAddressFor: (await importOriginal<typeof import("./mempool")>()).balanceAddressFor,
   addressBalanceSats: vi.fn(async () => 0),
   addressUtxos: (...args: unknown[]) => addressUtxos(...args),
   watchConfirmedBalance: () => ({

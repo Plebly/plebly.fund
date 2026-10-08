@@ -1,7 +1,7 @@
 import { claimFloorShortfall } from "./builder";
 import { CLAIM_FLOOR_SATS } from "./config";
 import { listListedProposals } from "./github";
-import { addressBalanceSats } from "./mempool";
+import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { href, projectsHref } from "./router";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
@@ -21,15 +21,16 @@ export type PublicStats = {
   fundedTowardFloor: number;
 };
 
-async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
+export async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (proposal) => {
-      if (!proposal.escrow_address) return proposal;
+      const address = balanceAddressFor(proposal);
+      if (!address) return proposal;
       if (typeof proposal.balance_sats === "number") return proposal;
       try {
         return {
           ...proposal,
-          balance_sats: await addressBalanceSats(proposal.escrow_address),
+          balance_sats: await addressBalanceSats(address),
         };
       } catch {
         return proposal;

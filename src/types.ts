@@ -171,6 +171,8 @@ export type Proposal = {
   related_work?: RelatedWorkEntry[];
   body: string;
   balance_sats?: number;
+  /** Catalog: escrow address shared with another row — never read its balance. */
+  escrow_shared?: boolean;
   proposer?: ProposalProposer | null;
   /** individual (default) | org */
   proposer_type?: "individual" | "org" | string | null;

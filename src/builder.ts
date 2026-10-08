@@ -243,7 +243,7 @@ export function isDirectProposal(p: Proposal): boolean {
 }
 
 /** Check catalog-level voided/blocked signals (accepting_funds:false, bounty_settled:true, structured_state voided/unreadable/unknown, claim_phase settled/unreadable). */
-function isCatalogVoided(p: Proposal): boolean {
+export function isCatalogVoided(p: Proposal): boolean {
   if (p.accepting_funds === false) return true;
   // Catalog bounty_settled:true blocks (workers#41 adds this to all settled bounties)
   if (p.bounty_settled === true) return true;
@@ -289,6 +289,8 @@ export function claimFloorShortfall(
     if (isDirectProposal(p)) continue;
     if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) continue;
     if (isCatalogVoided(p)) continue;
+    // Shared escrow with no confirmed own funding yet: not a 0-sat row.
+    if (p.escrow_shared === true && p.balance_sats == null) continue;
     const bal = Math.max(0, p.balance_sats ?? 0);
     const need = Math.max(0, floor - bal);
     if (need <= 0) continue;

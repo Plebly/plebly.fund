@@ -20,7 +20,7 @@ import {
 import { promptText } from "./confirm-modal";
 import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
-import { addressBalanceSats } from "./mempool";
+import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
   bindDonateModal,
@@ -479,10 +479,11 @@ export async function renderProposalPage(
 
     const proposalId = match.id;
     let balance: number | undefined = match.balance_sats;
-    if (balance == null && match.escrow_address) {
+    const balanceAddress = balanceAddressFor(match);
+    if (balance == null && balanceAddress) {
       try {
         balance = await Promise.race([
-          addressBalanceSats(match.escrow_address),
+          addressBalanceSats(balanceAddress),
           new Promise<undefined>((resolve) => {
             setTimeout(() => resolve(undefined), 2500);
           }),
@@ -717,6 +718,7 @@ export async function renderProposalPage(
       proposalTitle: match.title,
       signedIn: Boolean(user),
       initialBalance: balance ?? 0,
+      escrowShared: match.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: match.target_sats,
       creditPrefs: user?.funder_credit

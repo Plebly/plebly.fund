@@ -50,7 +50,7 @@ import {
   type LightningStatus,
   type LightningSwapView,
 } from "./lightning";
-import { watchConfirmedBalance } from "./mempool";
+import { balanceAddressFor, watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
 import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
@@ -100,6 +100,8 @@ export type DonateBindOpts = {
   targetSats?: number | null;
   /** Called when confirmed escrow balance changes (updates funding bar). */
   onBalanceUpdate?: (balance: number) => void;
+  /** Catalog escrow_shared: never poll the shared address balance. */
+  escrowShared?: boolean;
   /** Account default prefs (skip credit step when present). */
   creditPrefs?: CreditPreferences | null;
   /** Override UTXO poll interval (tests use a short value). */
@@ -1021,8 +1023,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
 
   const startBalanceWatch = () => {
     if (balanceStop) return;
+    const watchAddress = balanceAddressFor({
+      escrow_address: opts.address,
+      escrow_shared: opts.escrowShared,
+    });
+    if (!watchAddress) return;
     const watcher = watchConfirmedBalance(
-      opts.address,
+      watchAddress,
       (balance, { previous }) => {
         const delta = balance - previous;
         setWatchHintVisible(false);
