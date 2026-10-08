@@ -266,6 +266,3 @@ export function profileLinksListHtml(profile: {
     .map((l) => `<li>${profileLinkHtml(l, profile)}</li>`)
     .join("")}</ul>`;
 }
-
-/** Hostnames that skip the label requirement (keep in sync with workers/src/lib/social-urls.ts). */
-export const SOCIAL_HOSTS = Object.keys(SOCIAL_BY_HOST);
