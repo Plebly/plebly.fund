@@ -155,8 +155,11 @@ export async function recordContribution(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(data.error || "Could not record contribution.");
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  // Accepted only on 2xx with `ok: true`; anything else is not a recorded gift.
+  if (!res.ok || data.ok !== true) {
+    throw new Error(data.error || "Could not record contribution.");
+  }
 }
 
 export async function claimContribution(input: {
@@ -173,8 +176,11 @@ export async function claimContribution(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(data.error || "Could not link funder credit.");
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  // Credit is linked only when the server accepts the claim (2xx + `ok: true`).
+  if (!res.ok || data.ok !== true) {
+    throw new Error(data.error || "Could not link funder credit.");
+  }
 }
 
 export async function updateCreditPreferences(input: {
@@ -196,23 +202,45 @@ export function utxoKey(u: Pick<AddressUtxo, "txid" | "vout">): string {
   return `${u.txid}:${u.vout}`;
 }
 
-/** Poll for new UTXOs after a baseline snapshot. */
+/**
+ * Poll for new UTXOs after a baseline snapshot.
+ *
+ * Only UTXOs first seen after a successful baseline read count as new. If the
+ * first read fails, the watcher stays without a baseline and the next
+ * successful read becomes the baseline quietly (no `onNew`): an unreadable
+ * address is not an empty one, and treating it as empty would hand every
+ * existing UTXO (someone else's earlier payment) to the current donor.
+ */
 export function watchNewUtxos(
   address: string,
   onNew: (utxos: AddressUtxo[]) => void,
-  opts?: { intervalMs?: number; baseline?: Set<string> },
+  opts?: {
+    intervalMs?: number;
+    baseline?: Set<string>;
+    /**
+     * `"unavailable"`: the first read failed, so deposits can't be matched yet.
+     * `"ready"`: a baseline exists (first read, or the first good read after).
+     */
+    onBaselineState?: (state: "unavailable" | "ready") => void;
+  },
 ): { stop: () => void; ready: Promise<void> } {
   const intervalMs = opts?.intervalMs ?? 8000;
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | null = null;
-  let known = opts?.baseline ?? new Set<string>();
+  let known: Set<string> | null = opts?.baseline ?? null;
 
   const tick = async () => {
     if (stopped) return;
     try {
       const utxos = await addressUtxos(address);
-      const fresh = utxos.filter((u) => !known.has(utxoKey(u)));
-      for (const u of utxos) known.add(utxoKey(u));
+      if (known == null) {
+        known = new Set(utxos.map(utxoKey));
+        if (!stopped) opts?.onBaselineState?.("ready");
+        return;
+      }
+      const seen = known;
+      const fresh = utxos.filter((u) => !seen.has(utxoKey(u)));
+      for (const u of utxos) seen.add(utxoKey(u));
       if (fresh.length) onNew(fresh);
     } catch {
       /* ignore transient explorer errors */
@@ -224,7 +252,11 @@ export function watchNewUtxos(
       const utxos = await addressUtxos(address);
       known = new Set(utxos.map(utxoKey));
     } catch {
-      known = new Set();
+      // Keep the caller's baseline, or stay without one: the next successful
+      // tick then sets it quietly instead of announcing existing UTXOs.
+    }
+    if (!stopped) {
+      opts?.onBaselineState?.(known == null ? "unavailable" : "ready");
     }
     if (!stopped) {
       timer = setInterval(() => void tick(), intervalMs);

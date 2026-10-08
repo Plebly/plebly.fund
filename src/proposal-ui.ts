@@ -220,6 +220,7 @@ function donatePayStepHtml(
         </div>
       </div>
       <p class="donate-watch-hint muted" id="donate-watch-hint">Payment is detected automatically.</p>
+      <p class="donate-watch-unavailable" id="donate-watch-unavailable" role="status" hidden>${DONATE_WATCH_UNAVAILABLE_COPY}</p>
       <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
 
@@ -314,6 +315,10 @@ export {
 } from "./proposal-status-ui";
 
 import { fundingBarTrackHtml } from "./proposal-funding-bar";
+
+/** Shown while the first UTXO read has failed: no credit promise, by design. */
+export const DONATE_WATCH_UNAVAILABLE_COPY =
+  "Can't check deposits right now. If you've already sent, the escrow balance will update once it confirms, but this page can't link it to your account.";
 
 export {
   fundingBarScale,
@@ -882,6 +887,23 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     if (hint) hint.hidden = !visible;
   };
 
+  let hintHiddenForOutage = false;
+  const setWatchUnavailable = (unavailable: boolean) => {
+    const line = panel.querySelector<HTMLElement>("#donate-watch-unavailable");
+    if (line) line.hidden = !unavailable;
+    const hint = panel.querySelector<HTMLElement>("#donate-watch-hint");
+    if (unavailable) {
+      // "Detected automatically" is not true while the read is failing.
+      if (hint && !hint.hidden) {
+        hint.hidden = true;
+        hintHiddenForOutage = true;
+      }
+    } else if (hintHiddenForOutage) {
+      hintHiddenForOutage = false;
+      if (hint) hint.hidden = false;
+    }
+  };
+
   const linkOutpoint = async (utxo: {
     txid: string;
     vout: number;
@@ -1077,7 +1099,10 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         }
         showAnonymousReceipt(pick);
       },
-      { intervalMs: opts.utxoPollMs ?? 8000 },
+      {
+        intervalMs: opts.utxoPollMs ?? 8000,
+        onBaselineState: (state) => setWatchUnavailable(state === "unavailable"),
+      },
     );
     utxoStop = watcher.stop;
   };

@@ -295,3 +295,105 @@ describe("watchNewUtxos", () => {
     watcher.stop();
   });
 });
+
+describe("watchNewUtxos after a failed first read", () => {
+  const OLD = { txid: "old", vout: 0, value: 25_000, status: { confirmed: true } };
+  const NEW = { txid: "new", vout: 1, value: 7_000, status: { confirmed: false } };
+
+  it("treats the first good read as a quiet baseline, then emits only later UTXOs once", async () => {
+    vi.useFakeTimers();
+    const onNew = vi.fn();
+    const states: string[] = [];
+    addressUtxos
+      .mockRejectedValueOnce(new Error("mempool utxo 503"))
+      .mockResolvedValueOnce([OLD])
+      .mockResolvedValueOnce([OLD])
+      .mockResolvedValue([OLD, NEW]);
+
+    const watcher = watchNewUtxos("bc1q", onNew, {
+      intervalMs: 25,
+      onBaselineState: (s) => states.push(s),
+    });
+    await watcher.ready;
+    expect(states).toEqual(["unavailable"]);
+
+    await vi.advanceTimersByTimeAsync(25);
+    expect(states).toEqual(["unavailable", "ready"]);
+    expect(onNew).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(25);
+    expect(onNew).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(25);
+    expect(onNew).toHaveBeenCalledTimes(1);
+    expect(onNew.mock.calls[0]![0]).toEqual([expect.objectContaining({ txid: "new", vout: 1 })]);
+
+    await vi.advanceTimersByTimeAsync(75);
+    expect(onNew).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(["unavailable", "ready"]);
+    watcher.stop();
+  });
+
+  it("stays without a baseline through repeated failures", async () => {
+    vi.useFakeTimers();
+    const onNew = vi.fn();
+    addressUtxos
+      .mockRejectedValueOnce(new Error("down"))
+      .mockRejectedValueOnce(new Error("down"))
+      .mockResolvedValueOnce([OLD])
+      .mockResolvedValue([OLD]);
+    const watcher = watchNewUtxos("bc1q", onNew, { intervalMs: 25 });
+    await watcher.ready;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onNew).not.toHaveBeenCalled();
+    watcher.stop();
+  });
+
+  it("reports ready when the first read works", async () => {
+    const states: string[] = [];
+    addressUtxos.mockResolvedValue([OLD]);
+    const watcher = watchNewUtxos("bc1q", vi.fn(), {
+      intervalMs: 25,
+      onBaselineState: (s) => states.push(s),
+    });
+    await watcher.ready;
+    expect(states).toEqual(["ready"]);
+    watcher.stop();
+  });
+});
+
+describe("record / claim acceptance", () => {
+  it("claimContribution rejects a 2xx that is not ok:true", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: false, error: "not accepted" }), { status: 200 }),
+    );
+    await expect(
+      claimContribution({
+        proposal_id: "PLEBLY-1",
+        txid: "aa",
+        vout: 0,
+        public_credit: true,
+        anonymous: false,
+        show_amount: false,
+      }),
+    ).rejects.toThrow("not accepted");
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await expect(
+      claimContribution({
+        proposal_id: "PLEBLY-1",
+        txid: "aa",
+        vout: 0,
+        public_credit: true,
+        anonymous: false,
+        show_amount: false,
+      }),
+    ).rejects.toThrow("Could not link funder credit.");
+  });
+
+  it("recordContribution rejects a 2xx that is not ok:true", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await expect(
+      recordContribution({ proposal_id: "PLEBLY-1", txid: "aa", vout: 0, address: "bc1q" }),
+    ).rejects.toThrow("Could not record contribution.");
+  });
+});
