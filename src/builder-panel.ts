@@ -72,6 +72,11 @@ import { avatarImgHtml } from "./media";
 import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
+  donateClosedNoteHtml,
+  donateClosedReason,
+  escrowClosedNoteHtml,
+} from "./donate-closed-note";
+import {
   claimStructuredState,
   isCatalogDonateBlocked,
   isClaimViewDonateAllowed,
@@ -1478,7 +1483,21 @@ export async function bindBuilderPanel(
       if (!donateAllowed) {
         closeDonateModalWhenBlocked();
         const onchainEscrowRow = root.querySelector<HTMLElement>("#onchain-escrow-row");
+        // workers#51 funds-closed row with no Donate slot (e.g. refunding): say
+        // why in the address row's place instead of leaving it blank.
+        const escrowClosedReason = donateSlot
+          ? null
+          : donateClosedReason(String(opts.proposal.status || ""), status);
+        if (
+          onchainEscrowRow &&
+          escrowClosedReason &&
+          !root.querySelector("#onchain-escrow-closed-note")
+        ) {
+          onchainEscrowRow.insertAdjacentHTML("beforebegin", escrowClosedNoteHtml(escrowClosedReason));
+        }
         if (onchainEscrowRow) onchainEscrowRow.remove();
+      } else {
+        root.querySelector("#onchain-escrow-closed-note")?.remove();
       }
 
       if (donateSlot) {
@@ -1488,8 +1507,10 @@ export async function bindBuilderPanel(
         if (errorEl) errorEl.remove();
 
         if (!donateAllowed) {
-          donateSlot.hidden = true;
-          donateSlot.innerHTML = "";
+          // workers#51 funds-closed row: short muted reason, not a blank slot.
+          const closedReason = donateClosedReason(String(opts.proposal.status || ""), status);
+          donateSlot.hidden = !closedReason;
+          donateSlot.innerHTML = closedReason ? donateClosedNoteHtml(closedReason) : "";
         } else if (next.button === "donate") {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";

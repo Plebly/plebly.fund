@@ -93,6 +93,8 @@ export type ClaimStatus = {
   accepting_funds?: boolean | null;
   /** True when bounty is settled (paid) — hide Donate/Apply but keep claimant's mark-done/flag (workers#41). */
   bounty_settled?: boolean | null;
+  /** Claim-level open-claimability (workers#44); false without bounty_settled blocks every action. */
+  accepting_claims?: boolean | null;
   escrow_address?: string | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;

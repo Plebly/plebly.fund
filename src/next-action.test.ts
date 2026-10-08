@@ -907,7 +907,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Submit the work when it is done. The pot is still pooling.",
+      sentence: "Submit the work when it is done.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -1032,7 +1032,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Submit the work when it is done. The pot is still pooling.",
+      sentence: "Submit the work when it is done.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -1235,7 +1235,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Submit the work when it is done. The pot is still pooling.",
+      sentence: "Submit the work when it is done.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -1350,7 +1350,7 @@ describe("resolveNextAction", () => {
     },
     // stale catalog settled row + claim-view block → blocked (catalog flags cannot override claim-view)
     {
-      name: "stale catalog settled + claim accepting_funds:false (no claim.bounty_settled) → blocked",
+      name: "stale catalog settled + claim accepting_claims:false (no claim.bounty_settled) → blocked",
       input: {
         proposal: proposal({
           status: "in_review",
@@ -1364,12 +1364,36 @@ describe("resolveNextAction", () => {
           claimer: "bob",
           // claim.bounty_settled is NOT true — catalog flags cannot override
           accepting_funds: false,
+          accepting_claims: false,
           psbt: { structured_state: "awaiting_funds" },
         } as never),
         user: proposer,
       },
       sentence: "Structure unavailable, not accepting funds.",
       button: null,
+    },
+    {
+      // workers#51: accepting_funds:false alone only hides Donate; the
+      // in_review proposer keeps Mark it done.
+      name: "stale catalog settled + claim accepting_funds:false only → Mark it done stays",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
     },
   ];
 
