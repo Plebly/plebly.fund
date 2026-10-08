@@ -47,7 +47,6 @@ export function statusClass(status: string): string {
   ) {
     return "status-bad";
   }
-  if (!isKnownProposalStatus(s)) return "status-neutral";
   return "status-neutral";
 }
 
@@ -75,12 +74,8 @@ export function proposalCurrentStep(p: Proposal): ProposalStep {
   if (status === "rejected") return "Rebuttal";
   if (status === "in_review") return "Review";
   if (status === "claimed") return "Build";
-  if (status === "claimable" || status === "listed" || status === "funding") {
-    if (isDirect) return "Fund";
-    if (status === "claimable") return "Award";
-    return "Fund";
-  }
-  if (status === "unindexed" || status === "pr_open") return "List";
+  if (status === "claimable" && !isDirect) return "Award";
+  if (status === "claimable" || status === "listed" || status === "funding") return "Fund";
   return "List";
 }
 
@@ -90,11 +85,8 @@ export function proposalStepperHtml(p: Proposal): string {
   const steps: ProposalStep[] = isDirect
     ? ["List", "Fund", "Build", "Review", "Release"]
     : ["List", "Fund", "Award", "Build", "Review", "Release"];
-  if (current === "Rebuttal" && !steps.includes("Rebuttal")) {
-    const i = steps.indexOf("Review");
-    steps.splice(i + 1, 0, "Rebuttal");
-  }
-  const currentIdx = steps.indexOf(current === "Rebuttal" ? "Rebuttal" : current);
+  if (current === "Rebuttal") steps.splice(steps.indexOf("Review") + 1, 0, "Rebuttal");
+  const currentIdx = steps.indexOf(current);
   const items = steps.map((step, i) => {
     const state = i === currentIdx ? "current" : i < currentIdx ? "done" : "todo";
     return state === "current"

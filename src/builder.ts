@@ -653,15 +653,6 @@ export async function fetchMyClaims(): Promise<{
   return { pending: data.pending || [], ledger: data.ledger || null };
 }
 
-export async function fetchMyPendingClaims(): Promise<
-  NonNullable<
-    ClaimStatus["pending"] & { proposal_id: string; proposal_path: string }
-  >[]
-> {
-  const { pending } = await fetchMyClaims();
-  return pending;
-}
-
 export async function fetchClaimApplications(
   proposalPath: string,
   proposalId?: string | null,

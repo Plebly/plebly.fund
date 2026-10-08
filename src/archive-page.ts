@@ -11,12 +11,6 @@ import { escapeHtml, formatSats } from "./util";
 export type ArchiveShell = (inner: string) => string;
 export type ArchiveTab = "completed" | "declined";
 
-export function archiveTabFromSearch(search = ""): ArchiveTab {
-  const q = search.startsWith("?") ? search.slice(1) : search;
-  const tab = new URLSearchParams(q).get("tab");
-  return tab === "declined" ? "declined" : "completed";
-}
-
 export function archiveHref(tab: ArchiveTab = "completed"): string {
   return tab === "declined"
     ? href("/archive", "?tab=declined")

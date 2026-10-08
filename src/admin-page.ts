@@ -1,5 +1,6 @@
 import { authFetch, currentReturnPath, loginMenuHtml } from "./auth";
 import { BITCOIN_NETWORK, WORKERS_API } from "./config";
+import { fetchAdminMe } from "./admin-me";
 import { confirmAction } from "./confirm-modal";
 import { listListedProposals } from "./github";
 import { applySeo, href, seoForRoute } from "./router";
@@ -67,20 +68,6 @@ function groupRows(rows: InventoryRow[]): Map<string, InventoryRow[]> {
     map.set(row.group, list);
   }
   return map;
-}
-
-export async function fetchAdminMe(): Promise<{
-  admin: boolean;
-  github?: string | null;
-  error?: string;
-}> {
-  if (!WORKERS_API) return { admin: false };
-  try {
-    const res = await authFetch(`${API()}/admin/me`);
-    return (await res.json()) as { admin: boolean; github?: string; error?: string };
-  } catch {
-    return { admin: false };
-  }
 }
 
 export async function renderAdmin(shell: AdminShell): Promise<void> {

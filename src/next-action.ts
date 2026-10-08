@@ -8,6 +8,9 @@ import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
 import { isKnownProposalStatus, type Proposal } from "./types";
 import { escapeHtml } from "./util";
 
+/** Next-card copy for a row that is not fundable (UI UX agreed wording). */
+const NOT_ACCEPTING_FUNDS = "This listing isn't accepting funds.";
+
 /** States that are always blocked (terminal or errored). */
 const ALWAYS_BLOCKED_STATES = ["voided", "unreadable"] as const;
 
@@ -134,6 +137,27 @@ export function isCatalogDonateBlocked(
 ): boolean {
   if (proposal?.accepting_funds === false) return true;
   return isStructuredTerminalOrUnknown(proposal?.structured_state ?? null);
+}
+
+/**
+ * True when the catalog row must never show its escrow/donate address:
+ * donate-blocked (accepting_funds:false, voided/unreadable/unknown structure)
+ * or settled/voided by status. The claim view cannot override this.
+ */
+export function isCatalogEscrowHidden(
+  proposal: {
+    status?: string | null;
+    accepting_funds?: boolean | null;
+    structured_state?: string | null;
+    bounty_settled?: boolean | null;
+    claim_phase?: string | null;
+  } | null,
+): boolean {
+  if (isCatalogDonateBlocked(proposal)) return true;
+  const status = String(proposal?.status || "").toLowerCase();
+  if (status === "voided" || status === "bounty_settled") return true;
+  if (proposal?.bounty_settled === true) return true;
+  return String(proposal?.claim_phase || "").toLowerCase() === "settled";
 }
 
 /**
@@ -434,6 +458,18 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     const seatLine = seats.length ? ` Unsigned: ${seats.join(", ")}.` : "";
     return {
       sentence: `Release stalled.${seatLine}`,
+      button: null,
+      moreIds,
+    };
+  }
+
+  // Declined (not declined_fundable) is terminal and not fundable. Catalog
+  // `declined` wins over a runtime/frontmatter `listed` so the card never
+  // reads as still raising.
+  if (status === "declined") {
+    return {
+      sentence: "Listing declined.",
+      detail: NOT_ACCEPTING_FUNDS,
       button: null,
       moreIds,
     };
