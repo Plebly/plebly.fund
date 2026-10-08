@@ -33,7 +33,6 @@ import {
 } from "./auth";
 import { renderMissingProposal, renderProposalPage } from "./proposal-page";
 import { installDonateClickCapture } from "./proposal-ui";
-import { renderPropose } from "./propose-page";
 import { renderPublicOrgProfile } from "./org-page";
 import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
@@ -280,6 +279,8 @@ async function render() {
   }
   if (r.name === "propose") {
     applySeo(seoForRoute(r));
+    // Proposal wizard is only for proposers: load it on demand (own chunk).
+    const { renderPropose } = await import("./propose-page");
     await renderPropose(ctx);
     bindAuthHandlers();
     scrollToHashTarget();
