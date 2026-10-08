@@ -1,7 +1,8 @@
 /**
  * Donate modal: signed-out donors see a refund-route line above the escrow
  * address before they send. Shared and unique addresses get different copy
- * (catalog escrow_shared, workers#50). Signed-in donors see nothing here.
+ * (isSharedEscrow, which fails toward shared). The line is plain text with no
+ * link. Signed-in donors see nothing here.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -12,14 +13,22 @@ vi.mock("./config", async (importOriginal) => {
   return { ...actual, lightningUiAllowed: () => false };
 });
 
+/** Catalog rows "already loaded" for the render under test. */
+let catalogRows: Proposal[] = [];
+vi.mock("./github", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./github")>();
+  return { ...actual, loadedCatalogRows: () => catalogRows };
+});
+
 import {
   DONATE_SIGNED_OUT_SHARED_COPY,
   DONATE_SIGNED_OUT_UNIQUE_COPY,
   donateModalHtml,
   donateRefundRouteCopy,
   endowmentDonatePanelHtml,
-  SIGNED_REFUND_FORM_ANCHOR,
 } from "./proposal-ui";
+import { isSharedEscrow } from "./escrow-shared";
+import { applyCatalogRuntimeToProposal } from "./github";
 import type { Proposal } from "./types";
 
 /** UI UX / Review / Tester final copy, pinned literally. */
@@ -30,19 +39,30 @@ const SHARED =
 const BANNED = ["Refund addresses aren't available", "Your gift stays in escrow"];
 
 const ADDR = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
-const proposal = (shared: boolean): Proposal =>
+/** Live signet DEMO and 001-008 all pay this one address; their flag is null. */
+const LIVE_SHARED = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";
+
+type Flag = boolean | null | undefined;
+const row = (n: number, address: string, flag: Flag): Proposal =>
   ({
-    id: "PLEBLY-2026-009",
-    path: "proposals/listed/PLEBLY-2026-009.md",
-    title: "U",
+    id: `PLEBLY-2026-${String(n).padStart(3, "0")}`,
+    path: `proposals/listed/PLEBLY-2026-${String(n).padStart(3, "0")}.md`,
+    title: `P${n}`,
     status: "listed",
-    escrow_address: ADDR,
-    ...(shared ? { escrow_shared: true } : {}),
+    escrow_address: address,
+    ...(flag === undefined ? {} : { escrow_shared: flag }),
   }) as Proposal;
+/** shared=true: flag true; shared=false: flag false (unique), nothing else loaded. */
+const proposal = (shared: boolean): Proposal => row(9, ADDR, shared);
+
+function renderRow(p: Proposal, catalog: Proposal[], signedIn = false): HTMLElement | null {
+  catalogRows = catalog;
+  document.body.innerHTML = donateModalHtml(p, { signedIn });
+  return document.querySelector<HTMLElement>("#donate-refund-route");
+}
 
 function render(shared: boolean, signedIn: boolean): HTMLElement | null {
-  document.body.innerHTML = donateModalHtml(proposal(shared), { signedIn });
-  return document.querySelector<HTMLElement>("#donate-refund-route");
+  return renderRow(proposal(shared), [], signedIn);
 }
 
 describe("signed-out Donate refund-route line", () => {
@@ -67,18 +87,16 @@ describe("signed-out Donate refund-route line", () => {
     expect(line!.compareDocumentPosition(addr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("both lines link the signature words to the signed-refund form's stable anchor; the text is unchanged", () => {
-    expect(SIGNED_REFUND_FORM_ANCHOR).toBe("signed-refund");
-    for (const [shared, words, copy] of [
-      [false, "signing a message from the sending address", UNIQUE],
-      [true, "signed message from the sending address", SHARED],
+  it("both lines are plain text: no link, no anchor, the text word for word", () => {
+    for (const [shared, copy] of [
+      [false, UNIQUE],
+      [true, SHARED],
     ] as const) {
       const line = render(shared, false)!;
-      const links = line.querySelectorAll("a");
-      expect(links).toHaveLength(1);
-      expect(links[0]!.getAttribute("href")).toBe("#signed-refund");
-      expect(links[0]!.textContent).toBe(words);
       expect(line.textContent).toBe(copy);
+      expect(line.querySelectorAll("a, [href]")).toHaveLength(0);
+      expect(line.children).toHaveLength(0);
+      expect(line.innerHTML).not.toContain("signed-refund");
     }
   });
 
@@ -120,5 +138,61 @@ describe("signed-out Donate refund-route line", () => {
     expect(files.length).toBeGreaterThan(20);
     const hits = files.filter((f) => BANNED.some((b) => readFileSync(f, "utf8").includes(b)));
     expect(hits).toEqual([]);
+  });
+});
+
+describe("isSharedEscrow: fails toward shared (display only; the server is the gate)", () => {
+  it("live-like catalog: 9 rows on one address, all flags null: the shared line", () => {
+    const rows = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => row(n, LIVE_SHARED, null));
+    for (const p of rows) expect(isSharedEscrow(p, rows)).toBe(true);
+    expect(renderRow(rows[3]!, rows)?.textContent).toBe(SHARED);
+  });
+
+  it("direct link, no catalog loaded, null or missing flag: shared", () => {
+    for (const flag of [null, undefined] as const) {
+      expect(isSharedEscrow(row(9, ADDR, flag), [])).toBe(true);
+      expect(isSharedEscrow(row(9, ADDR, flag))).toBe(true);
+      expect(renderRow(row(9, ADDR, flag), [])?.textContent).toBe(SHARED);
+    }
+  });
+
+  it("partial catalog with the address once and a null flag: shared", () => {
+    const p = row(9, ADDR, null);
+    const partial = [p, row(10, "tb1qother0000000000000000000000000000000x", null)];
+    expect(isSharedEscrow(p, partial)).toBe(true);
+    expect(renderRow(p, partial)?.textContent).toBe(SHARED);
+  });
+
+  it("flag false and the address unique in the catalog: the unique line", () => {
+    const p = row(9, ADDR, false);
+    const catalog = [p, row(10, LIVE_SHARED, false), row(11, LIVE_SHARED, false)];
+    expect(isSharedEscrow(p, catalog)).toBe(false);
+    expect(renderRow(p, catalog)?.textContent).toBe(UNIQUE);
+  });
+
+  it("flag false but 2 loaded rows on the address (whitespace trimmed): shared", () => {
+    const p = row(9, ADDR, false);
+    const catalog = [p, row(10, `  ${ADDR}\n`, false)];
+    expect(isSharedEscrow(p, catalog)).toBe(true);
+    expect(isSharedEscrow({ ...p, escrow_address: ` ${ADDR} ` }, catalog)).toBe(true);
+    expect(renderRow(p, catalog)?.textContent).toBe(SHARED);
+  });
+
+  it("flag true on a single row: shared", () => {
+    const p = row(9, ADDR, true);
+    expect(isSharedEscrow(p, [p])).toBe(true);
+    expect(renderRow(p, [p])?.textContent).toBe(SHARED);
+  });
+
+  it("flag false on the page but the catalog row for that address says true: shared", () => {
+    const p = row(9, ADDR, false);
+    expect(isSharedEscrow(p, [row(9, ADDR, true)])).toBe(true);
+  });
+
+  it("an explicit false survives the catalog overlay; a missing one stays missing", () => {
+    const doc = { ...row(9, ADDR, undefined) };
+    expect(applyCatalogRuntimeToProposal(doc, row(9, ADDR, false)).escrow_shared).toBe(false);
+    expect(applyCatalogRuntimeToProposal(doc, row(9, ADDR, undefined)).escrow_shared).toBeUndefined();
+    expect(applyCatalogRuntimeToProposal(doc, row(9, ADDR, true)).escrow_shared).toBe(true);
   });
 });

@@ -6,6 +6,8 @@ import {
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
+import { isSharedEscrow } from "./escrow-shared";
+import { loadedCatalogRows } from "./github";
 import {
   fetchClaimStatus,
   isDirectProposal,
@@ -113,8 +115,8 @@ export type DonateBindOpts = {
 /** Hard-label beside Donate/escrow address — mirrors claim-bond feePay contrast. */
 /**
  * Signed-out Donate line above the escrow address, before they send.
- * Shared address (catalog escrow_shared, workers#50): rows there can't take a
- * session refund route, so the line doesn't promise one.
+ * Shared address (isSharedEscrow: fails toward shared): rows there can't take
+ * a session refund route, so the line doesn't promise one.
  */
 export const DONATE_SIGNED_OUT_UNIQUE_COPY =
   "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
@@ -127,32 +129,11 @@ export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean })
   return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
 }
 
-/**
- * Anchor id of the signed-refund form (separate fund PR). Must match that
- * form's id; this PR merges with or after it.
- */
-export const SIGNED_REFUND_FORM_ANCHOR = "signed-refund";
-
-/** The words that link to the signed-refund form, per copy variant. */
-const SIGNED_REFUND_LINK_PHRASES = [
-  "signing a message from the sending address",
-  "signed message from the sending address",
-];
-
 function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
   const copy = donateRefundRouteCopy(o);
   if (!copy) return "";
-  let html = escapeHtml(copy);
-  for (const phrase of SIGNED_REFUND_LINK_PHRASES) {
-    const esc = escapeHtml(phrase);
-    if (!html.includes(esc)) continue;
-    html = html.replace(
-      esc,
-      `<a class="donate-refund-route-link" href="#${SIGNED_REFUND_FORM_ANCHOR}">${esc}</a>`,
-    );
-    break;
-  }
-  return `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${html}</p>`;
+  // Plain text: no link (the signed-refund form isn't reachable signed out).
+  return `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${escapeHtml(copy)}</p>`;
 }
 
 function donateEscrowHardLabelHtml(): string {
@@ -609,7 +590,7 @@ export function donatePanelHtml(
   return `<div class="donate-panel" id="donate" data-donate-step="credit">
     ${donateCreditStepHtml(signedIn)}
     ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn, {
-      shared: p.escrow_shared === true,
+      shared: isSharedEscrow(p, loadedCatalogRows()),
     })}
   </div>`;
 }
