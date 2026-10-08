@@ -398,14 +398,22 @@ describe("QR render failure (Review Q11/Q12)", () => {
     expect(qr.hasAttribute("data-qr-address")).toBe(false);
   });
 
-  it("a stale render that fails after a newer success leaves no failure line", async () => {
+  it("a stale render that fails never shows the failure line (newer render in flight, or already landed)", async () => {
     const ui = await mount(C);
     await expectAllShow(C);
-    qrDelay = (uri) => (uri.includes(A) ? 60 : 0);
+    // Timers fire in expiry order: A fails at 20ms, check at 50ms, B lands at 80ms.
+    qrDelay = (uri) => (uri.includes(A) ? 20 : uri.includes(B) ? 80 : 0);
     qrFails = (uri) => uri.includes(A);
-    ui.syncDonateModalEscrow(A, document); // slow, will fail
-    ui.syncDonateModalEscrow(B, document); // fast, succeeds
+    ui.syncDonateModalEscrow(A, document); // stale, will fail
+    ui.syncDonateModalEscrow(B, document); // current, succeeds later
+    await new Promise((r) => setTimeout(r, 50));
+    expect(placeholder()?.textContent).toBe("Loading QR…"); // not the stale failure
     await expectAllShow(B);
+    expect(placeholder()).toBeNull();
+    // Already landed: a stale failure after B's success changes nothing.
+    qrDelay = (uri) => (uri.includes(A) ? 60 : 0);
+    ui.syncDonateModalEscrow(A, document);
+    ui.syncDonateModalEscrow(B, document);
     await new Promise((r) => setTimeout(r, 100));
     expect(placeholder()).toBeNull();
     await expectAllShow(B);
