@@ -1,5 +1,9 @@
+import { bindEscrowAddressCopy } from "./escrow-address-display";
+
 export function bindProposalCopyButtons(root: ParentNode): void {
-  root.querySelectorAll<HTMLButtonElement>(".copy-btn").forEach((btn) => {
+  // Escrow address Copy is delegated (also covers rows re-inserted later).
+  bindEscrowAddressCopy();
+  root.querySelectorAll<HTMLButtonElement>(".copy-btn:not([data-escrow-copy])").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const value = btn.dataset.copy;
       if (!value) return;
