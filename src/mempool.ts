@@ -1,15 +1,19 @@
+import { isSharedEscrow, type EscrowRow } from "./escrow-shared";
 import { MEMPOOL_API } from "./config";
 
 /**
  * Address to read a live chain balance from for this proposal, or null.
- * Never the address of a row the catalog marks `escrow_shared` (workers#50):
+ * Never the address of a shared row (`isSharedEscrow`: a null flag, a
+ * `true` flag, or several catalog rows on one address all count as shared):
  * that address holds several proposals' coins, so its balance is not this
  * proposal's. Those rows use the catalog's per-proposal balance_sats (null → 0).
  */
 export function balanceAddressFor(
   p: { escrow_address?: string | null; escrow_shared?: boolean | null } | null | undefined,
+  catalog: ReadonlyArray<EscrowRow> = [],
 ): string | null {
-  if (!p || p.escrow_shared === true) return null;
+  // One shared-address rule (fails toward shared: a null flag is shared).
+  if (!p || isSharedEscrow(p, catalog)) return null;
   const address = (p.escrow_address || "").trim();
   return address || null;
 }

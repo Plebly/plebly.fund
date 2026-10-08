@@ -996,7 +996,8 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
 
   const showClaimable = (utxos: { txid: string; vout: number; value: number }[]) => {
     if (!claimWrap || !utxos.length || !opts.proposalId) return;
-    if (!opts.signedIn) {
+    // Don't offer manual linking on shared addresses: show the receipt instead.
+    if (!opts.signedIn || opts.escrowShared !== false) {
       showAnonymousReceipt(utxos[0]!);
       return;
     }

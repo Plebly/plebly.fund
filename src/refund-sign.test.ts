@@ -165,6 +165,17 @@ describe("error mapping (Worker machine values → copy; never server text)", ()
       "That address didn't send this gift.",
     );
   });
+  it("shared-escrow rows send the same failures under refund_requires_signature", () => {
+    expect(refundSignErrorCopy({ code: "refund_requires_signature", error: "invalid refund signature" })).toBe(
+      REFUND_SIGN_COPY.badSignature,
+    );
+    expect(refundSignErrorCopy({ code: "refund_requires_signature", error: "vin_address is not a funding input" })).toBe(
+      REFUND_SIGN_COPY.notFundingInput,
+    );
+    expect(refundSignErrorCopy({ code: "refund_requires_signature", error: "refund_requires_signature" })).toBe(
+      REFUND_SIGN_COPY.failed,
+    );
+  });
   it("anything else is the neutral line, never the body's text", () => {
     for (const body of [
       { code: "refund_bind_required", error: "could not load funding transaction" },

@@ -81,7 +81,8 @@ afterEach(() => {
 describe("balanceAddressFor (the one helper)", () => {
   it("never returns a shared escrow address", () => {
     expect(balanceAddressFor({ escrow_address: SHARED, escrow_shared: true })).toBeNull();
-    expect(balanceAddressFor({ escrow_address: UNIQUE })).toBe(UNIQUE);
+    // No flag counts as shared (isSharedEscrow fails toward shared); only explicit false is unique.
+    expect(balanceAddressFor({ escrow_address: UNIQUE })).toBeNull();
     expect(balanceAddressFor({ escrow_address: ` ${UNIQUE} `, escrow_shared: false })).toBe(UNIQUE);
     expect(balanceAddressFor({ escrow_address: null })).toBeNull();
     expect(balanceAddressFor(undefined)).toBeNull();
@@ -116,7 +117,7 @@ describe("home-page enrichBalances", () => {
     const { enrichBalances } = await import("./home-page");
     const [shared, unique] = await enrichBalances([
       row({ escrow_shared: true }),
-      row({ id: "u", escrow_address: UNIQUE }),
+      row({ id: "u", escrow_address: UNIQUE, escrow_shared: false }),
     ]);
     expect(shared!.balance_sats).toBeUndefined();
     expect(unique!.balance_sats).toBe(ADDRESS_BALANCE);
@@ -130,7 +131,7 @@ describe("stats-page enrichBalances", () => {
     const { enrichBalances } = await import("./stats-page");
     const [shared, unique] = await enrichBalances([
       row({ escrow_shared: true }),
-      row({ id: "u", escrow_address: UNIQUE }),
+      row({ id: "u", escrow_address: UNIQUE, escrow_shared: false }),
     ]);
     expect(shared!.balance_sats).toBeUndefined();
     expect(unique!.balance_sats).toBe(ADDRESS_BALANCE);
@@ -177,7 +178,7 @@ describe("proposal page initial balance", () => {
   });
 
   it("unique row without a balance: still reads its address (unchanged)", async () => {
-    await paint(row({ escrow_address: UNIQUE, balance_sats: undefined }));
+    await paint(row({ escrow_address: UNIQUE, escrow_shared: false, balance_sats: undefined }));
     expect(addressHits).toContain(UNIQUE);
   });
 });

@@ -165,7 +165,8 @@ export function buildRefundRegisterBody(input: {
  * (`contrib.ts` applyVinRefundProof); nothing from the body is shown.
  */
 export function refundSignErrorCopy(body: { error?: unknown; code?: unknown } | null): string {
-  if (body && body.code === "refund_bind_required") {
+  // Shared-escrow rows answer the same failures under `refund_requires_signature`.
+  if (body && (body.code === "refund_bind_required" || body.code === "refund_requires_signature")) {
     if (body.error === "invalid refund signature") return REFUND_SIGN_COPY.badSignature;
     if (body.error === "vin_address is not a funding input") return REFUND_SIGN_COPY.notFundingInput;
   }

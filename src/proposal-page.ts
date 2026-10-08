@@ -20,6 +20,7 @@ import {
 import { promptText } from "./confirm-modal";
 import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
+import { isSharedEscrow } from "./escrow-shared";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import { bindRefundSign } from "./refund-sign";
@@ -767,7 +768,7 @@ export async function renderProposalPage(
       proposalTitle: match.title,
       signedIn: Boolean(user),
       initialBalance: balance ?? 0,
-      escrowShared: match.escrow_shared === true,
+      escrowShared: isSharedEscrow(match),
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: match.target_sats,
       creditPrefs: user?.funder_credit

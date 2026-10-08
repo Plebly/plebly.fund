@@ -117,6 +117,7 @@ function proposal(): Proposal {
 
 /** Paints the page; `withDisclosure` adds fund#100's `<details id="signed-refund">` under the panel. */
 async function paint(withDisclosure = true): Promise<HTMLElement> {
+  // With fund#100 the page renders the real disclosure; "without" removes it.
   vi.resetModules();
   stubFetch();
   document.body.innerHTML = `<div id="app"></div>`;
@@ -130,7 +131,8 @@ async function paint(withDisclosure = true): Promise<HTMLElement> {
     },
     { timeout: 5000 },
   );
-  if (withDisclosure) {
+  if (!withDisclosure) app.querySelector("#signed-refund")?.remove();
+  if (withDisclosure && !app.querySelector("#signed-refund")) {
     app
       .querySelector("#refund-panel")!
       .insertAdjacentHTML(
