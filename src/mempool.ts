@@ -4,7 +4,9 @@ import { MEMPOOL_API } from "./config";
  * Address to read a live chain balance from for this proposal, or null.
  * Never the address of a row the catalog marks `escrow_shared` (workers#50):
  * that address holds several proposals' coins, so its balance is not this
- * proposal's. Those rows use the catalog's per-proposal balance_sats (null → 0).
+ * proposal's. Those rows use only the catalog's per-proposal balance_sats; null
+ * means no confirmed own funding yet and renders as "Awaiting confirmation"
+ * (fundable) or no meter (terminal) — never as 0 sats.
  */
 export function balanceAddressFor(
   p: { escrow_address?: string | null; escrow_shared?: boolean | null } | null | undefined,

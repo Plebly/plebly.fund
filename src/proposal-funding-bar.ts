@@ -1,4 +1,11 @@
-import { isDirectProposal, isOpenToClaim, isTakenStatus } from "./builder";
+import {
+  isBlockedStatus,
+  isCatalogVoided,
+  isDirectProposal,
+  isOpenToClaim,
+  isTakenStatus,
+} from "./builder";
+import { isFundableStatus } from "./config";
 import type { Proposal, ProposalMilestone } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -286,4 +293,35 @@ export function updateProposalFundingBar(
       el.classList.add("funding-marker-pulse");
     }
   }
+}
+
+/**
+ * escrow_shared row (workers#50) with no confirmed own funding yet
+ * (balance_sats null): still fundable → "Awaiting confirmation" with no sats
+ * line and no bar; terminal (voided, settled, declined, completed,
+ * catalog-blocked) → "" (no meter). Null for every other row, which keeps the
+ * normal meter. Shared by the home card and the proposal detail page.
+ */
+export function sharedEscrowPendingHtml(
+  p: Proposal,
+  variant: "card" | "detail",
+): string | null {
+  if (p.escrow_shared !== true || p.balance_sats != null) return null;
+  const status = String(p.status || "");
+  const fundable =
+    isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
+  if (!fundable) return "";
+  return variant === "card"
+    ? `<div class="project-card-meter">
+    <div class="project-card-meter-top">
+      <span class="muted">Awaiting confirmation</span>
+    </div>
+  </div>`
+    : `<div class="proposal-funding-bar" data-shared-pending="1">
+    <div class="funding-meter">
+      <div class="funding-meter-top">
+        <span class="funding-meter-label muted">Awaiting confirmation</span>
+      </div>
+    </div>
+  </div>`;
 }
