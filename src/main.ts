@@ -35,7 +35,6 @@ import { renderMissingProposal, renderProposalPage } from "./proposal-page";
 import { installDonateClickCapture } from "./proposal-ui";
 import { renderPropose } from "./propose-page";
 import { renderPublicOrgProfile } from "./org-page";
-import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
 import { renderWanted } from "./wanted-page";
 import { syncStoredCreditPreferencesFromProfile } from "./funder-credit";
@@ -273,6 +272,8 @@ async function render() {
       | "notifications"
       | "receipts"
       | undefined;
+    // Account + public profile pages: load on demand (own chunk).
+    const { renderAccount } = await import("./profile-pages");
     await renderAccount(ctx, initialTab);
     bindAuthHandlers();
     scrollToHashTarget();
@@ -287,6 +288,7 @@ async function render() {
   }
   if (r.name === "profile") {
     applySeo(seoForRoute(r));
+    const { renderPublicProfile } = await import("./profile-pages");
     await renderPublicProfile(ctx, r.username);
     bindAuthHandlers();
     scrollToHashTarget();
