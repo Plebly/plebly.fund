@@ -315,10 +315,6 @@ export {
 
 import { fundingBarTrackHtml } from "./proposal-funding-bar";
 
-/** Donate modal: record/claim did not link the gift (refused, 5xx or offline). */
-export const DONATE_LINK_REFUSED_COPY =
-  "Your gift reached escrow. This page couldn't link it to your account.";
-
 export {
   fundingBarScale,
   fundingBarTrackHtml,
@@ -782,6 +778,10 @@ function setDonateStatusEl(
 function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
 }
+
+/** Donate modal: record/claim did not link the gift (refused, 5xx or offline). */
+export const DONATE_LINK_REFUSED_COPY =
+  "Your gift reached escrow. This page couldn't link it to your account.";
 
 function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
