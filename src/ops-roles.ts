@@ -95,7 +95,7 @@ export async function nominateOpsRole(input: {
     credentials: "include",
     body: JSON.stringify(input),
   });
-  const data = (await res.json()) as {
+  const data = (await res.json().catch(() => ({}))) as {
     ballot?: OpsRoleBallotView;
     error?: string;
   };
@@ -119,7 +119,7 @@ export async function voteOpsRoleBallot(
       body: JSON.stringify({ vote }),
     },
   );
-  const data = (await res.json()) as {
+  const data = (await res.json().catch(() => ({}))) as {
     ballot?: OpsRoleBallotView;
     error?: string;
   };
