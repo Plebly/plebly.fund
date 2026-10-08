@@ -10,6 +10,7 @@ import {
   claimContributionWithRetry,
   recordContributionWithRetry,
   RecordRetryCancelled,
+  RECORD_PENDING_INDEX_COPY,
   RECORD_RETRY_STATUS_COPY,
 } from "./funder-credit";
 import { formatSats } from "./util";
@@ -18,10 +19,14 @@ import { formatSats } from "./util";
 export const GIFT_LINK_FAILED_COPY =
   "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
 
-/** The linked toast closes itself after this long; the failure toast never does. */
+/**
+ * The linked and pending (202) toasts close themselves after this long; the
+ * failure toast never does.
+ */
 export const GIFT_LINKED_AUTO_CLOSE_MS = 10_000;
 
-export type GiftToastState = "retrying" | "linked" | "failed";
+/** "pending": /record answered 202 (workers#91); neutral, closes itself like "linked". */
+export type GiftToastState = "retrying" | "linked" | "pending" | "failed";
 
 export type GiftLinkInput = {
   /** Captured from the gift's own proposal when the run starts; never re-read. */
@@ -48,6 +53,8 @@ export function giftKey(txid: string, vout: number): string {
 export type GiftLinkResult = boolean | "pending";
 
 const runs = new Map<string, Promise<GiftLinkResult>>();
+/** Running gifts → show their "Linking…" toast if the inline line is gone. */
+const surfacers = new Map<string, () => void>();
 const toasts = new Map<string, { el: HTMLElement; timer: ReturnType<typeof setTimeout> | null }>();
 let generation = 0;
 
@@ -55,6 +62,7 @@ let generation = 0;
 export function stopGiftLinks(): void {
   generation += 1;
   runs.clear();
+  surfacers.clear();
   // A stopped run's "Keep this page open" would be a lie (e.g. a bfcache restore).
   for (const [key, t] of [...toasts]) {
     if (t.el.dataset.giftState === "retrying") closeGiftToast(key);
@@ -64,6 +72,16 @@ export function stopGiftLinks(): void {
 /** Remove every toast (page teardown / tests). */
 export function closeAllGiftToasts(): void {
   for (const key of [...toasts.keys()]) closeGiftToast(key);
+}
+
+/**
+ * Call when the Donate modal closes: every gift still linking whose inline
+ * line is no longer showing gets its "Linking…" toast right away (no silent
+ * gap until the next retry or the outcome). The outcome then updates that
+ * same toast in place.
+ */
+export function surfaceGiftLinks(): void {
+  for (const surface of [...surfacers.values()]) surface();
 }
 
 if (typeof window !== "undefined") {
@@ -92,6 +110,7 @@ export function closeGiftToast(key: string): void {
 function giftToastLine(state: GiftToastState, valueSats: number): string {
   if (state === "retrying") return RECORD_RETRY_STATUS_COPY;
   if (state === "linked") return `Credit linked for ${formatSats(valueSats)}.`;
+  if (state === "pending") return RECORD_PENDING_INDEX_COPY;
   return GIFT_LINK_FAILED_COPY;
 }
 
@@ -128,7 +147,7 @@ export function showGiftToast(
     close.addEventListener("click", () => closeGiftToast(key));
     el.appendChild(close);
   }
-  if (state === "linked") {
+  if (state === "linked" || state === "pending") {
     t.timer = setTimeout(() => closeGiftToast(key), GIFT_LINKED_AUTO_CLOSE_MS);
   }
   const region = toastRegion();
@@ -170,8 +189,9 @@ export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
         shouldContinue: stillLinking,
       });
       if (outcome === "pending_index") {
-        // 202: nothing to link yet; the caller shows the neutral line. No toast.
-        if (live()) closeGiftToast(key);
+        // 202: nothing to link yet. Modal showing this gift: the caller's
+        // neutral line only. Otherwise the same line as a neutral toast.
+        toast("pending");
         return "pending";
       }
       if (claim) {
@@ -188,9 +208,15 @@ export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
       toast("failed");
       throw e;
     } finally {
-      if (runs.get(key) === run) runs.delete(key);
+      if (runs.get(key) === run) {
+        runs.delete(key);
+        surfacers.delete(key);
+      }
     }
   })();
   runs.set(key, run);
+  surfacers.set(key, () => {
+    if (live() && !input.inlineShown?.()) showGiftToast(key, title, "retrying", input.valueSats);
+  });
   return run;
 }

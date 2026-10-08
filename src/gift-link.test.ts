@@ -113,7 +113,10 @@ function input(u: typeof A, title: string, extra?: { claim?: boolean }) {
 }
 
 /** Render a proposal view into #app (as the router does) and arm its watcher. */
-async function mountProposal(o: { id: string; path: string; title: string; address: string }) {
+async function mountProposal(
+  o: { id: string; path: string; title: string; address: string },
+  view?: { modalOpen?: boolean },
+) {
   let app = document.querySelector<HTMLElement>("#app");
   if (!app) {
     app = document.createElement("div");
@@ -124,6 +127,7 @@ async function mountProposal(o: { id: string; path: string; title: string; addre
     { id: o.id, path: o.path, title: o.title, status: "listed", escrow_address: o.address } as never,
     { signedIn: true },
   );
+  if (view?.modalOpen) document.querySelector<HTMLElement>("#donate-modal")!.hidden = false;
   await bindDonatePanel(document, {
     address: o.address,
     proposalId: o.id,
@@ -342,6 +346,44 @@ describe("runs", () => {
     expect(h.claims(A.txid)).toHaveLength(1);
   });
 
+  it("the run key is txid:vout: two outputs of one tx, and the same vout of another tx, are three runs", async () => {
+    expect(giftKey("ab", 3)).toBe("ab:3");
+    vi.useFakeTimers();
+    const h = stubNet({});
+    const T0 = { ...A, txid: "dd".repeat(32), vout: 0, value: 1_000 };
+    const T1 = { ...A, txid: "dd".repeat(32), vout: 1, value: 2_000 };
+    const U0 = { ...A, txid: "ee".repeat(32), vout: 0, value: 3_000 };
+    // Started back to back, so each would join a still-running run on a key clash.
+    const done = [linkGift(input(T0, "T")), linkGift(input(T1, "T")), linkGift(input(U0, "T"))];
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await Promise.all(done)).toEqual([true, true, true]);
+    const sent = h.records().map((r) => `${String(r.body.txid)}:${String(r.body.vout)}`);
+    expect(sent.sort()).toEqual([giftKey(T0.txid, 0), giftKey(T1.txid, 1), giftKey(U0.txid, 0)].sort());
+    expect(h.claims()).toHaveLength(3);
+    expect(toastText(T0)).toBe("Gift to T: Credit linked for 1,000 sats.");
+    expect(toastText(T1)).toBe("Gift to T: Credit linked for 2,000 sats.");
+    expect(toastText(U0)).toBe("Gift to T: Credit linked for 3,000 sats.");
+  });
+
+  it("a session change between /record and /claim: no claim under the new session, no toast", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("plebly_session", "token-alice");
+    const h = stubNet({
+      [A.txid]: [
+        () => {
+          // Another account signs in while alice's /record is answering.
+          sessionStorage.setItem("plebly_session", "token-bob");
+          return ok() as Response;
+        },
+      ],
+    });
+    expect(await linkGift(input(A, "T"))).toBe(false);
+    await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS);
+    expect(h.records(A.txid)).toHaveLength(1);
+    expect(h.claims()).toHaveLength(0);
+    expect(toastFor(A)).toBeNull();
+  });
+
   it("stopGiftLinks ends runs without a toast or further calls", async () => {
     vi.useFakeTimers();
     const h = stubNet({}, busy);
@@ -404,6 +446,26 @@ describe("two gifts in one modal", () => {
     expect(statusEl().classList.contains("bad")).toBe(false);
     expect(statusEl().textContent).toContain("Credit linked for 9,000 sats");
     expect(toastText(B)).toBe("Gift to Signet faucet: Credit linked for 9,000 sats.");
+  });
+
+  it("modal open: once B owns the modal line, A's outcome gets A's own toast (keyed by gift)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const h = stubNet({ [A.txid]: [busy, busy] });
+    await mountProposal(X, { modalOpen: true });
+    h.arrive(ADDR, A);
+    await vi.advanceTimersByTimeAsync(POLL * 2);
+    expect(h.records(A.txid)).toHaveLength(1);
+    expect(toastFor(A)).toBeNull(); // modal open and showing A: inline only
+    h.arrive(ADDR, B);
+    await vi.advanceTimersByTimeAsync(POLL * 2);
+    expect(statusEl().textContent).toContain("Credit linked for 9,000 sats");
+    expect(toastFor(B)).toBeNull(); // modal open and showing B: inline only
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records(A.txid)).toHaveLength(3);
+    expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(false);
+    expect(toastText(A)).toBe("Gift to Signet faucet: Credit linked for 7,000 sats.");
+    expect(statusEl().textContent).not.toContain("7,000");
+    expect(toastFor(B)).toBeNull();
   });
 
   it("(b) A's retries don't block or cancel B, and B doesn't cancel A; no client-side cap", async () => {

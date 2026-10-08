@@ -20,8 +20,8 @@ vi.mock("./config", async (importOriginal) => {
   };
 });
 
-import { bindDonatePanel, donateModalHtml } from "./proposal-ui";
-import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
+import { bindDonateModal, bindDonatePanel, donateModalHtml } from "./proposal-ui";
+import { closeAllGiftToasts, GIFT_LINKED_AUTO_CLOSE_MS, stopGiftLinks } from "./gift-link";
 import {
   RECORD_PENDING_INDEX_COPY,
   RECORD_RETRY_WINDOW_MS,
@@ -84,12 +84,20 @@ function stubFetch(recordReplies: Reply[], fallback: Reply) {
 
 const statusEl = () => document.querySelector<HTMLElement>("#donate-confirm-status")!;
 
-async function openAndDetect(h: ReturnType<typeof stubFetch>, signedIn: boolean) {
+async function openAndDetect(
+  h: ReturnType<typeof stubFetch>,
+  signedIn: boolean,
+  o?: { modalOpen?: boolean },
+) {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   document.body.innerHTML = `<div id="app">${donateModalHtml(
     { id: PID, path: PATH, title: "U", status: "listed", escrow_address: ADDR } as never,
     { signedIn },
   )}</div>`;
+  if (o?.modalOpen) {
+    document.querySelector<HTMLElement>("#donate-modal")!.hidden = false;
+    bindDonateModal(document);
+  }
   await bindDonatePanel(document, {
     address: ADDR,
     proposalId: PID,
@@ -135,32 +143,33 @@ describe("/record 202 pending_index", () => {
     expect(RECORD_PENDING_INDEX_COPY).toBe(PENDING);
   });
 
-  it("signed in: 202 shows exactly the neutral line, never the credit line, no toast, no claim", async () => {
+  it("signed in, modal open: 202 shows exactly the neutral line, never the credit line, no toast, no claim", async () => {
     const h = stubFetch([pending], pending);
-    await openAndDetect(h, true);
+    await openAndDetect(h, true, { modalOpen: true });
     expectPendingLine(h);
   });
 
-  it("signed in: 202 is never retried (one /record, through the whole window)", async () => {
+  it("signed in, modal open: 202 is never retried (one /record, through the whole window)", async () => {
     const h = stubFetch([pending], busy);
-    await openAndDetect(h, true);
+    await openAndDetect(h, true, { modalOpen: true });
     await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS + 10_000);
     expect(h.records()).toHaveLength(1);
     expectPendingLine(h);
   });
 
-  it("a 202 after a 503 retry ends the loop: the retrying toast goes, the neutral line shows", async () => {
+  it("modal open: a 202 after a 503 retry ends the loop; inline line only, no toast", async () => {
     const h = stubFetch([busy, pending], busy);
-    await openAndDetect(h, true);
-    expect(document.querySelector("#gift-toasts .gift-toast")).not.toBeNull();
+    await openAndDetect(h, true, { modalOpen: true });
+    expect(statusEl().textContent).toContain("Keep this page open");
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBeNull();
     await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS + 10_000);
     expect(h.records()).toHaveLength(2);
     expectPendingLine(h);
   });
 
-  it("signed out: 202 gets the same neutral line", async () => {
+  it("signed out, modal open: 202 gets the same neutral line", async () => {
     const h = stubFetch([pending], pending);
-    await openAndDetect(h, false);
+    await openAndDetect(h, false, { modalOpen: true });
     await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS);
     expect(h.records()).toHaveLength(1);
     expectPendingLine(h);
@@ -174,5 +183,59 @@ describe("/record 202 pending_index", () => {
       "pending_index",
     );
     expect(f).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("/record 202 with the Donate modal closed: the line as a neutral toast", () => {
+  const toast = () => document.querySelector<HTMLElement>("#gift-toasts .gift-toast");
+  const toastText = () => toast()?.querySelector(".gift-toast-text")?.textContent ?? null;
+
+  /** Neutral (not linked/failed), role=status, a Close button, closes itself like the linked toast. */
+  async function expectPendingToast(h: ReturnType<typeof stubFetch>, o?: { arrivedAgoMs?: number }) {
+    expect(toastText()).toBe(`Gift to U: ${PENDING}`);
+    const el = toast()!;
+    expect(el.dataset.giftState).toBe("pending");
+    expect(el.getAttribute("role")).toBe("status");
+    expect(el.querySelector("button.gift-toast-close")?.textContent).toBe("Close");
+    expect(document.querySelectorAll("#gift-toasts .gift-toast")).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/credit linked/i);
+    expect(h.claims()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(GIFT_LINKED_AUTO_CLOSE_MS - 200 - (o?.arrivedAgoMs ?? 0));
+    expect(toast()).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(toast()).toBeNull();
+  }
+
+  it("signed in: a 202 arriving with the modal closed shows the line as a toast", async () => {
+    const h = stubFetch([pending], busy);
+    await openAndDetect(h, true);
+    expect(h.records()).toHaveLength(1);
+    await expectPendingToast(h);
+    expect(h.records()).toHaveLength(1);
+  });
+
+  it("signed in: 503 then 202 with the modal closed: the Linking toast becomes the 202 toast in place", async () => {
+    const h = stubFetch([busy, pending], busy);
+    await openAndDetect(h, true);
+    const first = toast();
+    expect(first?.dataset.giftState).toBe("retrying");
+    await vi.advanceTimersByTimeAsync(1_200);
+    expect(h.records()).toHaveLength(2);
+    expect(toast()).toBe(first);
+    await expectPendingToast(h, { arrivedAgoMs: 200 });
+  });
+
+  it("signed out: a 202 arriving with the modal closed shows the line as a toast", async () => {
+    const h = stubFetch([pending], pending);
+    await openAndDetect(h, false);
+    expect(h.records()).toHaveLength(1);
+    await expectPendingToast(h);
+  });
+
+  it("signed out, modal open: the 202 line only, no toast", async () => {
+    const h = stubFetch([pending], pending);
+    await openAndDetect(h, false, { modalOpen: true });
+    expect(statusEl().textContent).toBe(PENDING);
+    expect(toast()).toBeNull();
   });
 });

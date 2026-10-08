@@ -19,7 +19,12 @@ vi.mock("./config", async (importOriginal) => {
   };
 });
 
-import { bindDonateModal, bindDonatePanel, donateModalHtml } from "./proposal-ui";
+import {
+  bindDonateModal,
+  bindDonatePanel,
+  closeDonateModalWhenBlocked,
+  donateModalHtml,
+} from "./proposal-ui";
 import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
 import {
   RECORD_RETRY_DELAYS_MS,
@@ -172,6 +177,36 @@ describe("retry window bound", () => {
     expect(calls).toBe(1);
   });
 
+  it("a session change during an attempt stops before the wait: no retrying hook, no wait", async () => {
+    vi.useFakeTimers();
+    let go = true;
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        go = false; // e.g. sign-out while this /record is in flight
+        return new Response("down", { status: 502 });
+      }),
+    );
+    const onRetry = vi.fn();
+    let settled = false;
+    const done = recordContributionWithRetry(
+      { proposal_id: PID, txid: NEW.txid, vout: 1, address: ADDR },
+      { delaysMs: [1_000, 1_000], windowMs: 10_000, onRetry, shouldContinue: () => go },
+    )
+      .catch((e: Error) => e)
+      .finally(() => {
+        settled = true;
+      });
+    await vi.advanceTimersByTimeAsync(10);
+    // Stopped at once: the "Keep this page open" hook never ran for the old session.
+    expect(settled).toBe(true);
+    expect(await done).toBeInstanceOf(RecordRetryCancelled);
+    expect(onRetry).not.toHaveBeenCalled();
+    expect(calls).toBe(1);
+  });
+
   it("no attempt starts after the window, even with long delays", async () => {
     vi.useFakeTimers();
     const calls: number[] = [];
@@ -294,6 +329,53 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     expect(h.records()).toHaveLength(3);
     expect(h.claims()).toHaveLength(1);
     expect(toastText()).toBe("Gift to U: Credit linked for 7,000 sats.");
+  });
+
+  it("modal closed during a retry wait: the Linking toast shows at once, then turns into the outcome in place", async () => {
+    const h = stubFetch([busy, busy], ok);
+    await openAndDetect(h, { modalOpen: true });
+    expect(statusEl().textContent).toBe(RETRYING);
+    expect(toastText()).toBeNull(); // modal open: inline only
+    document.querySelector<HTMLButtonElement>("#donate-close")!.click();
+    await vi.advanceTimersByTimeAsync(10); // well before the next attempt (+1 s)
+    expect(h.records()).toHaveLength(1);
+    expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
+    const el = document.querySelector<HTMLElement>("#gift-toasts .gift-toast")!;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records()).toHaveLength(3);
+    expect(toastText()).toBe("Gift to U: Credit linked for 7,000 sats.");
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBe(el);
+    expect(document.querySelectorAll("#gift-toasts .gift-toast")).toHaveLength(1);
+  });
+
+  it("modal closed while the first /record is still in flight: Linking toast at once, then the outcome in place", async () => {
+    let release: () => void = () => undefined;
+    const held: Reply = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(ok() as Response);
+      }) as unknown as Response;
+    const h = stubFetch([held], ok);
+    await openAndDetect(h, { modalOpen: true });
+    expect(h.records()).toHaveLength(1);
+    expect(toastText()).toBeNull();
+    document.querySelector<HTMLButtonElement>("#donate-close")!.click();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
+    const el = document.querySelector<HTMLElement>("#gift-toasts .gift-toast")!;
+    release();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(toastText()).toBe("Gift to U: Credit linked for 7,000 sats.");
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBe(el);
+  });
+
+  it("modal closed by the claim view (blocked) mid-link: the Linking toast shows at once too", async () => {
+    const h = stubFetch([busy], ok);
+    await openAndDetect(h, { modalOpen: true });
+    expect(toastText()).toBeNull();
+    closeDonateModalWhenBlocked();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(h.records()).toHaveLength(1);
+    expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
   });
 
   it("open modal, first-try link: inline line only, no toast", async () => {

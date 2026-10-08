@@ -6,7 +6,7 @@ import {
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
-import { giftKey, linkGift } from "./gift-link";
+import { giftKey, linkGift, showGiftToast, surfaceGiftLinks } from "./gift-link";
 import {
   fetchClaimStatus,
   isDirectProposal,
@@ -887,6 +887,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     if (hint) hint.hidden = !visible;
   };
 
+  /** This panel is on screen (not in a closed or removed modal). */
+  const panelShowing = () => {
+    if (!panel.isConnected) return false;
+    const modal = panel.closest<HTMLElement>("#donate-modal");
+    return !modal || !modal.hidden;
+  };
+
   const linkOutpoint = async (utxo: {
     txid: string;
     vout: number;
@@ -936,11 +943,7 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
           if (mine()) setDonateConfirmStatus(panel, RECORD_RETRY_STATUS_COPY, "live");
         },
         // Modal open and showing this gift: inline line only, no toast.
-        inlineShown: () => {
-          if (!mine() || !panel.isConnected) return false;
-          const modal = panel.closest<HTMLElement>("#donate-modal");
-          return !modal || !modal.hidden;
-        },
+        inlineShown: () => mine() && panelShowing(),
       }).catch((e: unknown) => {
         if (!mine()) return null; // a newer gift owns this line; its toast has the result
         throw e;
@@ -991,7 +994,16 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         { delaysMs: [] },
       )
         .then((outcome) => {
-          if (outcome === "pending_index") setDonateConfirmStatus(panel, RECORD_PENDING_INDEX_COPY);
+          if (outcome !== "pending_index") return;
+          setDonateConfirmStatus(panel, RECORD_PENDING_INDEX_COPY);
+          // Modal closed when the 202 lands: the same line as a neutral toast.
+          if (!panelShowing()) {
+            showGiftToast(
+              giftKey(utxo.txid, utxo.vout),
+              opts.proposalTitle || opts.proposalId || "this proposal",
+              "pending",
+            );
+          }
         })
         .catch(() => undefined);
     }
@@ -1952,6 +1964,8 @@ export function closeDonateModalWhenBlocked(): void {
 
   // Remove the modal from DOM entirely
   modal.remove();
+  // A gift still linking now shows its toast at once (no silent gap).
+  surfaceGiftLinks();
 }
 
 function currentDonateEscrowAddress(): string {
@@ -2303,6 +2317,8 @@ export function bindDonateModal(
     document.body.classList.remove("modal-open");
     window.removeEventListener("keydown", onEscape);
     lastOpener?.focus();
+    // A gift still linking now shows its toast at once (no silent gap).
+    surfaceGiftLinks();
   };
 
   const onEscape = (e: KeyboardEvent) => {
