@@ -24,8 +24,12 @@ export function isChunkLoadError(err: unknown): boolean {
 /** Shown instead when the browser reports no network (the chunk may be fine). */
 export const STALE_BUILD_OFFLINE_MESSAGE = "You're offline. Reconnect, then reload.";
 
-/** True when the view has nothing worth keeping: empty, or only "Loading…". */
+/**
+ * True when the view has nothing worth keeping: its text is empty or exactly
+ * "Loading…", and it holds no form field (a field's typed value has no text).
+ */
 function viewIsDisposable(view: HTMLElement): boolean {
+  if (view.querySelector("input, textarea, select, [contenteditable]")) return false;
   const text = (view.textContent || "").replace(/\s+/g, " ").trim();
   return text === "" || /^Loading(?:…|\.\.\.)$/.test(text);
 }

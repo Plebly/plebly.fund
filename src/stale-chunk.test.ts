@@ -155,6 +155,51 @@ describe("stale build prompt keeps a live page (UI UX hold)", () => {
     expect(document.body.innerHTML).not.toContain("profile-pages");
   });
 
+  it("a 'Loading…' placeholder plus a filled form is not an empty view: banner, input kept", () => {
+    document.body.innerHTML = `<div id="app">
+      <header class="site-header"><a href="/">Plebly</a></header>
+      <main id="main-content">
+        <div id="ballot-status"><p class="muted">Loading…</p></div>
+        <form><label>Note <input id="typed" name="note" /></label></form>
+      </main>
+    </div>`;
+    const input = document.querySelector<HTMLInputElement>("#typed")!;
+    input.value = "typed while a panel was still loading";
+    const before = app().innerHTML;
+    window.dispatchEvent(rejection(new TypeError(RAW)));
+    expect(document.querySelector("#typed")).toBe(input);
+    expect(input.value).toBe("typed while a panel was still loading");
+    expect(app().innerHTML).toBe(before);
+    expect(banner()).not.toBeNull();
+    expect(prompts()).toHaveLength(1);
+  });
+
+  it.each([
+    ["input", `<input id="typed" />`],
+    ["textarea", `<textarea id="typed"></textarea>`],
+  ])("'Loading…' plus an unlabelled %s with a typed value (no other text): banner, value kept", (_n, field) => {
+    document.body.innerHTML = `<div id="app"><main id="main-content"><p class="loading">Loading…</p>${field}</main></div>`;
+    const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>("#typed")!;
+    el.value = "half-written";
+    window.dispatchEvent(rejection(new TypeError(RAW)));
+    expect(document.querySelector("#typed")).toBe(el);
+    expect(el.value).toBe("half-written");
+    expect(banner()).not.toBeNull();
+    expect(prompts()).toHaveLength(1);
+  });
+
+  it.each([
+    ["placeholder first", `<p class="muted">Loading…</p><section><h1>Bounty 42</h1><p>Escrow funded.</p></section>`],
+    ["placeholder after content", `<section><h1>Bounty 42</h1><p>Escrow funded.</p></section><p class="muted">Loading…</p>`],
+  ])("a 'Loading…' placeholder next to rendered content (%s) is not an empty view: banner, view kept", (_n, inner) => {
+    document.body.innerHTML = `<div id="app"><main id="main-content">${inner}</main></div>`;
+    const before = app().innerHTML;
+    window.dispatchEvent(rejection(new TypeError(RAW)));
+    expect(app().innerHTML).toBe(before);
+    expect(banner()).not.toBeNull();
+    expect(prompts()).toHaveLength(1);
+  });
+
   it("the banner's Reload reloads", () => {
     renderPageWithInput();
     window.dispatchEvent(rejection(new TypeError(RAW)));
