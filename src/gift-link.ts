@@ -32,6 +32,12 @@ export type GiftLinkInput = {
   valueSats: number;
   /** Per-caller hook for each retry wait (the modal updates its own line). */
   onRetry?: () => void;
+  /**
+   * True while the caller's inline line is visible for this gift (modal open
+   * and showing it). Then the inline line is the only surface: no toast.
+   * Missing: always toast.
+   */
+  inlineShown?: () => boolean;
 };
 
 export function giftKey(txid: string, vout: number): string {
@@ -146,13 +152,19 @@ export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
   const startedIn = generation;
   const session = currentSessionToken();
   const live = () => startedIn === generation;
+  /** Toast only when the inline line isn't showing this gift (UI UX). */
+  const toast = (state: GiftToastState) => {
+    if (!live()) return;
+    if (input.inlineShown?.()) closeGiftToast(key);
+    else showGiftToast(key, title, state, input.valueSats);
+  };
   const stillLinking = () => live() && currentSessionToken() === session;
   let run!: Promise<GiftLinkResult>;
   run = (async () => {
     try {
       const outcome = await recordContributionWithRetry(record, {
         onRetry: () => {
-          showGiftToast(key, title, "retrying");
+          toast("retrying");
           input.onRetry?.();
         },
         shouldContinue: stillLinking,
@@ -166,14 +178,14 @@ export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
         if (!stillLinking()) throw new RecordRetryCancelled();
         await claimContributionWithRetry(claim);
       }
-      if (live()) showGiftToast(key, title, "linked", input.valueSats);
+      toast("linked");
       return true;
     } catch (e) {
       if (e instanceof RecordRetryCancelled) {
         if (live()) closeGiftToast(key);
         return false;
       }
-      if (live()) showGiftToast(key, title, "failed");
+      toast("failed");
       throw e;
     } finally {
       if (runs.get(key) === run) runs.delete(key);

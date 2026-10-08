@@ -282,17 +282,46 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
 
   const toastText = () => document.querySelector("#gift-toasts .gift-toast-text")?.textContent ?? null;
 
-  it("closing the modal mid-retry does NOT stop the retries; the gift still links", async () => {
+  it("modal closed mid-retry: retries continue and the later outcome gets the linked toast", async () => {
     const h = stubFetch([busy, busy], ok);
     await openAndDetect(h, { modalOpen: true });
     expect(h.records()).toHaveLength(1);
+    expect(statusEl().textContent).toBe(RETRYING);
+    expect(toastText()).toBeNull(); // modal open: inline only
     document.querySelector<HTMLButtonElement>("#donate-close")!.click();
     expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(true);
-    expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
     await vi.advanceTimersByTimeAsync(5_000);
     expect(h.records()).toHaveLength(3);
     expect(h.claims()).toHaveLength(1);
     expect(toastText()).toBe("Gift to U: Credit linked for 7,000 sats.");
+  });
+
+  it("open modal, first-try link: inline line only, no toast", async () => {
+    const h = stubFetch([ok], ok);
+    await openAndDetect(h, { modalOpen: true });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(h.records()).toHaveLength(1);
+    expect(statusEl().textContent).toContain("Credit linked for 7,000 sats");
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBeNull();
+  });
+
+  it("open modal, final refusal: inline failure only, no toast", async () => {
+    const h = stubFetch([() => Response.json({ error: "x", code: "contribution_owned" }, { status: 409 })], ok);
+    await openAndDetect(h, { modalOpen: true });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(showsFailure()).toBe(true);
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBeNull();
+  });
+
+  it("open modal through retries to the outcome: inline only, no toast at any point", async () => {
+    const h = stubFetch([busy, busy], ok);
+    await openAndDetect(h, { modalOpen: true });
+    for (let t = 0; t < 10; t += 1) {
+      expect(document.querySelector("#gift-toasts .gift-toast")).toBeNull();
+      await vi.advanceTimersByTimeAsync(500);
+    }
+    expect(statusEl().textContent).toContain("Credit linked");
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBeNull();
   });
 
   it("in-app navigation (view torn down, #app replaced) does NOT stop the retries", async () => {

@@ -935,6 +935,12 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         onRetry: () => {
           if (mine()) setDonateConfirmStatus(panel, RECORD_RETRY_STATUS_COPY, "live");
         },
+        // Modal open and showing this gift: inline line only, no toast.
+        inlineShown: () => {
+          if (!mine() || !panel.isConnected) return false;
+          const modal = panel.closest<HTMLElement>("#donate-modal");
+          return !modal || !modal.hidden;
+        },
       }).catch((e: unknown) => {
         if (!mine()) return null; // a newer gift owns this line; its toast has the result
         throw e;
