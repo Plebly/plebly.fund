@@ -7,7 +7,7 @@ import { renderParameters } from "./parameters-page";
 import { renderKeyholderDuties } from "./keyholder-duties-page";
 import { renderReviewerRules } from "./reviewer-rules-page";
 import { renderTerms } from "./terms-page";
-import { fetchAdminMe, renderAdmin } from "./admin-page";
+import { fetchAdminMe } from "./admin-me";
 import { renderArchive } from "./archive-page";
 import { renderDonations } from "./donations-page";
 import { renderEndowment } from "./endowment-page";
@@ -329,6 +329,8 @@ async function render() {
   }
   if (r.name === "admin") {
     applySeo(seoForRoute(r));
+    // Admin desk is only for platform admins: load it on demand (own chunk).
+    const { renderAdmin } = await import("./admin-page");
     await renderAdmin(shell);
     bindAuthHandlers();
     scrollToHashTarget();
