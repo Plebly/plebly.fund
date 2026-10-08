@@ -7,7 +7,7 @@
  * shared with balance_sats:null, mempool error, and the 2.5s mempool timeout.
  * A known 0 is a real balance and still draws the meter.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAIM_FLOOR_SATS } from "./config";
 import {
   fundingProgressHtml,
@@ -143,6 +143,10 @@ describe("proposal page hero: unknown balance paths", () => {
     return app;
   }
 
+  // Warm the page module graph once so the first cold import can't hit the 5s timeout.
+  beforeAll(async () => {
+    await import("./proposal-page");
+  }, 30_000);
   beforeEach(() => {
     addressHits = [];
     vi.resetModules();

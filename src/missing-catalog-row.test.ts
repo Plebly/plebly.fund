@@ -13,7 +13,7 @@
  *     (workers#50 fail-closed): no address-total meter. A catalog or claim
  *     view `accepting_funds: false` still closes Donate.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClaimStatus } from "./builder";
 import { CLAIM_FLOOR_SATS } from "./config";
 import type { Proposal } from "./types";
@@ -183,6 +183,12 @@ function pageHtml(): string {
   return document.body.innerHTML;
 }
 
+// Warm the module transform once: the first test's cold import of the page
+// graph alone ran ~5s under full-suite load and hit the 5s test timeout.
+beforeAll(async () => {
+  await import("./proposal-page");
+  await import("./github");
+}, 30_000);
 beforeEach(() => {
   addressHits = [];
   vi.resetModules();
