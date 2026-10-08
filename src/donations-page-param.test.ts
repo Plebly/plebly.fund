@@ -56,4 +56,29 @@ describe("donations ?page parsing", () => {
     expect(fetchMock).toHaveBeenCalledWith("https://api.test/donations?limit=40&offset=80");
     expect(app().querySelector(".donations-pager")!.textContent).toContain("Page 3 of 3");
   });
+
+  it("?page past the last page clamps to the last page (no 'Page 99 of 3', no empty state)", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      new Response(
+        JSON.stringify({ donations: String(url).endsWith("offset=80") ? [row] : [], total: 81 }),
+        { status: 200 },
+      ),
+    );
+    history.replaceState(null, "", "/donations?page=99");
+    await renderDonations((inner) => inner);
+    expect(fetchMock).toHaveBeenLastCalledWith("https://api.test/donations?limit=40&offset=80");
+    expect(location.search).toBe("?page=3");
+    const pager = app().querySelector(".donations-pager")!;
+    expect(pager.textContent).toContain("Page 3 of 3");
+    expect(app().textContent).not.toContain("No confirmed donations yet");
+    expect(app().querySelectorAll(".donations-row")).toHaveLength(1);
+  });
+
+  it("?page=2 with an empty ledger stays a calm empty state (no redirect loop)", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ donations: [], total: 0 }), { status: 200 }));
+    history.replaceState(null, "", "/donations?page=2");
+    await renderDonations((inner) => inner);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(app().textContent).toContain("No confirmed donations yet");
+  });
 });
