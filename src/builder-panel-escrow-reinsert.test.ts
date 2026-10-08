@@ -1,7 +1,8 @@
 /**
  * UI-2 (shape 2): when the claim view allows Donate, builder-panel re-inserts
- * #onchain-escrow-row. It must not do that when the catalog row is voided or
- * settled — the catalog wins over the claim view.
+ * #onchain-escrow-row and fills Donate chrome (sidebar button, mobile CTA,
+ * ?donate auto-open). None of that may happen when the catalog row is voided
+ * or settled — the catalog wins over the claim view.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "./types";
@@ -57,6 +58,7 @@ async function bindWithDonateAllowedClaimView(p: Proposal) {
       fetchPayoutStatus: vi.fn(async () => null),
     };
   });
+  const ui = await import("./proposal-ui");
   const { bindBuilderPanel } = await import("./builder-panel");
   document.body.innerHTML = `<div id="app">
     <article class="proposal-page">
@@ -77,11 +79,26 @@ async function bindWithDonateAllowedClaimView(p: Proposal) {
       <div id="mobile-cta-slot" hidden></div>
     </article>
   </div>`;
+  // ?donate deep link pending: builder-panel opens the modal only if Donate is allowed.
+  ui.setDonateChromeContext({
+    root: document,
+    proposal: p,
+    panelOpts: {
+      address: ESCROW,
+      proposalId: p.id,
+      proposalPath: p.path,
+      proposalTitle: p.title,
+      signedIn: true,
+    },
+    wantsDonateOpen: true,
+  });
+  ui.bindDonateModal(document);
   await bindBuilderPanel(document, { proposal: p, balance: 200_000, user: null, watching: false });
   // Refresh has rendered once the next-card sentence is replaced.
   await vi.waitFor(() => {
     expect(document.querySelector("#next-card-sentence")?.textContent || "").not.toBe("");
   });
+  return ui;
 }
 
 afterEach(() => {
@@ -102,12 +119,31 @@ describe("builder-panel escrow re-insert vs catalog block", () => {
       expect(document.querySelector("#onchain-escrow-row")).toBeNull();
       expect(document.querySelector(".onchain-panel")!.innerHTML).not.toContain(ESCROW);
     });
+
+    it(`${name} + claim view allows Donate -> no Donate button, no mobile CTA, no auto-open`, async () => {
+      const ui = await bindWithDonateAllowedClaimView(proposal(over as Partial<Proposal>));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(document.querySelector("[data-open-donate], #donate-open")).toBeNull();
+      const cta = document.querySelector<HTMLElement>("#mobile-cta-slot")!;
+      expect(cta.hidden).toBe(true);
+      expect(cta.innerHTML).toBe("");
+      // Modal (which carries the escrow address) is never mounted.
+      expect(document.querySelector("#donate-modal")).toBeNull();
+      // The ?donate deep link was never consumed.
+      expect(ui.getDonateChromeContext()?.wantsDonateOpen).toBe(true);
+    });
   }
 
-  it("unblocked donate-eligible row + claim view allows Donate -> row re-inserted (unchanged)", async () => {
-    await bindWithDonateAllowedClaimView(proposal({}));
+  it("unblocked donate-eligible row + claim view allows Donate -> row re-inserted, Donate chrome shown (unchanged)", async () => {
+    const ui = await bindWithDonateAllowedClaimView(proposal({}));
     await vi.waitFor(() => {
       expect(document.querySelector(".onchain-panel #onchain-escrow-row")).not.toBeNull();
     });
+    expect(document.querySelector("[data-open-donate]")).not.toBeNull();
+    const cta = document.querySelector<HTMLElement>("#mobile-cta-slot")!;
+    expect(cta.hidden).toBe(false);
+    expect(cta.querySelector("[data-open-donate]")).not.toBeNull();
+    expect(ui.getDonateChromeContext()?.wantsDonateOpen).toBe(false);
+    expect(document.querySelector("#donate-modal")).not.toBeNull();
   });
 });

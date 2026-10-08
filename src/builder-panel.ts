@@ -1469,7 +1469,9 @@ export async function bindBuilderPanel(
       const catalogBlocked = isCatalogDonateBlocked(opts.proposal);
       const claimAllowed = isClaimViewDonateAllowed(status);
       const structured = String(claimStructuredState(status) || "");
-      const donateAllowed = !catalogBlocked && claimAllowed;
+      // catalogEscrowHidden is read from the catalog row at bind time: a voided or
+      // settled row stays blocked even after the claim view merged its status.
+      const donateAllowed = !catalogEscrowHidden && !catalogBlocked && claimAllowed;
       const sideDonateOk =
         donateAllowed &&
         next.button !== "donate" &&
@@ -1481,6 +1483,9 @@ export async function bindBuilderPanel(
         closeDonateModalWhenBlocked();
         const onchainEscrowRow = root.querySelector<HTMLElement>("#onchain-escrow-row");
         if (onchainEscrowRow) onchainEscrowRow.remove();
+        // The next card is resolved from the merged claim-view status, so it can
+        // still carry a Donate button for a voided/settled catalog row.
+        body.querySelectorAll("[data-open-donate]").forEach((btn) => btn.remove());
       }
 
       if (donateSlot) {
@@ -1530,8 +1535,7 @@ export async function bindBuilderPanel(
       if (
         onchainPanel &&
         donateAllowed &&
-        opts.proposal.escrow_address &&
-        !catalogEscrowHidden
+        opts.proposal.escrow_address
       ) {
         if (!onchainPanel.querySelector("#onchain-escrow-row")) {
           onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));

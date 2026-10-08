@@ -79,12 +79,25 @@ describe("proposal page first paint: escrow row", () => {
     });
   }
 
+  for (const [name, over] of [
+    ["listed + bounty_settled:true", { status: "listed", structured_state: "awaiting_funds", accepting_funds: true, bounty_settled: true }],
+    ["listed + claim_phase settled", { status: "listed", structured_state: "awaiting_funds", accepting_funds: true, claim_phase: "settled" }],
+  ] as [string, Partial<Proposal>][]) {
+    it(`settled on a donate-chrome status (${name}): no Donate placeholder, no mobile CTA slot`, async () => {
+      const app = await firstPaint(row(over));
+      expect(app.querySelector(".proposal-donate-slot")).toBeNull();
+      expect(app.querySelector("#mobile-cta-slot")).toBeNull();
+      expect(app.querySelector(".proposal-onchain #onchain-escrow-row")).toBeNull();
+    });
+  }
+
   it("donate-eligible row: escrow stays out of the panel (donate placeholder carries it), as before", async () => {
     const app = await firstPaint(
       row({ status: "listed", structured_state: "awaiting_funds", accepting_funds: true }),
     );
     expect(app.querySelector(".proposal-onchain #onchain-escrow-row")).toBeNull();
     expect(app.querySelector(".proposal-donate-slot")).not.toBeNull();
+    expect(app.querySelector("#mobile-cta-slot")).not.toBeNull();
   });
 
   it("not blocked, not donate chrome (completed): escrow row still shown, as before", async () => {
