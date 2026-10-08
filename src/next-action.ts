@@ -365,30 +365,36 @@ export function resolveNextAction(input: NextActionInput): NextAction {
 
   // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
   // Exception: "rejected" status should still allow rebuttal action.
-  // Exception: "bounty_settled" status should let claim branches run (claimant actions stay available).
-  // Exception: bounty_settled:true or claim_phase:'settled' on catalog/claim should only block Donate/Apply,
-  //   not claimant actions like Mark done/Flag/Submit deliverable.
-  // Exception: "completed" status should keep its settled/approved copy even with accepting_funds:false.
+  // Exception: "completed" status should keep its settled/approved copy.
   const claimViewBlocked = isClaimViewBlocked(claim ?? null);
   const claimStructured = structuredState(claim);
 
   // Check if bounty is settled (workers#41 contract shape)
   const bountySettled = isBountySettled(p, claim ?? null, status);
+  // Only claim.bounty_settled can override claim-view blocks; catalog flags cannot
+  const claimBountySettled = claim?.bounty_settled === true;
 
-  // For bounty-settled rows, the catalog sends accepting_funds:false which makes catalogBlocked true.
-  // But we should NOT early-exit with "Structure unavailable" — we should let the real status drive the UI.
-  // Only use structure-blocking when it's NOT just a bounty-settled signal.
+  // psbt voided/unreadable/unknown ALWAYS blocks, no override from anything
   const psbTerminal = claimStructured && isStructuredTerminalOrUnknown(claimStructured);
-  const structureBlocked =
-    (!bountySettled && catalogBlocked) ||
-    (!bountySettled && claimViewBlocked) ||
-    psbTerminal;
+  if (psbTerminal && status !== "rejected" && status !== "completed") {
+    if (!p.release_blocked_reason) {
+      return {
+        sentence: "Structure unavailable, not accepting funds.",
+        button: null,
+        moreIds,
+      };
+    }
+  }
+
+  // Claim-view blocked: only claim.bounty_settled can override (catalog flags cannot)
+  // Catalog blocked: any bountySettled can override (catalog-level signals)
+  const claimViewBlockedNotOverridden = claimViewBlocked && !claimBountySettled;
+  const catalogBlockedNotOverridden = catalogBlocked && !bountySettled;
+  const structureBlocked = claimViewBlockedNotOverridden || catalogBlockedNotOverridden;
 
   // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
-  // For bounty_settled status (workers#41), skip so claim branches can render claimant actions.
-  // For bounty-settled rows with real status (in_review/completed), skip so real status drives the UI.
-  // For completed status with bounty_settled:true, skip so it keeps its normal copy.
-  if (structureBlocked && status !== "rejected" && status !== "bounty_settled" && status !== "completed" && !bountySettled) {
+  // For completed status, skip so it keeps its normal copy.
+  if (structureBlocked && status !== "rejected" && status !== "completed") {
     // Exception: release_blocked_reason should still show for stalled releases
     if (!p.release_blocked_reason) {
       return {
@@ -588,6 +594,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
+    // Bounty settled: show "Bounty paid" BEFORE confirmed/awaiting_funds checks
+    // so settled donors on confirmed records see 'Bounty paid' (workers#41)
+    if (bountySettled) {
+      return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
+    }
     if (structured === "confirmed") {
       return {
         sentence: "Funds are structured. Waiting on the proposer to mark done.",
@@ -596,19 +607,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (structured === "awaiting_funds") {
-      // Bounty settled blocks Donate even when claim is in_review (workers#41)
-      if (bountySettled) {
-        return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
-      }
       return {
         sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
         button: "donate",
         moreIds,
       };
-    }
-    // Bounty settled: show "Bounty paid" instead of generic waiting message (workers#41)
-    if (bountySettled) {
-      return { sentence: "Bounty paid. Waiting on the proposer.", button: null, moreIds };
     }
     return { sentence: "Waiting on the proposer.", button: null, moreIds };
   }
@@ -638,6 +641,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (claim?.can_challenge_abandoned) moreIds.push("challenge");
+    // Bounty settled: show "Bounty paid" BEFORE psbt_ready/confirmed/awaiting_funds checks
+    // so settled donors on confirmed records see 'Bounty paid' (workers#41)
+    if (bountySettled) {
+      return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
+    }
     if (structured === "psbt_ready") {
       return {
         sentence: "Structured funding is ready. Keyholders broadcast in Sparrow.",
@@ -653,19 +661,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       };
     }
     if (structured === "awaiting_funds") {
-      // Bounty settled blocks Donate even when claim is claimed (workers#41)
-      if (bountySettled) {
-        return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
-      }
       return {
         sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
         button: "donate",
         moreIds,
       };
-    }
-    // Bounty settled: show "Bounty paid" instead of generic waiting message (workers#41)
-    if (bountySettled) {
-      return { sentence: "Bounty paid. Waiting on the builder.", button: null, moreIds };
     }
     return { sentence: "Waiting on the builder.", button: null, moreIds };
   }

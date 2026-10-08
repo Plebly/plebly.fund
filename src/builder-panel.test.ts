@@ -1071,4 +1071,194 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
       expect(modal!.parentElement).toBe(document.body);
     });
   });
+
+  it("wantsDonateOpen deep link opens only when donateAllowed, not when blocked", async () => {
+    const escrow = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";
+
+    vi.resetModules();
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => ({
+          proposal_id: "demo",
+          proposal_path: "proposals/listed/demo.md",
+          state: "open",
+          status: "listed",
+          confirmed_balance_sats: 15_000,
+          claim_floor_sats: 10_000,
+          claimer: null,
+          escrow_address: escrow,
+          title: "Demo",
+          accepting_funds: true,
+          psbt: { structured_state: "awaiting_funds" },
+        })),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+
+    const {
+      setDonateChromeContext,
+      bindDonateModal,
+    } = await import("./proposal-ui");
+    const { bindBuilderPanel } = await import("./builder-panel");
+
+    const p = proposal({
+      status: "listed",
+      balance_sats: 15_000,
+      claimer: null,
+      escrow_address: escrow,
+    });
+
+    document.body.innerHTML = `<div id="app">
+      <article class="proposal-page">
+        <div id="builder" class="builder-panel">
+          <div class="builder-actions">
+            <button type="button" class="btn ghost next-card-watch" id="builder-watch" data-watching="0">Watch</button>
+          </div>
+          <div id="builder-body" class="builder-body">
+            <div class="next-card-main"><p class="next-card-sentence">Listed — still raising</p></div>
+            <div id="claim-apps-host"></div>
+          </div>
+          <p class="builder-msg" id="builder-msg" hidden></p>
+        </div>
+        <div class="proposal-donate-slot" hidden></div>
+        <div id="mobile-cta-slot" hidden></div>
+      </article>
+    </div>`;
+
+    // Set context with wantsDonateOpen flag
+    setDonateChromeContext({
+      root: document,
+      proposal: p,
+      panelOpts: {
+        address: escrow,
+        proposalId: p.id,
+        proposalPath: p.path,
+        proposalTitle: p.title,
+        signedIn: true,
+      },
+      wantsDonateOpen: true,
+    });
+    bindDonateModal(document);
+
+    await bindBuilderPanel(document, {
+      proposal: p,
+      balance: 15_000,
+      user: null,
+      watching: false,
+    });
+
+    // Modal should open automatically because donateAllowed and wantsDonateOpen
+    await vi.waitFor(() => {
+      const modal = document.querySelector<HTMLElement>("#donate-modal");
+      expect(modal).toBeTruthy();
+      expect(modal!.hidden).toBe(false);
+    });
+  });
+
+  it("wantsDonateOpen deep link does NOT open when blocked", async () => {
+    vi.resetModules();
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => ({
+          proposal_id: "demo",
+          proposal_path: "proposals/listed/demo.md",
+          state: "in_review",
+          status: "in_review",
+          confirmed_balance_sats: 15_000,
+          claim_floor_sats: 10_000,
+          claimer: "bob",
+          escrow_address: "tb1qtest",
+          title: "Demo",
+          accepting_funds: false,
+          bounty_settled: true,
+          psbt: { structured_state: "voided" },
+        })),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+
+    const {
+      setDonateChromeContext,
+      bindDonateModal,
+    } = await import("./proposal-ui");
+    const { bindBuilderPanel } = await import("./builder-panel");
+
+    const p = proposal({
+      status: "in_review",
+      balance_sats: 15_000,
+      claimer: "bob",
+      escrow_address: "tb1qtest",
+    });
+
+    document.body.innerHTML = `<div id="app">
+      <article class="proposal-page">
+        <div id="builder" class="builder-panel">
+          <div class="builder-actions">
+            <button type="button" class="btn ghost next-card-watch" id="builder-watch" data-watching="0">Watch</button>
+          </div>
+          <div id="builder-body" class="builder-body">
+            <div class="next-card-main"><p class="next-card-sentence">In review</p></div>
+            <div id="claim-apps-host"></div>
+          </div>
+          <p class="builder-msg" id="builder-msg" hidden></p>
+        </div>
+        <div class="proposal-donate-slot" hidden></div>
+        <div id="mobile-cta-slot" hidden></div>
+      </article>
+    </div>`;
+
+    // Set context with wantsDonateOpen flag
+    setDonateChromeContext({
+      root: document,
+      proposal: p,
+      panelOpts: {
+        address: "tb1qtest",
+        proposalId: p.id,
+        proposalPath: p.path,
+        proposalTitle: p.title,
+        signedIn: true,
+      },
+      wantsDonateOpen: true,
+    });
+    bindDonateModal(document);
+
+    await bindBuilderPanel(document, {
+      proposal: p,
+      balance: 15_000,
+      user: null,
+      watching: false,
+    });
+
+    // Modal should NOT open because blocked (voided psbt)
+    await vi.waitFor(
+      () => {
+        const modal = document.querySelector<HTMLElement>("#donate-modal");
+        // Either modal doesn't exist or it's hidden (was closed when blocked)
+        expect(!modal || modal.hidden).toBe(true);
+      },
+      { timeout: 500 },
+    );
+  });
 });

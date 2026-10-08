@@ -1259,6 +1259,74 @@ describe("resolveNextAction", () => {
       sentence: "Settled on-chain.",
       button: null,
     },
+    // psbt terminal ALWAYS blocks regardless of bountySettled — no Mark done
+    {
+      name: "settled + voided psbt → blocked, no Mark done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "voided" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    {
+      name: "settled + unreadable psbt → blocked, no Mark done",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          accepting_funds: false,
+          psbt: { structured_state: "unreadable" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
+    // stale catalog settled row + claim-view block → blocked (catalog flags cannot override claim-view)
+    {
+      name: "stale catalog settled + claim accepting_funds:false (no claim.bounty_settled) → blocked",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          // claim.bounty_settled is NOT true — catalog flags cannot override
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Structure unavailable, not accepting funds.",
+      button: null,
+    },
   ];
 
   it.each(rows)("$name", ({ input, sentence, button, more }) => {

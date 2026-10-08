@@ -588,11 +588,14 @@ export async function bindBuilderPanel(
           }
         : null,
     };
+    const prevEarlyCtx = getDonateChromeContext();
     setDonateChromeContext({
       root,
       proposal: opts.proposal,
       panelOpts: earlyOpts,
       claimStatusPromise,
+      wantsDonateOpen: prevEarlyCtx?.wantsDonateOpen,
+      wantsLnRail: prevEarlyCtx?.wantsLnRail,
     });
     bindDonateModal(document);
   }
@@ -1341,13 +1344,17 @@ export async function bindBuilderPanel(
             }
           : null,
       };
+      const prevCtx = getDonateChromeContext();
       setDonateChromeContext({
         root,
         proposal: opts.proposal,
         panelOpts: donatePanelOpts,
         // Preserve claim status promise from earlier context for click-time re-checks,
         // or wrap the resolved status so subsequent ensureDonateModalMounted calls can use it.
-        claimStatusPromise: status ? Promise.resolve(status) : getDonateChromeContext()?.claimStatusPromise,
+        claimStatusPromise: status ? Promise.resolve(status) : prevCtx?.claimStatusPromise,
+        // Preserve deep link flags from earlier context
+        wantsDonateOpen: prevCtx?.wantsDonateOpen,
+        wantsLnRail: prevCtx?.wantsLnRail,
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
       // so #donate-open / [data-open-donate] from next-action actually open it.

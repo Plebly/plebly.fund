@@ -2109,6 +2109,8 @@ export async function mountDonateChromeWhenEscrowKnown(
     proposal,
     panelOpts,
     claimStatusPromise: donateChromeContext?.claimStatusPromise,
+    wantsDonateOpen: donateChromeContext?.wantsDonateOpen,
+    wantsLnRail: donateChromeContext?.wantsLnRail,
   });
 
   const existing = findDonateModal(root);
