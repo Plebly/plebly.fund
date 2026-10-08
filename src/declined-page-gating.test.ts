@@ -41,6 +41,9 @@ function claimView(over: Partial<ClaimStatus> = {}): ClaimStatus {
     status: "declined",
     confirmed_balance_sats: 5_000,
     claim_floor_sats: CLAIM_FLOOR_SATS,
+    // The claim view's own escrow: without it Donate is closed anyway, which
+    // would make the catalog-status gates below untestable.
+    escrow_address: ESCROW,
     ...over,
   };
 }
@@ -66,8 +69,9 @@ function stubFetch(claim: ClaimStatus | null) {
   );
 }
 
-async function renderPage(p: Proposal, claim: ClaimStatus | null): Promise<HTMLElement> {
+async function renderPage(p: Proposal, claim: ClaimStatus | null, search = ""): Promise<HTMLElement> {
   document.body.innerHTML = `<div id="app"></div>`;
+  history.replaceState(null, "", `/p/plebly-signet-demo${search}`);
   stubFetch(claim);
   const { renderProposalPage } = await import("./proposal-page");
   void renderProposalPage(p.path, (inner) => inner, null, () => undefined, {
@@ -87,10 +91,29 @@ function count(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
+/** Next card resolved from the claim view, plus a tick for builder-panel's chrome pass. */
+async function settled(app: HTMLElement): Promise<void> {
+  await vi.waitFor(() => {
+    const s = app.querySelector("#next-card-sentence")?.textContent || "";
+    if (!s || s === "…") throw new Error("next card not resolved");
+  });
+  await new Promise((r) => setTimeout(r, 20));
+}
+
+/** No Donate anywhere: no button, no modal, no address in the DOM, mobile CTA hidden. */
+function assertNoDonate(app: HTMLElement): void {
+  expect(app.querySelector("[data-open-donate]")).toBeNull();
+  expect(document.querySelector("#donate-modal")).toBeNull();
+  expect(document.body.innerHTML).not.toContain(ESCROW);
+  const mobile = app.querySelector<HTMLElement>("#mobile-cta-slot");
+  if (mobile) expect(mobile.hidden).toBe(true);
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
 afterEach(() => {
+  history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
   sessionStorage.clear();
@@ -111,6 +134,11 @@ describe("isClosedToFundsStatus", () => {
       expect(isClosedToFundsStatus(s)).toBe(true);
     }
   });
+  it("fails closed: unknown, empty, null and malformed (untrimmed / mixed-case) statuses are closed", () => {
+    for (const s of ["weird_status", "", "  ", " declined", "declined ", " listed", "Listed", null, undefined]) {
+      expect(isClosedToFundsStatus(s)).toBe(true);
+    }
+  });
   it("fundable, pooling and post-award rows are not closed", () => {
     for (const s of [
       "listed",
@@ -121,7 +149,6 @@ describe("isClosedToFundsStatus", () => {
       "in_review",
       "rejected",
       "completed",
-      "",
     ]) {
       expect(isClosedToFundsStatus(s)).toBe(false);
     }
@@ -210,28 +237,27 @@ describe("declined detail page after the claim view loads", () => {
     expect(app.querySelector(".proposal-funding-bar")).toBeNull();
   });
 
-  it("catalog declined wins over a claim view that says listed", async () => {
+  it("catalog declined wins over a claim view that says listed: no address, no Donate", async () => {
     const app = await renderPage(row(), claimView({ status: "listed", state: "open", accepting_funds: true }));
-    await vi.waitFor(() => {
-      const s = app.querySelector("#next-card-sentence")?.textContent || "";
-      if (!s || s === "…") throw new Error("next card not resolved");
-    });
-    await new Promise((r) => setTimeout(r, 0));
+    await settled(app);
     expect(app.querySelector(".proposal-onchain .onchain-panel")).toBeTruthy();
     expect(app.querySelector("#onchain-escrow-row")).toBeNull();
     expect(app.querySelector(".proposal-onchain")?.textContent || "").not.toContain(ESCROW);
+    expect(app.querySelector("[data-open-donate]")).toBeNull();
   });
 
-  it("pooling structure on a declined row does not bring Donate or the address back", async () => {
+  it("pooling structure (claimed + awaiting_funds) on a declined row does not bring Donate or the address back", async () => {
     const app = await renderPage(
       row(),
-      claimView({ accepting_funds: true, psbt: { structured_state: "awaiting_funds" } as ClaimStatus["psbt"] }),
+      claimView({
+        status: "declined",
+        state: "claimed",
+        claimer: "bob",
+        accepting_funds: true,
+        psbt: { structured_state: "awaiting_funds" } as ClaimStatus["psbt"],
+      }),
     );
-    await vi.waitFor(() => {
-      const s = app.querySelector("#next-card-sentence")?.textContent || "";
-      if (!s || s === "…") throw new Error("next card not resolved");
-    });
-    await new Promise((r) => setTimeout(r, 0));
+    await settled(app);
     expect(app.querySelector("#onchain-escrow-row")).toBeNull();
     expect(app.querySelector("[data-open-donate]")).toBeNull();
   });
@@ -277,4 +303,115 @@ describe("refunding detail page after the claim view loads (UI UX: keep refundin
       if (accepting) expect(app.querySelector("#next-register")).toBeTruthy();
     });
   }
+});
+
+/**
+ * Review HOLD H1 on 8c61359: a catalog-closed row whose claim view says
+ * listed (or claimed + awaiting_funds) got a next-card Donate, and clicking it
+ * mounted the modal with the address. The next card is now built from the
+ * catalog status, and mounting/opening the modal refuses.
+ */
+describe("catalog-closed row, claim view open (H1): next card from the catalog status; no Donate, modal or address", () => {
+  const shapes: Record<string, Partial<ClaimStatus>> = {
+    "claim view listed/open": { status: "listed", state: "open", accepting_funds: true },
+    "claim view claimed + awaiting_funds": {
+      status: "listed",
+      state: "claimed",
+      claimer: "bob",
+      accepting_funds: true,
+      psbt: { structured_state: "awaiting_funds" } as ClaimStatus["psbt"],
+    },
+  };
+  for (const catalog of ["declined", "refunding"]) {
+    for (const [shape, cv] of Object.entries(shapes)) {
+      it(`${catalog} + ${shape}: card matches the catalog-status card, no Donate button`, async () => {
+        const claim = claimView(cv);
+        const app = await renderPage(row({ status: catalog }), claim);
+        await settled(app);
+        const { resolveNextAction } = await import("./next-action");
+        const expected = resolveNextAction({
+          proposal: row({ status: catalog }),
+          claim,
+          apps: null,
+          user: null,
+          reviewerActive: false,
+          isProposer: false,
+          isBuilder: false,
+        });
+        // Same card as resolveNextAction gives for the catalog status. On main a
+        // declined row still falls through to the generic fallback copy;
+        // plebly.fund#71 adds "Listing declined." (merge after #71).
+        expect(app.querySelector("#next-card-sentence")?.textContent?.trim()).toBe(expected.sentence);
+        assertNoDonate(app);
+      });
+
+      it(`${catalog} + ${shape}: a Donate click path (stale button) refuses: no modal, no address`, async () => {
+        const app = await renderPage(row({ status: catalog }), claimView(cv));
+        await settled(app);
+        // A stale/injected Donate trigger still goes through the click path.
+        app.insertAdjacentHTML("beforeend", `<button type="button" data-open-donate id="stale-donate">Donate</button>`);
+        const { ensureDonateModalMounted } = await import("./proposal-ui");
+        expect(await ensureDonateModalMounted(document)).toBeNull();
+        document.querySelector<HTMLButtonElement>("#stale-donate")!.click();
+        await new Promise((r) => setTimeout(r, 50));
+        expect(document.querySelector("#donate-modal:not([data-donate-shell])")).toBeNull();
+        expect(document.body.innerHTML).not.toContain(ESCROW);
+      });
+    }
+
+    it(`${catalog} + claim view listed + ?donate deep link: no auto-open, no modal, no address`, async () => {
+      const app = await renderPage(
+        row({ status: catalog }),
+        claimView({ status: "listed", state: "open", accepting_funds: true }),
+        "?donate=1",
+      );
+      await settled(app);
+      await new Promise((r) => setTimeout(r, 50));
+      assertNoDonate(app);
+    });
+  }
+
+  it("control: catalog listed + claim view listed keeps Donate and opens the modal on the claim-view address", async () => {
+    const app = await renderPage(
+      row({ status: "listed" }),
+      claimView({ status: "listed", state: "open", accepting_funds: true }),
+    );
+    await settled(app);
+    const btn = app.querySelector<HTMLButtonElement>("[data-open-donate]");
+    expect(btn).toBeTruthy();
+    btn!.click();
+    await vi.waitFor(() => {
+      if (!document.querySelector("#donate-modal")) throw new Error("modal not mounted");
+    });
+    expect(document.querySelector("#donate-modal")!.innerHTML).toContain(ESCROW);
+  });
+});
+
+/** Review HOLD H2: unknown or malformed status strings fail closed. */
+describe("unknown or malformed catalog status (H2): 'Funding status unavailable.', nothing fundable", () => {
+  for (const status of ["weird_status", "", " declined", "Listed"]) {
+    it(`status ${JSON.stringify(status)}: first paint and after the claim view, no address, meter or Donate`, async () => {
+      const app = await renderPage(row({ status }), claimView({ status: "listed", state: "open", accepting_funds: true }));
+      expect(app.querySelector(".proposal-funding-bar")).toBeNull();
+      expect(app.querySelector("#onchain-escrow-row")).toBeNull();
+      await settled(app);
+      expect(app.querySelector("#next-card-sentence")?.textContent?.trim()).toBe("Funding status unavailable.");
+      expect(app.querySelector(".next-card-primary button, .next-card-primary a")).toBeNull();
+      expect(app.querySelector(".proposal-funding-bar")).toBeNull();
+      assertNoDonate(app);
+    });
+  }
+
+  it("copy: 'Funding status unavailable.', never 'isn't accepting funds', no button", async () => {
+    const { resolveNextAction, nextActionCardHtml } = await import("./next-action");
+    for (const status of ["weird_status", "", " declined"]) {
+      const action = resolveNextAction({ proposal: row({ status }), claim: null });
+      expect(action.sentence).toBe("Funding status unavailable.");
+      expect(action.button).toBeNull();
+      const html = nextActionCardHtml(action);
+      expect(html).toContain("Funding status unavailable.");
+      expect(html).not.toMatch(/isn.t accepting funds/i);
+      expect(html).not.toContain("data-open-donate");
+    }
+  });
 });

@@ -1619,6 +1619,12 @@ export type DonateChromeContext = {
   wantsDonateOpen?: boolean;
   /** True when ?rail=lightning query param was present. */
   wantsLnRail?: boolean;
+  /**
+   * Catalog status (read before the claim view merged in) is closed to funds
+   * (plebly.fund#74): never mount or open the Donate modal, whatever the
+   * claim view says.
+   */
+  fundsClosed?: boolean;
 };
 
 let donateChromeContext: DonateChromeContext | null = null;
@@ -1795,6 +1801,11 @@ export async function ensureDonateModalMounted(
 
   let ctx = donateChromeContext;
   const locKeys = proposalKeysFromLocation();
+
+  if (ctx?.fundsClosed) {
+    closeDonateModalWhenBlocked();
+    return null;
+  }
 
   const applyClaimEscrow = (
     target: DonateChromeContext,
@@ -2091,6 +2102,12 @@ export async function mountDonateChromeWhenEscrowKnown(
   const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
 
+  // Catalog status closed to funds (plebly.fund#74): never mount.
+  if (donateChromeContext?.fundsClosed) {
+    closeDonateModalWhenBlocked();
+    return false;
+  }
+
   // Catalog-level blocking — also close any open modal
   if (isCatalogDonateBlocked(proposal)) {
     closeDonateModalWhenBlocked();
@@ -2119,6 +2136,7 @@ export async function mountDonateChromeWhenEscrowKnown(
     claimStatusPromise: donateChromeContext?.claimStatusPromise,
     wantsDonateOpen: donateChromeContext?.wantsDonateOpen,
     wantsLnRail: donateChromeContext?.wantsLnRail,
+    fundsClosed: donateChromeContext?.fundsClosed,
   });
 
   const existing = findDonateModal(root);
@@ -2188,7 +2206,7 @@ export function onChainPanelHtml(
   if (
     p.escrow_address &&
     !opts?.hideEscrow &&
-    !isClosedToFundsStatus(String(p.status || ""))
+    !isClosedToFundsStatus(p.status)
   ) {
     rows.push(onChainEscrowRowHtml(p.escrow_address));
   }

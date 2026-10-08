@@ -558,9 +558,11 @@ export async function bindBuilderPanel(
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
-  // Catalog status as painted (declined, voided, refunding, …), read before the
-  // claim view merges its status into opts.proposal: no escrow row, no Donate.
-  const closedToFunds = isClosedToFundsStatus(String(opts.proposal.status || ""));
+  // Catalog status as painted (declined, voided, refunding, unknown, …), read
+  // before the claim view merges its status into opts.proposal: no escrow row,
+  // no Donate, and the next card is built from this status, not the claim view's.
+  const catalogStatus = opts.proposal.status;
+  const closedToFunds = isClosedToFundsStatus(catalogStatus);
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
@@ -601,6 +603,7 @@ export async function bindBuilderPanel(
       claimStatusPromise,
       wantsDonateOpen: prevEarlyCtx?.wantsDonateOpen,
       wantsLnRail: prevEarlyCtx?.wantsLnRail,
+      fundsClosed: closedToFunds,
     });
     bindDonateModal(document);
   }
@@ -1361,6 +1364,7 @@ export async function bindBuilderPanel(
         // Preserve deep link flags from earlier context
         wantsDonateOpen: prevCtx?.wantsDonateOpen,
         wantsLnRail: prevCtx?.wantsLnRail,
+        fundsClosed: closedToFunds,
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
       // so #donate-open / [data-open-donate] from next-action actually open it.
@@ -1446,18 +1450,25 @@ export async function bindBuilderPanel(
       );
       const asFulfiller = sessionIsClaimStatusFulfiller(opts.user, status);
       void bindPayoutCard(asFulfiller);
+      // Closed catalog status (declined, refunding, unknown, …): build the next
+      // card from it, so a claim view saying listed/pooling can't bring back
+      // "still raising" or Donate. resolveNextAction keeps its own precedence
+      // (voided, settled, release-blocked first).
+      const cardProposal = closedToFunds
+        ? { ...opts.proposal, status: catalogStatus }
+        : opts.proposal;
       renderClaimStatusBody(
         body,
         status,
         opts.user,
-        opts.proposal,
+        cardProposal,
         isProposer,
         apps,
         reviewerActive,
       );
       await syncHybridReviewUi(root, opts.proposal, status, opts.user);
       const next = resolveNextAction({
-        proposal: opts.proposal,
+        proposal: cardProposal,
         claim: status,
         apps,
         user: opts.user,

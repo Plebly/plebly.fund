@@ -350,9 +350,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
       moreIds,
     };
   }
-  if (!isKnownProposalStatus(status)) {
+  if (!isKnownProposalStatus(status) || String(p.status || "") !== status) {
+    // Unknown or malformed (untrimmed, mixed-case) status: say so; don't claim
+    // it "isn't accepting funds".
     return {
-      sentence: "Unavailable.",
+      sentence: "Funding status unavailable.",
       button: null,
       moreIds,
     };

@@ -2,6 +2,7 @@ import type { AuthUser } from "./auth";
 import {
   type ClaimApplicationsResponse,
   type ClaimStatus,
+  isClosedToFundsStatus,
 } from "./builder";
 import { claimerTrackHtml } from "./claimer-track-ui";
 import {
@@ -72,9 +73,12 @@ export function renderClaimStatusBody(
   });
   // The claim view alone opens Donate (accepting_funds === true and its own
   // escrow address); a missing catalog row never does, nor does a null/absent
-  // accepting_funds. The sentence stays; only the button goes.
+  // accepting_funds. A status closed to funds (builder-panel passes the
+  // catalog status for those) never shows Donate either. The sentence stays;
+  // only the button goes.
   const action =
-    resolved.button === "donate" && !isClaimViewDonateAllowed(status)
+    resolved.button === "donate" &&
+    (!isClaimViewDonateAllowed(status) || isClosedToFundsStatus(proposal.status))
       ? { ...resolved, button: null }
       : resolved;
   const track = claimerTrackHtml(status);

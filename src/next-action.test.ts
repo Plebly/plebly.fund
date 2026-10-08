@@ -857,11 +857,11 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
-      name: "unknown catalog status shows Unavailable",
+      name: "unknown catalog status shows Funding status unavailable",
       input: {
         proposal: proposal({ status: "some_future_status" as never }),
       },
-      sentence: "Unavailable.",
+      sentence: "Funding status unavailable.",
       button: null,
     },
     {

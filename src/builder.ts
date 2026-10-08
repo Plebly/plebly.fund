@@ -6,7 +6,7 @@ import {
   WORKERS_API,
   isFundableStatus,
 } from "./config";
-import type { Proposal } from "./types";
+import { isKnownProposalStatus, type Proposal } from "./types";
 import { claimsProposalPath } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -240,13 +240,20 @@ export function isBlockedStatus(status: string): boolean {
 }
 
 /**
- * Blocked and not fundable (declined, voided, underfunded, refunding,
- * redirected, redirect_pending, bounty_settled). The detail page shows no
- * escrow address, no funding meter and no Donate for these rows.
+ * Closed to funds: the detail page shows no escrow address, no funding meter
+ * and no Donate. True for blocked, non-fundable statuses (declined, voided,
+ * underfunded, refunding, redirected, redirect_pending, bounty_settled) and,
+ * failing closed, for anything that is not an exact known status: unknown
+ * (`weird_status`), empty, or malformed (`" declined"`, `"Listed"`).
  * declined_fundable is blocked but still fundable, so it is not closed.
+ * This is about the status string only; a row missing from the catalog keeps
+ * its git status and is decided by the claim view.
  */
-export function isClosedToFundsStatus(status: string): boolean {
-  return isBlockedStatus(status) && !isFundableStatus(String(status || "").toLowerCase());
+export function isClosedToFundsStatus(status: string | null | undefined): boolean {
+  const raw = String(status ?? "");
+  const s = raw.trim().toLowerCase();
+  if (raw !== s || !isKnownProposalStatus(s)) return true;
+  return isBlockedStatus(s) && !isFundableStatus(s);
 }
 
 export function isDirectProposal(p: Proposal): boolean {

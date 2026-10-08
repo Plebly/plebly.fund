@@ -259,8 +259,9 @@ export function proposalFundingBarHtml(
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
 ): string {
-  // Declined, voided, refunding, …: no hero meter ("… to open" / "Applications closed").
-  if (isClosedToFundsStatus(String(ctx.status || ""))) return "";
+  // Declined, voided, refunding, unknown, …: no hero meter ("… to open" /
+  // "Applications closed"). Callers without a status context keep the meter.
+  if ("status" in ctx && isClosedToFundsStatus(ctx.status)) return "";
   return `<div class="proposal-funding-bar" data-milestones="${milestones.length}">
     ${fundingProgressHtml(balance, floor, target, milestones, ctx)}
   </div>`;
