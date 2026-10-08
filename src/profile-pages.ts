@@ -647,7 +647,7 @@ export async function renderAccount(
                         ? "Open to apply"
                         : typeof bal === "number" && Number.isFinite(bal)
                           ? formatSats(bal)
-                          : "Balance temporarily unavailable"
+                          : "Balance unavailable"
                     }</span>
                     <button type="button" class="btn ghost btn-compact work-list-action" data-unwatch="${escapeHtml(w.proposal_path)}">Unwatch</button>
                   </li>`;

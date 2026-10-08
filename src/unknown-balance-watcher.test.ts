@@ -7,7 +7,7 @@
  *    the whole existing balance on the next good read. Now the first good read
  *    is the baseline (shown, never announced); deltas start after it.
  * 2. Account › Watching pill: `formatSats(bal ?? 0)` said "0 sats" when the
- *    read failed. Now "Balance temporarily unavailable".
+ *    read failed. Now "Balance unavailable".
  * Known 0 behaves exactly as before in both.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +16,7 @@ import { CLAIM_FLOOR_SATS } from "./config";
 import type { Proposal } from "./types";
 
 const UNIQUE = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
-const UNAVAILABLE = "Balance temporarily unavailable";
+const UNAVAILABLE = "Balance unavailable";
 
 /** Scripted mempool: each /address read takes the next entry ("fail" → 503); the last repeats. */
 let reads: (number | "fail")[] = [];
@@ -275,7 +275,7 @@ describe("Account › Watching pill", () => {
     return el!.textContent || "";
   }
 
-  it("unique row whose read failed: 'Balance temporarily unavailable', not '0 sats'", async () => {
+  it("unique row whose read failed: 'Balance unavailable', not '0 sats'", async () => {
     const text = await pill(null, "fail");
     expect(text).toBe(UNAVAILABLE);
     expect(text).not.toMatch(/\b0 sats\b/);
