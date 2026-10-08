@@ -639,26 +639,16 @@ async function bindOnchainDonate(
   panel: Element,
   address: string,
 ): Promise<void> {
-  const qrImg = panel.querySelector<HTMLImageElement>("#donate-qr");
   const amountInput = panel.querySelector<HTMLInputElement>("#donate-amount");
-  const walletLink = panel.querySelector<HTMLAnchorElement>("#donate-wallet");
   const copyBtnEl = panel.querySelector<HTMLButtonElement>("#donate-copy");
 
-  const sync = async (sats: number | null) => {
-    const uri = bitcoinUri(address, sats);
-    if (walletLink) walletLink.href = uri;
-    if (qrImg) {
-      try {
-        qrImg.src = await QRCode.toDataURL(uri, {
-          width: 168,
-          margin: 1,
-          color: themeQrColors(),
-        });
-      } catch {
-        /* ignore */
-      }
-    }
-  };
+  // Address, copy target, QR and wallet link all come from one place.
+  syncDonateModalEscrow(address, panel);
+  await donateQrPending.get(panel);
+  // Re-binds (every Donate open calls bindDonatePanel) must not stack
+  // listeners: they used to each close over their own, possibly stale, address.
+  if (panel.hasAttribute("data-onchain-bound")) return;
+  panel.setAttribute("data-onchain-bound", "1");
 
   const onchainPresets = () =>
     panel.querySelectorAll<HTMLButtonElement>('.donate-preset[data-rail="onchain"]');
@@ -674,13 +664,11 @@ async function bindOnchainDonate(
     });
   };
 
-  await sync(null);
-
   amountInput?.addEventListener("input", () => {
     const n = Number(amountInput.value);
     const sats = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
     syncPresetActive(sats);
-    void sync(sats);
+    void renderDonatePaymentTargets(panel);
   });
 
   onchainPresets().forEach((btn) => {
@@ -691,13 +679,17 @@ async function bindOnchainDonate(
       if (!Number.isFinite(sats) || sats <= 0) return;
       if (amountInput) amountInput.value = String(Math.floor(sats));
       syncPresetActive(Math.floor(sats));
-      void sync(Math.floor(sats));
+      void renderDonatePaymentTargets(panel);
     });
   });
 
   copyBtnEl?.addEventListener("click", async () => {
+    // Exactly the address on screen (data-copy is synced with #donate-address
+    // by syncDonateModalEscrow and cleared when Donate is blocked).
+    const value = copyBtnEl.getAttribute("data-copy") || "";
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(address);
+      await navigator.clipboard.writeText(value);
       const prev = copyBtnEl.textContent;
       copyBtnEl.textContent = "Copied";
       copyBtnEl.classList.add("copied");
@@ -1632,13 +1624,92 @@ export function getDonateChromeContext(): DonateChromeContext | null {
   return donateChromeContext;
 }
 
-/** Keep address / copy / wallet / explorer in sync after late escrow arrives. */
+/** Latest QR render per Donate panel, so an older (slower) render never wins. */
+const donateQrSeq = new WeakMap<Element, number>();
+const donateQrPending = new WeakMap<Element, Promise<void>>();
+
+function donatePanelIn(root: ParentNode): Element | null {
+  if (root instanceof Element && root.id === "donate") return root;
+  return root.querySelector("#donate");
+}
+
+/** Amount (sats) currently typed in the on-chain pane, or null. */
+function donateAmountSats(panel: Element): number | null {
+  const raw = panel.querySelector<HTMLInputElement>("#donate-amount")?.value ?? "";
+  const n = Number(raw);
+  return raw !== "" && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+/**
+ * Wallet link + QR for the panel's current address and amount. Both use the
+ * exact address (never the chunked display). No address → both hidden and
+ * cleared, never a stale value.
+ */
+function renderDonatePaymentTargets(panel: Element): Promise<void> {
+  const addr = panel.getAttribute("data-donate-address") || "";
+  const wallet = panel.querySelector<HTMLAnchorElement>("#donate-wallet");
+  const qrImg = panel.querySelector<HTMLImageElement>("#donate-qr");
+  const seq = (donateQrSeq.get(panel) ?? 0) + 1;
+  donateQrSeq.set(panel, seq);
+  if (!addr) {
+    if (wallet) {
+      wallet.removeAttribute("href");
+      wallet.hidden = true;
+    }
+    if (qrImg) {
+      qrImg.removeAttribute("src");
+      qrImg.removeAttribute("data-qr-uri");
+      qrImg.removeAttribute("data-qr-address");
+      qrImg.hidden = true;
+    }
+    const done = Promise.resolve();
+    donateQrPending.set(panel, done);
+    return done;
+  }
+  const uri = bitcoinUri(addr, donateAmountSats(panel));
+  if (wallet) {
+    wallet.href = uri;
+    wallet.hidden = false;
+  }
+  if (!qrImg) return Promise.resolve();
+  // A different address must never keep showing the old code while the new
+  // one renders.
+  if (qrImg.getAttribute("data-qr-address") !== addr) {
+    qrImg.removeAttribute("src");
+    qrImg.removeAttribute("data-qr-uri");
+    qrImg.removeAttribute("data-qr-address");
+  }
+  qrImg.hidden = false;
+  const done = (async () => {
+    try {
+      const src = await QRCode.toDataURL(uri, {
+        width: 168,
+        margin: 1,
+        color: themeQrColors(),
+      });
+      if (donateQrSeq.get(panel) !== seq) return;
+      qrImg.src = src;
+      qrImg.setAttribute("data-qr-uri", uri);
+      qrImg.setAttribute("data-qr-address", addr);
+    } catch {
+      /* ignore */
+    }
+  })();
+  donateQrPending.set(panel, done);
+  return done;
+}
+
+/**
+ * The one place the Donate modal's address changes: displayed address, copy
+ * target, QR, wallet (BIP21) link and explorer link move together. An empty
+ * or wrong-network address hides and clears all of them.
+ */
 export function syncDonateModalEscrow(
   address: string,
   scope: ParentNode = document,
 ): void {
-  const addr = address.trim();
-  if (!addr) return;
+  const addr = String(address || "").trim();
+  if (!addr || !escrowAddressMatchesNetwork(addr)) return clearDonateModalAddress(scope);
   const root =
     scope instanceof Document || scope instanceof Element ? scope : document;
   const code = root.querySelector<HTMLElement>("#donate-address");
@@ -1648,11 +1719,41 @@ export function syncDonateModalEscrow(
   }
   const copy = root.querySelector<HTMLElement>("#donate-copy");
   if (copy) copy.setAttribute("data-copy", addr);
-  const wallet = root.querySelector<HTMLAnchorElement>("#donate-wallet");
-  if (wallet) wallet.href = bitcoinUri(addr);
+  setDonateAddressTargetsHidden(root, false);
+  const panel = donatePanelIn(root);
+  if (panel) {
+    panel.setAttribute("data-donate-address", addr);
+    void renderDonatePaymentTargets(panel);
+  }
   const explorer = root.querySelector<HTMLAnchorElement>(".donate-explorer-link");
   if (explorer) {
     explorer.href = `${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`;
+  }
+}
+
+function setDonateAddressTargetsHidden(root: ParentNode, hidden: boolean): void {
+  for (const sel of ["#donate-address", "#donate-copy", ".donate-explorer-link"]) {
+    const el = root.querySelector<HTMLElement>(sel);
+    if (el) el.hidden = hidden;
+  }
+}
+
+/** No valid address: clear and hide address, copy, QR, wallet and explorer. */
+function clearDonateModalAddress(scope: ParentNode): void {
+  const root =
+    scope instanceof Document || scope instanceof Element ? scope : document;
+  const code = root.querySelector<HTMLElement>("#donate-address");
+  if (code) {
+    code.textContent = "";
+    code.removeAttribute("title");
+  }
+  root.querySelector<HTMLElement>("#donate-copy")?.removeAttribute("data-copy");
+  root.querySelector<HTMLAnchorElement>(".donate-explorer-link")?.removeAttribute("href");
+  setDonateAddressTargetsHidden(root, true);
+  const panel = donatePanelIn(root);
+  if (panel) {
+    panel.removeAttribute("data-donate-address");
+    void renderDonatePaymentTargets(panel);
   }
 }
 
@@ -1672,14 +1773,8 @@ export function closeDonateModalWhenBlocked(): void {
   const modal = findDonateModal(document);
   if (!modal) return;
 
-  // Clear escrow address so user doesn't see it
-  const addrEl = modal.querySelector<HTMLElement>("#donate-address");
-  if (addrEl) {
-    addrEl.textContent = "";
-    addrEl.removeAttribute("title");
-  }
-  const copyBtn = modal.querySelector<HTMLElement>("#donate-copy");
-  if (copyBtn) copyBtn.removeAttribute("data-copy");
+  // Clear escrow address, copy target, QR and wallet link so nothing stale remains.
+  clearDonateModalAddress(modal);
 
   // Close the modal
   modal.hidden = true;
