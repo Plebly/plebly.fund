@@ -10,6 +10,7 @@ import { escapeHtml } from "./util";
 export const ESCROW_ADDRESS_CHUNK = 4;
 export const ESCROW_SIGNET_ONLY_LINE = "Signet test coins only. Real bitcoin can't be sent here.";
 export const ESCROW_COPIED_LINE = "Copied. Deposits show once they confirm.";
+export const ESCROW_COPY_FAILED_LINE = "Couldn't copy. Select the address instead.";
 
 export function escrowAddressChunks(address: string, size = ESCROW_ADDRESS_CHUNK): string[] {
   const a = String(address || "").trim();
@@ -44,11 +45,30 @@ export function escrowAddressCopiedHtml(): string {
   return `<p class="escrow-addr-copied" role="status" hidden>${escapeHtml(ESCROW_COPIED_LINE)}</p>`;
 }
 
+function escrowAddressStatusLine(from: Element): HTMLElement | null {
+  const block = from.closest("[data-escrow-address-block]");
+  return block?.querySelector<HTMLElement>(".escrow-addr-copied") ?? null;
+}
+
 /** Reveal the "deposits show once they confirm" line in the address block. */
 export function showEscrowAddressCopied(from: Element): void {
-  const block = from.closest("[data-escrow-address-block]");
-  const line = block?.querySelector<HTMLElement>(".escrow-addr-copied");
-  if (line) line.hidden = false;
+  const line = escrowAddressStatusLine(from);
+  if (!line) return;
+  line.textContent = ESCROW_COPIED_LINE;
+  line.classList.remove("is-error");
+  line.hidden = false;
+}
+
+/**
+ * Clipboard refused or missing (permissions, insecure context, old browser):
+ * say so on the same status line instead of looking like nothing happened.
+ */
+export function showEscrowAddressCopyFailed(from: Element): void {
+  const line = escrowAddressStatusLine(from);
+  if (!line) return;
+  line.textContent = ESCROW_COPY_FAILED_LINE;
+  line.classList.add("is-error");
+  line.hidden = false;
 }
 
 const ESCROW_COPY_HANDLER_KEY = "__pleblyEscrowCopyHandler";
@@ -78,7 +98,7 @@ export function bindEscrowAddressCopy(): void {
         btn.textContent = prev;
       }, 1200);
     } catch {
-      /* ignore */
+      showEscrowAddressCopyFailed(btn);
     }
   };
   document.addEventListener("click", handler);

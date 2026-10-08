@@ -4,6 +4,7 @@ import {
   escrowAddressSignetNoteHtml,
   renderEscrowAddressInto,
   showEscrowAddressCopied,
+  showEscrowAddressCopyFailed,
 } from "./escrow-address-display";
 import QRCode from "qrcode";
 import {
@@ -722,7 +723,7 @@ async function bindOnchainDonate(
         copyBtnEl.classList.remove("copied");
       }, 1400);
     } catch {
-      /* ignore */
+      showEscrowAddressCopyFailed(copyBtnEl);
     }
   });
 }
