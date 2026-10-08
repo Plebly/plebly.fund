@@ -53,7 +53,7 @@ import {
   userMatchesProposer,
 } from "./proposal-ui";
 import {
-  isCatalogDonateBlocked,
+  isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
   resolveNextAction,
 } from "./next-action";
@@ -532,12 +532,14 @@ export async function renderProposalPage(
       match.id,
     );
 
-    const catalogBlocked = isCatalogDonateBlocked(match);
+    // Donate-blocked by the catalog, or voided/settled by status: no Donate chrome,
+    // no ?donate auto-open and no escrow row on first paint.
+    const catalogEscrowHidden = isCatalogEscrowHidden(match);
     const hasEscrow =
       Boolean(match.escrow_address) &&
       escrowAddressMatchesNetwork(String(match.escrow_address));
     const statusOk = isDonateChromeStatus(String(match.status));
-    const showDonatePlaceholder = hasEscrow && statusOk && !catalogBlocked;
+    const showDonatePlaceholder = hasEscrow && statusOk && !catalogEscrowHidden;
     const wantsDonate =
       showDonatePlaceholder &&
       (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
@@ -698,7 +700,9 @@ export async function renderProposalPage(
                   </div>`
                 : ""
             }
-            ${onChainPanelHtml(match, { hideEscrow: showDonatePlaceholder })}
+            ${onChainPanelHtml(match, {
+              hideEscrow: showDonatePlaceholder || catalogEscrowHidden,
+            })}
           </aside>
         </div>
         ${showDonatePlaceholder ? `<div id="mobile-cta-slot" hidden></div>` : ""}
