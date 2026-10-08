@@ -75,7 +75,7 @@ const fromCatalog = (addr: string): Source => ({
   claimStatus: "claimable",
 });
 
-function stubFetch(src: Source, claim: Claim) {
+function stubFetch(src: Source, claim: Claim, claimAddr: string | null = CLAIM_ADDR) {
   const md = markdown(src.docEscrow);
   vi.stubGlobal(
     "fetch",
@@ -102,7 +102,7 @@ function stubFetch(src: Source, claim: Claim) {
           status: src.claimStatus,
           confirmed_balance_sats: 0,
           claim_floor_sats: CLAIM_FLOOR_SATS,
-          escrow_address: CLAIM_ADDR,
+          ...(claimAddr ? { escrow_address: claimAddr } : {}),
           accepting_funds: claim === "allows",
         };
         return Response.json(view);
@@ -112,9 +112,13 @@ function stubFetch(src: Source, claim: Claim) {
   );
 }
 
-async function renderPage(src: Source, claim: Claim): Promise<HTMLElement> {
+async function renderPage(
+  src: Source,
+  claim: Claim,
+  claimAddr: string | null = CLAIM_ADDR,
+): Promise<HTMLElement> {
   document.body.innerHTML = `<div id="app"></div>`;
-  stubFetch(src, claim);
+  stubFetch(src, claim, claimAddr);
   const { renderProposalPage } = await import("./proposal-page");
   const { findListedProposalById } = await import("./github");
   const preloaded = await findListedProposalById(ID);
@@ -124,11 +128,11 @@ async function renderPage(src: Source, claim: Claim): Promise<HTMLElement> {
   await vi.waitFor(() => {
     if (!app.querySelector(".proposal-onchain")) throw new Error("not painted yet");
   });
-  if (claim === "allows") {
+  if (claim === "allows" && claimAddr) {
     await vi.waitFor(() => {
       if (!app.querySelector("#onchain-escrow-row")) throw new Error("no escrow row yet");
     });
-  } else if (claim === "blocked") {
+  } else if (claim !== "pending") {
     await vi.waitFor(() => {
       const s = app.querySelector("#next-card-sentence")?.textContent || "";
       if (!s || s === "…") throw new Error("next card not resolved");
@@ -220,3 +224,33 @@ describe("control: a signet doc address is unchanged", () => {
     expect(app.querySelector("#onchain-escrow-row code")?.textContent).toBe(CLAIM_ADDR);
   });
 });
+
+// The claim view allows Donate but carries no escrow address of its own, so
+// the claim-view refresh falls back to the doc/catalog address when it
+// re-adds the escrow row. That re-add must apply the same network check as
+// first paint.
+for (const [label, mk] of [
+  ["doc", fromDoc],
+  ["catalog", fromCatalog],
+] as const) {
+  describe(`claim view allows Donate with no escrow address, ${label} address`, () => {
+    it("a bc1… address is not re-added (no row, nothing to copy)", async () => {
+      const app = await renderPage(mk(MAINNET_ADDR), "allows", null);
+      expect(app.querySelector("#next-card-sentence")?.textContent || "").not.toBe("…");
+      expect(app.querySelector("#onchain-escrow-row")).toBeNull();
+      expect(onchain(app)).not.toContain(MAINNET_ADDR);
+      expect(app.querySelector(`[data-copy="${MAINNET_ADDR}"]`)).toBeNull();
+    });
+
+    it("a signet address is still shown and copyable", async () => {
+      const app = await renderPage(mk(DOC_ADDR), "allows", null);
+      await vi.waitFor(() => {
+        if (!app.querySelector("#onchain-escrow-row")) throw new Error("no escrow row yet");
+      });
+      const rows = app.querySelectorAll<HTMLElement>("#onchain-escrow-row");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.querySelector("code")?.textContent).toBe(DOC_ADDR);
+      expect(rows[0]!.querySelector<HTMLElement>(".copy-btn")?.dataset.copy).toBe(DOC_ADDR);
+    });
+  });
+}

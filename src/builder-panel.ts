@@ -1525,7 +1525,14 @@ export async function bindBuilderPanel(
         }
       }
 
-      if (onchainPanel && donateAllowed && opts.proposal.escrow_address) {
+      // Same rule as first paint: only an address on this network is shown
+      // (a bc1… doc or catalog address on signet never comes back here).
+      if (
+        onchainPanel &&
+        donateAllowed &&
+        opts.proposal.escrow_address &&
+        escrowAddressMatchesNetwork(String(opts.proposal.escrow_address))
+      ) {
         if (!onchainPanel.querySelector("#onchain-escrow-row")) {
           onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));
         }

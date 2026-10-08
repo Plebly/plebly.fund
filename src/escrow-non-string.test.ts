@@ -151,7 +151,7 @@ describe("balanceAddressFor", () => {
     });
   }
   it("a string address is still read (trimmed); shared and blank are still null", () => {
-    expect(balanceAddressFor({ escrow_address: ` ${SIGNET_ADDR} ` })).toBe(SIGNET_ADDR);
+    expect(balanceAddressFor({ escrow_address: ` ${SIGNET_ADDR} `, escrow_shared: false })).toBe(SIGNET_ADDR);
     expect(balanceAddressFor({ escrow_address: SIGNET_ADDR, escrow_shared: true })).toBeNull();
     expect(balanceAddressFor({ escrow_address: "  " })).toBeNull();
     expect(balanceAddressFor({ escrow_address: null })).toBeNull();
