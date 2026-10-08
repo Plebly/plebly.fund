@@ -23,6 +23,13 @@ import { btnWithIcon } from "./icons";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { renderMarkdown } from "./markdown";
 import {
+  openSignedRefund,
+  REFUND_REQUIRES_SIGNATURE,
+  REFUND_SIGNATURE_COPY,
+  rowNeedsSignature,
+  signatureLineHtml,
+} from "./refund-needs-signature";
+import {
   bindDonateModal,
   mountDonateChromeWhenEscrowKnown,
   setDonateChromeContext,
@@ -152,8 +159,18 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
           status: string;
           refund_address?: string | null;
           refund_txid?: string | null;
+          /** Payout skips this row until it's bound by signature. */
+          refund_needs_signature?: boolean;
         }[];
       };
+      const rows = Array.isArray(data.contributions) ? data.contributions : [];
+      // A row that needs a signature is not "registered", whatever its status says.
+      const needsSignature = rows.filter(rowNeedsSignature);
+      const registeredCount = Math.max(
+        0,
+        (data.registered || 0) -
+          needsSignature.filter((r) => r.status === "registered").length,
+      );
       statusEl.hidden = false;
       if (!data.linked) {
         bodyEl.textContent =
@@ -164,13 +181,13 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       }
       const parts = [
         data.needs_address ? `${data.needs_address} still need an address` : "",
-        data.registered ? `${data.registered} registered` : "",
+        registeredCount ? `${registeredCount} registered` : "",
         data.paid ? `${data.paid} paid` : "",
       ].filter(Boolean);
       bodyEl.textContent = data.addresses_frozen
         ? `${parts.join(" · ")}. Address locked for this month’s payout.`
         : `${parts.join(" · ")}.`;
-      listEl.innerHTML = data.contributions
+      listEl.innerHTML = rows
         .map((r) => {
           const identity =
             r.rail === "lightning" || r.swap_id
@@ -178,6 +195,11 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
                   r.swap_id && r.swap_id.length > 16 ? "…" : ""
                 }`
               : `${escapeHtml(r.txid.slice(0, 12))}…:${r.vout}`;
+          if (rowNeedsSignature(r)) {
+            return `<li class="mono">${identity}<p class="muted refund-needs-signature">${signatureLineHtml(
+              REFUND_SIGNATURE_COPY.rowNeedsSignature,
+            )}</p></li>`;
+          }
           return `<li class="mono">${identity} · ${escapeHtml(r.status)}${
             r.refund_address
               ? ` · ${escapeHtml(r.refund_address.slice(0, 12))}…`
@@ -188,7 +210,9 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       if (formEl) {
         formEl.hidden = Boolean(
           data.addresses_frozen ||
-            (data.needs_address === 0 && data.registered + data.paid > 0),
+            (data.needs_address === 0 &&
+              needsSignature.length === 0 &&
+              registeredCount + data.paid > 0),
         );
       }
     } catch {
@@ -196,6 +220,12 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
     }
   };
   void loadRefundStatus();
+  root
+    .querySelector("#refund-panel")
+    ?.addEventListener("click", (ev) => {
+      const link = (ev.target as Element | null)?.closest?.("[data-open-signed-refund]");
+      if (link && openSignedRefund(root)) ev.preventDefault();
+    });
 
   const syncRefundRail = () => {
     const rail =
@@ -283,6 +313,13 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
           body.package_error ? "error" : "",
         );
         void loadRefundStatus();
+      } else if (body.code === REFUND_REQUIRES_SIGNATURE) {
+        if (msg) {
+          msg.hidden = false;
+          msg.className = "muted error";
+          msg.innerHTML = signatureLineHtml(REFUND_SIGNATURE_COPY.registerNeedsSignature);
+        }
+        openSignedRefund(root);
       } else {
         showRefundMsg(
           body.note || String(body.error || "failed"),
