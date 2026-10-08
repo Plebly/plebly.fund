@@ -271,19 +271,44 @@ describe("(b) the address comes from the claim view, never the catalog", () => {
 });
 
 describe("(c) missing catalog row is shared/unknown for its balance; accepting_funds:false still closes", () => {
-  it("no catalog row: the page never reads or shows the address total", async () => {
+  /** Balance unknown → no meter at all: no bar, no "0 raised", no "… to open". */
+  function expectNoMeter(app: HTMLElement): void {
+    expect(app.querySelector(".proposal-funding-bar")).toBeNull();
+    expect(app.querySelector(".funding-meter")).toBeNull();
+    expect(app.textContent || "").not.toMatch(/to open/i);
+    expect(app.querySelector(".funding-balance-unknown")?.textContent).toBe(
+      "Balance temporarily unavailable",
+    );
+  }
+
+  it("no catalog row: the page never reads or shows the address total, and draws no meter", async () => {
     const app = await renderPage({ claim: claimView({ accepting_funds: true }) });
+    expectNoMeter(app);
     await claimSettled(app);
     expect(addressHits).not.toContain(KNOTS);
     expect(app.textContent || "").not.toMatch(/777,777|777777/);
+    expectNoMeter(app);
   });
 
-  it("no catalog row, legacy path route: same, never the address total", async () => {
+  it("no catalog row, legacy path route: same, never the address total and no meter", async () => {
     const app = await renderPage({ claim: claimView({ accepting_funds: true }), route: "path" });
+    expectNoMeter(app);
     await claimSettled(app);
     expect(addressHits).not.toContain(KNOTS);
     expect(app.textContent || "").not.toMatch(/777,777|777777/);
     expect(donateShown(app)).toBe(true);
+    expectNoMeter(app);
+  });
+
+  it("control: a catalog row with a known balance of 0 still draws the meter (0 is a real value)", async () => {
+    const app = await renderPage({
+      claim: claimView({ accepting_funds: true }),
+      catalog: [catalogRow({ balance_sats: 0 })],
+    });
+    await claimSettled(app);
+    expect(app.querySelector(".proposal-funding-bar .funding-meter")).toBeTruthy();
+    expect(app.querySelector(".funding-balance-unknown")).toBeNull();
+    expect(app.querySelector(".proposal-funding-bar")?.textContent || "").toMatch(/to open/);
   });
 
   for (const route of ["stable", "path"] as const) {

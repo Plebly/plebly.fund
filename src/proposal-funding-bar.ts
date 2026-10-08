@@ -188,14 +188,31 @@ function fundingClosedLabel(status: string): string {
   return "Applications closed";
 }
 
+/**
+ * True only for a real balance. `null` / `undefined` / NaN mean unknown: a
+ * shared row with `balance_sats: null`, a row missing from the catalog
+ * (treated as shared), or a mempool read that failed or timed out. 0 is a
+ * real balance and still draws the meter.
+ */
+export function isKnownBalance(balance: number | null | undefined): balance is number {
+  return typeof balance === "number" && Number.isFinite(balance);
+}
+
+/** Shown in place of the meter when the balance is unknown. Never a 0 meter. */
+export function balanceUnavailableHtml(): string {
+  return `<p class="funding-balance-unknown muted" role="status">Balance temporarily unavailable</p>`;
+}
+
 export function fundingProgressHtml(
-  balance: number | undefined,
+  balance: number | null | undefined,
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
 ): string {
-  const funded = balance ?? 0;
+  // Unknown balance: no meter, no "0 raised", no "… to open" (BeTheChange777).
+  if (!isKnownBalance(balance)) return balanceUnavailableHtml();
+  const funded = balance;
   const { scale, markers } = fundingBarScale(floor, target, milestones);
   const pastFloor = funded >= floor;
   const eligibility = {
@@ -253,7 +270,7 @@ export function fundingProgressHtml(
 
 /** Slim funding strip under the hero: progress only, no duplicate stat cards. */
 export function proposalFundingBarHtml(
-  balance: number | undefined,
+  balance: number | null | undefined,
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
@@ -262,6 +279,9 @@ export function proposalFundingBarHtml(
   // Declined, voided, refunding, unknown, …: no hero meter ("… to open" /
   // "Applications closed"). Callers without a status context keep the meter.
   if ("status" in ctx && isClosedToFundsStatus(ctx.status)) return "";
+  // Unknown balance: no .proposal-funding-bar at all, so nothing later
+  // (ballot chrome, claim-view confirmed balance) can paint a meter into it.
+  if (!isKnownBalance(balance)) return balanceUnavailableHtml();
   return `<div class="proposal-funding-bar" data-milestones="${milestones.length}">
     ${fundingProgressHtml(balance, floor, target, milestones, ctx)}
   </div>`;
@@ -276,6 +296,7 @@ export function updateProposalFundingBar(
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
 ): void {
+  if (!isKnownBalance(balance)) return;
   const host = root.querySelector(".proposal-funding-bar");
   if (!host) return;
   const prevUnlocked = new Set(
