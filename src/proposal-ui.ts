@@ -1031,6 +1031,12 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     const watcher = watchConfirmedBalance(
       watchAddress,
       (balance, { previous }) => {
+        if (previous == null) {
+          // First known balance (the page's read failed or timed out): show
+          // it, but there is no delta to announce and nothing has confirmed.
+          opts.onBalanceUpdate?.(balance);
+          return;
+        }
         const delta = balance - previous;
         setWatchHintVisible(false);
         const statusEl = panel.querySelector<HTMLElement>("#donate-confirm-status");

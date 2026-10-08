@@ -721,7 +721,7 @@ export async function renderProposalPage(
       proposalPath: match.path,
       proposalTitle: match.title,
       signedIn: Boolean(user),
-      initialBalance: balance ?? 0,
+      initialBalance: balance ?? null,
       escrowShared: match.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: match.target_sats,
