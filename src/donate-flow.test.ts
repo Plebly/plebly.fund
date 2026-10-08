@@ -773,7 +773,11 @@ describe("manual linking only on a unique address", () => {
       await vi.advanceTimersByTimeAsync(100);
       expect(claimContributionWithRetry).toHaveBeenCalled();
     });
-    await vi.waitFor(() => expect(document.querySelector(".donate-credit-seen")).toBeTruthy());
+    if (escrowShared === false) {
+      await vi.waitFor(() => expect(document.querySelector(".donate-credit-seen")).toBeTruthy());
+    } else {
+      await vi.advanceTimersByTimeAsync(20_000);
+    }
     return document.body;
   }
 
@@ -793,14 +797,14 @@ describe("manual linking only on a unique address", () => {
     ["direct link: no catalog, flag null", { escrow_address: proposal.escrow_address, escrow_shared: null }, []],
     ["explicit true", { escrow_address: proposal.escrow_address, escrow_shared: true }, []],
   ] as const) {
-    it(`${label}: no picker, no Link this; the receipt instead`, async () => {
+    it(`${label}: no picker, no Link this`, async () => {
       const { isSharedEscrow } = await import("./escrow-shared");
       const shared = isSharedEscrow(row, catalog);
       expect(shared).toBe(true);
       await failedAutoLink(shared);
       expect(document.body.textContent).not.toContain("auto-link");
       expect(document.querySelector("[data-claim-txid]")).toBeNull();
-      expect(document.querySelector("[data-copy-receipt]")).toBeTruthy();
+      expect(document.querySelector<HTMLElement>("#donate-credit-claim")?.hidden).toBe(true);
     });
   }
 
