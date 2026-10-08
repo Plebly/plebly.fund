@@ -1175,12 +1175,32 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   });
 }
 
-async function linkLightningCredit(
+/** Lightning settled but the credit link failed (refused, 5xx or offline). */
+export const LIGHTNING_LINK_FAILED_COPY =
+  "Your Lightning payment went through. We couldn't link it to your account yet. Try again in a few minutes.";
+
+function setLightningRetry(panel: Element, onRetry: (() => void) | null): void {
+  panel.querySelector("#donate-ln-credit-retry")?.remove();
+  if (!onRetry) return;
+  const status = panel.querySelector<HTMLElement>("#donate-credit-status");
+  if (!status) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "donate-ln-credit-retry";
+  btn.className = "btn ghost";
+  btn.textContent = "Retry";
+  btn.addEventListener("click", onRetry, { once: true });
+  status.insertAdjacentElement("afterend", btn);
+}
+
+/** Exported for tests. */
+export async function linkLightningCredit(
   panel: Element,
   opts: DonateBindOpts,
   swapId: string,
 ): Promise<void> {
   if (!opts.signedIn || !opts.proposalId) return;
+  setLightningRetry(panel, null);
   setDonateCreditStatus(panel, "Linking Lightning funder credit…", "live");
   try {
     await claimContributionWithRetry({
@@ -1190,12 +1210,11 @@ async function linkLightningCredit(
     });
     setDonateCreditStatus(panel, "Lightning credit linked.", "ok");
     opts.onCreditLinked?.();
-  } catch (e) {
-    setDonateCreditStatus(
-      panel,
-      `${(e as Error).message} Try again after the swap indexes.`,
-      "bad",
-    );
+  } catch {
+    // Never show server text here: the payment already settled, so the only
+    // useful message is that linking can be retried.
+    setDonateCreditStatus(panel, LIGHTNING_LINK_FAILED_COPY, "bad");
+    setLightningRetry(panel, () => void linkLightningCredit(panel, opts, swapId));
   }
 }
 
