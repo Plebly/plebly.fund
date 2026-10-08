@@ -1177,9 +1177,12 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   });
 }
 
-/** Lightning settled but the credit link failed for now (5xx or offline): Retry is offered. */
+/**
+ * Lightning settled but the credit isn't linked yet: 5xx (incl. workers#90's 503 for a swap not
+ * indexed yet, claim busy, swap lookup failed) or no response. Retry is offered.
+ */
 export const LIGHTNING_LINK_FAILED_COPY =
-  "Your Lightning payment went through. We couldn't link it to your account yet. Try again in a few minutes.";
+  "Your Lightning payment went through. Your funder credit isn't showing yet. Try again in a few minutes.";
 
 /** Lightning settled but the server refused the link (4xx, or a 2xx without ok): no Retry. */
 export const LIGHTNING_LINK_REFUSED_COPY =

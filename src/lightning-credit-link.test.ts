@@ -9,9 +9,9 @@ import {
   type DonateBindOpts,
 } from "./proposal-ui";
 
-/** 5xx / network: try again later, with Retry. */
+/** 5xx / network / not indexed yet (503): try again later, with Retry. */
 const EXACT =
-  "Your Lightning payment went through. We couldn't link it to your account yet. Try again in a few minutes.";
+  "Your Lightning payment went through. Your funder credit isn't showing yet. Try again in a few minutes.";
 /** 4xx refusal (UI UX): final, no Retry. */
 const REFUSED = "Your Lightning payment went through, but we couldn't link it to your account.";
 const SERVER = "already claimed by another user (github:777)";
@@ -118,6 +118,8 @@ describe("Lightning credit link failure copy", () => {
 
   it.each([
     ["503 with JSON error", json(503, { error: SERVER })],
+    ["503 not indexed yet (workers#90)", json(503, { error: `contribution not found ${SERVER}`, code: "contribution_not_indexed" })],
+    ["503 claim busy (workers#90)", json(503, { error: SERVER, code: "contribution_busy" })],
     ["500 empty body", async () => new Response("", { status: 500 })],
     ["502 HTML page", async () => new Response(`<html>${SERVER}</html>`, { status: 502, headers: { "content-type": "text/html" } })],
     ["network error", async () => Promise.reject(new TypeError(`Failed to fetch ${SERVER}`))],
