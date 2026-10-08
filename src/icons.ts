@@ -43,21 +43,6 @@ export function btnWithNostrIcon(label: string): string {
   return `<span class="btn-icon">${nostrIcon()}<span data-login-label>${escapeHtml(label)}</span></span>`;
 }
 
-/** Nostr mark only — use with aria-label / title on the control. */
-export function btnNostrIconOnly(): string {
-  return `<span class="btn-icon btn-icon-only" data-login-label>${nostrIcon()}</span>`;
-}
-
-export function iconLink(
-  icon: BrandIcon,
-  href: string,
-  label: string,
-  extraClass = "",
-): string {
-  const cls = extraClass ? `icon-link ${extraClass}` : "icon-link";
-  return `<a class="${cls}" href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${brandIcon(icon)}</a>`;
-}
-
 export function socialAccountLink(
   icon: BrandIcon,
   href: string,

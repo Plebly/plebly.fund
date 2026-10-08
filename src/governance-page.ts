@@ -27,7 +27,6 @@ import {
 import {
   AI_REVIEWER_USERNAME,
   decisionKindLabel,
-  decisionPrimarySentence,
   fetchOpenRemovalBallots,
   fetchOpenReviewDecisions,
   fetchReviewerMe,
@@ -462,10 +461,6 @@ export function openDecisionsHtml(
   return `<ul class="gov-list" id="gov-decisions">${decisions
     .map((d) => decisionCardHtml(d, isReviewer))
     .join("")}</ul>`;
-}
-
-export function inboxDecisionSentence(kind: string): string {
-  return decisionPrimarySentence(kind);
 }
 
 export function openRemovalsHtml(

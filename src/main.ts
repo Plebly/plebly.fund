@@ -7,11 +7,10 @@ import { renderParameters } from "./parameters-page";
 import { renderKeyholderDuties } from "./keyholder-duties-page";
 import { renderReviewerRules } from "./reviewer-rules-page";
 import { renderTerms } from "./terms-page";
-import { fetchAdminMe, renderAdmin } from "./admin-page";
+import { fetchAdminMe } from "./admin-me";
 import { renderArchive } from "./archive-page";
 import { renderDonations } from "./donations-page";
 import { renderEndowment } from "./endowment-page";
-import { renderKeyholders } from "./keyholders-page";
 import { WORKERS_API, assertParametersNetwork } from "./config";
 
 assertParametersNetwork();
@@ -33,9 +32,7 @@ import {
 } from "./auth";
 import { renderMissingProposal, renderProposalPage } from "./proposal-page";
 import { installDonateClickCapture } from "./proposal-ui";
-import { renderPropose } from "./propose-page";
 import { renderPublicOrgProfile } from "./org-page";
-import { renderAccount, renderPublicProfile } from "./profile-pages";
 import { renderStats } from "./stats-page";
 import { renderWanted } from "./wanted-page";
 import { syncStoredCreditPreferencesFromProfile } from "./funder-credit";
@@ -58,6 +55,7 @@ import {
 import type { Route } from "./types";
 import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
+import { installStaleChunkReload } from "./stale-chunk";
 import { escapeHtml } from "./util";
 import { syncWebPushIfEnabled } from "./web-push";
 
@@ -68,6 +66,9 @@ void registerPwaServiceWorker();
 // Capture Donate clicks before any route finishes — modal mount must not wait
 // on builder-panel /claims.
 installDonateClickCapture();
+// A deploy while this tab is open removes the old chunks: prompt a reload
+// instead of leaving a blank view when a lazy import fails.
+installStaleChunkReload();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -273,6 +274,8 @@ async function render() {
       | "notifications"
       | "receipts"
       | undefined;
+    // Account + public profile pages: load on demand (own chunk).
+    const { renderAccount } = await import("./profile-pages");
     await renderAccount(ctx, initialTab);
     bindAuthHandlers();
     scrollToHashTarget();
@@ -280,6 +283,8 @@ async function render() {
   }
   if (r.name === "propose") {
     applySeo(seoForRoute(r));
+    // Proposal wizard is only for proposers: load it on demand (own chunk).
+    const { renderPropose } = await import("./propose-page");
     await renderPropose(ctx);
     bindAuthHandlers();
     scrollToHashTarget();
@@ -287,6 +292,7 @@ async function render() {
   }
   if (r.name === "profile") {
     applySeo(seoForRoute(r));
+    const { renderPublicProfile } = await import("./profile-pages");
     await renderPublicProfile(ctx, r.username);
     bindAuthHandlers();
     scrollToHashTarget();
@@ -329,6 +335,8 @@ async function render() {
   }
   if (r.name === "admin") {
     applySeo(seoForRoute(r));
+    // Admin desk is only for platform admins: load it on demand (own chunk).
+    const { renderAdmin } = await import("./admin-page");
     await renderAdmin(shell);
     bindAuthHandlers();
     scrollToHashTarget();
@@ -350,6 +358,8 @@ async function render() {
   }
   if (r.name === "keyholders") {
     applySeo(seoForRoute(r));
+    // Keyholder desk is only for signers: load it on demand (own chunk).
+    const { renderKeyholders } = await import("./keyholders-page");
     await renderKeyholders(shell, currentUser);
     bindAuthHandlers();
     scrollToHashTarget();
