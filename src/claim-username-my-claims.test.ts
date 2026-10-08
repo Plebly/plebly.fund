@@ -72,7 +72,7 @@ describe("fetchMyClaims", () => {
   });
 
   it("a non-2xx response is fail-soft: empty pending, null ledger", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 401 })));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 502 })));
     expect(await fetchMyClaims()).toEqual({ pending: [], ledger: null });
   });
 });
