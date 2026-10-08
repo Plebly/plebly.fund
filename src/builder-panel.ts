@@ -1,3 +1,4 @@
+import { donateInitialBalance } from "./proposal-funding-bar";
 import {
   acceptClaimApplication,
   acceptClaimCollaboratorInvite,
@@ -577,7 +578,7 @@ export async function bindBuilderPanel(
       proposalPath: opts.proposal.path,
       proposalTitle: opts.proposal.title,
       signedIn: Boolean(opts.user),
-      initialBalance: opts.balance ?? opts.proposal.balance_sats ?? 0,
+      initialBalance: donateInitialBalance(opts.proposal, opts.balance),
       escrowShared: opts.proposal.escrow_shared === true,
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: opts.proposal.target_sats,
@@ -1334,7 +1335,7 @@ export async function bindBuilderPanel(
         proposalPath: opts.proposal.path,
         proposalTitle: opts.proposal.title,
         signedIn: Boolean(opts.user),
-        initialBalance: opts.balance ?? opts.proposal.balance_sats ?? 0,
+        initialBalance: donateInitialBalance(opts.proposal, opts.balance),
         escrowShared: opts.proposal.escrow_shared === true,
         claimFloorSats: CLAIM_FLOOR_SATS,
         targetSats: opts.proposal.target_sats,
