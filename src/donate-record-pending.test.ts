@@ -25,7 +25,6 @@ import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
 import {
   RECORD_PENDING_INDEX_COPY,
   RECORD_RETRY_WINDOW_MS,
-  recordContribution,
   recordContributionWithRetry,
 } from "./funder-credit";
 
@@ -167,14 +166,13 @@ describe("/record 202 pending_index", () => {
     expectPendingLine(h);
   });
 
-  it("the client calls report 202 as pending, with a single request", async () => {
+  it("the client call reports 202 as pending, with a single request", async () => {
     const f = vi.fn(async () => pending());
     vi.stubGlobal("fetch", f);
     const input = { proposal_id: PID, txid: NEW.txid, vout: 1, address: ADDR };
-    expect(await recordContribution(input)).toBe("pending_index");
     expect(await recordContributionWithRetry(input, { delaysMs: [10, 10], windowMs: 1_000 })).toBe(
       "pending_index",
     );
-    expect(f).toHaveBeenCalledTimes(2);
+    expect(f).toHaveBeenCalledTimes(1);
   });
 });

@@ -21,7 +21,7 @@ import {
   hasStoredCreditPreferences,
   loadStoredCreditPreferences,
   readCreditPreferences,
-  recordContribution,
+  recordContributionWithRetry,
   RECORD_PENDING_INDEX_COPY,
   RECORD_RETRY_STATUS_COPY,
   saveStoredCreditPreferences,
@@ -969,14 +969,18 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     value: number;
   }) => {
     if (opts.proposalId) {
-      void recordContribution({
-        proposal_id: opts.proposalId,
-        txid: utxo.txid,
-        vout: utxo.vout,
-        address: opts.address,
-        anonymous: true,
-        public_credit: false,
-      })
+      // One attempt (no retries signed out); only the 202 outcome is shown.
+      void recordContributionWithRetry(
+        {
+          proposal_id: opts.proposalId,
+          txid: utxo.txid,
+          vout: utxo.vout,
+          address: opts.address,
+          anonymous: true,
+          public_credit: false,
+        },
+        { delaysMs: [] },
+      )
         .then((outcome) => {
           if (outcome === "pending_index") setDonateConfirmStatus(panel, RECORD_PENDING_INDEX_COPY);
         })

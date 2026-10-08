@@ -149,16 +149,14 @@ export async function recordContribution(input: {
   legal_name?: string;
   proposal_path?: string;
   proposal_title?: string;
-}): Promise<RecordOutcome> {
+}): Promise<void> {
   const res = await authFetch(`${api()}/contributions/record`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (res.status === 202) return "pending_index";
   if (!res.ok) throw new Error(data.error || "Could not record contribution.");
-  return "recorded";
 }
 
 export async function claimContribution(input: {

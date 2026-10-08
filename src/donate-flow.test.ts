@@ -48,12 +48,14 @@ vi.mock("./lightning", async (importOriginal) => {
 });
 
 const recordContribution = vi.fn();
+const recordContributionWithRetry = vi.fn();
 const claimContributionWithRetry = vi.fn();
 vi.mock("./funder-credit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./funder-credit")>();
   return {
     ...actual,
     recordContribution: (...args: unknown[]) => recordContribution(...args),
+    recordContributionWithRetry: (...args: unknown[]) => recordContributionWithRetry(...args),
     claimContributionWithRetry: (...args: unknown[]) =>
       claimContributionWithRetry(...args),
   };
@@ -153,6 +155,8 @@ beforeEach(() => {
   addressUtxos.mockResolvedValue([]);
   recordContribution.mockReset();
   recordContribution.mockResolvedValue(undefined);
+  recordContributionWithRetry.mockReset();
+  recordContributionWithRetry.mockResolvedValue("recorded");
   claimContributionWithRetry.mockReset();
   claimContributionWithRetry.mockResolvedValue(undefined);
   fetchLightningStatus.mockReset();
@@ -465,7 +469,8 @@ describe("donate credit UX (signed in, on-chain)", () => {
 
     await vi.advanceTimersByTimeAsync(100);
     await vi.waitFor(() => {
-      expect(recordContribution).toHaveBeenCalled();
+      // The modal records through the retrying call (fund#98).
+      expect(recordContributionWithRetry).toHaveBeenCalled();
       expect(claimContributionWithRetry).toHaveBeenCalledWith(
         expect.objectContaining({
           proposal_id: "PLEBLY-42",
