@@ -55,6 +55,32 @@ export type GiftLinkResult = boolean | "pending";
 const runs = new Map<string, Promise<GiftLinkResult>>();
 /** Running gifts → show their "Linking…" toast if the inline line is gone. */
 const surfacers = new Map<string, () => void>();
+
+/**
+ * While a gift is linking, any DOM removal outside the toast region (e.g. an
+ * in-app page change replacing #app, which takes an #app-hosted Donate modal
+ * with it without a close) re-checks the running gifts: one whose inline line
+ * is gone gets its "Linking…" toast at once.
+ */
+let removalWatch: MutationObserver | null = null;
+
+function watchRemovals(): void {
+  if (removalWatch || typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+  removalWatch = new MutationObserver((records) => {
+    const region = document.getElementById("gift-toasts");
+    const removedOutsideToasts = records.some(
+      (r) => r.removedNodes.length > 0 && !(region && (r.target === region || region.contains(r.target))),
+    );
+    if (removedOutsideToasts) surfaceGiftLinks();
+  });
+  removalWatch.observe(document.body, { childList: true, subtree: true });
+}
+
+function unwatchIfIdle(): void {
+  if (surfacers.size > 0 || !removalWatch) return;
+  removalWatch.disconnect();
+  removalWatch = null;
+}
 const toasts = new Map<string, { el: HTMLElement; timer: ReturnType<typeof setTimeout> | null }>();
 let generation = 0;
 
@@ -63,6 +89,7 @@ export function stopGiftLinks(): void {
   generation += 1;
   runs.clear();
   surfacers.clear();
+  unwatchIfIdle();
   // A stopped run's "Keep this page open" would be a lie (e.g. a bfcache restore).
   for (const [key, t] of [...toasts]) {
     if (t.el.dataset.giftState === "retrying") closeGiftToast(key);
@@ -211,12 +238,16 @@ export function linkGift(input: GiftLinkInput): Promise<GiftLinkResult> {
       if (runs.get(key) === run) {
         runs.delete(key);
         surfacers.delete(key);
+        unwatchIfIdle();
       }
     }
   })();
   runs.set(key, run);
   surfacers.set(key, () => {
-    if (live() && !input.inlineShown?.()) showGiftToast(key, title, "retrying", input.valueSats);
+    if (!live() || input.inlineShown?.()) return;
+    if (toasts.get(key)?.el.dataset.giftState === "retrying") return; // already showing
+    showGiftToast(key, title, "retrying", input.valueSats);
   });
+  watchRemovals();
   return run;
 }

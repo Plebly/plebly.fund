@@ -24,6 +24,7 @@ import {
   bindDonatePanel,
   closeDonateModalWhenBlocked,
   donateModalHtml,
+  endowmentDonateModalHtml,
 } from "./proposal-ui";
 import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
 import {
@@ -376,6 +377,65 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(h.records()).toHaveLength(1);
     expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
+  });
+
+  /** In-app page change: the router's next page replaces #app's content (no close() call). */
+  const changePage = () => {
+    document.querySelector("#app")!.innerHTML = "<main><h1>Another page</h1></main>";
+  };
+
+  it("page change while the endowment modal (hosted in #app) is open mid-link: Linking toast at once, then the outcome in place", async () => {
+    const h = stubFetch([busy, busy], ok);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // As endowment-page.ts renders it: the modal lives inside #app.
+    document.body.innerHTML = `<div id="app"><main>Endowment</main>${endowmentDonateModalHtml(ADDR, { signedIn: true })}</div>`;
+    document.querySelector<HTMLElement>("#donate-modal")!.hidden = false;
+    bindDonateModal(document.querySelector<HTMLElement>("#app")!);
+    await bindDonatePanel(document, {
+      address: ADDR,
+      proposalId: "endowment",
+      proposalPath: "/endowment",
+      proposalTitle: "Endowment",
+      mode: "endowment",
+      signedIn: true,
+      initialBalance: null,
+      balancePollMs: 600_000,
+      utxoPollMs: POLL,
+    });
+    await vi.waitFor(() => expect(document.querySelector("#donate-credit-continue")).toBeTruthy());
+    document.querySelector<HTMLButtonElement>("#donate-credit-continue")!.click();
+    await vi.advanceTimersByTimeAsync(POLL * 2);
+    h.arrive();
+    await vi.advanceTimersByTimeAsync(POLL * 2);
+    expect(h.records()).toHaveLength(1);
+    expect(statusEl().textContent).toBe(RETRYING);
+    expect(toastText()).toBeNull(); // modal open: inline only
+    changePage();
+    expect(document.querySelector("#donate-modal")).toBeNull(); // removed, never closed
+    await vi.advanceTimersByTimeAsync(10); // well before the next attempt (+1 s)
+    expect(h.records()).toHaveLength(1);
+    expect(toastText()).toBe(`Gift to Endowment: ${RETRYING}`);
+    const el = document.querySelector<HTMLElement>("#gift-toasts .gift-toast")!;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records()).toHaveLength(3);
+    expect(toastText()).toBe("Gift to Endowment: Credit linked for 7,000 sats.");
+    expect(document.querySelector("#gift-toasts .gift-toast")).toBe(el);
+  });
+
+  it("page change while a body-hosted proposal modal is open mid-link: the modal stays open, inline only, no toast", async () => {
+    const h = stubFetch([busy, busy], ok);
+    await openAndDetect(h, { modalOpen: true });
+    // As mountDonateChromeWhenEscrowKnown hosts it: on document.body, outside #app.
+    document.body.appendChild(document.querySelector<HTMLElement>("#donate-modal")!);
+    expect(statusEl().textContent).toBe(RETRYING);
+    changePage();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(false);
+    expect(toastText()).toBeNull();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records()).toHaveLength(3);
+    expect(statusEl().textContent).toContain("Credit linked for 7,000 sats");
+    expect(toastText()).toBeNull();
   });
 
   it("open modal, first-try link: inline line only, no toast", async () => {
