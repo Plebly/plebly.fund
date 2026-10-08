@@ -16,7 +16,9 @@ vi.mock("./config", async (importOriginal) => {
 
 import {
   bindCreditPreferenceGates,
+  ClaimLinkError,
   claimContribution,
+  claimFailureIsRetryable,
   claimContributionWithRetry,
   creditPreferenceFieldsHtml,
   hasStoredCreditPreferences,
@@ -251,6 +253,46 @@ describe("claimContributionWithRetry", () => {
       ),
     ).rejects.toThrow("already claimed");
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  const input = {
+    proposal_id: "PLEBLY-1",
+    swap_id: "s1",
+    public_credit: true,
+    anonymous: false,
+    show_amount: false,
+  };
+
+  it.each([
+    ["409", 409, false],
+    ["400", 400, false],
+    ["403", 403, false],
+    ["503", 503, true],
+    ["500", 500, true],
+  ])("final failure carries the last status (%s) and its retry class", async (_n, status, retryable) => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ error: "nope" }), { status }));
+    const err = await claimContributionWithRetry(input, { attempts: 2, delayMs: 0 }).catch((e) => e);
+    expect(err).toBeInstanceOf(ClaimLinkError);
+    expect((err as ClaimLinkError).status).toBe(status);
+    expect(claimFailureIsRetryable(err)).toBe(retryable);
+  });
+
+  it("a 5xx then a 4xx on the last attempt is final (last status wins)", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "nope" }), { status: 409 }));
+    const err = await claimContributionWithRetry(input, { attempts: 2, delayMs: 0 }).catch((e) => e);
+    expect((err as ClaimLinkError).status).toBe(409);
+    expect(claimFailureIsRetryable(err)).toBe(false);
+  });
+
+  it("a network error (no response) has status null and is retryable", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response("{}", { status: 409 }))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const err = await claimContributionWithRetry(input, { attempts: 2, delayMs: 0 }).catch((e) => e);
+    expect((err as ClaimLinkError).status).toBeNull();
+    expect(claimFailureIsRetryable(err)).toBe(true);
   });
 });
 

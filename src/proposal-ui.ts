@@ -16,6 +16,7 @@ import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
   claimContributionWithRetry,
+  claimFailureIsRetryable,
   creditPreferenceFieldsHtml,
   hasStoredCreditPreferences,
   loadStoredCreditPreferences,
@@ -759,13 +760,13 @@ function setLightningReady(panel: Element): void {
 function setDonateStatusEl(
   el: HTMLElement | null,
   message: string | null,
-  kind?: "ok" | "bad" | "live",
+  kind?: "ok" | "bad" | "live" | "warn",
 ): void {
   if (!el) return;
   if (!message) {
     el.hidden = true;
     el.textContent = "";
-    el.classList.remove("ok", "bad", "live");
+    el.classList.remove("ok", "bad", "live", "warn");
     return;
   }
   el.hidden = false;
@@ -773,9 +774,10 @@ function setDonateStatusEl(
   el.classList.toggle("ok", kind === "ok");
   el.classList.toggle("bad", kind === "bad");
   el.classList.toggle("live", kind === "live");
+  el.classList.toggle("warn", kind === "warn");
 }
 
-function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
+function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live" | "warn"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
 }
 
@@ -1175,9 +1177,13 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   });
 }
 
-/** Lightning settled but the credit link failed (refused, 5xx or offline). */
+/** Lightning settled but the credit link failed for now (5xx or offline): Retry is offered. */
 export const LIGHTNING_LINK_FAILED_COPY =
   "Your Lightning payment went through. We couldn't link it to your account yet. Try again in a few minutes.";
+
+/** Lightning settled but the server refused the link (4xx, or a 2xx without ok): no Retry. */
+export const LIGHTNING_LINK_REFUSED_COPY =
+  "Your Lightning payment went through, but we couldn't link it to your account.";
 
 function setLightningRetry(panel: Element, onRetry: (() => void) | null): void {
   panel.querySelector("#donate-ln-credit-retry")?.remove();
@@ -1210,11 +1216,16 @@ export async function linkLightningCredit(
     });
     setDonateCreditStatus(panel, "Lightning credit linked.", "ok");
     opts.onCreditLinked?.();
-  } catch {
-    // Never show server text here: the payment already settled, so the only
-    // useful message is that linking can be retried.
-    setDonateCreditStatus(panel, LIGHTNING_LINK_FAILED_COPY, "bad");
-    setLightningRetry(panel, () => void linkLightningCredit(panel, opts, swapId));
+  } catch (e) {
+    // Never show server text here. The payment already settled, so this is a
+    // warning, not an error (no red). Only "try later" failures (5xx, no
+    // response) offer Retry; a refusal (4xx) won't change by retrying.
+    if (claimFailureIsRetryable(e)) {
+      setDonateCreditStatus(panel, LIGHTNING_LINK_FAILED_COPY, "warn");
+      setLightningRetry(panel, () => void linkLightningCredit(panel, opts, swapId));
+    } else {
+      setDonateCreditStatus(panel, LIGHTNING_LINK_REFUSED_COPY, "warn");
+    }
   }
 }
 

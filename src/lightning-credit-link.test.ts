@@ -1,8 +1,19 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LIGHTNING_LINK_FAILED_COPY, linkLightningCredit, type DonateBindOpts } from "./proposal-ui";
+import {
+  LIGHTNING_LINK_FAILED_COPY,
+  LIGHTNING_LINK_REFUSED_COPY,
+  linkLightningCredit,
+  type DonateBindOpts,
+} from "./proposal-ui";
 
+/** 5xx / network: try again later, with Retry. */
 const EXACT =
   "Your Lightning payment went through. We couldn't link it to your account yet. Try again in a few minutes.";
+/** 4xx refusal (UI UX): final, no Retry. */
+const REFUSED = "Your Lightning payment went through, but we couldn't link it to your account.";
 const SERVER = "already claimed by another user (github:777)";
 
 type Reply = () => Promise<Response>;
@@ -63,26 +74,84 @@ describe("Lightning credit link failure copy", () => {
     expect(LIGHTNING_LINK_FAILED_COPY).toBe(EXACT);
   });
 
+  it("exports the exact refusal line", () => {
+    expect(LIGHTNING_LINK_REFUSED_COPY).toBe(REFUSED);
+  });
+
+  /** Server text must appear nowhere: visible text, any attribute, page HTML (body markup). */
+  function expectNoServerText(): void {
+    const attrs = [...document.querySelectorAll("*")].flatMap((el) =>
+      [...el.attributes].map((a) => `${a.name}=${a.value}`),
+    );
+    for (const needle of ["already claimed", "github:777", "Failed to fetch", "swap indexes", "<html>"]) {
+      expect(document.body.textContent).not.toContain(needle);
+      expect(attrs.filter((v) => v.includes(needle))).toEqual([]);
+      expect(document.body.innerHTML).not.toContain(needle);
+    }
+  }
+
+  /** Settled payment: amber "warn", never the red "bad" class. */
+  function expectWarnStyle(): void {
+    expect(status().classList.contains("warn")).toBe(true);
+    expect(status().classList.contains("bad")).toBe(false);
+  }
+
   it.each([
     ["409 already claimed", json(409, { error: SERVER })],
+    ["409 contribution_owned", json(409, { error: "contribution recorded by github:777", code: "contribution_owned" })],
     ["400 refusal", json(400, { error: SERVER })],
     ["403 refusal", json(403, { error: SERVER })],
+    ["401 signed out", json(401, { error: "unauthorized github:777" })],
+    ["404 other 4xx", json(404, { error: "not found github:777" })],
+  ])("4xx %s → refusal line, NO Retry, no server text, warn style", async (_n, reply) => {
+    replies = [reply];
+    const o = opts();
+    await run(o);
+    expect(status().hidden).toBe(false);
+    expect(status().textContent).toBe(REFUSED);
+    expect(retry()).toBeNull();
+    expect(panel().querySelectorAll("button")).toHaveLength(0);
+    expectWarnStyle();
+    expectNoServerText();
+    expect(o.onCreditLinked).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ["503 with JSON error", json(503, { error: SERVER })],
+    ["500 empty body", async () => new Response("", { status: 500 })],
     ["502 HTML page", async () => new Response(`<html>${SERVER}</html>`, { status: 502, headers: { "content-type": "text/html" } })],
     ["network error", async () => Promise.reject(new TypeError(`Failed to fetch ${SERVER}`))],
-  ])("%s → exact line + Retry, no server text", async (_n, reply) => {
+  ])("%s → try-again line + one Retry, no server text, warn style", async (_n, reply) => {
     replies = [reply];
     const o = opts();
     await run(o);
     expect(status().hidden).toBe(false);
     expect(status().textContent).toBe(EXACT);
-    expect(status().classList.contains("bad")).toBe(true);
-    expect(panel().textContent).not.toContain("already claimed");
-    expect(panel().textContent).not.toContain("github:777");
-    expect(panel().textContent).not.toMatch(/swap indexes/i);
-    expect(panel().textContent).not.toContain("Failed to fetch");
     expect(retry()?.textContent).toBe("Retry");
+    expect(panel().querySelectorAll("#donate-ln-credit-retry")).toHaveLength(1);
+    expectWarnStyle();
+    expectNoServerText();
     expect(o.onCreditLinked).not.toHaveBeenCalled();
+  });
+
+  it("the warn style is amber in CSS, not the red --bad colour", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "style.css"), "utf8");
+    const rule = css.match(/\.donate-credit-status\.warn[^{]*\{([^}]*)\}/);
+    expect(rule, ".donate-credit-status.warn rule").not.toBeNull();
+    expect(rule![1]).toMatch(/color:\s*var\(--overfund\)/);
+    expect(rule![1]).not.toMatch(/--bad/);
+  });
+
+  it("5xx then a 4xx on Retry: the Retry goes away and the refusal line shows", async () => {
+    replies = [json(503, { error: SERVER })];
+    await run(opts());
+    expect(retry()).not.toBeNull();
+    replies = [json(409, { error: SERVER })];
+    retry()!.click();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(status().textContent).toBe(REFUSED);
+    expect(retry()).toBeNull();
+    expectWarnStyle();
   });
 
   it("Retry re-attempts the link; success shows the normal credit state and removes Retry", async () => {
@@ -105,7 +174,7 @@ describe("Lightning credit link failure copy", () => {
   });
 
   it("a failed Retry shows the same line with one Retry button (no stacking)", async () => {
-    replies = [json(409, { error: SERVER })];
+    replies = [json(503, { error: SERVER })];
     await run(opts());
     retry()!.click();
     await vi.advanceTimersByTimeAsync(60_000);
