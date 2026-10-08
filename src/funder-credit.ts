@@ -278,9 +278,18 @@ export const RECORD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_00
 /** No new attempt starts after this many ms from the first one. */
 export const RECORD_RETRY_WINDOW_MS = 60_000;
 
+/** Donate modal status while transient /record failures are being retried. */
+export const RECORD_RETRY_STATUS_COPY =
+  "Linking your gift to your account… Keep this page open.";
+
 export async function recordContributionWithRetry(
   input: Parameters<typeof recordContribution>[0],
-  opts?: { delaysMs?: readonly number[]; windowMs?: number },
+  opts?: {
+    delaysMs?: readonly number[];
+    windowMs?: number;
+    /** Called before each wait, i.e. only once a transient failure will be retried. */
+    onRetry?: () => void;
+  },
 ): Promise<void> {
   const delays = opts?.delaysMs ?? RECORD_RETRY_DELAYS_MS;
   const windowMs = opts?.windowMs ?? RECORD_RETRY_WINDOW_MS;
@@ -306,6 +315,7 @@ export async function recordContributionWithRetry(
     }
     const delay = delays[attempt];
     if (delay == null || Date.now() - started + delay > windowMs) throw lastError!;
+    opts?.onRetry?.();
     await new Promise((r) => setTimeout(r, delay));
   }
 }

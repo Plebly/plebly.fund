@@ -22,6 +22,7 @@ import {
   readCreditPreferences,
   recordContribution,
   recordContributionWithRetry,
+  RECORD_RETRY_STATUS_COPY,
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
   watchNewUtxos,
@@ -907,6 +908,8 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         legal_name: readLegalName(panel),
         proposal_path: opts.proposalPath,
         proposal_title: opts.proposalTitle,
+      }, {
+        onRetry: () => setDonateConfirmStatus(panel, RECORD_RETRY_STATUS_COPY, "live"),
       });
       if (opts.mode !== "endowment") {
         await claimContributionWithRetry({

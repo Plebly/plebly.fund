@@ -22,9 +22,13 @@ vi.mock("./config", async (importOriginal) => {
 import { bindDonatePanel, donateModalHtml } from "./proposal-ui";
 import {
   RECORD_RETRY_DELAYS_MS,
+  RECORD_RETRY_STATUS_COPY,
   RECORD_RETRY_WINDOW_MS,
   recordContributionWithRetry,
 } from "./funder-credit";
+
+/** UI UX copy, pinned literally. */
+const RETRYING = "Linking your gift to your account\u2026 Keep this page open.";
 
 const ADDR = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
 const PID = "PLEBLY-2026-009";
@@ -43,7 +47,7 @@ const offline: Reply = () => new TypeError("Failed to fetch");
 
 function stubFetch(recordReplies: Reply[], fallback: Reply) {
   let utxos = [OLD];
-  const posts: { path: string; at: number }[] = [];
+  const posts: { path: string; at: number; body: string }[] = [];
   let i = 0;
   vi.stubGlobal(
     "fetch",
@@ -56,7 +60,7 @@ function stubFetch(recordReplies: Reply[], fallback: Reply) {
       if (url.includes("/contributions/mine/")) return Response.json({ contributions: [] });
       if (init?.method === "POST" && url.startsWith("https://api.test/contributions/")) {
         const path = url.slice("https://api.test".length);
-        posts.push({ path, at: Date.now() });
+        posts.push({ path, at: Date.now(), body: String(init.body ?? "") });
         const r = path === "/contributions/record" ? (recordReplies[i++] ?? fallback)() : ok();
         if (r instanceof Error) throw r;
         return r;
@@ -171,7 +175,7 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     // Still trying (not failed) through most of the backoff.
     await vi.advanceTimersByTimeAsync(30_000);
     expect(showsFailure()).toBe(false);
-    expect(statusEl().textContent).toMatch(/linking/i);
+    expect(statusEl().textContent).toBe(RETRYING);
 
     let shownAt: number | null = null;
     for (let t = 0; t < 400 && shownAt == null; t += 1) {
@@ -185,6 +189,36 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     expect(lastStart).toBeLessThanOrEqual(RECORD_RETRY_WINDOW_MS);
     expect(h.claims()).toHaveLength(0);
     expect(statusEl().textContent).not.toMatch(/credit linked/i);
+    expect(statusEl().textContent).not.toBe(RETRYING);
+  });
+
+  it("while retries run the status reads the retrying line exactly, then success replaces it", async () => {
+    expect(RECORD_RETRY_STATUS_COPY).toBe(RETRYING);
+    const h = stubFetch([busy, offline], ok);
+    await openAndDetect(h);
+    expect(h.records()).toHaveLength(1);
+    expect(statusEl().textContent).toBe(RETRYING);
+    expect(showsFailure()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_200); // second attempt fails too
+    expect(h.records()).toHaveLength(2);
+    expect(statusEl().textContent).toBe(RETRYING);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(h.records()).toHaveLength(3);
+    expect(statusEl().textContent).toContain("Credit linked");
+    expect(statusEl().textContent).not.toContain(RETRYING);
+  });
+
+  it("every retry sends the identical /record body, so the server sees a same-owner re-record", async () => {
+    // workers: a re-record of an outpoint the same session already wrote is a
+    // no-op (main contrib.ts:302-314; #86 contributions.ts:274-297, test :323).
+    const h = stubFetch([() => new Response("bad gateway", { status: 502 }), offline, busy], ok);
+    await openAndDetect(h);
+    await vi.advanceTimersByTimeAsync(10_000);
+    const bodies = h.records().map((r) => r.body);
+    expect(bodies).toHaveLength(4);
+    expect(new Set(bodies).size).toBe(1);
+    expect(JSON.parse(bodies[0]!)).toMatchObject({ proposal_id: PID, txid: NEW.txid, vout: NEW.vout, address: ADDR });
+    expect(statusEl().textContent).toContain("Credit linked");
   });
 
   const finals: [string, Reply][] = [
@@ -203,6 +237,7 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
       expect(h.records()).toHaveLength(1);
       expect(h.claims()).toHaveLength(0);
       expect(statusEl().textContent).not.toMatch(/credit linked/i);
+      expect(statusEl().textContent).not.toBe(RETRYING);
     });
   }
 });
