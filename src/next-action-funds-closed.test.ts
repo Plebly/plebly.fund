@@ -209,12 +209,10 @@ const builder = { id: "github:2", username: "bob", github: "bob" };
 for (const cat of ["claimable", "listed"]) {
   it(`DRIFT catalog ${cat}, claim view claimed (af:false, ac:true): builder keeps Submit work`, () => {
     const r = resolveNextAction({ proposal: P(cat), claim: C, user: builder, isBuilder: true } as never);
-    console.log(`DRIFT builder catalog=${cat}: ${r.sentence} [${r.button ?? "-"}]`);
     expect(r.button).toBe("deliverable");
   });
   it(`DRIFT catalog ${cat}, claim view claimed (af:false, ac:true): anon gets no Donate button`, () => {
     const r = resolveNextAction({ proposal: P(cat), claim: C } as never);
-    console.log(`DRIFT anon catalog=${cat}: ${r.sentence} [${r.button ?? "-"}]`);
     expect(r.button).not.toBe("donate");
   });
 }
@@ -222,7 +220,6 @@ for (const cat of ["claimable", "listed"]) {
   it(`DRIFT catalog ${cat}, runtime moved to refunding/declined (state unavailable, af:false, ac:true): no Donate button`, () => {
     const c = { ...C, state: "unavailable", claimer: null, psbt: undefined } as unknown as ClaimStatus;
     const r = resolveNextAction({ proposal: { ...P(cat), claimer: undefined } as Proposal, claim: c } as never);
-    console.log(`DRIFT2 anon catalog=${cat}: ${r.sentence} [${r.button ?? "-"}]`);
     expect(r.button).not.toBe("donate");
   });
 }
