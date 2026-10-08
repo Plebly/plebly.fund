@@ -277,14 +277,21 @@ describe("(b) the address comes from the claim view, never the catalog", () => {
 });
 
 describe("(c) missing catalog row is shared/unknown for its balance; accepting_funds:false still closes", () => {
-  /** Balance unknown → no meter at all: no bar, no "0 raised", no "… to open". */
+  /**
+   * Balance unknown → no meter: no funding bar, no sats/goal line, no track,
+   * no "0 raised", no "… to open". The row is shared, so with #62 merged its
+   * "Awaiting confirmation" pending block (`[data-shared-pending]`, no sats,
+   * no track) may stand in for "Balance temporarily unavailable".
+   */
   function expectNoMeter(app: HTMLElement): void {
-    expect(app.querySelector(".proposal-funding-bar")).toBeNull();
-    expect(app.querySelector(".funding-meter")).toBeNull();
+    expect(app.querySelector(".proposal-funding-bar:not([data-shared-pending])")).toBeNull();
+    expect(app.querySelector(".funding-meter-goal")).toBeNull();
+    expect(app.querySelector(".proposal-progress-detail")).toBeNull();
     expect(app.textContent || "").not.toMatch(/to open/i);
-    expect(app.querySelector(".funding-balance-unknown")?.textContent).toBe(
-      "Balance temporarily unavailable",
-    );
+    const line =
+      app.querySelector(".funding-balance-unknown")?.textContent ??
+      app.querySelector("[data-shared-pending] .funding-meter-label")?.textContent;
+    expect(["Balance temporarily unavailable", "Awaiting confirmation"]).toContain(line);
   }
 
   it("no catalog row: the page never reads or shows the address total, and draws no meter", async () => {

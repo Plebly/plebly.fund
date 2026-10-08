@@ -163,7 +163,16 @@ describe("proposal page hero: unknown balance paths", () => {
       "ok-0",
     );
     expect(addressHits).not.toContain(SHARED);
-    expectNoMeter(app);
+    // With #62 merged, its "Awaiting confirmation" block (no sats, no track)
+    // takes this shared row first; either way there is no meter.
+    expect(app.querySelector(".proposal-funding-bar:not([data-shared-pending])")).toBeNull();
+    expect(app.querySelector(".funding-meter-goal")).toBeNull();
+    expect(app.querySelector(".proposal-progress-detail")).toBeNull();
+    expect(app.textContent || "").not.toMatch(/to open/i);
+    const line =
+      app.querySelector(".funding-balance-unknown")?.textContent ??
+      app.querySelector("[data-shared-pending] .funding-meter-label")?.textContent;
+    expect([UNAVAILABLE, "Awaiting confirmation"]).toContain(line);
   });
 
   it("unique row, mempool read errors: no meter", async () => {
@@ -208,11 +217,17 @@ describe("home card: own-address row whose balance read failed", () => {
     expect(c.textContent).not.toMatch(/to open|\b0 sats\b/);
   });
 
-  it("terminal (completed/declined/voided): no balance line at all", async () => {
+  it("any status (completed/declined/voided too): never a 0 meter when the read failed", async () => {
     for (const status of ["completed", "declined", "voided"]) {
       const c = await card(row({ status, balance_sats: undefined } as Partial<Proposal>));
-      expect(c.querySelector(".project-card-meter")).toBeNull();
+      expect(c.querySelector(".project-card-meter .sats")).toBeNull();
+      expect(c.textContent).not.toMatch(/\b0 sats\b|to open/);
     }
+  });
+
+  it("row with no escrow address keeps today's card (not 'unavailable')", async () => {
+    const c = await card(row({ escrow_address: null as unknown as string, balance_sats: undefined }));
+    expect(c.querySelector(".funding-balance-unknown")).toBeNull();
   });
 
   it("control: known 0 still draws the card meter", async () => {

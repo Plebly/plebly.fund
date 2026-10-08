@@ -95,12 +95,6 @@ export function sharedEscrowNoteHtml(proposals: Proposal[]): string {
   return `<p class="shared-escrow-note">These test listings share one escrow address. Each balance counts only that listing's own confirmed funding, so a block explorer will show a higher total for the address.</p>`;
 }
 
-/** Card meter may show a balance line at all (fundable, not blocked/voided). */
-function cardFundable(p: Proposal): boolean {
-  const status = String(p.status || "");
-  return isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
-}
-
 /**
  * Shared-escrow row with no confirmed per-proposal funding yet (balance null):
  * still fundable → "Awaiting confirmation"; terminal → no balance at all.
@@ -108,7 +102,10 @@ function cardFundable(p: Proposal): boolean {
  */
 export function sharedEscrowPendingHtml(p: Proposal): string | null {
   if (p.escrow_shared !== true || p.balance_sats != null) return null;
-  if (!cardFundable(p)) return "";
+  const status = String(p.status || "");
+  const fundable =
+    isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
+  if (!fundable) return "";
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="muted">Awaiting confirmation</span>
@@ -336,13 +333,11 @@ function discoverToolbarHtml(count: number): string {
 function progressHtml(p: Proposal, floor: number): string {
   const sharedPending = sharedEscrowPendingHtml(p);
   if (sharedPending != null) return sharedPending;
+  const bal = p.balance_sats ?? 0;
   // Own-address row whose balance read failed: no 0 meter / "… to open".
   if (!isKnownBalance(p.balance_sats) && balanceAddressFor(p)) {
-    return cardFundable(p)
-      ? `<div class="project-card-meter">${balanceUnavailableHtml()}</div>`
-      : "";
+    return `<div class="project-card-meter">${balanceUnavailableHtml()}</div>`;
   }
-  const bal = p.balance_sats ?? 0;
   const remaining = Math.max(0, floor - bal);
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);
