@@ -1,5 +1,5 @@
 /**
- * Refund by signing a message (refunding proposals). Message format, P2WPKH
+ * Refund by signing a message: disclosure under the refund panel (refunding proposals). Message format, P2WPKH
  * check, signature-format gate, payload, error mapping and every UI string.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +11,8 @@ import {
   bindRefundSign,
   buildRefundRegisterBody,
   isP2wpkhAddress,
+  normalizeTxid,
+  parseVout,
   refundSignErrorCopy,
   refundSignHtml,
   refundSignMessage,
@@ -175,41 +177,73 @@ describe("error mapping (Worker machine values → copy; never server text)", ()
   });
 });
 
+
+describe("txid / vout parsing", () => {
+  it("txid: 64 hex, trimmed and lowercased; anything else is null", () => {
+    expect(normalizeTxid(` ${"AB".repeat(32)} `)).toBe("ab".repeat(32));
+    expect(normalizeTxid("ab".repeat(31))).toBeNull();
+    expect(normalizeTxid(`${"ab".repeat(31)}zz`)).toBeNull();
+    expect(normalizeTxid("")).toBeNull();
+  });
+  it("vout: whole number ≥ 0", () => {
+    expect(parseVout(" 0 ")).toBe(0);
+    expect(parseVout("12")).toBe(12);
+    for (const bad of ["", "-1", "1.5", "1e2", "x", "99999999999999999999"]) expect(parseVout(bad)).toBeNull();
+  });
+});
+
 describe("copy", () => {
   it("uses UI UX's strings exactly", () => {
-    expect(REFUND_SIGN_COPY.heading).toBe("Refund by signing a message");
-    expect(REFUND_SIGN_COPY.intro).toBe(
-      "Prove you sent this gift by signing the message below with the address you paid from. This works only with single-key (P2WPKH) addresses. Exchanges and multisig wallets can't do it.",
-    );
-    expect(REFUND_SIGN_COPY.signedOut).toBe("Sign in to get the message to sign.");
-    expect(REFUND_SIGN_COPY.fromLabel).toBe("Address you sent from");
-    expect(REFUND_SIGN_COPY.fromInvalid).toBe("This address type can't sign a refund message.");
-    expect(REFUND_SIGN_COPY.messageLabel).toBe("Message to sign");
-    expect(REFUND_SIGN_COPY.copied).toBe("Copied.");
-    expect(REFUND_SIGN_COPY.signatureLabel).toBe("Signature");
-    expect(REFUND_SIGN_COPY.signatureHint).toBe("Paste the signature your wallet shows after signing.");
-    expect(REFUND_SIGN_COPY.signatureUnsupported).toBe(
-      "This wallet's signature format isn't supported yet. Electrum and Sparrow can sign this message.",
-    );
-    expect(REFUND_SIGN_COPY.toLabel).toBe("Refund to");
+    expect(REFUND_SIGN_COPY).toEqual({
+      title: "Sent without signing in? Refund by signing a message",
+      intro:
+        "Prove you sent this gift by signing the message below with the address you paid from. This works only with single-key (P2WPKH) addresses. Exchanges and multisig wallets can't do it.",
+      signedOut: "Sign in to get the message to sign.",
+      signIn: "Sign in",
+      txidLabel: "Funding txid",
+      voutLabel: "vout",
+      messageLabel: "Message to sign",
+      copy: "Copy",
+      copied: "Copied.",
+      messageChanged: "The message changed. Sign the new message.",
+      fromLabel: "Address you sent from",
+      fromInvalid: "This address type can't sign a refund message.",
+      signatureLabel: "Signature",
+      signatureHint: "Paste the signature your wallet shows after signing.",
+      signatureUnsupported:
+        "This wallet's signature format isn't supported yet. Electrum and Sparrow can sign this message.",
+      toLabel: "Refund to",
+      submit: "Register refund",
+      registered: "Refund address registered for this gift.",
+      failed: "Couldn't register this refund. Try again in a few minutes.",
+      badSignature:
+        "That signature doesn't match this address and message. Sign the exact message above with the address you sent from.",
+      notFundingInput: "That address didn't send this gift.",
+      needOutpoint: "Enter the funding txid and vout.",
+      needFrom: "Enter the address you sent from.",
+      needSignature: "Paste the signature from your wallet.",
+      needRefundTo: "Enter a refund address.",
+    });
   });
 });
 
 describe("anchor", () => {
-  it("is #signed-refund (Donate-modal refund lines link here), signed in and signed out", () => {
+  it("is the #signed-refund disclosure (Donate-modal refund lines link here), signed in and signed out", () => {
     expect(REFUND_SIGN_ANCHOR).toBe("signed-refund");
     for (const signedIn of [true, false]) {
       document.body.innerHTML = refundSignHtml(signedIn);
       const el = document.getElementById("signed-refund");
-      expect(el).toBeTruthy();
-      expect(el!.tagName).toBe("SECTION");
+      expect(el?.tagName).toBe("DETAILS");
       expect(document.querySelectorAll("#signed-refund")).toHaveLength(1);
+      expect(el!.querySelector(":scope > summary")?.textContent).toBe(
+        "Sent without signing in? Refund by signing a message",
+      );
     }
   });
 });
 
 // ---------------------------------------------------------------------------
-// DOM: the section bound inside a refund form host.
+// DOM: the disclosure bound under a normal refund panel.
 
 let fetchCalls: { url: string; body: unknown }[] = [];
 let reply: { status: number; body: unknown } = { status: 200, body: { ok: true } };
@@ -220,15 +254,25 @@ function stubRegisterFetch() {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       fetchCalls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
-      return Response.json(reply.body, { status: reply.status });
+      return typeof reply.body === "string"
+        ? new Response(reply.body, { status: reply.status })
+        : Response.json(reply.body, { status: reply.status });
     }),
   );
 }
 
-function mount(opts: { signedIn: boolean; status?: string; userId?: string | null }) {
+function mount(opts: {
+  signedIn: boolean;
+  status?: string;
+  userId?: string | null;
+  panelTxid?: string;
+  panelVout?: string;
+}) {
   document.body.innerHTML = `<div id="root">
-    <input id="refund-txid" value="" />
-    <input id="refund-vout" type="number" value="0" />
+    <div id="refund-panel">
+      <input id="refund-txid" value="${opts.panelTxid ?? ""}" />
+      <input id="refund-vout" type="number" value="${opts.panelVout ?? "0"}" />
+    </div>
     ${refundSignHtml(opts.signedIn)}
   </div>`;
   const root = document.querySelector<HTMLElement>("#root")!;
@@ -242,34 +286,46 @@ function mount(opts: { signedIn: boolean; status?: string; userId?: string | nul
   return { root, onRegistered };
 }
 
+const $ = <T extends HTMLElement>(root: ParentNode, sel: string) => root.querySelector<T>(sel)!;
+
 function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   el.value = value;
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 function fillOutpoint(root: HTMLElement, txid = FIXTURE.txid, vout = String(FIXTURE.vout)) {
-  type(root.querySelector<HTMLInputElement>("#refund-txid")!, txid);
-  type(root.querySelector<HTMLInputElement>("#refund-vout")!, vout);
+  type($<HTMLInputElement>(root, "#refund-sign-txid"), txid);
+  type($<HTMLInputElement>(root, "#refund-sign-vout"), vout);
 }
 
 function fillAll(root: HTMLElement, sig = FIXTURE.signature) {
   fillOutpoint(root);
-  type(root.querySelector<HTMLInputElement>("#refund-sign-from")!, FIXTURE.address);
-  type(root.querySelector<HTMLTextAreaElement>("#refund-sign-signature")!, sig);
-  type(root.querySelector<HTMLInputElement>("#refund-sign-to")!, REFUND_TO);
+  type($<HTMLInputElement>(root, "#refund-sign-from"), FIXTURE.address);
+  type($<HTMLTextAreaElement>(root, "#refund-sign-signature"), sig);
+  type($<HTMLInputElement>(root, "#refund-sign-to"), REFUND_TO);
 }
 
 async function submit(root: HTMLElement): Promise<string> {
-  root.querySelector<HTMLButtonElement>("#refund-sign-submit")!.click();
+  $<HTMLButtonElement>(root, "#refund-sign-submit").click();
   await new Promise((r) => setTimeout(r, 0));
   await new Promise((r) => setTimeout(r, 0));
-  const msg = root.querySelector<HTMLElement>("#refund-sign-msg")!;
+  const msg = $<HTMLElement>(root, "#refund-sign-msg");
   return msg.hidden ? "" : msg.textContent || "";
+}
+
+/** Visible inline errors, by id → text. */
+function inlineErrors(root: HTMLElement): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const el of root.querySelectorAll<HTMLElement>("p.error")) {
+    if (!el.hidden) out[el.id] = el.textContent || "";
+  }
+  return out;
 }
 
 beforeEach(() => {
   fetchCalls = [];
   reply = { status: 200, body: { ok: true } };
+  history.replaceState(null, "", "/p/PLEBLY-2026-001");
   stubRegisterFetch();
 });
 afterEach(() => {
@@ -277,11 +333,26 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+describe("disclosure", () => {
+  it("closed by default; opens when the page is opened at #signed-refund or the hash changes to it", () => {
+    let { root } = mount({ signedIn: true });
+    expect($<HTMLDetailsElement>(root, "#signed-refund").open).toBe(false);
+    history.replaceState(null, "", "/p/PLEBLY-2026-001#signed-refund");
+    ({ root } = mount({ signedIn: false }));
+    expect($<HTMLDetailsElement>(root, "#signed-refund").open).toBe(true);
+    history.replaceState(null, "", "/p/PLEBLY-2026-001");
+    ({ root } = mount({ signedIn: true }));
+    history.replaceState(null, "", "/p/PLEBLY-2026-001#signed-refund");
+    window.dispatchEvent(new Event("hashchange"));
+    expect($<HTMLDetailsElement>(root, "#signed-refund").open).toBe(true);
+  });
+});
+
 describe("signed out", () => {
-  it("shows only the heading, the line and Sign in: no message, no fields", () => {
-    const { root } = mount({ signedIn: false });
-    const sec = root.querySelector<HTMLElement>(`#${REFUND_SIGN_ANCHOR}`)!;
-    expect(sec).toBeTruthy();
+  it("shows only the title, the line and Sign in: no message, no fields", () => {
+    const { root } = mount({ signedIn: false, panelTxid: FIXTURE.txid, panelVout: "1" });
+    const sec = $<HTMLElement>(root, `#${REFUND_SIGN_ANCHOR}`);
+    expect(sec.querySelector("summary")?.textContent).toBe(REFUND_SIGN_COPY.title);
     expect(sec.querySelector("#refund-sign-signedout")?.textContent).toBe("Sign in to get the message to sign.");
     expect(sec.querySelector("#refund-sign-signin")?.textContent).toBe("Sign in");
     expect(sec.querySelectorAll("input, textarea, label").length).toBe(0);
@@ -291,8 +362,8 @@ describe("signed out", () => {
 
   it("Sign in opens the login choices, returning to the anchor", () => {
     const { root } = mount({ signedIn: false });
-    root.querySelector<HTMLButtonElement>("#refund-sign-signin")!.click();
-    const login = root.querySelector<HTMLElement>("#refund-sign-login")!;
+    $<HTMLButtonElement>(root, "#refund-sign-signin").click();
+    const login = $<HTMLElement>(root, "#refund-sign-login");
     expect(login.hidden).toBe(false);
     expect(login.querySelector(".login-choices")).toBeTruthy();
     expect(login.innerHTML).toMatch(/signed-refund/);
@@ -301,8 +372,8 @@ describe("signed out", () => {
 
 describe("not refunding", () => {
   for (const status of ["listed", "funding", "declined", "underfunded", "", undefined]) {
-    it(`status ${JSON.stringify(status)}: the section is removed`, () => {
-      document.body.innerHTML = `<div id="root"><input id="refund-txid" /><input id="refund-vout" />${refundSignHtml(true)}</div>`;
+    it(`status ${JSON.stringify(status)}: the disclosure is removed`, () => {
+      document.body.innerHTML = `<div id="root">${refundSignHtml(true)}</div>`;
       const root = document.querySelector<HTMLElement>("#root")!;
       bindRefundSign(root, { proposalId: "P1", status: status as string, userId: "u" });
       expect(root.querySelector(`#${REFUND_SIGN_ANCHOR}`)).toBeNull();
@@ -311,53 +382,194 @@ describe("not refunding", () => {
   }
 });
 
-describe("signed in, refunding", () => {
-  it("heading, intro, and the fields in order with a stable anchor", () => {
+describe("signed in, refunding: layout", () => {
+  it("title, intro, and the fields in UI UX's order", () => {
     const { root } = mount({ signedIn: true });
-    const sec = root.querySelector<HTMLElement>(`section#${REFUND_SIGN_ANCHOR}`)!;
-    expect(sec.querySelector("h4")?.textContent).toBe("Refund by signing a message");
+    const sec = $<HTMLElement>(root, `details#${REFUND_SIGN_ANCHOR}`);
+    expect(sec.querySelector("summary")?.textContent).toBe("Sent without signing in? Refund by signing a message");
     expect(sec.querySelector(".refund-sign-intro")?.textContent).toBe(REFUND_SIGN_COPY.intro);
     expect([...sec.querySelectorAll("label")].map((l) => l.textContent)).toEqual([
-      "Address you sent from",
+      "Funding txid",
+      "vout",
       "Message to sign",
+      "Address you sent from",
       "Signature",
       "Refund to",
     ]);
-    const ids = [...sec.querySelectorAll("input, textarea")].map((e) => e.id);
-    expect(ids).toEqual(["refund-sign-from", "refund-sign-message", "refund-sign-signature", "refund-sign-to"]);
+    expect([...sec.querySelectorAll("input, textarea")].map((e) => e.id)).toEqual([
+      "refund-sign-txid",
+      "refund-sign-vout",
+      "refund-sign-message",
+      "refund-sign-from",
+      "refund-sign-signature",
+      "refund-sign-to",
+    ]);
     for (const label of sec.querySelectorAll("label")) {
       expect(sec.querySelector(`#${label.getAttribute("for")}`)).toBeTruthy();
     }
     expect(sec.querySelector("#refund-sign-signature-hint")?.textContent).toBe(
       "Paste the signature your wallet shows after signing.",
     );
+    expect(sec.querySelector("#refund-sign-submit")?.textContent).toBe("Register refund");
   });
 
-  it("message is read-only, empty until the outpoint is known, then exact", () => {
+  it("the message shows only once txid and vout are valid, then is exact and read-only", () => {
     const { root } = mount({ signedIn: true });
-    const m = root.querySelector<HTMLTextAreaElement>("#refund-sign-message")!;
+    const block = $<HTMLElement>(root, "#refund-sign-message-block");
+    const m = $<HTMLTextAreaElement>(root, "#refund-sign-message");
     expect(m.readOnly).toBe(true);
-    expect(m.value).toBe("");
-    expect(root.querySelector<HTMLButtonElement>("#refund-sign-copy")!.disabled).toBe(true);
+    expect(block.hidden).toBe(true);
+    fillOutpoint(root, "4f".repeat(31), "1");
+    expect(block.hidden).toBe(true);
+    for (const vout of ["", "-1", "1.5", "x"]) {
+      fillOutpoint(root, FIXTURE.txid, vout);
+      expect(block.hidden).toBe(true);
+    }
     fillOutpoint(root);
+    expect(block.hidden).toBe(false);
     expect(m.value).toBe(FIXTURE.message);
-    expect(root.querySelector<HTMLButtonElement>("#refund-sign-copy")!.disabled).toBe(false);
-    fillOutpoint(root, FIXTURE.txid, "7");
+    fillOutpoint(root, FIXTURE.txid.toUpperCase(), "7");
     expect(m.value).toBe(FIXTURE.message.replace(":1|", ":7|"));
+    fillOutpoint(root, "", "7");
+    expect(block.hidden).toBe(true);
   });
 
   it("the message names the signed-in account", () => {
     const { root } = mount({ signedIn: true, userId: "github:10" });
     fillOutpoint(root);
-    expect(root.querySelector<HTMLTextAreaElement>("#refund-sign-message")!.value).toBe(
+    expect($<HTMLTextAreaElement>(root, "#refund-sign-message").value).toBe(
       FIXTURE.message.replace("usr_fixture_01", "github:10"),
     );
   });
+});
 
+describe("prefill from the refund panel", () => {
+  it("prefills txid and vout when the panel has them, and shows the message", () => {
+    const { root } = mount({ signedIn: true, panelTxid: FIXTURE.txid, panelVout: "1" });
+    expect($<HTMLInputElement>(root, "#refund-sign-txid").value).toBe(FIXTURE.txid);
+    expect($<HTMLInputElement>(root, "#refund-sign-vout").value).toBe("1");
+    expect($<HTMLElement>(root, "#refund-sign-message-block").hidden).toBe(false);
+    expect($<HTMLTextAreaElement>(root, "#refund-sign-message").value).toBe(FIXTURE.message);
+  });
+
+  it("leaves txid empty when the panel has none", () => {
+    const { root } = mount({ signedIn: true, panelTxid: "" });
+    expect($<HTMLInputElement>(root, "#refund-sign-txid").value).toBe("");
+    expect($<HTMLElement>(root, "#refund-sign-message-block").hidden).toBe(true);
+  });
+
+  it("follows later panel edits until the donor types here", () => {
+    const { root } = mount({ signedIn: true });
+    type($<HTMLInputElement>(root, "#refund-txid"), FIXTURE.txid);
+    type($<HTMLInputElement>(root, "#refund-vout"), "1");
+    expect($<HTMLInputElement>(root, "#refund-sign-txid").value).toBe(FIXTURE.txid);
+    expect($<HTMLTextAreaElement>(root, "#refund-sign-message").value).toBe(FIXTURE.message);
+    type($<HTMLInputElement>(root, "#refund-sign-txid"), "ab".repeat(32));
+    type($<HTMLInputElement>(root, "#refund-txid"), "cd".repeat(32));
+    expect($<HTMLInputElement>(root, "#refund-sign-txid").value).toBe("ab".repeat(32));
+  });
+
+  it("opening the disclosure picks up the panel's values", () => {
+    const { root } = mount({ signedIn: true });
+    $<HTMLInputElement>(root, "#refund-txid").value = FIXTURE.txid;
+    $<HTMLInputElement>(root, "#refund-vout").value = "1";
+    const d = $<HTMLDetailsElement>(root, "#signed-refund");
+    d.open = true;
+    d.dispatchEvent(new Event("toggle"));
+    expect($<HTMLInputElement>(root, "#refund-sign-txid").value).toBe(FIXTURE.txid);
+  });
+});
+
+describe("message changes after a signature is entered", () => {
+  for (const [label, change] of [
+    ["vout edited", (root: HTMLElement) => type($<HTMLInputElement>(root, "#refund-sign-vout"), "2")],
+    ["txid edited", (root: HTMLElement) => type($<HTMLInputElement>(root, "#refund-sign-txid"), "ab".repeat(32))],
+    ["panel prefill changed", (root: HTMLElement) => type($<HTMLInputElement>(root, "#refund-vout"), "3")],
+  ] as const) {
+    it(`${label}: clears the signature and says "The message changed. Sign the new message."`, () => {
+      const { root } = mount({ signedIn: true, panelTxid: FIXTURE.txid, panelVout: "1" });
+      const sig = $<HTMLTextAreaElement>(root, "#refund-sign-signature");
+      type(sig, FIXTURE.signature);
+      change(root);
+      expect(sig.value).toBe("");
+      expect(inlineErrors(root)).toEqual({
+        "refund-sign-signature-error": "The message changed. Sign the new message.",
+      });
+      type(sig, FIXTURE.signature);
+      expect(inlineErrors(root)).toEqual({});
+    });
+  }
+
+  it("no signature yet: nothing to clear, no notice", () => {
+    const { root } = mount({ signedIn: true, panelTxid: FIXTURE.txid, panelVout: "1" });
+    type($<HTMLInputElement>(root, "#refund-sign-vout"), "2");
+    expect(inlineErrors(root)).toEqual({});
+  });
+
+  it("same message (e.g. retyping the same vout): signature kept", () => {
+    const { root } = mount({ signedIn: true, panelTxid: FIXTURE.txid, panelVout: "1" });
+    const sig = $<HTMLTextAreaElement>(root, "#refund-sign-signature");
+    type(sig, FIXTURE.signature);
+    type($<HTMLInputElement>(root, "#refund-sign-vout"), " 1");
+    expect(sig.value).toBe(FIXTURE.signature);
+  });
+});
+
+describe("empty fields: inline errors, focus on the first empty one", () => {
+  it("all empty: four lines, focus the txid", async () => {
+    const { root } = mount({ signedIn: true });
+    type($<HTMLInputElement>(root, "#refund-sign-vout"), "");
+    expect(await submit(root)).toBe("");
+    expect(inlineErrors(root)).toEqual({
+      "refund-sign-outpoint-error": "Enter the funding txid and vout.",
+      "refund-sign-from-error": "Enter the address you sent from.",
+      "refund-sign-signature-error": "Paste the signature from your wallet.",
+      "refund-sign-to-error": "Enter a refund address.",
+    });
+    expect(document.activeElement?.id).toBe("refund-sign-txid");
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it("txid set, vout empty: focus the vout", async () => {
+    const { root } = mount({ signedIn: true });
+    fillAll(root);
+    $<HTMLInputElement>(root, "#refund-sign-vout").value = "";
+    await submit(root);
+    expect(inlineErrors(root)).toEqual({ "refund-sign-outpoint-error": "Enter the funding txid and vout." });
+    expect(document.activeElement?.id).toBe("refund-sign-vout");
+  });
+
+  for (const [field, id, errId, text] of [
+    ["address", "refund-sign-from", "refund-sign-from-error", "Enter the address you sent from."],
+    ["signature", "refund-sign-signature", "refund-sign-signature-error", "Paste the signature from your wallet."],
+    ["refund address", "refund-sign-to", "refund-sign-to-error", "Enter a refund address."],
+  ] as const) {
+    it(`only the ${field} empty: its line, focus it, nothing sent`, async () => {
+      const { root } = mount({ signedIn: true });
+      fillAll(root);
+      $<HTMLInputElement>(root, `#${id}`).value = "";
+      await submit(root);
+      expect(inlineErrors(root)).toEqual({ [errId]: text });
+      expect(document.activeElement?.id).toBe(id);
+      expect(fetchCalls).toHaveLength(0);
+    });
+  }
+
+  it("signature and refund address empty: both lines, focus the signature", async () => {
+    const { root } = mount({ signedIn: true });
+    fillAll(root, "");
+    $<HTMLInputElement>(root, "#refund-sign-to").value = "";
+    await submit(root);
+    expect(Object.keys(inlineErrors(root))).toEqual(["refund-sign-signature-error", "refund-sign-to-error"]);
+    expect(document.activeElement?.id).toBe("refund-sign-signature");
+  });
+});
+
+describe("validation and sending", () => {
   it("validates the sending address on input: P2WSH tb1q, taproot and mainnet are refused", () => {
     const { root } = mount({ signedIn: true });
-    const from = root.querySelector<HTMLInputElement>("#refund-sign-from")!;
-    const err = root.querySelector<HTMLElement>("#refund-sign-from-error")!;
+    const from = $<HTMLInputElement>(root, "#refund-sign-from");
+    const err = $<HTMLElement>(root, "#refund-sign-from-error");
     for (const bad of [P2WSH_TB, P2TR_TB, P2WPKH_BC, "hello"]) {
       type(from, bad);
       expect(err.hidden).toBe(false);
@@ -365,8 +577,16 @@ describe("signed in, refunding", () => {
     }
     type(from, FIXTURE.address);
     expect(err.hidden).toBe(true);
-    type(from, "");
-    expect(err.hidden).toBe(true);
+  });
+
+  it("a P2WSH sending address is not sent; its line shows and it gets focus", async () => {
+    const { root } = mount({ signedIn: true });
+    fillAll(root);
+    type($<HTMLInputElement>(root, "#refund-sign-from"), P2WSH_TB);
+    await submit(root);
+    expect(inlineErrors(root)).toEqual({ "refund-sign-from-error": "This address type can't sign a refund message." });
+    expect(document.activeElement?.id).toBe("refund-sign-from");
+    expect(fetchCalls).toHaveLength(0);
   });
 
   it("Copy writes the exact message and shows Copied.; a new message hides it", async () => {
@@ -374,9 +594,9 @@ describe("signed in, refunding", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     const { root } = mount({ signedIn: true });
     fillOutpoint(root);
-    const copied = root.querySelector<HTMLElement>("#refund-sign-copied")!;
+    const copied = $<HTMLElement>(root, "#refund-sign-copied");
     expect(copied.hidden).toBe(true);
-    root.querySelector<HTMLButtonElement>("#refund-sign-copy")!.click();
+    $<HTMLButtonElement>(root, "#refund-sign-copy").click();
     await new Promise((r) => setTimeout(r, 0));
     expect(writeText).toHaveBeenCalledWith(FIXTURE.message);
     expect(copied.hidden).toBe(false);
@@ -386,17 +606,22 @@ describe("signed in, refunding", () => {
   });
 
   it("a failed copy shows no Copied.", async () => {
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn(async () => Promise.reject(new Error("denied"))) } });
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText: vi.fn(async () => Promise.reject(new Error("denied"))) },
+    });
     const { root } = mount({ signedIn: true });
     fillOutpoint(root);
-    root.querySelector<HTMLButtonElement>("#refund-sign-copy")!.click();
+    $<HTMLButtonElement>(root, "#refund-sign-copy").click();
     await new Promise((r) => setTimeout(r, 0));
-    expect(root.querySelector<HTMLElement>("#refund-sign-copied")!.hidden).toBe(true);
+    expect($<HTMLElement>(root, "#refund-sign-copied").hidden).toBe(true);
   });
 
-  it("sends the fixture: outpoint, refund address, vin_address and signature_b64", async () => {
+  it("sends the fixture: outpoint (lowercased txid), refund address, vin_address and signature_b64", async () => {
     const { root, onRegistered } = mount({ signedIn: true });
     fillAll(root);
+    type($<HTMLInputElement>(root, "#refund-sign-txid"), FIXTURE.txid.toUpperCase());
+    type($<HTMLTextAreaElement>(root, "#refund-sign-signature"), FIXTURE.signature);
     const text = await submit(root);
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]!.url).toMatch(/\/refunds\/register$/);
@@ -408,7 +633,7 @@ describe("signed in, refunding", () => {
       vin_address: FIXTURE.address,
       signature_b64: FIXTURE.signature,
     });
-    expect(text).toBe("Refund address registered — track under Account → Funds.");
+    expect(text).toBe("Refund address registered for this gift.");
     expect(onRegistered).toHaveBeenCalled();
   });
 
@@ -431,41 +656,28 @@ describe("signed in, refunding", () => {
     ["BIP-322-sized", withHeader(FIXTURE.signature, 2, 107)],
     ["not base64", "%%%"],
   ] as const) {
-    it(`${label}: unsupported-format line, nothing sent`, async () => {
+    it(`${label}: unsupported-format line under the signature, focus, nothing sent`, async () => {
       const { root } = mount({ signedIn: true });
       fillAll(root, sig);
-      expect(await submit(root)).toBe(
-        "This wallet's signature format isn't supported yet. Electrum and Sparrow can sign this message.",
-      );
+      await submit(root);
+      expect(inlineErrors(root)).toEqual({
+        "refund-sign-signature-error":
+          "This wallet's signature format isn't supported yet. Electrum and Sparrow can sign this message.",
+      });
+      expect(document.activeElement?.id).toBe("refund-sign-signature");
       expect(fetchCalls).toHaveLength(0);
     });
   }
 
-  it("a non-P2WPKH sending address is not sent", async () => {
-    const { root } = mount({ signedIn: true });
-    fillAll(root);
-    type(root.querySelector<HTMLInputElement>("#refund-sign-from")!, P2WSH_TB);
-    expect(await submit(root)).toBe("This address type can't sign a refund message.");
-    expect(fetchCalls).toHaveLength(0);
-  });
-
   it("a refund address on the other network is not sent", async () => {
     const { root } = mount({ signedIn: true });
     fillAll(root);
-    type(root.querySelector<HTMLInputElement>("#refund-sign-to")!, P2WPKH_BC);
-    const err = root.querySelector<HTMLElement>("#refund-sign-to-error")!;
+    type($<HTMLInputElement>(root, "#refund-sign-to"), P2WPKH_BC);
+    const err = $<HTMLElement>(root, "#refund-sign-to-error");
     expect(err.hidden).toBe(false);
     expect(err.textContent).toMatch(/mainnet/);
-    expect(await submit(root)).toMatch(/mainnet/);
-    expect(fetchCalls).toHaveLength(0);
-  });
-
-  it("missing signature or outpoint is not sent", async () => {
-    const { root } = mount({ signedIn: true });
-    fillAll(root, "");
-    expect(await submit(root)).toBe("Paste the signature your wallet shows after signing.");
-    type(root.querySelector<HTMLInputElement>("#refund-txid")!, "");
-    expect(await submit(root)).toBe("Enter the funding txid (and vout).");
+    await submit(root);
+    expect(document.activeElement?.id).toBe("refund-sign-to");
     expect(fetchCalls).toHaveLength(0);
   });
 
@@ -492,18 +704,33 @@ describe("signed in, refunding", () => {
       fillAll(root);
       expect(await submit(root)).toBe(expected);
       const page = document.body.textContent || "";
-      for (const server of ["SERVER NOTE", "not your contribution", "could not load", "oops", "invalid refund signature", "funding input"]) {
+      for (const server of [
+        "SERVER NOTE",
+        "not your contribution",
+        "could not load",
+        "oops",
+        "invalid refund signature",
+        "funding input",
+      ]) {
         expect(page).not.toContain(server);
       }
     });
   }
 
-  it("package_error: the client's own line, not the note", async () => {
+  it("package_error: the generic line (not the note), and the status list refreshes", async () => {
     reply = { status: 502, body: { package_error: true, note: "SERVER PACKAGE NOTE" } };
+    const { root, onRegistered } = mount({ signedIn: true });
+    fillAll(root);
+    expect(await submit(root)).toBe("Couldn't register this refund. Try again in a few minutes.");
+    expect(document.body.textContent).not.toContain("SERVER PACKAGE NOTE");
+    expect(onRegistered).toHaveBeenCalled();
+  });
+
+  it("network failure: the generic line", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
     const { root } = mount({ signedIn: true });
     fillAll(root);
-    expect(await submit(root)).toBe("Address saved, but payout setup failed — try Register again.");
-    expect(document.body.textContent).not.toContain("SERVER PACKAGE NOTE");
+    expect(await submit(root)).toBe("Couldn't register this refund. Try again in a few minutes.");
   });
 });
 
@@ -539,53 +766,41 @@ describe("proposal page", () => {
 
   async function paint(status: string, user: AuthUser | null): Promise<HTMLElement> {
     vi.resetModules();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("{}", { status: 404 })),
-    );
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
     document.body.innerHTML = `<div id="app"></div>`;
     const { renderProposalPage } = await import("./proposal-page");
     void renderProposalPage(proposal(status).path, (inner) => inner, user, () => undefined, proposal(status));
     const app = document.querySelector<HTMLElement>("#app")!;
-    await vi.waitFor(() => {
-      if (!app.querySelector(".proposal-onchain")) throw new Error(`not painted: ${app.textContent?.slice(0, 200)}`);
-    }, { timeout: 5000 });
-    await vi.waitFor(() => {
-      if (status === "refunding" && !app.querySelector("#refund-register-form")) throw new Error("no refund form");
-    }, { timeout: 5000 });
+    await vi.waitFor(
+      () => {
+        if (!app.querySelector(".proposal-onchain")) throw new Error(`not painted: ${app.textContent?.slice(0, 200)}`);
+      },
+      { timeout: 5000 },
+    );
+    await vi.waitFor(
+      () => {
+        if (status === "refunding" && !app.querySelector("#refund-register-form")) throw new Error("no refund form");
+      },
+      { timeout: 5000 },
+    );
     await new Promise((r) => setTimeout(r, 50));
     return app;
   }
 
-  it("refunding + signed in: the section shows and its message follows the outpoint fields", async () => {
+  it("refunding + signed in: the disclosure sits under the refund panel and prefills from it", async () => {
     const app = await paint("refunding", USER);
-    const sec = app.querySelector<HTMLElement>("#signed-refund");
+    const sec = app.querySelector<HTMLElement>("#signed-refund")!;
     expect(sec).toBeTruthy();
-    expect(sec!.closest("#refund-register-form")).toBeTruthy();
+    expect(sec.closest("#refund-panel")).toBeNull();
+    expect(app.querySelector("#refund-panel")!.nextElementSibling).toBe(sec);
     await vi.waitFor(() => {
       type(app.querySelector<HTMLInputElement>("#refund-txid")!, FIXTURE.txid);
       type(app.querySelector<HTMLInputElement>("#refund-vout")!, "1");
       if (app.querySelector<HTMLTextAreaElement>("#refund-sign-message")!.value !== FIXTURE.message) {
-        throw new Error("message not bound");
+        throw new Error("not bound");
       }
     });
-  });
-
-  it("refunding: the Lightning rail hides the section; on-chain shows it", async () => {
-    const app = await paint("refunding", USER);
-    const sec = app.querySelector<HTMLElement>(`#${REFUND_SIGN_ANCHOR}`)!;
-    const ln = app.querySelector<HTMLInputElement>('input[name="refund_rail"][value="lightning"]')!;
-    const oc = app.querySelector<HTMLInputElement>('input[name="refund_rail"][value="onchain"]')!;
-    await vi.waitFor(() => {
-      oc.checked = false;
-      ln.checked = true;
-      ln.dispatchEvent(new Event("change"));
-      if (!sec.hidden) throw new Error("not bound yet");
-    });
-    ln.checked = false;
-    oc.checked = true;
-    oc.dispatchEvent(new Event("change"));
-    expect(sec.hidden).toBe(false);
+    expect(app.querySelector<HTMLInputElement>("#refund-sign-txid")!.value).toBe(FIXTURE.txid);
   });
 
   it("refunding + signed out: only the sign-in line", async () => {
@@ -595,7 +810,7 @@ describe("proposal page", () => {
     expect(sec.querySelectorAll("input, textarea").length).toBe(0);
   });
 
-  it("not refunding: no section", async () => {
+  it("not refunding: no disclosure", async () => {
     const app = await paint("listed", USER);
     expect(app.querySelector(`#${REFUND_SIGN_ANCHOR}`)).toBeNull();
     expect(app.textContent).not.toContain("Refund by signing a message");

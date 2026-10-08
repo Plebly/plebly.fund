@@ -4,8 +4,9 @@
  * address they paid from. The Worker checks it at refund registration
  * (`/refunds/register` with `vin_address` + `signature_b64`).
  *
- * Shown only on a refunding proposal; the message only to a signed-in donor.
- * Copy is UI UX's; server text never reaches the page.
+ * A disclosure under the normal refund panel, only on a refunding proposal;
+ * the message only to a signed-in donor. Copy is UI UX's; server text never
+ * reaches the page.
  */
 import { authFetch, bindLoginHandlers, loginChoicesHtml } from "./auth";
 import { addressHrp, BITCOIN_NETWORK, escrowAddressMatchesNetwork, networkLabel, WORKERS_API } from "./config";
@@ -16,32 +17,34 @@ import { escapeHtml } from "./util";
 export const REFUND_SIGN_ANCHOR = "signed-refund";
 
 export const REFUND_SIGN_COPY = {
-  heading: "Refund by signing a message",
+  title: "Sent without signing in? Refund by signing a message",
   intro:
     "Prove you sent this gift by signing the message below with the address you paid from. This works only with single-key (P2WPKH) addresses. Exchanges and multisig wallets can't do it.",
   signedOut: "Sign in to get the message to sign.",
   signIn: "Sign in",
-  fromLabel: "Address you sent from",
-  fromInvalid: "This address type can't sign a refund message.",
+  txidLabel: "Funding txid",
+  voutLabel: "vout",
   messageLabel: "Message to sign",
   copy: "Copy",
   copied: "Copied.",
+  messageChanged: "The message changed. Sign the new message.",
+  fromLabel: "Address you sent from",
+  fromInvalid: "This address type can't sign a refund message.",
   signatureLabel: "Signature",
   signatureHint: "Paste the signature your wallet shows after signing.",
   signatureUnsupported:
     "This wallet's signature format isn't supported yet. Electrum and Sparrow can sign this message.",
   toLabel: "Refund to",
-  submit: "Register",
+  submit: "Register refund",
+  registered: "Refund address registered for this gift.",
+  failed: "Couldn't register this refund. Try again in a few minutes.",
   badSignature:
     "That signature doesn't match this address and message. Sign the exact message above with the address you sent from.",
   notFundingInput: "That address didn't send this gift.",
-  // Existing refund-panel lines, reused (no new copy).
-  needOutpoint: "Enter the funding txid (and vout).",
-  badVout: "Enter a valid vout (integer ≥ 0).",
-  registered: "Refund address registered — track under Account → Funds.",
-  packageError: "Address saved, but payout setup failed — try Register again.",
+  needOutpoint: "Enter the funding txid and vout.",
+  needFrom: "Enter the address you sent from.",
+  needSignature: "Paste the signature from your wallet.",
   needRefundTo: "Enter a refund address.",
-  failed: "Couldn’t register the refund. Try again.",
 } as const;
 
 /** Exactly the Worker's `refundVinMessage` for an on-chain outpoint. */
@@ -181,43 +184,71 @@ export function refundToInvalidReason(raw: string): string | null {
   return null;
 }
 
-export function refundSignHtml(signedIn: boolean): string {
-  const c = REFUND_SIGN_COPY;
-  const head = `<h4 class="refund-sign-title">${escapeHtml(c.heading)}</h4>`;
-  if (!signedIn) {
-    return `<section class="refund-sign" id="${REFUND_SIGN_ANCHOR}" data-signed-in="0">
-      ${head}
-      <p class="muted" id="refund-sign-signedout">${escapeHtml(c.signedOut)}</p>
-      <button type="button" class="btn" id="refund-sign-signin">${escapeHtml(c.signIn)}</button>
-      <div id="refund-sign-login" hidden></div>
-    </section>`;
-  }
-  return `<section class="refund-sign" id="${REFUND_SIGN_ANCHOR}" data-signed-in="1">
-    ${head}
-    <p class="muted refund-sign-intro">${escapeHtml(c.intro)}</p>
-    <label class="donate-amount-label" for="refund-sign-from">${escapeHtml(c.fromLabel)}</label>
-    <input id="refund-sign-from" class="donate-amount mono" type="text" autocomplete="off" spellcheck="false" aria-describedby="refund-sign-from-error" />
-    <p class="muted error" id="refund-sign-from-error" hidden></p>
-    <label class="donate-amount-label" for="refund-sign-message">${escapeHtml(c.messageLabel)}</label>
-    <textarea id="refund-sign-message" class="donate-amount mono" rows="3" readonly></textarea>
-    <div class="refund-sign-copy-row">
-      <button type="button" class="btn ghost" id="refund-sign-copy" disabled>${escapeHtml(c.copy)}</button>
-      <span class="muted" id="refund-sign-copied" role="status" hidden>${escapeHtml(c.copied)}</span>
-    </div>
-    <label class="donate-amount-label" for="refund-sign-signature">${escapeHtml(c.signatureLabel)}</label>
-    <textarea id="refund-sign-signature" class="donate-amount mono" rows="2" spellcheck="false" aria-describedby="refund-sign-signature-hint"></textarea>
-    <p class="muted" id="refund-sign-signature-hint">${escapeHtml(c.signatureHint)}</p>
-    <label class="donate-amount-label" for="refund-sign-to">${escapeHtml(c.toLabel)}</label>
-    <input id="refund-sign-to" class="donate-amount mono" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(addressHrp())}…" />
-    <p class="muted error" id="refund-sign-to-error" hidden></p>
-    <button type="button" class="btn" id="refund-sign-submit">${escapeHtml(c.submit)}</button>
-    <p class="muted" id="refund-sign-msg" hidden></p>
-  </section>`;
+/** A funding txid as the Worker stores it: 64 hex chars (lowercased here). */
+export function normalizeTxid(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  return /^[0-9a-f]{64}$/.test(t) ? t : null;
+}
+
+/** A vout: a whole number ≥ 0. */
+export function parseVout(raw: string): number | null {
+  const t = raw.trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isSafeInteger(n) ? n : null;
 }
 
 /**
- * Wire the section. Reads the funding txid / vout from the on-chain refund
- * fields above it (`#refund-txid`, `#refund-vout`).
+ * Disclosure under the normal refund panel. Signed out: only the sign-in
+ * line. Signed in: txid + vout, the message (once both are valid), sending
+ * address, signature, refund address.
+ */
+export function refundSignHtml(signedIn: boolean): string {
+  const c = REFUND_SIGN_COPY;
+  const summary = `<summary class="refund-sign-title">${escapeHtml(c.title)}</summary>`;
+  if (!signedIn) {
+    return `<details class="refund-sign" id="${REFUND_SIGN_ANCHOR}" data-signed-in="0">
+      ${summary}
+      <p class="muted" id="refund-sign-signedout">${escapeHtml(c.signedOut)}</p>
+      <button type="button" class="btn" id="refund-sign-signin">${escapeHtml(c.signIn)}</button>
+      <div id="refund-sign-login" hidden></div>
+    </details>`;
+  }
+  const err = (id: string) => `<p class="muted error" id="${id}" role="alert" hidden></p>`;
+  return `<details class="refund-sign" id="${REFUND_SIGN_ANCHOR}" data-signed-in="1">
+    ${summary}
+    <p class="muted refund-sign-intro">${escapeHtml(c.intro)}</p>
+    <label class="donate-amount-label" for="refund-sign-txid">${escapeHtml(c.txidLabel)}</label>
+    <input id="refund-sign-txid" class="donate-amount mono" type="text" maxlength="64" autocomplete="off" spellcheck="false" aria-describedby="refund-sign-outpoint-error" />
+    <label class="donate-amount-label" for="refund-sign-vout">${escapeHtml(c.voutLabel)}</label>
+    <input id="refund-sign-vout" class="donate-amount mono" type="text" inputmode="numeric" autocomplete="off" aria-describedby="refund-sign-outpoint-error" />
+    ${err("refund-sign-outpoint-error")}
+    <div id="refund-sign-message-block" hidden>
+      <label class="donate-amount-label" for="refund-sign-message">${escapeHtml(c.messageLabel)}</label>
+      <textarea id="refund-sign-message" class="donate-amount mono" rows="3" readonly></textarea>
+      <div class="refund-sign-copy-row">
+        <button type="button" class="btn ghost" id="refund-sign-copy">${escapeHtml(c.copy)}</button>
+        <span class="muted" id="refund-sign-copied" role="status" hidden>${escapeHtml(c.copied)}</span>
+      </div>
+    </div>
+    <label class="donate-amount-label" for="refund-sign-from">${escapeHtml(c.fromLabel)}</label>
+    <input id="refund-sign-from" class="donate-amount mono" type="text" autocomplete="off" spellcheck="false" aria-describedby="refund-sign-from-error" />
+    ${err("refund-sign-from-error")}
+    <label class="donate-amount-label" for="refund-sign-signature">${escapeHtml(c.signatureLabel)}</label>
+    <textarea id="refund-sign-signature" class="donate-amount mono" rows="2" spellcheck="false" aria-describedby="refund-sign-signature-hint refund-sign-signature-error"></textarea>
+    <p class="muted" id="refund-sign-signature-hint">${escapeHtml(c.signatureHint)}</p>
+    ${err("refund-sign-signature-error")}
+    <label class="donate-amount-label" for="refund-sign-to">${escapeHtml(c.toLabel)}</label>
+    <input id="refund-sign-to" class="donate-amount mono" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(addressHrp())}…" aria-describedby="refund-sign-to-error" />
+    ${err("refund-sign-to-error")}
+    <button type="button" class="btn" id="refund-sign-submit">${escapeHtml(c.submit)}</button>
+    <p class="muted" id="refund-sign-msg" role="status" hidden></p>
+  </details>`;
+}
+
+/**
+ * Wire the disclosure. Txid / vout prefill from the normal refund panel
+ * (`#refund-txid`, `#refund-vout`) until the donor edits them here.
  */
 export function bindRefundSign(
   root: ParentNode,
@@ -229,12 +260,18 @@ export function bindRefundSign(
     onAuthed?: () => void;
   },
 ): void {
-  const host = root.querySelector<HTMLElement>(`#${REFUND_SIGN_ANCHOR}`);
+  const host = root.querySelector<HTMLDetailsElement>(`#${REFUND_SIGN_ANCHOR}`);
   if (!host) return;
   if (opts.status !== "refunding" || !opts.proposalId) {
     host.remove();
     return;
   }
+  const openFromHash = () => {
+    if (location.hash === `#${REFUND_SIGN_ANCHOR}`) host.open = true;
+  };
+  openFromHash();
+  window.addEventListener("hashchange", openFromHash);
+
   if (!opts.userId) {
     host.querySelector("#refund-sign-signin")?.addEventListener("click", () => {
       const login = host.querySelector<HTMLElement>("#refund-sign-login");
@@ -248,36 +285,25 @@ export function bindRefundSign(
   }
   const c = REFUND_SIGN_COPY;
   const q = <T extends HTMLElement>(sel: string) => host.querySelector<T>(sel);
-  const from = q<HTMLInputElement>("#refund-sign-from");
-  const fromErr = q<HTMLElement>("#refund-sign-from-error");
+  const txidEl = q<HTMLInputElement>("#refund-sign-txid");
+  const voutEl = q<HTMLInputElement>("#refund-sign-vout");
+  const outpointErr = q<HTMLElement>("#refund-sign-outpoint-error");
+  const messageBlock = q<HTMLElement>("#refund-sign-message-block");
   const messageEl = q<HTMLTextAreaElement>("#refund-sign-message");
   const copyBtn = q<HTMLButtonElement>("#refund-sign-copy");
   const copied = q<HTMLElement>("#refund-sign-copied");
+  const from = q<HTMLInputElement>("#refund-sign-from");
+  const fromErr = q<HTMLElement>("#refund-sign-from-error");
   const sigEl = q<HTMLTextAreaElement>("#refund-sign-signature");
+  const sigErr = q<HTMLElement>("#refund-sign-signature-error");
   const toEl = q<HTMLInputElement>("#refund-sign-to");
   const toErr = q<HTMLElement>("#refund-sign-to-error");
   const submit = q<HTMLButtonElement>("#refund-sign-submit");
   const msg = q<HTMLElement>("#refund-sign-msg");
+  const panelTxid = root.querySelector<HTMLInputElement>("#refund-txid");
+  const panelVout = root.querySelector<HTMLInputElement>("#refund-vout");
 
-  const outpoint = () => {
-    const txid = (root.querySelector<HTMLInputElement>("#refund-txid")?.value || "").trim();
-    const voutRaw = (root.querySelector<HTMLInputElement>("#refund-vout")?.value || "").trim();
-    const vout = voutRaw === "" ? NaN : Number(voutRaw);
-    return { txid, vout };
-  };
-  const currentMessage = () => {
-    const { txid, vout } = outpoint();
-    return refundSignMessage({ proposalId: opts.proposalId, txid, vout, userId: opts.userId });
-  };
-  const syncMessage = () => {
-    const m = currentMessage() || "";
-    if (messageEl && messageEl.value !== m) {
-      messageEl.value = m;
-      if (copied) copied.hidden = true;
-    }
-    if (copyBtn) copyBtn.disabled = !m;
-  };
-  const showFieldError = (el: HTMLElement | null, text: string | null) => {
+  const fieldError = (el: HTMLElement | null, text: string | null) => {
     if (!el) return;
     el.hidden = !text;
     el.textContent = text || "";
@@ -289,18 +315,61 @@ export function bindRefundSign(
     msg.textContent = text;
   };
 
-  for (const sel of ["#refund-txid", "#refund-vout"]) {
-    root.querySelector(sel)?.addEventListener("input", syncMessage);
-    root.querySelector(sel)?.addEventListener("change", syncMessage);
+  const currentMessage = () => {
+    const txid = normalizeTxid(txidEl?.value || "");
+    const vout = parseVout(voutEl?.value || "");
+    if (!txid || vout == null) return null;
+    return refundSignMessage({ proposalId: opts.proposalId, txid, vout, userId: opts.userId });
+  };
+  let shownMessage = "";
+  const syncMessage = () => {
+    const m = currentMessage() || "";
+    if (messageBlock) messageBlock.hidden = !m;
+    if (m !== shownMessage) {
+      if (messageEl) messageEl.value = m;
+      if (copied) copied.hidden = true;
+      if (sigEl && sigEl.value.trim()) {
+        sigEl.value = "";
+        fieldError(sigErr, c.messageChanged);
+      }
+      shownMessage = m;
+    }
+    if (m) fieldError(outpointErr, null);
+  };
+
+  // Prefill from the normal panel until the donor types here.
+  const edited = { txid: false, vout: false };
+  const prefill = () => {
+    if (txidEl && !edited.txid && panelTxid && panelTxid.value.trim()) txidEl.value = panelTxid.value.trim();
+    if (voutEl && !edited.vout && panelVout && panelVout.value.trim()) voutEl.value = panelVout.value.trim();
+    syncMessage();
+  };
+  for (const el of [panelTxid, panelVout]) {
+    el?.addEventListener("input", prefill);
+    el?.addEventListener("change", prefill);
   }
-  syncMessage();
+  host.addEventListener("toggle", () => {
+    if (host.open) prefill();
+  });
+  txidEl?.addEventListener("input", () => {
+    edited.txid = true;
+    syncMessage();
+  });
+  voutEl?.addEventListener("input", () => {
+    edited.vout = true;
+    syncMessage();
+  });
+  prefill();
 
   from?.addEventListener("input", () => {
     const v = from.value.trim();
-    showFieldError(fromErr, v && !isP2wpkhAddress(v) ? c.fromInvalid : null);
+    fieldError(fromErr, v && !isP2wpkhAddress(v) ? c.fromInvalid : null);
+  });
+  sigEl?.addEventListener("input", () => {
+    if (sigEl.value.trim()) fieldError(sigErr, null);
   });
   toEl?.addEventListener("input", () => {
-    showFieldError(toErr, refundToInvalidReason(toEl.value));
+    fieldError(toErr, refundToInvalidReason(toEl.value));
   });
 
   copyBtn?.addEventListener("click", async () => {
@@ -315,25 +384,39 @@ export function bindRefundSign(
   });
 
   submit?.addEventListener("click", async () => {
-    const { txid, vout } = outpoint();
-    if (!txid) return show(c.needOutpoint, "error");
-    if (!Number.isInteger(vout) || vout < 0) return show(c.badVout, "error");
-    const message = currentMessage();
-    if (!message) return show(c.needOutpoint, "error");
+    if (msg) msg.hidden = true;
+    const txid = normalizeTxid(txidEl?.value || "");
+    const vout = parseVout(voutEl?.value || "");
     const vin = (from?.value || "").trim();
-    if (!isP2wpkhAddress(vin)) {
-      showFieldError(fromErr, c.fromInvalid);
-      return show(c.fromInvalid, "error");
-    }
     const sig = (sigEl?.value || "").replace(/\s+/g, "");
-    if (!sig) return show(c.signatureHint, "error");
-    if (!signatureFormatSupported(sig)) return show(c.signatureUnsupported, "error");
     const refundTo = (toEl?.value || "").trim();
-    if (!refundTo) return show(c.needRefundTo, "error");
+
+    // Empty (or unusable outpoint): inline under each field, focus the first.
+    const missing: [HTMLElement | null, HTMLElement | null, string][] = [];
+    if (!txid || vout == null) missing.push([!txid ? txidEl : voutEl, outpointErr, c.needOutpoint]);
+    if (!vin) missing.push([from, fromErr, c.needFrom]);
+    if (!sig) missing.push([sigEl, sigErr, c.needSignature]);
+    if (!refundTo) missing.push([toEl, toErr, c.needRefundTo]);
+    if (missing.length) {
+      for (const [, errEl, text] of missing) fieldError(errEl, text);
+      missing[0]![0]?.focus();
+      return;
+    }
+    if (!isP2wpkhAddress(vin)) {
+      fieldError(fromErr, c.fromInvalid);
+      from?.focus();
+      return;
+    }
+    if (!signatureFormatSupported(sig)) {
+      fieldError(sigErr, c.signatureUnsupported);
+      sigEl?.focus();
+      return;
+    }
     const toReason = refundToInvalidReason(refundTo);
     if (toReason) {
-      showFieldError(toErr, toReason);
-      return show(toReason, "error");
+      fieldError(toErr, toReason);
+      toEl?.focus();
+      return;
     }
     const api = WORKERS_API.replace(/\/$/, "");
     try {
@@ -343,8 +426,8 @@ export function bindRefundSign(
         body: JSON.stringify(
           buildRefundRegisterBody({
             proposal_id: opts.proposalId!,
-            txid,
-            vout,
+            txid: txid!,
+            vout: vout!,
             refund_address: refundTo,
             vin_address: vin,
             signature_b64: sig,
@@ -361,11 +444,10 @@ export function bindRefundSign(
       if (res.ok) {
         show(c.registered);
         opts.onRegistered?.();
-      } else if (body?.package_error === true) {
-        show(c.packageError, "error");
-        opts.onRegistered?.();
       } else {
         show(refundSignErrorCopy(body), "error");
+        // Address saved but payout setup failed: refresh the status list.
+        if (body?.package_error === true) opts.onRegistered?.();
       }
     } catch {
       show(c.failed, "error");

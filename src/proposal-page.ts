@@ -22,7 +22,7 @@ import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { renderMarkdown } from "./markdown";
-import { bindRefundSign, REFUND_SIGN_ANCHOR } from "./refund-sign";
+import { bindRefundSign } from "./refund-sign";
 import {
   bindDonateModal,
   mountDonateChromeWhenEscrowKnown,
@@ -213,9 +213,6 @@ function bindRefundAndBallot(
     const ln = root.querySelector<HTMLElement>("#refund-ln-fields");
     if (onchain) onchain.hidden = rail !== "onchain";
     if (ln) ln.hidden = rail !== "lightning";
-    // Signing proves an on-chain funding input; not for Lightning gifts.
-    const signed = root.querySelector<HTMLElement>(`#${REFUND_SIGN_ANCHOR}`);
-    if (signed) signed.hidden = rail !== "onchain";
   };
   bindRefundSign(root, {
     proposalId: match.id,

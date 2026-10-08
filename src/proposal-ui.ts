@@ -2286,10 +2286,10 @@ export function refundRegisterHtml(proposalId: string | null, signedIn = false):
       <label class="donate-amount-label" for="refund-address">Refund address</label>
       <input id="refund-address" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
       <button type="button" class="btn" id="refund-submit">Register</button>
-      ${refundSignHtml(signedIn)}
     </div>
     <p class="muted" id="refund-msg" hidden></p>
-  </div>`;
+  </div>
+  ${refundSignHtml(signedIn)}`;
 }
 
 export function ballotPanelHtml(proposalId: string | null): string {
