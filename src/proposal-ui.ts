@@ -314,6 +314,7 @@ export {
 } from "./proposal-status-ui";
 
 import { fundingBarTrackHtml } from "./proposal-funding-bar";
+import { refundSignHtml } from "./refund-sign";
 
 export {
   fundingBarScale,
@@ -2256,7 +2257,7 @@ export function metaChipsHtml(p: Proposal): string {
   return `<div class="proposal-meta-line">${bits.join('<span class="proposal-meta-sep" aria-hidden="true">·</span>')}</div>`;
 }
 
-export function refundRegisterHtml(proposalId: string | null): string {
+export function refundRegisterHtml(proposalId: string | null, signedIn = false): string {
   if (!proposalId) return "";
   return `<div class="refund-panel" id="refund-panel">
     <h3 class="milestones-title">Register refund</h3>
@@ -2285,6 +2286,7 @@ export function refundRegisterHtml(proposalId: string | null): string {
       <label class="donate-amount-label" for="refund-address">Refund address</label>
       <input id="refund-address" class="donate-amount mono" type="text" placeholder="bc1… or tb1…" />
       <button type="button" class="btn" id="refund-submit">Register</button>
+      ${refundSignHtml(signedIn)}
     </div>
     <p class="muted" id="refund-msg" hidden></p>
   </div>`;

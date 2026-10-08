@@ -22,6 +22,7 @@ import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { renderMarkdown } from "./markdown";
+import { bindRefundSign, REFUND_SIGN_ANCHOR } from "./refund-sign";
 import {
   bindDonateModal,
   mountDonateChromeWhenEscrowKnown,
@@ -116,7 +117,11 @@ export function renderMissingProposal(shell: ProposalShell, id: string): void {
   app.innerHTML = shell(missingProposalHtml(id));
 }
 
-function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
+function bindRefundAndBallot(
+  root: ParentNode,
+  match: Proposal,
+  user: AuthUser | null = null,
+): void {
   const api = WORKERS_API.replace(/\/$/, "");
 
   const loadRefundStatus = async () => {
@@ -208,7 +213,17 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
     const ln = root.querySelector<HTMLElement>("#refund-ln-fields");
     if (onchain) onchain.hidden = rail !== "onchain";
     if (ln) ln.hidden = rail !== "lightning";
+    // Signing proves an on-chain funding input; not for Lightning gifts.
+    const signed = root.querySelector<HTMLElement>(`#${REFUND_SIGN_ANCHOR}`);
+    if (signed) signed.hidden = rail !== "onchain";
   };
+  bindRefundSign(root, {
+    proposalId: match.id,
+    status: match.status,
+    userId: user?.id ?? null,
+    onRegistered: () => void loadRefundStatus(),
+    onAuthed: () => location.reload(),
+  });
   root.querySelectorAll('input[name="refund_rail"]').forEach((el) => {
     el.addEventListener("change", syncRefundRail);
   });
@@ -576,7 +591,7 @@ export async function renderProposalPage(
       status === "rejected" && match.id
         ? rebuttalPanelHtml(match.rebuttal_expires_at, match.rebuttal_reasoning)
         : "",
-      status === "refunding" ? refundRegisterHtml(match.id) : "",
+      status === "refunding" ? refundRegisterHtml(match.id, Boolean(user)) : "",
       status === "abandoned_vote" ||
       (status === "underfunded" && (balance ?? 0) > 0)
         ? ballotPanelHtml(match.id)
@@ -816,7 +831,7 @@ export async function renderProposalPage(
       }),
       donateReady,
     ]);
-    bindRefundAndBallot(app, match);
+    bindRefundAndBallot(app, match, user);
     const reviewerMe = await reviewerMePromise;
     await bindListingReportControl(app, {
       proposalId: match.id,
