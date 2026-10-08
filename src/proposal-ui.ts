@@ -3,6 +3,7 @@ import {
   authFetch,
   bindLoginHandlers,
   currentReturnPath,
+  currentSessionToken,
   loginChoicesHtml,
 } from "./auth";
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
@@ -22,6 +23,7 @@ import {
   readCreditPreferences,
   recordContribution,
   recordContributionWithRetry,
+  RecordRetryCancelled,
   RECORD_RETRY_STATUS_COPY,
   saveStoredCreditPreferences,
   syncStoredCreditPreferencesFromProfile,
@@ -869,8 +871,11 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   let utxoStop: (() => void) | null = null;
   let balanceStop: (() => void) | null = null;
   let linking = false;
+  // stop() bumps this so an in-flight /record retry loop gives up.
+  let linkGeneration = 0;
 
   const stopWatchers = () => {
+    linkGeneration += 1;
     utxoStop?.();
     balanceStop?.();
     utxoStop = null;
@@ -894,11 +899,22 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     setWatchHintVisible(false);
     setDonateConfirmStatus(panel, "Linking funder credit…", "live");
     setDonateCreditStatus(panel, null);
+    // Retries stop when the modal closes, on stop(), or when the session
+    // changes, so a gift is never recorded under an account that signed in
+    // after it was seen.
+    const generation = linkGeneration;
+    const sessionAtStart = currentSessionToken();
+    const modal = panel.closest<HTMLElement>("#donate-modal");
+    const modalWasOpen = Boolean(modal && !modal.hidden);
+    const stillLinking = () =>
+      generation === linkGeneration &&
+      currentSessionToken() === sessionAtStart &&
+      !(modalWasOpen && modal?.hidden);
     try {
       const prefs = activeCreditPreferences(panel);
       // Transient record failures (busy / 5xx / offline) retry for a bounded
       // window before the modal gives up; 4xx and 409 stay final.
-      await recordContributionWithRetry({
+      const recorded = await recordContributionWithRetry({
         proposal_id: opts.proposalId,
         txid: utxo.txid,
         vout: utxo.vout,
@@ -910,7 +926,19 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         proposal_title: opts.proposalTitle,
       }, {
         onRetry: () => setDonateConfirmStatus(panel, RECORD_RETRY_STATUS_COPY, "live"),
-      });
+        shouldContinue: stillLinking,
+      }).then(
+        () => true,
+        (e: unknown) => {
+          if (e instanceof RecordRetryCancelled) return false;
+          throw e;
+        },
+      );
+      if (!recorded) {
+        // Stopped on purpose: no failure line, no Link button, nothing recorded.
+        setDonateConfirmStatus(panel, null);
+        return;
+      }
       if (opts.mode !== "endowment") {
         await claimContributionWithRetry({
           proposal_id: opts.proposalId,

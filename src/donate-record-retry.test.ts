@@ -19,11 +19,12 @@ vi.mock("./config", async (importOriginal) => {
   };
 });
 
-import { bindDonatePanel, donateModalHtml } from "./proposal-ui";
+import { bindDonateModal, bindDonatePanel, donateModalHtml } from "./proposal-ui";
 import {
   RECORD_RETRY_DELAYS_MS,
   RECORD_RETRY_STATUS_COPY,
   RECORD_RETRY_WINDOW_MS,
+  RecordRetryCancelled,
   recordContributionWithRetry,
 } from "./funder-credit";
 
@@ -47,7 +48,7 @@ const offline: Reply = () => new TypeError("Failed to fetch");
 
 function stubFetch(recordReplies: Reply[], fallback: Reply) {
   let utxos = [OLD];
-  const posts: { path: string; at: number; body: string }[] = [];
+  const posts: { path: string; at: number; body: string; auth: string | null }[] = [];
   let i = 0;
   vi.stubGlobal(
     "fetch",
@@ -60,7 +61,12 @@ function stubFetch(recordReplies: Reply[], fallback: Reply) {
       if (url.includes("/contributions/mine/")) return Response.json({ contributions: [] });
       if (init?.method === "POST" && url.startsWith("https://api.test/contributions/")) {
         const path = url.slice("https://api.test".length);
-        posts.push({ path, at: Date.now(), body: String(init.body ?? "") });
+        posts.push({
+          path,
+          at: Date.now(),
+          body: String(init.body ?? ""),
+          auth: new Headers(init.headers).get("Authorization"),
+        });
         const r = path === "/contributions/record" ? (recordReplies[i++] ?? fallback)() : ok();
         if (r instanceof Error) throw r;
         return r;
@@ -81,12 +87,19 @@ function stubFetch(recordReplies: Reply[], fallback: Reply) {
 const statusEl = () => document.querySelector<HTMLElement>("#donate-confirm-status")!;
 const showsFailure = () => statusEl().classList.contains("bad");
 
-async function openAndDetect(h: ReturnType<typeof stubFetch>): Promise<number> {
+async function openAndDetect(
+  h: ReturnType<typeof stubFetch>,
+  o?: { modalOpen?: boolean },
+): Promise<number> {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   document.body.innerHTML = donateModalHtml(
     { id: PID, path: PATH, title: "U", status: "listed", escrow_address: ADDR } as never,
     { signedIn: true },
   );
+  if (o?.modalOpen) {
+    document.querySelector<HTMLElement>("#donate-modal")!.hidden = false;
+    bindDonateModal(document);
+  }
   await bindDonatePanel(document, {
     address: ADDR,
     proposalId: PID,
@@ -121,6 +134,38 @@ describe("retry window bound", () => {
     expect(sum).toBeLessThan(RECORD_RETRY_WINDOW_MS);
     expect(RECORD_RETRY_WINDOW_MS).toBeLessThanOrEqual(60_000);
     expect(RECORD_RETRY_WINDOW_MS * 4).toBeLessThanOrEqual(INDEXER_PERIOD_MS);
+  });
+
+  it("onRetry fires once per wait, never on the final give-up", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 502 })));
+    const onRetry = vi.fn();
+    const done = recordContributionWithRetry(
+      { proposal_id: PID, txid: NEW.txid, vout: 1, address: ADDR },
+      { delaysMs: [10, 10], windowMs: 1_000, onRetry },
+    ).catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await done).toBeInstanceOf(Error);
+    expect(onRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it("shouldContinue false during a wait stops the loop with RecordRetryCancelled", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls += 1;
+      return new Response("down", { status: 502 });
+    }));
+    let go = true;
+    const done = recordContributionWithRetry(
+      { proposal_id: PID, txid: NEW.txid, vout: 1, address: ADDR },
+      { delaysMs: [1_000, 1_000, 1_000], windowMs: 10_000, shouldContinue: () => go },
+    ).catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(500);
+    go = false;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await done).toBeInstanceOf(RecordRetryCancelled);
+    expect(calls).toBe(1);
   });
 
   it("no attempt starts after the window, even with long delays", async () => {
@@ -218,6 +263,61 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     expect(bodies).toHaveLength(4);
     expect(new Set(bodies).size).toBe(1);
     expect(JSON.parse(bodies[0]!)).toMatchObject({ proposal_id: PID, txid: NEW.txid, vout: NEW.vout, address: ADDR });
+    expect(statusEl().textContent).toContain("Credit linked");
+  });
+
+  /** No further /record, no claim, no failure line, no retrying line left behind. */
+  async function expectStopped(h: ReturnType<typeof stubFetch>, recordsBefore: number) {
+    await vi.advanceTimersByTimeAsync(RECORD_RETRY_WINDOW_MS + 10_000);
+    expect(h.records()).toHaveLength(recordsBefore);
+    expect(h.claims()).toHaveLength(0);
+    expect(showsFailure()).toBe(false);
+    expect(statusEl().textContent ?? "").not.toBe(RETRYING);
+    expect(statusEl().textContent ?? "").not.toMatch(/credit linked/i);
+  }
+
+  it("closing the modal mid-retry stops further /record calls", async () => {
+    const h = stubFetch([], busy);
+    await openAndDetect(h, { modalOpen: true });
+    expect(h.records()).toHaveLength(1);
+    expect(statusEl().textContent).toBe(RETRYING);
+    document.querySelector<HTMLButtonElement>("#donate-close")!.click();
+    expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(true);
+    await expectStopped(h, 1);
+  });
+
+  it("stop() mid-retry stops further /record calls", async () => {
+    const h = stubFetch([], busy);
+    await openAndDetect(h);
+    await vi.advanceTimersByTimeAsync(1_200);
+    expect(h.records()).toHaveLength(2);
+    const panel = document.querySelector<HTMLElement & { __stopDonateWatchers?: () => void }>("#donate")!;
+    panel.__stopDonateWatchers!();
+    await expectStopped(h, 2);
+  });
+
+  for (const [name, next] of [
+    ["signing in as another account", "token-bob"],
+    ["signing out", null],
+  ] as const) {
+    it(`a session change (${name}) mid-retry stops further /record calls`, async () => {
+      sessionStorage.setItem("plebly_session", "token-alice");
+      const h = stubFetch([], busy);
+      await openAndDetect(h);
+      expect(h.records()).toHaveLength(1);
+      if (next) sessionStorage.setItem("plebly_session", next);
+      else sessionStorage.removeItem("plebly_session");
+      await expectStopped(h, 1);
+      expect(h.records().map((r) => r.auth)).toEqual(["Bearer token-alice"]);
+    });
+  }
+
+  it("an unchanged session keeps retrying (the session check isn't always false)", async () => {
+    sessionStorage.setItem("plebly_session", "token-alice");
+    const h = stubFetch([busy, busy], ok);
+    await openAndDetect(h, { modalOpen: true });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.records().map((r) => r.auth)).toEqual(Array(3).fill("Bearer token-alice"));
     expect(statusEl().textContent).toContain("Credit linked");
   });
 

@@ -27,6 +27,11 @@ function storedSession(): string | null {
   }
 }
 
+/** This tab's session token (null when signed out). Changes on sign-out / sign-in. */
+export function currentSessionToken(): string | null {
+  return storedSession();
+}
+
 function setStoredSession(token: string): void {
   sessionStorage.setItem(SESSION_KEY, token);
 }
