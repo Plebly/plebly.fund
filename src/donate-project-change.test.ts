@@ -188,6 +188,18 @@ describe("project → project with the Donate modal open mid-link", () => {
       expect(m.outerHTML).not.toContain(X.id);
       expect(m.outerHTML).not.toContain(X.path);
     }
+
+    // UI UX: Y's modal is mounted and ready, never opened by the project change
+    // (X's open state doesn't carry over); only a Donate click opens it.
+    const yModal = modals[0]!;
+    expect(yModal.hidden).toBe(true);
+    expect(document.body.classList.contains("modal-open")).toBe(false);
+    const donateBtn = document.querySelector<HTMLButtonElement>("[data-open-donate]");
+    expect(donateBtn).not.toBeNull();
+    donateBtn!.click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(false));
+    expect(document.querySelector<HTMLElement>("#donate-modal")!.dataset.donateProposalId).toBe(Y.id);
+    expect(document.body.classList.contains("modal-open")).toBe(true);
   });
 
   it("re-rendering the same project keeps its modal (no close on a same-project render)", async () => {
