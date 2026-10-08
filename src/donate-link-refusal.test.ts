@@ -27,12 +27,12 @@ const PATH = "proposals/listed/PLEBLY-2026-009.md";
 const OLD = { txid: "cd".repeat(32), vout: 0, value: 25_000, status: { confirmed: true } };
 const NEW = { txid: "ef".repeat(32), vout: 1, value: 7_000, status: { confirmed: true } };
 const POLL = 50;
-const LINE = "Your gift reached escrow. This page couldn't link it to your account.";
+const LINE = "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
 
 type Reply = () => Response | Error;
 const accepted: Reply = () => Response.json({ ok: true, entry: {} });
 
-function stubFetch(record: Reply, claim: Reply) {
+function stubFetch(record: Reply, claim: Reply, arriving: typeof NEW = NEW) {
   let utxos = [OLD];
   const posts: string[] = [];
   vi.stubGlobal(
@@ -57,7 +57,7 @@ function stubFetch(record: Reply, claim: Reply) {
   return {
     posts,
     arrive: () => {
-      utxos = [OLD, NEW];
+      utxos = [OLD, arriving];
     },
   };
 }
@@ -87,6 +87,9 @@ async function payAndDetect(h: ReturnType<typeof stubFetch>): Promise<void> {
 
 const statusText = () => document.querySelector("#donate-confirm-status")?.textContent || "";
 const pageText = () => document.body.textContent || "";
+/** Every attribute value on the page (title, aria-*, data-*, href, …), as name=value lines. */
+const attributeValues = () =>
+  [...document.querySelectorAll("*")].flatMap((el) => [...el.attributes].map((a) => `${a.name}=${a.value}`));
 
 afterEach(() => {
   for (const el of document.querySelectorAll<HTMLElement & { __stopDonateWatchers?: () => void }>("*")) {
@@ -145,10 +148,31 @@ describe("Donate modal: record/claim refusal shows one fixed line", () => {
       await payAndDetect(h);
       expect(h.posts).toContain("/contributions/record");
       expect(statusText()).toBe(LINE);
-      if (raw) expect(pageText()).not.toContain(raw);
+      if (raw) {
+        // Not in visible text, and not in any attribute (title, aria-label, data-*).
+        expect(pageText()).not.toContain(raw);
+        expect(attributeValues().filter((v) => v.includes(raw))).toEqual([]);
+        expect(document.documentElement.outerHTML).not.toContain(raw);
+      }
       expect(pageText()).not.toMatch(/credit linked/i);
+      // No ownership claim, no "in escrow" before confirmation (Review H1/H2).
+      expect(pageText()).not.toMatch(/your gift|reached escrow/i);
     });
   }
+
+  it("unconfirmed deposit + refusal -> the same line (nothing says it is in escrow yet)", async () => {
+    const unconfirmed = { ...NEW, status: { confirmed: false } };
+    const h = stubFetch(
+      () => Response.json({ error: "contribution already recorded by another donor", code: "contribution_owned" }, { status: 409 }),
+      accepted,
+      unconfirmed,
+    );
+    await payAndDetect(h);
+    expect(h.posts).toContain("/contributions/record");
+    expect(statusText()).toBe(LINE);
+    expect(pageText()).not.toMatch(/your gift|reached escrow/i);
+    expect(attributeValues().filter((v) => v.includes("already recorded by another donor"))).toEqual([]);
+  });
 
   it("accepted record + claim still says Credit linked", async () => {
     const h = stubFetch(accepted, accepted);

@@ -779,9 +779,13 @@ function setDonateCreditStatus(panel: Element, message: string | null, kind?: "o
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
 }
 
-/** Donate modal: record/claim did not link the gift (refused, 5xx or offline). */
+/**
+ * Donate modal: record/claim did not link a deposit the watcher saw (any
+ * refusal, 5xx or offline). It claims neither ownership ("your gift") nor
+ * that the deposit is in escrow before it confirms. Copy: UI UX + Review.
+ */
 export const DONATE_LINK_REFUSED_COPY =
-  "Your gift reached escrow. This page couldn't link it to your account.";
+  "A new deposit was seen at this address, but this page couldn't link it to your account. If you sent it, it will be held in escrow once it confirms.";
 
 function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
