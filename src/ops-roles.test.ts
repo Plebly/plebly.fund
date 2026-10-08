@@ -120,6 +120,23 @@ describe("ops-roles POST helpers: JSON responses", () => {
       "Ops role vote failed (200)",
     );
   });
+
+  it("nominate: 200 without a ballot is an error", async () => {
+    fetchMock.mockResolvedValue(json(200, {}));
+    await expect(nominate()).rejects.toThrow("Nominate failed (200)");
+  });
+
+  it("nominate: an HTML 200 is an error, never a ballot", async () => {
+    fetchMock.mockResolvedValue(html(200));
+    await expect(nominate()).rejects.toThrow("Nominate failed (200)");
+  });
+
+  it("vote: an HTML 200 is an error, never a ballot", async () => {
+    fetchMock.mockResolvedValue(html(200));
+    await expect(voteOpsRoleBallot("b1", "yes")).rejects.toThrow(
+      "Ops role vote failed (200)",
+    );
+  });
 });
 
 describe("fetchOpsRoles", () => {
