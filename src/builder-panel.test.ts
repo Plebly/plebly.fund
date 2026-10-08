@@ -579,6 +579,8 @@ describe("bindBuilderPanel stepper refresh", () => {
       document.querySelector(".proposal-step-current")?.textContent,
     ).toBe("Fund");
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     await bindBuilderPanel(document.querySelector("#panel-root")!, {
       proposal: { ...p },
       balance: 15_000,
@@ -664,6 +666,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
 
     expect(document.querySelector("#donate-modal")).toBeNull();
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     await bindBuilderPanel(document.querySelector("#app")!, {
       proposal: { ...p },
       balance: 15_000,
@@ -759,6 +763,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     expect(document.querySelector("#donate-modal")).toBeNull();
     expect(document.querySelector("[data-open-donate]")).toBeNull();
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     await bindBuilderPanel(document.querySelector("#app")!, {
       proposal: { ...p },
       balance: 15_000,
@@ -841,6 +847,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
       </article>
     </div>`;
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     await bindBuilderPanel(document.querySelector("#app")!, {
       proposal: { ...p },
       balance: 15_000,
@@ -933,6 +941,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
       </article>
     </div>`;
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -1026,6 +1036,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     </div>`;
 
     // No escrow on proposal; capture installed like main.ts (no builder bind).
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -1137,6 +1149,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     </div>`;
 
     // Set context with wantsDonateOpen flag
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -1151,6 +1165,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     });
     bindDonateModal(document);
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     await bindBuilderPanel(document, {
       proposal: p,
       balance: 15_000,
@@ -1230,6 +1246,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     </div>`;
 
     // Set context with wantsDonateOpen flag
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -1244,6 +1262,8 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
     });
     bindDonateModal(document);
 
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     await bindBuilderPanel(document, {
       proposal: p,
       balance: 15_000,

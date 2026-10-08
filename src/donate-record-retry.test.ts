@@ -25,6 +25,7 @@ import {
   closeDonateModalWhenBlocked,
   donateModalHtml,
   endowmentDonateModalHtml,
+  endDonateProject,
 } from "./proposal-ui";
 import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
 import {
@@ -422,20 +423,25 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     expect(document.querySelector("#gift-toasts .gift-toast")).toBe(el);
   });
 
-  it("change to a non-project page while a body-hosted proposal modal is open mid-link: the modal stays open, inline only, no toast (project to project closes it: donate-project-change.test.ts)", async () => {
+  it("change to a non-project page while a body-hosted proposal modal is open mid-link: the modal gets the normal close, Linking toast at once, then the outcome in place (was: stayed open)", async () => {
     const h = stubFetch([busy, busy], ok);
     await openAndDetect(h, { modalOpen: true });
     // As mountDonateChromeWhenEscrowKnown hosts it: on document.body, outside #app.
-    document.body.appendChild(document.querySelector<HTMLElement>("#donate-modal")!);
+    const modal = document.querySelector<HTMLElement>("#donate-modal")!;
+    document.body.appendChild(modal);
+    document.body.classList.add("modal-open");
     expect(statusEl().textContent).toBe(RETRYING);
+    // What main.ts's render() runs for any page that isn't a project page.
+    endDonateProject();
     changePage();
-    await vi.advanceTimersByTimeAsync(10);
-    expect(document.querySelector<HTMLElement>("#donate-modal")!.hidden).toBe(false);
-    expect(toastText()).toBeNull();
+    // Synchronously, as the Close button does: no gap before the toast.
+    expect(modal.isConnected).toBe(false);
+    expect(document.body.classList.contains("modal-open")).toBe(false);
+    expect(toastText()).toBe(`Gift to U: ${RETRYING}`);
     await vi.advanceTimersByTimeAsync(5_000);
     expect(h.records()).toHaveLength(3);
-    expect(statusEl().textContent).toContain("Credit linked for 7,000 sats");
-    expect(toastText()).toBeNull();
+    expect(toastText()).toContain("Credit linked for 7,000 sats");
+    expect(document.querySelectorAll("#gift-toasts .gift-toast")).toHaveLength(1);
   });
 
   it("open modal, first-try link: inline line only, no toast", async () => {

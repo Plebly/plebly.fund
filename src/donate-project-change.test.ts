@@ -23,7 +23,7 @@ vi.mock("./config", async (importOriginal) => {
 
 import { closeAllGiftToasts, stopGiftLinks } from "./gift-link";
 import { renderProposalPage } from "./proposal-page";
-import { bindDonateModal, mountDonateChromeWhenEscrowKnown } from "./proposal-ui";
+import { beginDonateProject, bindDonateModal, mountDonateChromeWhenEscrowKnown } from "./proposal-ui";
 import type { Proposal } from "./types";
 
 const RETRYING = "Linking your gift to your account\u2026 Keep this page open.";
@@ -127,6 +127,7 @@ describe("project → project with the Donate modal open mid-link", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const h = stubNet();
     document.body.innerHTML = `<div id="app"><main>Project X</main></div>`;
+    beginDonateProject(X.path); // X's page is on screen (renderProposalPage does this first)
     // X's modal as the proposal page mounts it: on document.body, outside #app.
     await mountDonateChromeWhenEscrowKnown(
       document,
@@ -206,6 +207,7 @@ describe("project → project with the Donate modal open mid-link", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     stubNet();
     document.body.innerHTML = `<div id="app"></div>`;
+    beginDonateProject(Y.path); // Y's page is on screen
     await mountDonateChromeWhenEscrowKnown(
       document,
       Y,

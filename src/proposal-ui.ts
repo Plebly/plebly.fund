@@ -635,7 +635,7 @@ export function endowmentDonateModalHtml(
 ): string {
   const panel = endowmentDonatePanelHtml(address, opts);
   if (!panel) return "";
-  return `<div class="site-modal donate-modal" id="donate-modal" hidden>
+  return `<div class="site-modal donate-modal" id="donate-modal" data-donate-scope="endowment" hidden>
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
     <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
       <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
@@ -1958,6 +1958,20 @@ function findDonateModal(root: ParentNode): HTMLElement | null {
   );
 }
 
+/** The endowment page's own Donate modal (its address comes only from /endowment). */
+function isEndowmentDonateModal(modal: Element | null | undefined): boolean {
+  return modal?.getAttribute("data-donate-scope") === "endowment";
+}
+
+/** A project's Donate modal (never the endowment's). */
+function findProjectDonateModal(): HTMLElement | null {
+  return (
+    [...document.querySelectorAll<HTMLElement>("#donate-modal")].find(
+      (m) => !isEndowmentDonateModal(m),
+    ) || null
+  );
+}
+
 /** Which project a Donate modal belongs to (checked on a project change). */
 function donateModalOwnerAttrs(p: Proposal): string {
   const id = String(p.id || "").trim();
@@ -1986,6 +2000,13 @@ function sameDonateProject(a: ProjectKeys, b: ProjectKeys): boolean {
   return ids(a).some((x) => bIds.has(x));
 }
 
+/** The modal is tagged for project `p` (untagged or the endowment's: no). */
+function donateModalIsTaggedFor(modal: HTMLElement, p: ProjectKeys): boolean {
+  const own = { id: modal.dataset.donateProposalId, path: modal.dataset.donateProposalPath };
+  if (isEndowmentDonateModal(modal) || (!own.id && !own.path)) return false;
+  return sameDonateProject(own, p);
+}
+
 function donateModalIsFor(modal: HTMLElement, path: string): boolean {
   return sameDonateProject(
     { id: modal.dataset.donateProposalId, path: modal.dataset.donateProposalPath },
@@ -1995,6 +2016,8 @@ function donateModalIsFor(modal: HTMLElement, path: string): boolean {
 
 /** The modal is tagged for a different project than `p` (untagged: not foreign). */
 function donateModalIsForeign(modal: HTMLElement, p: ProjectKeys): boolean {
+  // The endowment's modal belongs to no project.
+  if (isEndowmentDonateModal(modal)) return true;
   const own = { id: modal.dataset.donateProposalId, path: modal.dataset.donateProposalPath };
   if (!own.id && !own.path) return false;
   return !sameDonateProject(own, p);
@@ -2011,6 +2034,21 @@ let activeDonateProject: { path: string; ids: string[] } | null = null;
 export function beginDonateProject(path: string): void {
   closeDonateModalOnProposalChange(path);
   activeDonateProject = { path, ids: [] };
+}
+
+/**
+ * A page that isn't a project page renders (main.ts render): no project is
+ * active and the Donate context is cleared, so no claim/escrow result for the
+ * previous project applies any more. The previous project's Donate modal gets
+ * the normal close: watchers stopped, a running link shows its Linking toast.
+ * The endowment page's own modal is left alone.
+ */
+export function endDonateProject(): void {
+  activeDonateProject = null;
+  setDonateChromeContext(null);
+  for (const modal of [...document.querySelectorAll<HTMLElement>("#donate-modal")]) {
+    if (!isEndowmentDonateModal(modal)) closeForeignDonateModal(modal);
+  }
 }
 
 /** The page's proposal loaded: remember its id too (its path may differ from the route's). */
@@ -2031,12 +2069,11 @@ export function donateResultIsCurrent(p: ProjectKeys): boolean {
   const loc = proposalKeysFromLocation();
   if ((loc.path || loc.id) && !sameDonateProject(p, loc)) return false;
   const active = activeDonateProject;
-  if (active) {
-    const own = sameDonateProject(p, { path: active.path });
-    const byId = active.ids.some((id) => sameDonateProject(p, { id }));
-    if (!own && !byId) return false;
-  }
-  return true;
+  // No project page is active (home, listing, endowment, account, …): nothing is current.
+  if (!active) return false;
+  const own = sameDonateProject(p, { path: active.path });
+  const byId = active.ids.some((id) => sameDonateProject(p, { id }));
+  return own || byId;
 }
 
 /**
@@ -2070,7 +2107,8 @@ function closeForeignDonateModal(modal: HTMLElement): void {
  * Clears the escrow address display so the user sees no address during blocked state.
  */
 export function closeDonateModalWhenBlocked(): void {
-  const modal = findDonateModal(document);
+  // A project's claim view decides this; it never closes the endowment's modal.
+  const modal = findProjectDonateModal();
   if (!modal) return;
 
   // Clear escrow address, copy target, QR and wallet link so nothing stale remains.
@@ -2380,19 +2418,20 @@ export function bindDonateModal(
     else if (ev?.currentTarget instanceof HTMLButtonElement) {
       lastOpener = ev.currentTarget;
     }
-    const addr = String(
-      donateChromeContext?.proposal.escrow_address ||
-        donateChromeContext?.panelOpts.address ||
-        "",
-    ).trim();
-    if (addr) syncDonateModalEscrow(addr, bindRoot);
+    // The stored address goes only into the modal tagged for that project,
+    // and only while that project's page is the one on screen.
+    const ctx = donateChromeContext;
+    const addr = currentDonateEscrowAddress();
+    if (addr && ctx && donateModalIsTaggedFor(modal, ctx.proposal) && donateResultIsCurrent(ctx.proposal)) {
+      syncDonateModalEscrow(addr, modal);
+    }
     modal.hidden = false;
     document.body.classList.add("modal-open");
-    const panel = bindRoot.querySelector("#donate");
+    const panel = modal.querySelector("#donate");
     if (opts?.rail === "lightning" && panel) {
       selectDonateRail(panel, "lightning");
     }
-    bindRoot.querySelector<HTMLButtonElement>("#donate-close")?.focus();
+    modal.querySelector<HTMLButtonElement>("#donate-close")?.focus();
     window.addEventListener("keydown", onEscape);
   };
 
@@ -2426,12 +2465,12 @@ export function bindDonateModal(
           // Claim check failed or modal removed — do not reveal
           return;
         }
-        // Only sync address AFTER claim check passes
+        // Only sync address AFTER claim check passes. reveal() writes it only
+        // into the modal tagged for that project, while its page is on screen.
         const addr = currentDonateEscrowAddress();
-        if (addr) syncDonateModalEscrow(addr, bindRoot);
         reveal(host, ev);
         if (donateChromeContext) {
-          await bindDonatePanel(document, {
+          await bindDonatePanel(host, {
             ...donateChromeContext.panelOpts,
             address: addr || donateChromeContext.panelOpts.address,
           });
@@ -2567,7 +2606,7 @@ export async function mountDonateChromeWhenEscrowKnown(
   );
   if (!html) {
     if (existing) {
-      syncDonateModalEscrow(addr, document);
+      syncDonateModalEscrow(addr, existing);
       bindDonateModal(document);
       return true;
     }
@@ -2578,7 +2617,7 @@ export async function mountDonateChromeWhenEscrowKnown(
     reveal: Boolean(existing && !existing.hidden),
   });
   if (!mounted) {
-    if (existing) syncDonateModalEscrow(addr, document);
+    if (existing) syncDonateModalEscrow(addr, existing);
     return Boolean(existing);
   }
 
