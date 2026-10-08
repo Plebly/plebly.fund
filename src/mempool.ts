@@ -44,6 +44,8 @@ export function watchConfirmedBalance(
     if (stopped) return;
     try {
       const balance = await addressBalanceSats(address);
+      // stop() may land while the read is in flight; never report after it.
+      if (stopped) return;
       if (previous == null) {
         previous = balance;
         return;
