@@ -531,7 +531,7 @@ export function donateModalHtml(
   if (!p.escrow_address) return "";
   // Catalog-only blocking for static HTML; claim-view check happens at runtime
   if (isCatalogDonateBlocked(p)) return "";
-  return `<div class="site-modal donate-modal" id="donate-modal" hidden>
+  return `<div class="site-modal donate-modal" id="donate-modal" hidden${donateModalOwnerAttrs(p)}>
     <div class="site-modal-backdrop" data-close-donate tabindex="-1" aria-hidden="true"></div>
     <div class="site-modal-card donate-modal-card" role="dialog" aria-modal="true" aria-labelledby="donate-modal-title">
       <button type="button" class="site-modal-close" id="donate-close" aria-label="Close">${solidIcon("xmark")}</button>
@@ -1947,6 +1947,45 @@ function findDonateModal(root: ParentNode): HTMLElement | null {
   );
 }
 
+/** Which project a Donate modal belongs to (checked on a project change). */
+function donateModalOwnerAttrs(p: Proposal): string {
+  const id = String(p.id || "").trim();
+  const path = String(p.path || "").trim();
+  return `${id ? ` data-donate-proposal-id="${escapeHtml(id)}"` : ""}${
+    path ? ` data-donate-proposal-path="${escapeHtml(path)}"` : ""
+  }`;
+}
+
+function donateModalIsFor(modal: HTMLElement, path: string): boolean {
+  const ownPath = modal.dataset.donateProposalPath || "";
+  const ownId = modal.dataset.donateProposalId || "";
+  if (ownPath && ownPath === path) return true;
+  const base = (path.split("/").pop() || "").replace(/\.md$/i, "");
+  return Boolean(ownId) && ownId.toLowerCase() === base.toLowerCase();
+}
+
+/**
+ * Moving to another project: a Donate modal (open or not) that belongs to a
+ * different project is closed and unmounted, with its panel's address
+ * watchers stopped, so the new project never inherits the old project's
+ * panel, address or watchers. Same close as the Close button: a gift still
+ * linking keeps running and shows its "Linking…" toast at once.
+ */
+export function closeDonateModalOnProposalChange(nextPath: string): void {
+  const modal = findDonateModal(document);
+  if (!modal || donateModalIsFor(modal, nextPath)) return;
+  for (const panel of modal.querySelectorAll<HTMLElement & { __stopDonateWatchers?: () => void }>(
+    ".donate-panel",
+  )) {
+    panel.__stopDonateWatchers?.();
+  }
+  const wasOpen = !modal.hidden;
+  modal.hidden = true;
+  if (wasOpen) document.body.classList.remove("modal-open");
+  modal.remove();
+  surfaceGiftLinks();
+}
+
 /**
  * Close and unmount the donate modal when claim-view resolves blocked.
  * Clears the escrow address display so the user sees no address during blocked state.
@@ -2044,7 +2083,12 @@ function insertDonateModalShell(): HTMLElement {
   }
   // Claim-view-first: insert shell with NO escrow address
   const modal = replaceDonateModalHtml(donateShellHtml(), { reveal: true });
-  if (modal) return modal;
+  if (modal) {
+    const owner = donateChromeContext?.proposal;
+    if (owner?.id) modal.dataset.donateProposalId = owner.id;
+    if (owner?.path) modal.dataset.donateProposalPath = owner.path;
+    return modal;
+  }
   const fallback = document.createElement("div");
   fallback.id = "donate-modal";
   fallback.className = "site-modal donate-modal";

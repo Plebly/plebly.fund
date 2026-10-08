@@ -422,7 +422,7 @@ describe("Donate modal: transient /record failures retry with backoff", () => {
     expect(document.querySelector("#gift-toasts .gift-toast")).toBe(el);
   });
 
-  it("page change while a body-hosted proposal modal is open mid-link: the modal stays open, inline only, no toast", async () => {
+  it("change to a non-project page while a body-hosted proposal modal is open mid-link: the modal stays open, inline only, no toast (project to project closes it: donate-project-change.test.ts)", async () => {
     const h = stubFetch([busy, busy], ok);
     await openAndDetect(h, { modalOpen: true });
     // As mountDonateChromeWhenEscrowKnown hosts it: on document.body, outside #app.

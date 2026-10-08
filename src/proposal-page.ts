@@ -51,6 +51,7 @@ import {
   projectOutcomeHtml,
   statusPillHtml,
   userMatchesProposer,
+  closeDonateModalOnProposalChange,
 } from "./proposal-ui";
 import {
   isCatalogEscrowHidden,
@@ -423,6 +424,8 @@ export async function renderProposalPage(
   onAuthed: () => void = () => undefined,
   preloaded: Proposal | null = null,
 ): Promise<void> {
+  // Another project's Donate modal never carries over (panel, address, watchers).
+  closeDonateModalOnProposalChange(path);
   const app = document.querySelector<HTMLDivElement>("#app")!;
   app.innerHTML = shell(
     `<section class="wrap-wide detail proposal-page"><p class="loading">Loading…</p></section>`,
