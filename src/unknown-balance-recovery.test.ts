@@ -79,6 +79,15 @@ describe("updateProposalFundingBar on an unknown-balance placeholder", () => {
     expect(root.querySelector(".funding-balance-unknown")?.textContent).toBe(UNAVAILABLE);
   });
 
+  it("a shared row's pending block (#62 data-shared-pending) never becomes a meter", () => {
+    const root = host(`<div class="proposal-funding-bar" data-shared-pending="1"><div class="funding-meter"><div class="funding-meter-top"><span class="funding-meter-label muted">Awaiting confirmation</span></div></div></div>`);
+    updateProposalFundingBar(root, 5_000, CLAIM_FLOOR_SATS, 100_000, [], CTX);
+    updateProposalFundingBar(root, 5_000, CLAIM_FLOOR_SATS, 100_000, [], CTX, { recoverUnknown: true });
+    expect(root.querySelector(".funding-meter-label")?.textContent).toBe("Awaiting confirmation");
+    expect(root.querySelector(".funding-meter-goal")).toBeNull();
+    expect(root.textContent || "").not.toMatch(/5,000|to open/);
+  });
+
   it("recoverUnknown with an unknown value: nothing changes", () => {
     const root = host(proposalFundingBarHtml(undefined, CLAIM_FLOOR_SATS, 100_000, [], CTX));
     updateProposalFundingBar(root, Number.NaN, CLAIM_FLOOR_SATS, 100_000, [], CTX, { recoverUnknown: true });
@@ -133,12 +142,30 @@ describe("proposal page: first read fails, a later good read arrives", () => {
     return app;
   }
 
-  /** What #88's watcher (and the Donate panel's balance poll) calls. */
-  async function balanceUpdate(next: number): Promise<void> {
+  /**
+   * What #88's watcher (and the Donate panel's balance poll) calls: the
+   * onBalanceUpdate on the Donate context's panelOpts, i.e. the opts the real
+   * modal is bound with. bindBuilderPanel replaces the page's context (early
+   * opts, then claim-view opts), so this is builder-panel's object, not the
+   * page's; both must forward the page's hook.
+   */
+  async function balanceUpdate(next: number, stage: "early" | "claim"): Promise<void> {
     const { getDonateChromeContext } = await import("./proposal-ui");
-    const cb = getDonateChromeContext()?.panelOpts.onBalanceUpdate;
+    const ctx = getDonateChromeContext();
+    // builder-panel's contexts carry fundsClosed; the page's own does not.
+    expect(ctx && "fundsClosed" in ctx).toBe(true);
+    if (stage === "claim") expect(ctx?.claimStatusPromise).toBeTruthy();
+    const cb = ctx?.panelOpts.onBalanceUpdate;
     expect(cb).toBeTypeOf("function");
     cb!(next);
+  }
+
+  async function claimApplied(app: HTMLElement): Promise<void> {
+    await vi.waitFor(() => {
+      const s = app.querySelector("#next-card-sentence")?.textContent || "";
+      if (!s || s === "…") throw new Error("claim view not applied yet");
+    });
+    await new Promise((r) => setTimeout(r, 20));
   }
 
   function confirmedClaim(p: Proposal, sats: number): Partial<ClaimStatus> {
@@ -173,9 +200,20 @@ describe("proposal page: first read fails, a later good read arrives", () => {
     const app = await paint(row({ balance_sats: undefined }), "500");
     expect(addressHits).toContain(UNIQUE);
     expect(app.querySelector(".funding-balance-unknown")?.textContent).toBe(UNAVAILABLE);
-    await balanceUpdate(5_000);
+    await balanceUpdate(5_000, "early");
     expectMeter(app, /5,000/);
     expect(app.querySelector(".proposal-hero ~ .proposal-funding-bar")).toBeTruthy();
+    expect(app.textContent || "").not.toMatch(/added/i);
+  });
+
+  it("(1c) unique row: after the claim view loads, a balance update on the modal's opts draws the meter", async () => {
+    const p = row({ balance_sats: undefined });
+    claim = { ...confirmedClaim(p, 0), psbt: null };
+    const app = await paint(p, "500");
+    await claimApplied(app);
+    expect(app.querySelector(".funding-balance-unknown")?.textContent).toBe(UNAVAILABLE);
+    await balanceUpdate(5_000, "claim");
+    expectMeter(app, /5,000/);
     expect(app.textContent || "").not.toMatch(/added/i);
   });
 
@@ -196,18 +234,22 @@ describe("proposal page: first read fails, a later good read arrives", () => {
   ] as [string, Proposal][]) {
     it(`(2) ${label}: a balance update never draws a meter`, async () => {
       const app = await paint(p, "500");
-      await balanceUpdate(5_000);
+      await balanceUpdate(5_000, "early");
+      expectNoMeter(app);
+    });
+
+    it(`(2c) ${label}: after the claim view loads, a balance update still never draws a meter`, async () => {
+      claim = { ...confirmedClaim(p, 0), psbt: null };
+      const app = await paint(p, "500");
+      await claimApplied(app);
+      await balanceUpdate(5_000, "claim");
       expectNoMeter(app);
     });
 
     it(`(2b) ${label}: a claim-view confirmed balance never draws a meter`, async () => {
       claim = confirmedClaim(p, 5_000);
       const app = await paint(p, "500");
-      await vi.waitFor(() => {
-        const s = app.querySelector("#next-card-sentence")?.textContent || "";
-        if (!s || s === "…") throw new Error("claim view not applied yet");
-      });
-      await new Promise((r) => setTimeout(r, 20));
+      await claimApplied(app);
       expectNoMeter(app);
     });
   }
@@ -215,7 +257,7 @@ describe("proposal page: first read fails, a later good read arrives", () => {
   it("(3) control: known 0 draws the meter at first paint, and an update moves it", async () => {
     const app = await paint(row({ balance_sats: undefined }), "ok-0");
     expectMeter(app, /to open/);
-    await balanceUpdate(5_000);
+    await balanceUpdate(5_000, "early");
     expectMeter(app, /5,000/);
     expect(app.textContent || "").not.toMatch(/added/i);
   });

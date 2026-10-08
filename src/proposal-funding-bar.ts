@@ -321,6 +321,9 @@ export function updateProposalFundingBar(
     }
     return;
   }
+  // A shared row's "Awaiting confirmation" block (#62, data-shared-pending) is
+  // not a meter and never becomes one from a balance update.
+  if (host.hasAttribute("data-shared-pending")) return;
   const prevUnlocked = new Set(
     [...host.querySelectorAll(".funding-marker.is-unlocked")].map(
       (el) => (el as HTMLElement).style.left,
