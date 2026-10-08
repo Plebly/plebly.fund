@@ -103,6 +103,60 @@ describe("watchConfirmedBalance with an unknown baseline", () => {
     w.stop();
   });
 
+  it("a failed read mid-watch keeps the baseline: the next deposit is announced once, at its real amount", async () => {
+    // good read (baseline) → explorer fails → deposit confirms. Resetting the
+    // baseline on a failure would turn the deposit into a silent new baseline.
+    reads = [25_000, 25_000, "fail", "fail", 30_000];
+    stubMempool();
+    const { watchConfirmedBalance } = await import("./mempool");
+    const onUpdate = vi.fn();
+    const w = watchConfirmedBalance(UNIQUE, onUpdate, { intervalMs: 10 });
+    stops.push(w.stop);
+    await w.ready;
+    expect(onUpdate.mock.calls).toEqual([[25_000, { previous: null }]]);
+    await vi.waitFor(() => expect(onUpdate).toHaveBeenCalledWith(30_000, { previous: 25_000 }));
+    const hits = addressHits;
+    await vi.waitFor(() => expect(addressHits).toBeGreaterThan(hits + 2)); // more 30,000 reads
+    w.stop();
+    expect(onUpdate.mock.calls).toEqual([
+      [25_000, { previous: null }],
+      [30_000, { previous: 25_000 }],
+    ]);
+  });
+
+  it("a failed read mid-watch keeps a known baseline too (page-supplied 25,000)", async () => {
+    reads = [25_000, "fail", 30_000];
+    stubMempool();
+    const { watchConfirmedBalance } = await import("./mempool");
+    const onUpdate = vi.fn();
+    const w = watchConfirmedBalance(UNIQUE, onUpdate, { baseline: 25_000, intervalMs: 10 });
+    stops.push(w.stop);
+    await w.ready;
+    await vi.waitFor(() => expect(addressHits).toBeGreaterThan(2));
+    await vi.waitFor(() => expect(onUpdate).toHaveBeenCalledWith(30_000, { previous: 25_000 }));
+    const hits = addressHits;
+    await vi.waitFor(() => expect(addressHits).toBeGreaterThan(hits + 2));
+    w.stop();
+    expect(onUpdate.mock.calls).toEqual([[30_000, { previous: 25_000 }]]);
+  });
+
+  it("stopped before the first read lands: the baseline read reports nothing", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    reads = [25_000];
+    vi.stubGlobal("fetch", vi.fn(async () => { await gate; return addressResponse(); }));
+    const { watchConfirmedBalance } = await import("./mempool");
+    const onUpdate = vi.fn();
+    const w = watchConfirmedBalance(UNIQUE, onUpdate, { intervalMs: 10 });
+    stops.push(w.stop);
+    w.stop(); // e.g. Donate closed / page left while the explorer is slow
+    release();
+    await w.ready;
+    await new Promise((r) => setTimeout(r, 40));
+    expect(addressHits).toBe(1);
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
   it("control: known baseline 0 is a real balance; the first increase is a delta from 0", async () => {
     reads = [0, 25_000];
     stubMempool();
