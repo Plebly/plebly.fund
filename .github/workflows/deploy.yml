@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -27,22 +27,6 @@ jobs:
       # generated/*.ts is gitignored — must generate before test/build.
       # Bake network/API in the job. Do not read repo vars.VITE_* (they would
       # flip both sites).
-      - name: Test (develop / signet)
-        if: github.ref == 'refs/heads/develop'
-        run: npm test
-        env:
-          VITE_BITCOIN_NETWORK: signet
-      - name: Build (develop / signet)
-        if: github.ref == 'refs/heads/develop'
-        run: npm run build
-        env:
-          VITE_WORKERS_API: https://api.signet.plebly.fund
-          VITE_BITCOIN_NETWORK: signet
-          VITE_BASE_PATH: /
-      - name: Deploy signet.plebly.fund
-        if: github.ref == 'refs/heads/develop'
-        run: npx wrangler deploy --env signet
-
       - name: Test (main / apex, still signet until cutover)
         if: github.ref == 'refs/heads/main'
         run: npm test
@@ -62,3 +46,15 @@ jobs:
       - name: Deploy apex (unnamed env)
         if: github.ref == 'refs/heads/main'
         run: npx wrangler deploy
+      # signet.plebly.fund also deploys from main (develop was retired: it had
+      # drifted 90 commits behind and stopped receiving merges).
+      - name: Build (main / signet.plebly.fund)
+        if: github.ref == 'refs/heads/main'
+        run: npm run build
+        env:
+          VITE_WORKERS_API: https://api.signet.plebly.fund
+          VITE_BITCOIN_NETWORK: signet
+          VITE_BASE_PATH: /
+      - name: Deploy signet.plebly.fund
+        if: github.ref == 'refs/heads/main'
+        run: npx wrangler deploy --env signet
