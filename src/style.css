@@ -4623,6 +4623,13 @@ a.project-card-by:hover .project-card-by-text {
   color: var(--bad);
 }
 
+/* Not an error (e.g. the payment settled but linking didn't): amber, not red. */
+.donate-credit-status.warn,
+.donate-confirm-status.warn,
+.fee-pay-status.warn {
+  color: var(--overfund);
+}
+
 .donate-credit-claim {
   margin-top: 0.85rem;
 }

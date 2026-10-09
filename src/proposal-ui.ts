@@ -25,6 +25,7 @@ import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
   claimContributionWithRetry,
+  claimFailureIsRetryable,
   creditPreferenceFieldsHtml,
   hasStoredCreditPreferences,
   loadStoredCreditPreferences,
@@ -770,13 +771,13 @@ function setLightningReady(panel: Element): void {
 function setDonateStatusEl(
   el: HTMLElement | null,
   message: string | null,
-  kind?: "ok" | "bad" | "live",
+  kind?: "ok" | "bad" | "live" | "warn",
 ): void {
   if (!el) return;
   if (!message) {
     el.hidden = true;
     el.textContent = "";
-    el.classList.remove("ok", "bad", "live");
+    el.classList.remove("ok", "bad", "live", "warn");
     return;
   }
   el.hidden = false;
@@ -784,9 +785,10 @@ function setDonateStatusEl(
   el.classList.toggle("ok", kind === "ok");
   el.classList.toggle("bad", kind === "bad");
   el.classList.toggle("live", kind === "live");
+  el.classList.toggle("warn", kind === "warn");
 }
 
-function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
+function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live" | "warn"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
 }
 
@@ -1232,12 +1234,39 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   });
 }
 
-async function linkLightningCredit(
+/**
+ * Lightning settled but the credit isn't linked yet: 5xx (incl. workers#90's 503 for a swap not
+ * indexed yet, claim busy, swap lookup failed) or no response. Retry is offered.
+ */
+export const LIGHTNING_LINK_FAILED_COPY =
+  "Your Lightning payment went through. Your funder credit isn't showing yet. Try again in a few minutes.";
+
+/** Lightning settled but the server refused the link (4xx, or a 2xx without ok): no Retry. */
+export const LIGHTNING_LINK_REFUSED_COPY =
+  "Your Lightning payment went through, but we couldn't link it to your account.";
+
+function setLightningRetry(panel: Element, onRetry: (() => void) | null): void {
+  panel.querySelector("#donate-ln-credit-retry")?.remove();
+  if (!onRetry) return;
+  const status = panel.querySelector<HTMLElement>("#donate-credit-status");
+  if (!status) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "donate-ln-credit-retry";
+  btn.className = "btn ghost";
+  btn.textContent = "Retry";
+  btn.addEventListener("click", onRetry, { once: true });
+  status.insertAdjacentElement("afterend", btn);
+}
+
+/** Exported for tests. */
+export async function linkLightningCredit(
   panel: Element,
   opts: DonateBindOpts,
   swapId: string,
 ): Promise<void> {
   if (!opts.signedIn || !opts.proposalId) return;
+  setLightningRetry(panel, null);
   setDonateCreditStatus(panel, "Linking Lightning funder credit…", "live");
   try {
     await claimContributionWithRetry({
@@ -1248,11 +1277,15 @@ async function linkLightningCredit(
     setDonateCreditStatus(panel, "Lightning credit linked.", "ok");
     opts.onCreditLinked?.();
   } catch (e) {
-    setDonateCreditStatus(
-      panel,
-      `${(e as Error).message} Try again after the swap indexes.`,
-      "bad",
-    );
+    // Never show server text here. The payment already settled, so this is a
+    // warning, not an error (no red). Only "try later" failures (5xx, no
+    // response) offer Retry; a refusal (4xx) won't change by retrying.
+    if (claimFailureIsRetryable(e)) {
+      setDonateCreditStatus(panel, LIGHTNING_LINK_FAILED_COPY, "warn");
+      setLightningRetry(panel, () => void linkLightningCredit(panel, opts, swapId));
+    } else {
+      setDonateCreditStatus(panel, LIGHTNING_LINK_REFUSED_COPY, "warn");
+    }
   }
 }
 
