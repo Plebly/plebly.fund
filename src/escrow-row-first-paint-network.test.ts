@@ -205,7 +205,7 @@ for (const [label, src] of [
       const app = await renderPage(src, "allows");
       const row = app.querySelector<HTMLElement>("#onchain-escrow-row")!;
       expect(row.querySelector("code")?.textContent).toBe(CLAIM_ADDR);
-      expect(row.querySelector<HTMLElement>(".copy-btn")?.dataset.copy).toBe(CLAIM_ADDR);
+      expect(row.querySelector<HTMLElement>(".copy-btn")?.dataset.escrowCopy).toBe(CLAIM_ADDR);
       expect(app.querySelectorAll("#onchain-escrow-row")).toHaveLength(1);
       expect(onchain(app)).not.toContain(MAINNET_ADDR);
     });
@@ -225,10 +225,8 @@ describe("control: a signet doc address is unchanged", () => {
   });
 });
 
-// The claim view allows Donate but carries no escrow address of its own, so
-// the claim-view refresh falls back to the doc/catalog address when it
-// re-adds the escrow row. That re-add must apply the same network check as
-// first paint.
+// The claim view says accepting_funds but sends no escrow address of its own.
+// Donate stays closed and the doc/catalog address is not shown, on either network.
 for (const [label, mk] of [
   ["doc", fromDoc],
   ["catalog", fromCatalog],
@@ -239,18 +237,14 @@ for (const [label, mk] of [
       expect(app.querySelector("#next-card-sentence")?.textContent || "").not.toBe("…");
       expect(app.querySelector("#onchain-escrow-row")).toBeNull();
       expect(onchain(app)).not.toContain(MAINNET_ADDR);
-      expect(app.querySelector(`[data-copy="${MAINNET_ADDR}"]`)).toBeNull();
+      expect(app.querySelector(`[data-escrow-copy="${MAINNET_ADDR}"]`)).toBeNull();
     });
 
-    it("a signet address is still shown and copyable", async () => {
+    it("a signet doc address is not shown either: the claim view sent no address of its own", async () => {
       const app = await renderPage(mk(DOC_ADDR), "allows", null);
-      await vi.waitFor(() => {
-        if (!app.querySelector("#onchain-escrow-row")) throw new Error("no escrow row yet");
-      });
-      const rows = app.querySelectorAll<HTMLElement>("#onchain-escrow-row");
-      expect(rows).toHaveLength(1);
-      expect(rows[0]!.querySelector("code")?.textContent).toBe(DOC_ADDR);
-      expect(rows[0]!.querySelector<HTMLElement>(".copy-btn")?.dataset.copy).toBe(DOC_ADDR);
+      expect(app.querySelector("#next-card-sentence")?.textContent || "").not.toBe("…");
+      expect(app.querySelector("#onchain-escrow-row")).toBeNull();
+      expect(app.querySelector(`[data-escrow-copy="${DOC_ADDR}"]`)).toBeNull();
     });
   });
 }

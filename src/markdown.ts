@@ -111,10 +111,14 @@ const PURIFY_CONFIG = {
   ALLOW_DATA_ATTR: false,
 };
 
-/** Last-resort strip if DOMPurify cannot bind a DOM (should not happen in SPA). */
+/**
+ * Last-resort strip if DOMPurify cannot bind a DOM (should not happen in SPA).
+ * Each quote style is matched on its own, so a value holding the other quote
+ * character (`href="javascript:alert('x')"`) is still removed.
+ */
 function stripUnsafeHrefs(html: string): string {
   return html.replace(
-    /\s(href|src)\s*=\s*(["'])(?!https?:)[^"']*\2/gi,
+    /\s(href|src)\s*=\s*(?:"(?!https?:)[^"]*"|'(?!https?:)[^']*')/gi,
     "",
   );
 }

@@ -164,8 +164,8 @@ export async function claimContribution(input: {
   legal_name?: string;
   proposal_path?: string;
   proposal_title?: string;
-} & CreditPreferences): Promise<void> {
-  const res = await authFetch(`${api()}/contributions/claim`, {
+} & CreditPreferences, onStatus?: (status: number) => void): Promise<void> {
+  const res = await authFetchReporting(onStatus)(`${api()}/contributions/claim`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -196,23 +196,47 @@ export function utxoKey(u: Pick<AddressUtxo, "txid" | "vout">): string {
   return `${u.txid}:${u.vout}`;
 }
 
-/** Poll for new UTXOs after a baseline snapshot. */
+/**
+ * Poll for new UTXOs after a baseline snapshot.
+ *
+ * Only UTXOs first seen after a successful baseline read count as new. If the
+ * first read fails, the watcher stays without a baseline and the next
+ * successful read becomes the baseline quietly (no `onNew`): an unreadable
+ * address is not an empty one, and treating it as empty would hand every
+ * existing UTXO (someone else's earlier payment) to the current donor.
+ */
 export function watchNewUtxos(
   address: string,
   onNew: (utxos: AddressUtxo[]) => void,
-  opts?: { intervalMs?: number; baseline?: Set<string> },
+  opts?: {
+    intervalMs?: number;
+    baseline?: Set<string>;
+    /**
+     * `"unavailable"`: the first read failed, so deposits can't be matched yet.
+     * `"ready"`: a baseline exists (first read, or the first good read after).
+     */
+    onBaselineState?: (state: "unavailable" | "ready") => void;
+  },
 ): { stop: () => void; ready: Promise<void> } {
   const intervalMs = opts?.intervalMs ?? 8000;
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | null = null;
-  let known = opts?.baseline ?? new Set<string>();
+  let known: Set<string> | null = opts?.baseline ?? null;
 
   const tick = async () => {
     if (stopped) return;
     try {
       const utxos = await addressUtxos(address);
-      const fresh = utxos.filter((u) => !known.has(utxoKey(u)));
-      for (const u of utxos) known.add(utxoKey(u));
+      // stop() may have run while the read was in flight (modal closed).
+      if (stopped) return;
+      if (known == null) {
+        known = new Set(utxos.map(utxoKey));
+        if (!stopped) opts?.onBaselineState?.("ready");
+        return;
+      }
+      const seen = known;
+      const fresh = utxos.filter((u) => !seen.has(utxoKey(u)));
+      for (const u of utxos) seen.add(utxoKey(u));
       if (fresh.length) onNew(fresh);
     } catch {
       /* ignore transient explorer errors */
@@ -224,7 +248,11 @@ export function watchNewUtxos(
       const utxos = await addressUtxos(address);
       known = new Set(utxos.map(utxoKey));
     } catch {
-      known = new Set();
+      // Keep the caller's baseline, or stay without one: the next successful
+      // tick then sets it quietly instead of announcing existing UTXOs.
+    }
+    if (!stopped) {
+      opts?.onBaselineState?.(known == null ? "unavailable" : "ready");
     }
     if (!stopped) {
       timer = setInterval(() => void tick(), intervalMs);
@@ -249,18 +277,50 @@ export async function claimContributionWithRetry(
   const attempts = opts?.attempts ?? 6;
   const delayMs = opts?.delayMs ?? 2500;
   let lastError: Error | null = null;
+  let lastStatus: number | null = null;
   for (let i = 0; i < attempts; i += 1) {
+    lastStatus = null;
     try {
-      await claimContribution(input);
+      await claimContribution(input, (s) => {
+        lastStatus = s;
+      });
       return;
     } catch (e) {
       lastError = e as Error;
       const msg = lastError.message.toLowerCase();
-      if (msg.includes("already claimed")) throw lastError;
+      if (msg.includes("already claimed")) throw new ClaimLinkError(lastError.message, lastStatus);
       if (i < attempts - 1) {
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
   }
-  throw lastError || new Error("Could not link funder credit.");
+  throw new ClaimLinkError(lastError?.message || "Could not link funder credit.", lastStatus);
+}
+
+/**
+ * Final claim failure. `status` is the last HTTP status the server answered
+ * with, or `null` when no response arrived (network error / offline).
+ */
+export class ClaimLinkError extends Error {
+  readonly status: number | null;
+  constructor(message: string, status: number | null) {
+    super(message);
+    this.name = "ClaimLinkError";
+    this.status = status;
+  }
+}
+
+/** True when trying again later can help: no response (network) or a 5xx. */
+export function claimFailureIsRetryable(e: unknown): boolean {
+  const status = e instanceof ClaimLinkError ? e.status : null;
+  return status == null || status >= 500;
+}
+
+/** authFetch that also reports the response status (for failure classes). */
+function authFetchReporting(onStatus?: (status: number) => void): typeof authFetch {
+  return async (...args: Parameters<typeof authFetch>) => {
+    const res = await authFetch(...args);
+    onStatus?.(res.status);
+    return res;
+  };
 }

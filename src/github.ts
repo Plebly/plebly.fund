@@ -211,7 +211,8 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     escrow_address: entry.escrow_address ?? null,
     balance_sats:
       typeof entry.balance_sats === "number" ? entry.balance_sats : undefined,
-    ...(entry.escrow_shared === true ? { escrow_shared: true } : {}),
+    // Keep an explicit false: isSharedEscrow treats a missing flag as shared.
+    ...(typeof entry.escrow_shared === "boolean" ? { escrow_shared: entry.escrow_shared } : {}),
     funding_window_ends_at: entry.funding_window_ends_at ?? null,
     delivery_window_ends_at: entry.delivery_window_ends_at ?? null,
     claimer: entry.claimer ?? null,
@@ -280,10 +281,15 @@ export function applyCatalogRuntimeToProposal(
   doc: Proposal,
   catalog: Proposal | null | undefined,
 ): Proposal {
-  if (!catalog) return doc;
+  // No catalog row (KNOTS, 2026-10-08): sharing is unknown, so treat the
+  // escrow as shared for its balance (workers#50 fail-closed). The page never
+  // shows the address total; the claim view still decides Donate.
+  if (!catalog) return { ...doc, escrow_shared: true };
   if (catalog.escrow_shared === true) {
     // Shared escrow: only the catalog's per-proposal balance, never a fallback.
     doc = { ...doc, escrow_shared: true, balance_sats: catalog.balance_sats };
+  } else if (catalog.escrow_shared === false && doc.escrow_shared === undefined) {
+    doc = { ...doc, escrow_shared: false };
   }
   const catStatus = String(catalog.status || "");
   const docStatus = String(doc.status || "");
@@ -325,18 +331,33 @@ export function applyCatalogRuntimeToProposal(
   };
 }
 
-async function catalogEntryById(id: string): Promise<Proposal | null> {
-  const needle = id.trim().toLowerCase();
-  if (!needle) return null;
+/**
+ * Canonical proposal id for matching: trimmed and upper-cased (ids are
+ * `PLEBLY-…`; the /p/ route carries them lower-case, e.g.
+ * `/p/plebly-knots-size-value-spam`). Compared with `===` only. Never derived
+ * from a path.
+ */
+function catalogIdKey(id: string | null | undefined): string {
+  return typeof id === "string" ? id.trim().toUpperCase() : "";
+}
+
+/**
+ * The catalog row for a loaded proposal doc, matched on the doc's frontmatter
+ * id only. Paths are never compared: the catalog row's `path` and the claim
+ * view's `proposal_path` can name the same proposal with different filenames
+ * (DEMO / KNOTS: slug `listed/knots-size-value-spam.md` in the catalog vs ID
+ * `listed/PLEBLY-KNOTS-SIZE-VALUE-SPAM.md` after proposals#21). No path, stem,
+ * substring or prefix match. Fails closed: a doc without an id, no row with
+ * that id, or more than one, returns null, and the caller treats the row as
+ * missing (shared, no meter).
+ */
+async function catalogEntryForDoc(doc: Proposal): Promise<Proposal | null> {
+  const key = catalogIdKey(doc.id);
+  if (!key) return null;
   try {
     const proposals = await listListedProposals();
-    return (
-      proposals.find(
-        (p) =>
-          p.id?.toLowerCase() === needle ||
-          p.path.toLowerCase().includes(`/${needle}.md`),
-      ) || null
-    );
+    const hits = proposals.filter((p) => catalogIdKey(p.id) === key);
+    return hits.length === 1 ? hits[0]! : null;
   } catch {
     return null;
   }
@@ -423,7 +444,7 @@ export async function findListedProposalById(
 
   const fromDoc = await loadProposalDocFromWorker(normalized);
   if (fromDoc) {
-    const catalog = await catalogEntryById(normalized);
+    const catalog = await catalogEntryForDoc(fromDoc);
     return applyCatalogRuntimeToProposal(fromDoc, catalog);
   }
 
@@ -442,7 +463,7 @@ export async function findListedProposalById(
         if (data.path) {
           const hit = await loadProposalByPath(data.path);
           if (hit) {
-            const catalog = await catalogEntryById(normalized);
+            const catalog = await catalogEntryForDoc(hit);
             return applyCatalogRuntimeToProposal(hit, catalog);
           }
         }
@@ -452,14 +473,21 @@ export async function findListedProposalById(
     }
   }
 
+  // Catalog-only fallback. The route value is normalised once here (to the
+  // canonical id) and compared exactly; ids that collide once normalised are
+  // ambiguous and fail closed. A legacy path input still needs the exact row
+  // path.
   const proposals = await listListedProposals();
-  const needle = normalized.toLowerCase();
-  return (
-    proposals.find(
-      (proposal) =>
-        proposal.id?.toLowerCase() === needle || proposal.path === normalized,
-    ) || null
-  );
+  const key = catalogIdKey(normalized);
+  const byId = key ? proposals.filter((p) => catalogIdKey(p.id) === key) : [];
+  if (byId.length > 1) return null;
+  if (byId.length === 1) return byId[0]!;
+  return proposals.find((proposal) => proposal.path === normalized) || null;
+}
+
+/** Catalog rows already loaded (any scope); empty when none. Does not fetch. */
+export function loadedCatalogRows(): readonly Proposal[] {
+  return listedCache?.data ?? [];
 }
 
 /** Title from a catalog already loaded. Does not fetch. */

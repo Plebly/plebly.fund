@@ -857,11 +857,11 @@ describe("resolveNextAction", () => {
       button: null,
     },
     {
-      name: "unknown catalog status shows Unavailable",
+      name: "unknown catalog status shows Funding status unavailable",
       input: {
         proposal: proposal({ status: "some_future_status" as never }),
       },
-      sentence: "Unavailable.",
+      sentence: "Funding status unavailable.",
       button: null,
     },
     {
@@ -907,7 +907,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Submit the work when it is done. The pot is still pooling.",
+      sentence: "Submit the work when it is done.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -1032,7 +1032,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Submit the work when it is done. The pot is still pooling.",
+      sentence: "Submit the work when it is done.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -1235,7 +1235,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: builder,
       },
-      sentence: "Submit the work when it is done. The pot is still pooling.",
+      sentence: "Submit the work when it is done.",
       button: "deliverable",
       more: ["checkpoint", "extension", "collab", "workboard"],
     },
@@ -1350,7 +1350,7 @@ describe("resolveNextAction", () => {
     },
     // stale catalog settled row + claim-view block → blocked (catalog flags cannot override claim-view)
     {
-      name: "stale catalog settled + claim accepting_funds:false (no claim.bounty_settled) → blocked",
+      name: "stale catalog settled + claim accepting_claims:false (no claim.bounty_settled) → blocked",
       input: {
         proposal: proposal({
           status: "in_review",
@@ -1364,12 +1364,36 @@ describe("resolveNextAction", () => {
           claimer: "bob",
           // claim.bounty_settled is NOT true — catalog flags cannot override
           accepting_funds: false,
+          accepting_claims: false,
           psbt: { structured_state: "awaiting_funds" },
         } as never),
         user: proposer,
       },
       sentence: "Structure unavailable, not accepting funds.",
       button: null,
+    },
+    {
+      // workers#51: accepting_funds:false alone only hides Donate; the
+      // in_review proposer keeps Mark it done.
+      name: "stale catalog settled + claim accepting_funds:false only → Mark it done stays",
+      input: {
+        proposal: proposal({
+          status: "in_review",
+          claimer: "bob",
+          bounty_settled: true,
+          claim_phase: "settled",
+          accepting_funds: false,
+        }),
+        claim: claim({
+          state: "in_review",
+          claimer: "bob",
+          accepting_funds: false,
+          psbt: { structured_state: "awaiting_funds" },
+        } as never),
+        user: proposer,
+      },
+      sentence: "Mark it done if the work is finished.",
+      button: "done",
     },
   ];
 
@@ -1602,6 +1626,8 @@ describe("isStructuredTerminalOrUnknown", () => {
   });
 });
 
+const CLAIM_ESCROW = "tb1qf8agl2750ezeuwt7ys5ghzmul9wutls0cs9jyt";
+
 describe("isDonateBlocked (claim-view-first)", () => {
   it("returns true when claim view is null (claim-view-first requires loaded claim)", () => {
     expect(isDonateBlocked(null, null)).toBe(true);
@@ -1631,27 +1657,34 @@ describe("isDonateBlocked (claim-view-first)", () => {
   });
 
   it("returns false when claim view allows and has healthy structured state", () => {
-    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" }, accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" }, accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" }, accepting_funds: true })).toBe(false);
+    const e = CLAIM_ESCROW;
+    expect(isDonateBlocked({}, { psbt: { structured_state: "awaiting_funds" }, accepting_funds: true, escrow_address: e })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "confirmed" }, accepting_funds: true, escrow_address: e })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "psbt_ready" }, accepting_funds: true, escrow_address: e })).toBe(false);
+    expect(isDonateBlocked({}, { psbt: { structured_state: "broadcast" }, accepting_funds: true, escrow_address: e })).toBe(false);
   });
 
   it("returns false when claim view has no psbt but accepting_funds is true", () => {
-    expect(isDonateBlocked({}, { accepting_funds: true })).toBe(false);
+    expect(isDonateBlocked({}, { accepting_funds: true, escrow_address: CLAIM_ESCROW })).toBe(false);
   });
 
-  it("returns false when claim has neither psbt nor accepting_funds (no structured record)", () => {
-    // No structured record = allowed; workers#40 sends accepting_funds:false on unreadable
-    expect(isDonateBlocked({}, { state: "open" })).toBe(false);
-    expect(isDonateBlocked({}, {})).toBe(false);
+  it("returns true when claim view has no accepting_funds (unresolved reply; only true opens Donate)", () => {
+    // Every resolved Workers claim view sends accepting_funds; the unresolved
+    // reply (git file missing) omits it and must not open Donate.
+    expect(isDonateBlocked({}, { state: "open", escrow_address: CLAIM_ESCROW })).toBe(true);
+    expect(isDonateBlocked({}, { accepting_funds: null, escrow_address: CLAIM_ESCROW })).toBe(true);
+    expect(isDonateBlocked({}, {})).toBe(true);
+  });
+
+  it("returns true when claim view says accepting_funds:true but has no escrow_address of its own", () => {
+    expect(isDonateBlocked({}, { accepting_funds: true })).toBe(true);
+    expect(isDonateBlocked({}, { accepting_funds: true, escrow_address: "  " })).toBe(true);
   });
 
   it("does NOT block on claim.state === unavailable (workers returns that for declined_fundable etc)", () => {
     // Workers returns state: unavailable for declined_fundable, refunding, underfunded, etc.
     // which still need their UI actions (Donate, Register, etc.)
-    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true })).toBe(false);
-    expect(isDonateBlocked({}, { state: "unavailable" })).toBe(false);
+    expect(isDonateBlocked({}, { state: "unavailable", accepting_funds: true, escrow_address: CLAIM_ESCROW })).toBe(false);
   });
 
   it("returns true when claim accepting_funds is false", () => {

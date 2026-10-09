@@ -221,7 +221,7 @@ for (const [label, yaml, value] of NON_STRINGS) {
         const rows = app.querySelectorAll<HTMLElement>("#onchain-escrow-row");
         expect(rows).toHaveLength(1);
         expect(rows[0]!.querySelector("code")?.textContent).toBe(CLAIM_ADDR);
-        expect(rows[0]!.querySelector<HTMLElement>(".copy-btn")?.dataset.copy).toBe(CLAIM_ADDR);
+        expect(rows[0]!.querySelector<HTMLElement>(".copy-btn")?.dataset.escrowCopy).toBe(CLAIM_ADDR);
       });
     }
   });

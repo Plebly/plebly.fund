@@ -740,3 +740,76 @@ describe("donate markup contract", () => {
     expect(html).not.toContain("Legal name for tax receipt");
   });
 });
+
+describe("manual linking only on a unique address", () => {
+  const txid = "c".repeat(64);
+  /** Live-like: 9 catalog rows on one address, every flag null. */
+  const NINE = Array.from({ length: 9 }, (_, i) => ({
+    id: `PLEBLY-2026-00${i}`,
+    escrow_address: proposal.escrow_address,
+    escrow_shared: null,
+  }));
+
+  async function failedAutoLink(escrowShared: boolean | undefined): Promise<HTMLElement> {
+    vi.useFakeTimers();
+    addressUtxos
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ txid, vout: 0, value: 40_000, status: { confirmed: false } }]);
+    claimContributionWithRetry.mockRejectedValue(new Error("Couldn't link credit."));
+    mountDonate({ signedIn: true, open: true });
+    await bindDonatePanel(document, {
+      address: proposal.escrow_address!,
+      proposalId: proposal.id,
+      proposalPath: proposal.path,
+      signedIn: true,
+      utxoPollMs: 100,
+      escrowShared,
+    });
+    await vi.waitFor(() => expect(document.querySelector("#donate-credit-continue")).toBeTruthy());
+    document.querySelector<HTMLInputElement>("#donate-credit-amount")!.checked = true;
+    continueToPay();
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+      expect(claimContributionWithRetry).toHaveBeenCalled();
+    });
+    if (escrowShared === false) {
+      await vi.waitFor(() => expect(document.querySelector(".donate-credit-seen")).toBeTruthy());
+    } else {
+      await vi.advanceTimersByTimeAsync(20_000);
+    }
+    return document.body;
+  }
+
+  it("unique address (explicit false, one row): the picker and Link this are offered", async () => {
+    const { isSharedEscrow } = await import("./escrow-shared");
+    const shared = isSharedEscrow({ escrow_address: proposal.escrow_address, escrow_shared: false }, [
+      { escrow_address: proposal.escrow_address, escrow_shared: false },
+    ]);
+    expect(shared).toBe(false);
+    await failedAutoLink(shared);
+    expect(document.body.textContent).toContain("Couldn’t auto-link — pick your payment:");
+    expect(document.querySelector("[data-claim-txid]")?.textContent).toBe("Link this");
+  });
+
+  for (const [label, row, catalog] of [
+    ["live-like: 9 rows on one address, flags null", { escrow_address: proposal.escrow_address, escrow_shared: null }, NINE],
+    ["direct link: no catalog, flag null", { escrow_address: proposal.escrow_address, escrow_shared: null }, []],
+    ["explicit true", { escrow_address: proposal.escrow_address, escrow_shared: true }, []],
+  ] as const) {
+    it(`${label}: no picker, no Link this`, async () => {
+      const { isSharedEscrow } = await import("./escrow-shared");
+      const shared = isSharedEscrow(row, catalog);
+      expect(shared).toBe(true);
+      await failedAutoLink(shared);
+      expect(document.body.textContent).not.toContain("auto-link");
+      expect(document.querySelector("[data-claim-txid]")).toBeNull();
+      expect(document.querySelector<HTMLElement>("#donate-credit-claim")?.hidden).toBe(true);
+    });
+  }
+
+  it("escrowShared not passed: treated as shared (no picker)", async () => {
+    await failedAutoLink(undefined);
+    expect(document.querySelector("[data-claim-txid]")).toBeNull();
+  });
+});

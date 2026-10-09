@@ -81,7 +81,8 @@ afterEach(() => {
 describe("balanceAddressFor (the one helper)", () => {
   it("never returns a shared escrow address", () => {
     expect(balanceAddressFor({ escrow_address: SHARED, escrow_shared: true })).toBeNull();
-    expect(balanceAddressFor({ escrow_address: UNIQUE })).toBe(UNIQUE);
+    // No flag counts as shared (isSharedEscrow fails toward shared); only explicit false is unique.
+    expect(balanceAddressFor({ escrow_address: UNIQUE })).toBeNull();
     expect(balanceAddressFor({ escrow_address: ` ${UNIQUE} `, escrow_shared: false })).toBe(UNIQUE);
     expect(balanceAddressFor({ escrow_address: null })).toBeNull();
     expect(balanceAddressFor(undefined)).toBeNull();
@@ -116,7 +117,7 @@ describe("home-page enrichBalances", () => {
     const { enrichBalances } = await import("./home-page");
     const [shared, unique] = await enrichBalances([
       row({ escrow_shared: true }),
-      row({ id: "u", escrow_address: UNIQUE }),
+      row({ id: "u", escrow_address: UNIQUE, escrow_shared: false }),
     ]);
     expect(shared!.balance_sats).toBeUndefined();
     expect(unique!.balance_sats).toBe(ADDRESS_BALANCE);
@@ -130,7 +131,7 @@ describe("stats-page enrichBalances", () => {
     const { enrichBalances } = await import("./stats-page");
     const [shared, unique] = await enrichBalances([
       row({ escrow_shared: true }),
-      row({ id: "u", escrow_address: UNIQUE }),
+      row({ id: "u", escrow_address: UNIQUE, escrow_shared: false }),
     ]);
     expect(shared!.balance_sats).toBeUndefined();
     expect(unique!.balance_sats).toBe(ADDRESS_BALANCE);
@@ -177,7 +178,7 @@ describe("proposal page initial balance", () => {
   });
 
   it("unique row without a balance: still reads its address (unchanged)", async () => {
-    await paint(row({ escrow_address: UNIQUE, balance_sats: undefined }));
+    await paint(row({ escrow_address: UNIQUE, escrow_shared: false, balance_sats: undefined }));
     expect(addressHits).toContain(UNIQUE);
   });
 });
@@ -310,5 +311,90 @@ describe("home card: escrow_shared row without confirmed own funding", () => {
       CLAIM_FLOOR_SATS,
     );
     expect(withShared).toEqual(base);
+  });
+});
+
+describe("proposal detail page: escrow_shared row without confirmed own funding", () => {
+  async function paintDetail(p: Proposal, addressFails = false): Promise<HTMLElement> {
+    document.body.innerHTML = `<div id="app"></div>`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (/\/address\/[^/?]+$/.test(url)) {
+          addressHits.push(url);
+          return Promise.resolve(
+            addressFails
+              ? new Response("down", { status: 503 })
+              : Response.json({ chain_stats: { funded_txo_sum: ADDRESS_BALANCE, spent_txo_sum: 0 } }),
+          );
+        }
+        return new Promise<Response>(() => undefined);
+      }),
+    );
+    const { renderProposalPage } = await import("./proposal-page");
+    void renderProposalPage(p.path, (inner) => inner, null, () => undefined, {
+      ...p,
+      endowment_funded: false,
+    });
+    const app = document.querySelector<HTMLElement>("#app")!;
+    await vi.waitFor(() => {
+      if (!app.querySelector(".proposal-onchain")) throw new Error("not painted yet");
+    });
+    return app;
+  }
+  const sharedNull = (over: Partial<Proposal>) =>
+    row({
+      escrow_shared: true,
+      balance_sats: undefined,
+      structured_state: "awaiting_funds",
+      accepting_funds: true,
+      ...over,
+    } as Partial<Proposal>);
+
+  it("fundable: 'Awaiting confirmation', no '0 sats', no sats line or bar", async () => {
+    const app = await paintDetail(sharedNull({ status: "listed" }));
+    const bar = app.querySelector(".proposal-funding-bar")!;
+    expect(bar.textContent).toContain("Awaiting confirmation");
+    expect(bar.querySelector(".sats, .funding-detail-track, .funding-track")).toBeNull();
+    expect(app.textContent).not.toMatch(/\b0 sats\b/);
+  });
+
+  it("terminal (voided / settled / catalog-blocked): no funding meter at all", async () => {
+    const terminal: Partial<Proposal>[] = [
+      { status: "voided" },
+      { status: "in_review", structured_state: "voided", accepting_funds: false },
+      { status: "claimable", bounty_settled: true } as Partial<Proposal>,
+      { status: "listed", accepting_funds: false },
+    ];
+    for (const over of terminal) {
+      const app = await paintDetail(sharedNull(over));
+      expect(app.querySelector(".proposal-funding-bar")).toBeNull();
+      expect(app.querySelector(".funding-meter")).toBeNull();
+      expect(app.textContent).not.toContain("Awaiting confirmation");
+    }
+  });
+
+  it("confirmed own funding: normal meter with the per-proposal amount, not the pending state", async () => {
+    const app = await paintDetail(sharedNull({ status: "listed", balance_sats: 16_576 }));
+    const bar = app.querySelector(".proposal-funding-bar")!;
+    expect(bar.getAttribute("data-shared-pending")).toBeNull();
+    expect(bar.textContent).toContain("16,576");
+    expect(bar.textContent).not.toContain("Awaiting confirmation");
+    expect(bar.textContent).not.toContain("10,586");
+  });
+
+  it("non-shared row whose balance read fails shows unavailable, not a 0 or shared-pending meter", async () => {
+    const app = await paintDetail(
+      row({ escrow_address: UNIQUE, escrow_shared: false, balance_sats: undefined, status: "listed" }),
+      true,
+    );
+    await vi.waitFor(() => {
+      const line = app.querySelector(".funding-balance-unknown")?.textContent;
+      if (line !== "Balance temporarily unavailable.") throw new Error(line || "no line");
+    });
+    expect(app.querySelector(".proposal-funding-bar .funding-meter")).toBeNull();
+    expect(app.textContent).not.toContain("Awaiting confirmation");
+    expect(app.textContent).not.toMatch(/\b0 sats\b/);
   });
 });

@@ -24,7 +24,7 @@ export type PublicStats = {
 export async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (proposal) => {
-      const address = balanceAddressFor(proposal);
+      const address = balanceAddressFor(proposal, proposals);
       if (!address) return proposal;
       if (typeof proposal.balance_sats === "number") return proposal;
       try {

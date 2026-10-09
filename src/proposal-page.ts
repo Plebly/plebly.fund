@@ -20,8 +20,18 @@ import {
 import { promptText } from "./confirm-modal";
 import { findListedProposalById, proposalFromMarkdown } from "./github";
 import { btnWithIcon } from "./icons";
+import { isSharedEscrow } from "./escrow-shared";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
+import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { renderMarkdown } from "./markdown";
+import { bindRefundSign } from "./refund-sign";
+import {
+  openSignedRefund,
+  REFUND_REQUIRES_SIGNATURE,
+  REFUND_SIGNATURE_COPY,
+  rowNeedsSignature,
+  signatureLineHtml,
+} from "./refund-needs-signature";
 import {
   bindDonateModal,
   mountDonateChromeWhenEscrowKnown,
@@ -116,7 +126,11 @@ export function renderMissingProposal(shell: ProposalShell, id: string): void {
   app.innerHTML = shell(missingProposalHtml(id));
 }
 
-function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
+function bindRefundAndBallot(
+  root: ParentNode,
+  match: Proposal,
+  user: AuthUser | null = null,
+): void {
   const api = WORKERS_API.replace(/\/$/, "");
 
   const loadRefundStatus = async () => {
@@ -152,8 +166,18 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
           status: string;
           refund_address?: string | null;
           refund_txid?: string | null;
+          /** Payout skips this row until it's bound by signature. */
+          refund_needs_signature?: boolean;
         }[];
       };
+      const rows = Array.isArray(data.contributions) ? data.contributions : [];
+      // A row that needs a signature is not "registered", whatever its status says.
+      const needsSignature = rows.filter(rowNeedsSignature);
+      const registeredCount = Math.max(
+        0,
+        (data.registered || 0) -
+          needsSignature.filter((r) => r.status === "registered").length,
+      );
       statusEl.hidden = false;
       if (!data.linked) {
         bodyEl.textContent =
@@ -164,13 +188,13 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       }
       const parts = [
         data.needs_address ? `${data.needs_address} still need an address` : "",
-        data.registered ? `${data.registered} registered` : "",
+        registeredCount ? `${registeredCount} registered` : "",
         data.paid ? `${data.paid} paid` : "",
       ].filter(Boolean);
       bodyEl.textContent = data.addresses_frozen
         ? `${parts.join(" · ")}. Address locked for this month’s payout.`
         : `${parts.join(" · ")}.`;
-      listEl.innerHTML = data.contributions
+      listEl.innerHTML = rows
         .map((r) => {
           const identity =
             r.rail === "lightning" || r.swap_id
@@ -178,6 +202,11 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
                   r.swap_id && r.swap_id.length > 16 ? "…" : ""
                 }`
               : `${escapeHtml(r.txid.slice(0, 12))}…:${r.vout}`;
+          if (rowNeedsSignature(r)) {
+            return `<li class="mono">${identity}<p class="muted refund-needs-signature">${signatureLineHtml(
+              REFUND_SIGNATURE_COPY.rowNeedsSignature,
+            )}</p></li>`;
+          }
           return `<li class="mono">${identity} · ${escapeHtml(r.status)}${
             r.refund_address
               ? ` · ${escapeHtml(r.refund_address.slice(0, 12))}…`
@@ -188,7 +217,9 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
       if (formEl) {
         formEl.hidden = Boolean(
           data.addresses_frozen ||
-            (data.needs_address === 0 && data.registered + data.paid > 0),
+            (data.needs_address === 0 &&
+              needsSignature.length === 0 &&
+              registeredCount + data.paid > 0),
         );
       }
     } catch {
@@ -196,6 +227,12 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
     }
   };
   void loadRefundStatus();
+  root
+    .querySelector("#refund-panel")
+    ?.addEventListener("click", (ev) => {
+      const link = (ev.target as Element | null)?.closest?.("[data-open-signed-refund]");
+      if (link && openSignedRefund(root)) ev.preventDefault();
+    });
 
   const syncRefundRail = () => {
     const rail =
@@ -209,6 +246,13 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
     if (onchain) onchain.hidden = rail !== "onchain";
     if (ln) ln.hidden = rail !== "lightning";
   };
+  bindRefundSign(root, {
+    proposalId: match.id,
+    status: match.status,
+    userId: user?.id ?? null,
+    onRegistered: () => void loadRefundStatus(),
+    onAuthed: () => location.reload(),
+  });
   root.querySelectorAll('input[name="refund_rail"]').forEach((el) => {
     el.addEventListener("change", syncRefundRail);
   });
@@ -283,6 +327,13 @@ function bindRefundAndBallot(root: ParentNode, match: Proposal): void {
           body.package_error ? "error" : "",
         );
         void loadRefundStatus();
+      } else if (body.code === REFUND_REQUIRES_SIGNATURE) {
+        if (msg) {
+          msg.hidden = false;
+          msg.className = "muted error";
+          msg.innerHTML = signatureLineHtml(REFUND_SIGNATURE_COPY.registerNeedsSignature);
+        }
+        openSignedRefund(root);
       } else {
         showRefundMsg(
           body.note || String(body.error || "failed"),
@@ -583,7 +634,7 @@ export async function renderProposalPage(
       status === "rejected" && match.id
         ? rebuttalPanelHtml(match.rebuttal_expires_at, match.rebuttal_reasoning)
         : "",
-      status === "refunding" ? refundRegisterHtml(match.id) : "",
+      status === "refunding" ? refundRegisterHtml(match.id, Boolean(user)) : "",
       status === "abandoned_vote" ||
       (status === "underfunded" && (balance ?? 0) > 0)
         ? ballotPanelHtml(match.id)
@@ -631,7 +682,8 @@ export async function renderProposalPage(
 
         ${
           match.escrow_address
-            ? proposalFundingBarHtml(
+            ? (sharedEscrowPendingHtml({ ...match, balance_sats: balance }, "detail") ??
+              proposalFundingBarHtml(
                 balance,
                 CLAIM_FLOOR_SATS,
                 match.target_sats,
@@ -641,7 +693,7 @@ export async function renderProposalPage(
                   claimer: match.claimer,
                   proposal_type: match.proposal_type,
                 },
-              )
+              ))
             : ""
         }
 
@@ -727,7 +779,7 @@ export async function renderProposalPage(
       proposalTitle: match.title,
       signedIn: Boolean(user),
       initialBalance: balance ?? null,
-      escrowShared: match.escrow_shared === true,
+      escrowShared: isSharedEscrow(match),
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: match.target_sats,
       creditPrefs: user?.funder_credit
@@ -754,6 +806,8 @@ export async function renderProposalPage(
           match.target_sats,
           match.milestones,
           fundingCtx,
+          // Own-address read on a non-shared row may replace the unknown line.
+          { recoverUnknown: balanceAddressFor(match) != null },
         );
         const needEl = app.querySelector(".builder-status.muted");
         if (
@@ -825,7 +879,7 @@ export async function renderProposalPage(
       }),
       donateReady,
     ]);
-    bindRefundAndBallot(app, match);
+    bindRefundAndBallot(app, match, user);
     const reviewerMe = await reviewerMePromise;
     await bindListingReportControl(app, {
       proposalId: match.id,
