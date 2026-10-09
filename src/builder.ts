@@ -602,6 +602,8 @@ export async function fetchClaimParams(): Promise<ClaimParams> {
   return (await res.json()) as ClaimParams;
 }
 
+export const MY_CLAIMS_SIGNED_OUT = "Your session expired — sign in again to see your claims.";
+
 export async function fetchMyClaims(): Promise<{
   pending: {
     user_id: string;
@@ -619,6 +621,8 @@ export async function fetchMyClaims(): Promise<{
     headers: authHeaders(),
     credentials: "include",
   });
+  // Signed out is not "no claims": callers must not paint an empty claims list.
+  if (res.status === 401) throw new Error(MY_CLAIMS_SIGNED_OUT);
   if (!res.ok) return { pending: [], ledger: null };
   const data = (await res.json()) as {
     pending?: {
