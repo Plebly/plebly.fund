@@ -62,6 +62,8 @@ import {
 } from "./lightning";
 import { balanceAddressFor, watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
+import { isSharedEscrow } from "./escrow-shared";
+import { loadedCatalogRows } from "./github";
 import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
@@ -121,6 +123,29 @@ export type DonateBindOpts = {
 };
 
 /** Hard-label beside Donate/escrow address — mirrors claim-bond feePay contrast. */
+/**
+ * Signed-out Donate line above the escrow address, before they send.
+ * Shared address (isSharedEscrow: fails toward shared): rows there can't take
+ * a session refund route, so the line doesn't promise one.
+ */
+export const DONATE_SIGNED_OUT_UNIQUE_COPY =
+  "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
+export const DONATE_SIGNED_OUT_SHARED_COPY =
+  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
+
+/** Signed-out donors only; signed-in donors see nothing here. */
+export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean }): string | null {
+  if (o.signedIn) return null;
+  return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
+}
+
+function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
+  const copy = donateRefundRouteCopy(o);
+  if (!copy) return "";
+  // Plain text: no link (the signed-refund form isn't reachable signed out).
+  return `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${escapeHtml(copy)}</p>`;
+}
+
 function donateEscrowHardLabelHtml(): string {
   const net = networkLabel();
   return `<p class="fee-pay-bond-label" id="donate-escrow-label">DONATE / ESCROW ADDRESS</p>
@@ -165,7 +190,7 @@ function donatePayStepHtml(
   onchainPresets: string,
   lnPresets: string,
   signedIn: boolean,
-  opts?: { endowment?: boolean },
+  opts?: { endowment?: boolean; shared?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
   const head = `<div class="donate-panel-head">
@@ -220,6 +245,7 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
+          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${donateEscrowHardLabelHtml()}
           <div class="donate-address-block" data-escrow-address-block>
           <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
@@ -582,7 +608,9 @@ export function donatePanelHtml(
 
   return `<div class="donate-panel" id="donate" data-donate-step="credit">
     ${donateCreditStepHtml(signedIn)}
-    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn)}
+    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn, {
+      shared: isSharedEscrow(p, loadedCatalogRows()),
+    })}
   </div>`;
 }
 
