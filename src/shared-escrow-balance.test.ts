@@ -384,14 +384,17 @@ describe("proposal detail page: escrow_shared row without confirmed own funding"
     expect(bar.textContent).not.toContain("10,586");
   });
 
-  it("non-shared row with a null balance is unchanged (normal meter)", async () => {
+  it("non-shared row whose balance read fails shows unavailable, not a 0 or shared-pending meter", async () => {
     const app = await paintDetail(
-      row({ escrow_address: UNIQUE, balance_sats: undefined, status: "listed" }),
+      row({ escrow_address: UNIQUE, escrow_shared: false, balance_sats: undefined, status: "listed" }),
       true,
     );
-    const bar = app.querySelector(".proposal-funding-bar")!;
-    expect(bar).toBeTruthy();
-    expect(bar.querySelector(".funding-meter-goal.sats")).toBeTruthy();
-    expect(bar.textContent).not.toContain("Awaiting confirmation");
+    await vi.waitFor(() => {
+      const line = app.querySelector(".funding-balance-unknown")?.textContent;
+      if (line !== "Balance temporarily unavailable.") throw new Error(line || "no line");
+    });
+    expect(app.querySelector(".proposal-funding-bar .funding-meter")).toBeNull();
+    expect(app.textContent).not.toContain("Awaiting confirmation");
+    expect(app.textContent).not.toMatch(/\b0 sats\b/);
   });
 });

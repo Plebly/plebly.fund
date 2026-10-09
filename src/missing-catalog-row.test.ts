@@ -340,7 +340,7 @@ describe("(c) missing catalog row is shared/unknown for its balance; accepting_f
   it("control: a catalog row with a known balance of 0 still draws the meter (0 is a real value)", async () => {
     const app = await renderPage({
       claim: claimView({ accepting_funds: true }),
-      catalog: [catalogRow({ balance_sats: 0 })],
+      catalog: [catalogRow({ balance_sats: 0, escrow_shared: false })],
     });
     await claimSettled(app);
     expect(app.querySelector(".proposal-funding-bar .funding-meter")).toBeTruthy();
@@ -352,7 +352,7 @@ describe("(c) missing catalog row is shared/unknown for its balance; accepting_f
     it(`control (${route} route): a unique catalog row (not shared) still reads its address balance`, async () => {
       const app = await renderPage({
         claim: claimView({ accepting_funds: true }),
-        catalog: [catalogRow({ balance_sats: undefined })],
+        catalog: [catalogRow({ balance_sats: undefined, escrow_shared: false })],
         route,
       });
       await claimSettled(app);

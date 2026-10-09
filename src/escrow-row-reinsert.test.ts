@@ -230,7 +230,7 @@ function expectRowExactly(app: HTMLElement, addr: string): void {
   const row = app.querySelector<HTMLElement>("#onchain-escrow-row");
   expect(row).toBeTruthy();
   expect(row!.querySelector("code")?.textContent).toBe(addr);
-  expect(row!.querySelector<HTMLElement>(".copy-btn")?.dataset.copy).toBe(addr);
+  expect(row!.querySelector<HTMLElement>(".copy-btn")?.dataset.escrowCopy).toBe(addr);
   expect(row!.querySelector<HTMLAnchorElement>(".explorer-link")?.getAttribute("href")).toBe(
     `https://mempool.space/signet/address/${addr}`,
   );
