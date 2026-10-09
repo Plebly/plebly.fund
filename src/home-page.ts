@@ -30,6 +30,7 @@ import {
   statusLabel,
   statusPillHtml,
 } from "./proposal-ui";
+import { balanceUnavailableHtml, isKnownBalance } from "./proposal-funding-bar";
 import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
 import { projectCardProposerHtml } from "./github-orgs-client";
@@ -308,6 +309,10 @@ function progressHtml(p: Proposal, floor: number): string {
   const sharedPending = sharedEscrowPendingHtml(p, "card");
   if (sharedPending != null) return sharedPending;
   const bal = p.balance_sats ?? 0;
+  // Own-address row whose balance read failed: no 0 meter / "… to open".
+  if (!isKnownBalance(p.balance_sats) && balanceAddressFor(p)) {
+    return `<div class="project-card-meter">${balanceUnavailableHtml()}</div>`;
+  }
   const remaining = Math.max(0, floor - bal);
   const open = isOpenToClaim(p, floor);
   const near = isNearFloor(p, floor);

@@ -3899,6 +3899,12 @@ a.project-card-by:hover .project-card-by-text {
   margin-top: 0;
 }
 
+/* Balance unknown (shared/null, missing catalog row, mempool timeout): text only, no meter. */
+.funding-balance-unknown {
+  margin: 0.35rem 0 1rem;
+  font-size: 0.9rem;
+}
+
 .proposal-funding-bar .proposal-progress {
   margin-bottom: 0;
 }

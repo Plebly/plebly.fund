@@ -8,6 +8,7 @@ import {
 import { claimModeHeroChipHtml } from "./claim-mode-ui";
 import {
   fetchClaimStatus,
+  isClosedToFundsStatus,
   isDirectProposal,
   isOpenToClaim,
   isTakenStatus,
@@ -58,7 +59,7 @@ import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
 import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
-import { isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
+import { escrowAddressText, isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
 import type { ClaimViewForDonate } from "./next-action";
 import type { GithubOrgAttestation } from "./types";
 import {
@@ -1628,6 +1629,12 @@ export type DonateChromeContext = {
   /** True when ?rail=lightning query param was present. */
   wantsLnRail?: boolean;
   /**
+   * Catalog status (read before the claim view merged in) is closed to funds
+   * (plebly.fund#74): never mount or open the Donate modal, whatever the
+   * claim view says.
+   */
+  fundsClosed?: boolean;
+  /**
    * isCatalogEscrowHidden(catalog row) read at page load. When true, Donate never
    * opens or mounts, whatever the claim view later says.
    */
@@ -2020,6 +2027,11 @@ export async function ensureDonateModalMounted(
   let ctx = donateChromeContext;
   const locKeys = proposalKeysFromLocation();
 
+  if (ctx?.fundsClosed) {
+    closeDonateModalWhenBlocked();
+    return null;
+  }
+
   const applyClaimEscrow = (
     target: DonateChromeContext,
     status: {
@@ -2317,6 +2329,12 @@ export async function mountDonateChromeWhenEscrowKnown(
   const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
 
+  // Catalog status closed to funds (plebly.fund#74): never mount.
+  if (donateChromeContext?.fundsClosed) {
+    closeDonateModalWhenBlocked();
+    return false;
+  }
+
   // Catalog-level blocking — also close any open modal
   if (isCatalogDonateBlocked(proposal)) {
     closeDonateModalWhenBlocked();
@@ -2345,6 +2363,7 @@ export async function mountDonateChromeWhenEscrowKnown(
     claimStatusPromise: donateChromeContext?.claimStatusPromise,
     wantsDonateOpen: donateChromeContext?.wantsDonateOpen,
     wantsLnRail: donateChromeContext?.wantsLnRail,
+    fundsClosed: donateChromeContext?.fundsClosed,
   });
 
   const existing = findDonateModal(root);
@@ -2410,8 +2429,10 @@ export function onChainPanelHtml(
 ): string {
   const rows: string[] = [];
 
-  if (p.escrow_address && !opts?.hideEscrow) {
-    rows.push(onChainEscrowRowHtml(p.escrow_address));
+  // Declined, voided, refunding, …: never show the escrow address.
+  const escrowText = escrowAddressText(p.escrow_address);
+  if (escrowText && !opts?.hideEscrow && !isClosedToFundsStatus(p.status)) {
+    rows.push(onChainEscrowRowHtml(escrowText));
   }
 
   if (p.submission_fee_txid) {
