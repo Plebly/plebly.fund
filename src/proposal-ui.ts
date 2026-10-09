@@ -355,6 +355,7 @@ export {
 } from "./proposal-status-ui";
 
 import { fundingBarTrackHtml } from "./proposal-funding-bar";
+import { refundSignHtml } from "./refund-sign";
 
 /** Shown while the first UTXO read has failed: no credit promise, by design. */
 export const DONATE_WATCH_UNAVAILABLE_COPY =
@@ -1068,6 +1069,12 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     if (!claimWrap || !utxos.length || !opts.proposalId) return;
     if (!opts.signedIn) {
       showAnonymousReceipt(utxos[0]!);
+      return;
+    }
+    // Don't offer manual linking on shared addresses.
+    if (opts.escrowShared !== false) {
+      claimWrap.hidden = true;
+      claimWrap.innerHTML = "";
       return;
     }
     claimWrap.hidden = false;
@@ -2614,7 +2621,7 @@ export function metaChipsHtml(p: Proposal): string {
   return `<div class="proposal-meta-line">${bits.join('<span class="proposal-meta-sep" aria-hidden="true">·</span>')}</div>`;
 }
 
-export function refundRegisterHtml(proposalId: string | null): string {
+export function refundRegisterHtml(proposalId: string | null, signedIn = false): string {
   if (!proposalId) return "";
   return `<div class="refund-panel" id="refund-panel">
     <h3 class="milestones-title">Register refund</h3>
@@ -2645,7 +2652,8 @@ export function refundRegisterHtml(proposalId: string | null): string {
       <button type="button" class="btn" id="refund-submit">Register</button>
     </div>
     <p class="muted" id="refund-msg" hidden></p>
-  </div>`;
+  </div>
+  ${refundSignHtml(signedIn)}`;
 }
 
 export function ballotPanelHtml(proposalId: string | null): string {

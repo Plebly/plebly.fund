@@ -1,3 +1,4 @@
+import { isSharedEscrow } from "./escrow-shared";
 import {
   acceptClaimApplication,
   acceptClaimCollaboratorInvite,
@@ -607,7 +608,7 @@ export async function bindBuilderPanel(
       proposalTitle: opts.proposal.title,
       signedIn: Boolean(opts.user),
       initialBalance: opts.balance ?? opts.proposal.balance_sats ?? null,
-      escrowShared: opts.proposal.escrow_shared === true,
+      escrowShared: isSharedEscrow(opts.proposal),
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: opts.proposal.target_sats,
       onBalanceUpdate: pageBalanceUpdate,
@@ -1367,7 +1368,7 @@ export async function bindBuilderPanel(
         proposalTitle: opts.proposal.title,
         signedIn: Boolean(opts.user),
         initialBalance: opts.balance ?? opts.proposal.balance_sats ?? null,
-        escrowShared: opts.proposal.escrow_shared === true,
+        escrowShared: isSharedEscrow(opts.proposal),
         claimFloorSats: CLAIM_FLOOR_SATS,
         targetSats: opts.proposal.target_sats,
         onBalanceUpdate: pageBalanceUpdate,

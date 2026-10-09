@@ -528,7 +528,7 @@ function bottomCtaHtml(): string {
 export async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]> {
   return Promise.all(
     proposals.map(async (p) => {
-      const address = balanceAddressFor(p);
+      const address = balanceAddressFor(p, proposals);
       if (!address) return p;
       // Catalog blob already includes balances from the Worker cron.
       if (typeof p.balance_sats === "number") return p;
