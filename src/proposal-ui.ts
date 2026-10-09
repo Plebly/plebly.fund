@@ -1,3 +1,11 @@
+import {
+  escrowAddressChunksHtml,
+  escrowAddressCopiedHtml,
+  escrowAddressSignetNoteHtml,
+  renderEscrowAddressInto,
+  showEscrowAddressCopied,
+  showEscrowAddressCopyFailed,
+} from "./escrow-address-display";
 import QRCode from "qrcode";
 import {
   authFetch,
@@ -212,10 +220,14 @@ function donatePayStepHtml(
           </div>
           <div class="donate-presets">${onchainPresets}</div>
           ${donateEscrowHardLabelHtml()}
-          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+          <div class="donate-address-block" data-escrow-address-block>
+          <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
+          ${escrowAddressSignetNoteHtml()}
           <div class="donate-actions">
             <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
             <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
+          </div>
+          ${escrowAddressCopiedHtml()}
           </div>
           <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
         </div>
@@ -691,6 +703,7 @@ async function bindOnchainDonate(
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
+      showEscrowAddressCopied(copyBtnEl);
       const prev = copyBtnEl.textContent;
       copyBtnEl.textContent = "Copied";
       copyBtnEl.classList.add("copied");
@@ -699,7 +712,7 @@ async function bindOnchainDonate(
         copyBtnEl.classList.remove("copied");
       }, 1400);
     } catch {
-      /* ignore */
+      showEscrowAddressCopyFailed(copyBtnEl);
     }
   });
 }
@@ -1777,10 +1790,7 @@ export function syncDonateModalEscrow(
   const root =
     scope instanceof Document || scope instanceof Element ? scope : document;
   const code = root.querySelector<HTMLElement>("#donate-address");
-  if (code) {
-    code.textContent = addr;
-    code.setAttribute("title", addr);
-  }
+  if (code) renderEscrowAddressInto(code, addr);
   const copy = root.querySelector<HTMLElement>("#donate-copy");
   if (copy) copy.setAttribute("data-copy", addr);
   setDonateAddressTargetsHidden(root, false);
@@ -2410,15 +2420,20 @@ export async function mountDonateChromeWhenEscrowKnown(
 
 /** Escrow address row for on-chain panel (injected after claim view confirms). */
 export function onChainEscrowRowHtml(escrowAddress: string): string {
-  if (!escrowAddress) return "";
-  return `<div class="onchain-row" id="onchain-escrow-row">
+  const addr = String(escrowAddress || "").trim();
+  if (!addr) return "";
+  // Chunked for reading (CSS margin only, no inserted characters); Copy uses
+  // the exact address. Only rendered where the address row already was.
+  return `<div class="onchain-row" id="onchain-escrow-row" data-escrow-address-block>
     <span class="onchain-label">Escrow address</span>
     <div class="onchain-value">
-      <code class="mono">${escapeHtml(escrowAddress)}</code>
+      <code class="mono escrow-addr" id="onchain-escrow-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
       <span class="onchain-actions">
-        ${explorerLink(`${MEMPOOL_WEB}/address/${encodeURIComponent(escrowAddress)}`, "Explorer")}
-        ${copyBtn(escrowAddress, "address")}
+        ${explorerLink(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`, "Explorer")}
+        <button type="button" class="copy-btn" data-escrow-copy="${escapeHtml(addr)}" title="Copy address">Copy</button>
       </span>
+      ${escrowAddressSignetNoteHtml()}
+      ${escrowAddressCopiedHtml()}
     </div>
   </div>`;
 }

@@ -11098,6 +11098,47 @@ a.proposal-comment-author:hover {
   }
 }
 
+/* Readable escrow address (chunked). Spacing is margin only: never insert
+   characters between chunks, so copy / select-copy stay a valid address. */
+.onchain-value code.escrow-addr,
+.donate-modal-card .donate-address.escrow-addr,
+.donate-address.escrow-addr {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink);
+  /* Override .mono / .donate-address / .onchain-value code break-all: wraps
+     fall only between the inline-block 4-char groups, never inside one. */
+  word-break: normal;
+  overflow-wrap: normal;
+  letter-spacing: 0.01em;
+}
+
+.escrow-addr-chunk {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.escrow-addr-chunk + .escrow-addr-chunk {
+  margin-left: 0.4em;
+}
+
+.escrow-addr-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-secondary);
+}
+
+.escrow-addr-copied {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.escrow-addr-copied.is-error {
+  color: var(--bad);
+}
+
 /* Stale build after a deploy: a fixed banner that keeps the page (and any typed input). */
 .stale-build-banner {
   position: fixed;
