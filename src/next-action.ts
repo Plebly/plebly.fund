@@ -174,6 +174,11 @@ export type ClaimViewForDonate = {
   claim_phase?: string | null;
   /** True when bounty is settled — hide Donate/Apply but keep claimant's mark-done/flag. */
   bounty_settled?: boolean | null;
+  /**
+   * Claim-level open-claimability (workers#44). `false` without bounty_settled
+   * blocks every action. Absent on Workers builds before #44.
+   */
+  accepting_claims?: boolean | null;
 } | null;
 
 /**
@@ -254,9 +259,23 @@ export function isDonateBlocked(
 }
 
 /**
- * True when the claim view indicates a state that should block ALL actions
- * (voided/unreadable/unknown structure, unknown claim state, or accepting_funds:false without bounty_settled).
+ * True when the claim view indicates a state that should block ALL actions:
+ * - `accepting_claims === false` without bounty_settled (workers#44),
+ * - voided/unreadable/unknown structured state,
+ * - unknown claim state, or a settled claim with no active claimant.
  * Used at the top of resolveNextAction to exit early.
+ *
+ * `accepting_funds === false` on its own does NOT block every action: since
+ * workers#51 the claim view sends it for every row whose status is not
+ * FUNDABLE (claimed, in_review, refunding, completed, declined, ...). It only
+ * hides Donate and the escrow address (isClaimViewDonateAllowed). Those rows
+ * keep Submit work, Mark it done, Add a refund address, etc.
+ *
+ * Fail closed for Workers builds without `accepting_claims` (pre-#44): there
+ * `accepting_funds === false` on a FUNDABLE status (listed, funding, claimable,
+ * declined_fundable) can only mean an unreadable/unresolved record, so it
+ * still blocks every action. Pass `status` (catalog/proposal status); when it
+ * is missing the legacy check blocks.
  *
  * NOTE: Do NOT block on claim.state === 'unavailable' — Workers returns that for
  * declined_fundable, refunding, underfunded, abandoned_vote, redirected which need
@@ -267,7 +286,10 @@ export function isDonateBlocked(
  * (Mark done, Flag, Submit deliverable). Donate/Apply are blocked separately
  * via isClaimViewDonateAllowed.
  */
-export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
+export function isClaimViewBlocked(
+  claim: ClaimViewForDonate,
+  status?: string | null,
+): boolean {
   if (!claim) return false;
   const structured = claim.psbt?.structured_state ?? null;
   // When bounty_settled is true with healthy psbt, let claim branches run
@@ -277,8 +299,17 @@ export function isClaimViewBlocked(claim: ClaimViewForDonate): boolean {
       return false;
     }
   }
-  // accepting_funds:false without bounty_settled blocks everything
-  if (claim.accepting_funds === false) return true;
+  // Not accepting claims and not settled blocks everything (workers#44)
+  if (claim.accepting_claims === false) return true;
+  // Pre-#44 Workers: accepting_funds:false on a FUNDABLE status means the
+  // record is unreadable/unresolved. Fail closed (unknown status blocks too).
+  if (
+    claim.accepting_claims == null &&
+    claim.accepting_funds === false &&
+    (!status || isFundableStatus(String(status).toLowerCase()))
+  ) {
+    return true;
+  }
   // Settled state (no active claimant) blocks everything
   if (claim.state === "settled" || claim.claim_phase === "settled") return true;
   // Unknown claim state blocks (fail closed allowlist)
@@ -368,8 +399,22 @@ function roles(input: NextActionInput): {
   return { isProposer, isBuilder, user };
 }
 
-/** One sentence and at most one primary button. */
+/**
+ * One sentence and at most one primary button.
+ *
+ * When the claim view says `accepting_funds === false` (workers#51: every row
+ * whose status is not FUNDABLE) the Donate button never renders; the row keeps
+ * its other actions.
+ */
 export function resolveNextAction(input: NextActionInput): NextAction {
+  const action = resolveNextActionInner(input);
+  if (action.button === "donate" && input.claim?.accepting_funds === false) {
+    return { ...action, button: null };
+  }
+  return action;
+}
+
+function resolveNextActionInner(input: NextActionInput): NextAction {
   const p = input.proposal;
   const claim = input.claim;
   const { isProposer, isBuilder, user } = roles(input);
@@ -377,6 +422,9 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   const donor = claim?.donor_review_status ?? p.donor_review_status ?? null;
   const donorExp = claim?.donor_review_expires_at ?? p.donor_review_expires_at;
   const moreIds: NextMoreId[] = [];
+  // workers#51: the claim view closes funds for every non-FUNDABLE row. Hide
+  // Donate only; the row's other actions stay.
+  const fundsClosed = claim?.accepting_funds === false;
 
   // FIRST: check catalog status "voided" or unknown — terminal, no actions at all.
   if (status === "voided") {
@@ -412,7 +460,7 @@ export function resolveNextAction(input: NextActionInput): NextAction {
   // Voided/unknown/unavailable/unreadable claim states block fund/apply/mark-done/flag.
   // Exception: "rejected" status should still allow rebuttal action.
   // Exception: "completed" status should keep its settled/approved copy.
-  const claimViewBlocked = isClaimViewBlocked(claim ?? null);
+  const claimViewBlocked = isClaimViewBlocked(claim ?? null, status);
   const claimStructured = structuredState(claim);
 
   // Check if bounty is settled (workers#41 contract shape)
@@ -664,7 +712,7 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
-    if (structured === "awaiting_funds") {
+    if (structured === "awaiting_funds" && !fundsClosed) {
       return {
         sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
         button: "donate",
@@ -691,7 +739,7 @@ export function resolveNextAction(input: NextActionInput): NextAction {
             ? "Submit the work when it is done. Structured funding is ready for keyholders."
             : structured === "confirmed"
               ? "Submit the work when it is done. Funds are structured for release."
-              : structured === "awaiting_funds"
+              : structured === "awaiting_funds" && !fundsClosed
                 ? "Submit the work when it is done. The pot is still pooling."
                 : "Submit the work when it is done.",
         button: "deliverable",
@@ -718,7 +766,7 @@ export function resolveNextAction(input: NextActionInput): NextAction {
         moreIds,
       };
     }
-    if (structured === "awaiting_funds") {
+    if (structured === "awaiting_funds" && !fundsClosed) {
       return {
         sentence: "The pot is still pooling. Donate until the frozen allocation is met.",
         button: "donate",
