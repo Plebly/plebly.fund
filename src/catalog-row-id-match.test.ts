@@ -254,7 +254,7 @@ for (const f of [KNOTS, DEMO]) {
       it(`${route} route: the slug-path row with the same id is used; its own address balance draws the meter`, async () => {
         // Row as served but without a balance: a unique (not shared) row, so
         // the page reads the proposal's own address.
-        const app = await renderPage(f, [OTHER_ROW, slugRow(f, { balance_sats: undefined })], route);
+        const app = await renderPage(f, [OTHER_ROW, slugRow(f, { balance_sats: undefined, escrow_shared: false })], route);
         expect(addressHits).toContain(f.escrow);
         expectMeter(app);
         expect(app.querySelector(".proposal-funding-bar")?.textContent || "").toMatch(f.addressLabel);
@@ -262,13 +262,13 @@ for (const f of [KNOTS, DEMO]) {
       });
 
       it(`${route} route: the slug-path row exactly as in the catalog snapshot (balance ${f.catalogBalance}) draws the meter`, async () => {
-        const app = await renderPage(f, [OTHER_ROW, slugRow(f)], route);
+        const app = await renderPage(f, [OTHER_ROW, slugRow(f, { escrow_shared: false })], route);
         expectMeter(app);
       });
     }
 
     it("matches whatever the case/whitespace of the frontmatter id (same id)", async () => {
-      const app = await renderPage(f, [slugRow(f, { id: `  ${f.id.toLowerCase()} `, balance_sats: undefined })], "path");
+      const app = await renderPage(f, [slugRow(f, { id: `  ${f.id.toLowerCase()} `, balance_sats: undefined, escrow_shared: false })], "path");
       expect(addressHits).toContain(f.escrow);
       expectMeter(app);
     });
@@ -458,7 +458,7 @@ describe("lower-case /p/ route", () => {
   for (const f of [KNOTS, DEMO]) {
     const routeId = f.id.toLowerCase();
     it(`${f.name}: /p/${routeId} resolves to its slug-path row and draws its own meter`, async () => {
-      const app = await renderPage(f, [OTHER_ROW, slugRow(f, { balance_sats: undefined })], "stable", true, routeId);
+      const app = await renderPage(f, [OTHER_ROW, slugRow(f, { balance_sats: undefined, escrow_shared: false })], "stable", true, routeId);
       expect(addressHits).toContain(f.escrow);
       expectMeter(app);
       expect(app.querySelector(".proposal-funding-bar")?.textContent || "").toMatch(f.addressLabel);
@@ -504,7 +504,7 @@ describe("legacy /proposal/listed/ route", () => {
       it(`${f.name}: /proposal/listed/${file} resolves to its slug-path row and draws its own meter`, async () => {
         const r = parseLocation(`/proposal/listed/${file}`, "");
         expect(r).toEqual({ name: "proposal", id: f.idPath });
-        const app = await renderPage(f, [OTHER_ROW, slugRow(f, { balance_sats: undefined })], "path");
+        const app = await renderPage(f, [OTHER_ROW, slugRow(f, { balance_sats: undefined, escrow_shared: false })], "path");
         expect(addressHits).toContain(f.escrow);
         expectMeter(app);
         expect(app.querySelector(".proposal-funding-bar")?.textContent || "").toMatch(f.addressLabel);

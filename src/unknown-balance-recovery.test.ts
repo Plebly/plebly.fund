@@ -28,6 +28,7 @@ function row(over: Partial<Proposal>): Proposal {
     proposal_type: "bounty",
     target_sats: 100_000,
     escrow_address: UNIQUE,
+    escrow_shared: false,
     submission_fee_txid: "ab".repeat(32),
     created_at: "2026-10-01T00:00:00Z",
     escrow_index: null,
