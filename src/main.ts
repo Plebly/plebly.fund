@@ -31,7 +31,7 @@ import {
   type AuthUser,
 } from "./auth";
 import { renderMissingProposal, renderProposalPage } from "./proposal-page";
-import { installDonateClickCapture } from "./proposal-ui";
+import { endDonateProject, installDonateClickCapture } from "./proposal-ui";
 import { renderPublicOrgProfile } from "./org-page";
 import { renderStats } from "./stats-page";
 import { renderWanted } from "./wanted-page";
@@ -228,6 +228,9 @@ function scrollToHashTarget(): void {
 }
 
 async function render() {
+  // Any page that isn't a project page: no project is active any more, its
+  // Donate context is cleared and its modal closed (proposal-ui.ts).
+  if (route().name !== "proposal") endDonateProject();
   currentUser = await fetchCurrentUser();
   if (currentUser?.funder_credit) {
     syncStoredCreditPreferencesFromProfile(currentUser.funder_credit);
@@ -411,6 +414,7 @@ async function render() {
     const proposal = r.stable ? await findListedProposalById(r.id) : null;
     const path = proposal?.path || (!r.stable ? r.id : "");
     if (!path) {
+      endDonateProject();
       renderMissingProposal(shell, r.id);
       bindAuthHandlers();
       return;

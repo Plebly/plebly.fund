@@ -132,6 +132,10 @@ function paint(p: Proposal, withDonateSlot: boolean): void {
 }
 
 async function bind(p: Proposal): Promise<void> {
+  const { beginDonateProject } = await import("./proposal-ui");
+  const routePath = p.path.replace(/^proposals\//, "").replace(/\.md$/, "");
+  history.replaceState(null, "", `/proposal/${routePath}`);
+  beginDonateProject(p.path);
   const { bindBuilderPanel } = await import("./builder-panel");
   await bindBuilderPanel(document, { proposal: p, balance: 15_000, user: null, watching: false });
 }

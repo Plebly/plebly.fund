@@ -131,6 +131,8 @@ async function bindWithDonateAllowedClaimView(p: Proposal, duringBind?: () => vo
     wantsDonateOpen: true,
   });
   ui.bindDonateModal(document);
+  // As renderProposalPage does first: this project's page is the one on screen.
+  (await import("./proposal-ui")).beginDonateProject(p.path);
   const bound = bindBuilderPanel(document, { proposal: p, balance: 200_000, user: null, watching: false });
   // Runs after bindBuilderPanel's synchronous start (early Donate context set),
   // before the claim view has resolved.

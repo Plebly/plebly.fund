@@ -80,6 +80,8 @@ describe("Donate click capture — production listing DOM", () => {
     document.body.innerHTML = `<div id="app">
       <button type="button" data-open-donate id="donate-open">Donate</button>
     </div>`;
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -114,6 +116,8 @@ describe("Donate click capture — production listing DOM", () => {
     </div>`;
     // Claim-view-first: must provide a valid claim status to enable donations.
     // Without a claim status, donations are blocked even if catalog has escrow.
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -152,6 +156,8 @@ describe("Donate click capture — production listing DOM", () => {
     document.body.innerHTML = `<div id="app">
       <button type="button" data-open-donate id="donate-open">Donate</button>
     </div>`;
+    // As renderProposalPage does first: this project's page is the one on screen.
+    (await import("./proposal-ui")).beginDonateProject(p.path);
     setDonateChromeContext({
       root: document,
       proposal: p,
@@ -217,6 +223,8 @@ describe("Donate click capture — production listing DOM", () => {
       document.body.innerHTML = `<div id="app">
         <button type="button" data-open-donate id="donate-open">Donate</button>
       </div>`;
+      // As renderProposalPage does first: this project's page is the one on screen.
+      (await import("./proposal-ui")).beginDonateProject(p.path);
       setDonateChromeContext({
         root: document,
         proposal: p,

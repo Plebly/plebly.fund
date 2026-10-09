@@ -193,6 +193,10 @@ async function renderPage(
   routeId: string = f.id,
 ): Promise<HTMLElement> {
   document.body.innerHTML = `<div id="app"></div>`;
+  // This render is the page on screen. A previous test's /p/… URL must not
+  // make the result look stale.
+  const routePath = f.idPath.replace(/^proposals\//, "").replace(/\.md$/, "");
+  history.replaceState(null, "", `/proposal/${routePath}`);
   stubFetch(f, rows, { route, withId });
   const { renderProposalPage } = await import("./proposal-page");
   let preloaded = null;

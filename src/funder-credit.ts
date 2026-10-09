@@ -272,14 +272,24 @@ export function watchNewUtxos(
 /** Retry claim a few times while the indexer catches up (esp. Lightning). */
 export async function claimContributionWithRetry(
   input: Parameters<typeof claimContribution>[0],
-  opts?: { attempts?: number; delayMs?: number },
+  opts?: {
+    attempts?: number;
+    delayMs?: number;
+    /**
+     * Checked before each wait and before each retry; false (e.g. the session
+     * changed or ended) stops with RecordRetryCancelled: no further /claim.
+     */
+    shouldContinue?: () => boolean;
+  },
 ): Promise<void> {
   const attempts = opts?.attempts ?? 6;
   const delayMs = opts?.delayMs ?? 2500;
+  const stop = () => Boolean(opts?.shouldContinue && !opts.shouldContinue());
   let lastError: Error | null = null;
   let lastStatus: number | null = null;
   for (let i = 0; i < attempts; i += 1) {
     lastStatus = null;
+    if (i > 0 && stop()) throw new RecordRetryCancelled();
     try {
       await claimContribution(input, (s) => {
         lastStatus = s;
@@ -290,6 +300,7 @@ export async function claimContributionWithRetry(
       const msg = lastError.message.toLowerCase();
       if (msg.includes("already claimed")) throw new ClaimLinkError(lastError.message, lastStatus);
       if (i < attempts - 1) {
+        if (stop()) throw new RecordRetryCancelled();
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
@@ -323,4 +334,81 @@ function authFetchReporting(onStatus?: (status: number) => void): typeof authFet
     onStatus?.(res.status);
     return res;
   };
+}
+
+/**
+ * `/contributions/record` retry for the Donate modal.
+ *
+ * Retries only transient failures: 5xx (incl. workers' 503
+ * `contribution_busy`) and network errors. 4xx (incl. every 409) and a 2xx
+ * without `ok: true` are final. The whole window stays well inside one escrow
+ * indexer period (workers cron, every 5 minutes): once the indexer records the
+ * gift anonymously, a later session record is refused for good.
+ */
+export const RECORD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000] as const;
+/** No new attempt starts after this many ms from the first one. */
+export const RECORD_RETRY_WINDOW_MS = 60_000;
+
+/**
+ * workers#91: /record answers 202 (code pending_index) when it wrote no row
+ * yet; the indexer adds the gift at 2 confirmations. Not an error, not
+ * "Credit linked", never retried. (Main never returns 202.)
+ */
+export const RECORD_PENDING_INDEX_COPY =
+  "Thanks. Your gift will show on this proposal after 2 confirmations.";
+export type RecordOutcome = "recorded" | "pending_index";
+
+/** Thrown when the caller stops a /record retry loop (modal closed, stop(), session changed). */
+export class RecordRetryCancelled extends Error {
+  constructor() {
+    super("Linking stopped.");
+    this.name = "RecordRetryCancelled";
+  }
+}
+
+/** Donate modal status while transient /record failures are being retried. */
+export const RECORD_RETRY_STATUS_COPY =
+  "Linking your gift to your account… Keep this page open.";
+
+export async function recordContributionWithRetry(
+  input: Parameters<typeof recordContribution>[0],
+  opts?: {
+    delaysMs?: readonly number[];
+    windowMs?: number;
+    /** Called before each wait, i.e. only once a transient failure will be retried. */
+    onRetry?: () => void;
+    /** Checked before and after each wait; false stops the loop with RecordRetryCancelled. */
+    shouldContinue?: () => boolean;
+  },
+): Promise<RecordOutcome> {
+  const delays = opts?.delaysMs ?? RECORD_RETRY_DELAYS_MS;
+  const windowMs = opts?.windowMs ?? RECORD_RETRY_WINDOW_MS;
+  const started = Date.now();
+  for (let attempt = 0; ; attempt += 1) {
+    let lastError: Error;
+    let res: Response | null = null;
+    try {
+      res = await authFetch(`${api()}/contributions/record`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error("Could not record contribution.");
+    }
+    if (res) {
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.status === 202) return "pending_index"; // workers#91: no row yet, final
+      if (res.ok && data.ok === true) return "recorded";
+      lastError = new Error(data.error || "Could not record contribution.");
+      // Final: 4xx (409 included) and an unaccepted 2xx are answers, not outages.
+      if (res.status < 500) throw lastError;
+    }
+    const delay = delays[attempt];
+    if (delay == null || Date.now() - started + delay > windowMs) throw lastError!;
+    if (opts?.shouldContinue && !opts.shouldContinue()) throw new RecordRetryCancelled();
+    opts?.onRetry?.();
+    await new Promise((r) => setTimeout(r, delay));
+    if (opts?.shouldContinue && !opts.shouldContinue()) throw new RecordRetryCancelled();
+  }
 }
