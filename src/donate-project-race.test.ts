@@ -320,4 +320,43 @@ describe("each Donate writer checks the project (unit)", () => {
     expect(document.querySelector("#app h1")?.textContent).toBe("Relay fund");
     expectOnlyY();
   });
+
+  it("a page still waiting on /endowment never rewrites the URL or paints over a newer page", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let releaseEndowment: () => void = () => undefined;
+    const held = new Promise<void>((r) => {
+      releaseEndowment = r;
+    });
+    let endowmentCalls = 0;
+    stubNet();
+    const inner = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes("/endowment")) {
+        endowmentCalls += 1;
+        if (endowmentCalls === 1) await held;
+        return Response.json({ funded_proposal_ids: [] });
+      }
+      return inner(input, init);
+    });
+    document.body.innerHTML = `<div id="app"></div>`;
+    go(X);
+    void renderProposalPage(X.path, (s) => s, null, () => undefined, X);
+    await vi.waitFor(() => {
+      if (endowmentCalls < 1) throw new Error("X has not reached /endowment");
+    });
+    go(Y);
+    void renderProposalPage(Y.path, (s) => s, null, () => undefined, Y);
+    await vi.waitFor(() => {
+      if (document.querySelector("#app h1")?.textContent !== "Relay fund") {
+        throw new Error("Y not painted");
+      }
+    });
+    const yPath = location.pathname;
+    releaseEndowment();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(document.querySelector("#app h1")?.textContent).toBe("Relay fund");
+    expect(location.pathname).toBe(yPath);
+    expect(location.pathname).not.toBe("/p/plebly-2026-009");
+    expectOnlyY();
+  });
 });

@@ -511,7 +511,11 @@ export async function renderProposalPage(
     }
     // Another project page started while this one loaded: never paint it,
     // rewrite the URL, or set its Donate context over the newer page.
-    if (!donateResultIsCurrent(match) && !donateResultIsCurrent({ path })) return;
+    // Recheck after every later await. The URL rewrite and the paint both
+    // sit after those awaits, so one early check is not enough.
+    const stillHere = () =>
+      donateResultIsCurrent(match) || donateResultIsCurrent({ path });
+    if (!stillHere()) return;
     if (match.id && WORKERS_API && match.endowment_funded == null) {
       try {
         const er = await fetch(
@@ -533,13 +537,8 @@ export async function renderProposalPage(
         /* ignore */
       }
     }
+    if (!stillHere()) return;
     const coverUrl = safeCoverImageUrl(match.cover_image);
-    if (match.id) {
-      const canonical = new URL(proposalHref(match.path, match.id), location.origin);
-      if (location.pathname !== canonical.pathname) {
-        history.replaceState(history.state, "", `${canonical.pathname}${location.search}${location.hash}`);
-      }
-    }
     const bodyMd = match.body;
     const sectionsHtml = proposalSectionsHtml(bodyMd);
 
@@ -565,28 +564,6 @@ export async function renderProposalPage(
     const seoPath = match.id
       ? proposalStablePath(match.id)
       : `/proposal/${match.path.replace(/^proposals\//, "").replace(/\.md$/, "")}`;
-    applySeo({
-      ...seoForRoute(
-        { name: "proposal", id: match.path || path },
-        {
-          title: match.title,
-          description: seoDescription,
-          path: match.id ? proposalStablePath(match.id) : undefined,
-        },
-      ),
-      ogType: "article",
-      ...(coverUrl ? { image: coverUrl } : {}),
-      jsonLd: proposalJsonLd({
-        id: match.id,
-        title: match.title,
-        description: seoDescription,
-        path: seoPath,
-        status: String(match.status),
-        target_sats: match.target_sats,
-        balance_sats: balance ?? match.balance_sats,
-        cover_image: coverUrl,
-      }),
-    });
 
     const byline = proposerBylineHtml(match.proposer, profilePath, {
       proposer_type: match.proposer_type,
@@ -621,6 +598,41 @@ export async function renderProposalPage(
         w.proposal_id === match.id ||
         w.proposal_id === path.split("/").pop()?.replace(/\.md$/, ""),
     );
+    // Endowment, balance, and the watch list have all settled. A newer page
+    // that started during any of them keeps the URL, the title, and #app.
+    if (!stillHere()) return;
+    if (match.id) {
+      const canonical = new URL(proposalHref(match.path, match.id), location.origin);
+      if (location.pathname !== canonical.pathname) {
+        history.replaceState(
+          history.state,
+          "",
+          `${canonical.pathname}${location.search}${location.hash}`,
+        );
+      }
+    }
+    applySeo({
+      ...seoForRoute(
+        { name: "proposal", id: match.path || path },
+        {
+          title: match.title,
+          description: seoDescription,
+          path: match.id ? proposalStablePath(match.id) : undefined,
+        },
+      ),
+      ogType: "article",
+      ...(coverUrl ? { image: coverUrl } : {}),
+      jsonLd: proposalJsonLd({
+        id: match.id,
+        title: match.title,
+        description: seoDescription,
+        path: seoPath,
+        status: String(match.status),
+        target_sats: match.target_sats,
+        balance_sats: balance ?? match.balance_sats,
+        cover_image: coverUrl,
+      }),
+    });
     const coverHtml = coverUrl
       ? `<div class="proposal-cover"><img src="${escapeHtml(coverUrl)}" alt="" decoding="async" /></div>`
       : "";
