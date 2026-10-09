@@ -2547,8 +2547,14 @@ export function onChainPanelHtml(
   const rows: string[] = [];
 
   // Declined, voided, refunding, …: never show the escrow address.
+  // A non-string or wrong-network address (bc1… on signet) never paints either.
   const escrowText = escrowAddressText(p.escrow_address);
-  if (escrowText && !opts?.hideEscrow && !isClosedToFundsStatus(p.status)) {
+  if (
+    escrowText &&
+    escrowAddressMatchesNetwork(escrowText) &&
+    !opts?.hideEscrow &&
+    !isClosedToFundsStatus(p.status)
+  ) {
     rows.push(onChainEscrowRowHtml(escrowText));
   }
 

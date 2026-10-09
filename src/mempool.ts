@@ -15,8 +15,10 @@ export function balanceAddressFor(
   catalog: ReadonlyArray<EscrowRow> = [],
 ): string | null {
   // One shared-address rule (fails toward shared: a null flag is shared).
+  // A non-string address is bad data: no read, and no throw.
   if (!p || isSharedEscrow(p, catalog)) return null;
-  const address = (p.escrow_address || "").trim();
+  if (typeof p.escrow_address !== "string") return null;
+  const address = p.escrow_address.trim();
   return address || null;
 }
 
