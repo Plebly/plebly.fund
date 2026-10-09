@@ -6,6 +6,7 @@ import {
   WORKERS_API,
   isFundableStatus,
 } from "./config";
+import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
 import { isKnownProposalStatus, type Proposal } from "./types";
 import { claimsProposalPath } from "./util";
 
@@ -262,18 +263,25 @@ export function isDirectProposal(p: Proposal): boolean {
   return String(p.proposal_type || "bounty").toLowerCase() === "direct";
 }
 
-/** Check catalog-level voided/blocked signals (accepting_funds:false, bounty_settled:true, structured_state voided/unreadable/unknown, claim_phase settled/unreadable). */
+/**
+ * Catalog row is closed to claims: settled, or a structured state that is
+ * voided, unreadable, or not in STRUCTURED_FUNDING_KNOWN_STATES.
+ * `accepting_funds: false` is not voided. It hides Donate only. A funded
+ * bounty that has stopped taking coins can still be claimed.
+ */
 export function isCatalogVoided(p: Proposal): boolean {
-  if (p.accepting_funds === false) return true;
-  // Catalog bounty_settled:true blocks (workers#41 adds this to all settled bounties)
   if (p.bounty_settled === true) return true;
-  // Catalog claim_phase 'settled' or 'unreadable' blocks (workers#41)
   const phase = String(p.claim_phase || "").toLowerCase();
   if (phase === "settled" || phase === "unreadable") return true;
   const structured = p.structured_state;
   if (!structured) return false;
-  const KNOWN_STATES = ["awaiting_funds", "psbt_ready", "broadcast", "confirmed"];
-  return structured === "voided" || structured === "unreadable" || !KNOWN_STATES.includes(structured);
+  if (structured === "voided" || structured === "unreadable") return true;
+  return !(STRUCTURED_FUNDING_KNOWN_STATES as readonly string[]).includes(structured);
+}
+
+/** Still soliciting coins. A missing flag is treated as open. */
+function stillAcceptingFunds(p: Proposal): boolean {
+  return p.accepting_funds !== false;
 }
 
 export function isOpenToClaim(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
@@ -289,7 +297,7 @@ export function isNearFloor(p: Proposal, floor = CLAIM_FLOOR_SATS): boolean {
   if (isDirectProposal(p)) return false;
   const status = String(p.status).toLowerCase();
   if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) return false;
-  if (isCatalogVoided(p)) return false;
+  if (!stillAcceptingFunds(p) || isCatalogVoided(p)) return false;
   if (!CLAIMABLE_STATUSES.has(status)) return false;
   const bal = p.balance_sats ?? 0;
   return bal >= floor * 0.5 && bal < floor;
@@ -308,7 +316,7 @@ export function claimFloorShortfall(
     if (status === "completed" || status === "voided") continue;
     if (isDirectProposal(p)) continue;
     if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) continue;
-    if (isCatalogVoided(p)) continue;
+    if (!stillAcceptingFunds(p) || isCatalogVoided(p)) continue;
     // Shared escrow with no confirmed own funding yet: not a 0-sat row.
     if (p.escrow_shared === true && p.balance_sats == null) continue;
     const bal = Math.max(0, p.balance_sats ?? 0);

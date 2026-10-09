@@ -100,6 +100,50 @@ describe("claim floor helpers", () => {
     ).toBe(false);
   });
 
+  it("a funded bounty that stopped taking coins can still be claimed", () => {
+    const floor = 100_000;
+    const funded = proposal({
+      status: "listed",
+      balance_sats: floor,
+      accepting_funds: false,
+      structured_state: "psbt_ready",
+    });
+    expect(isOpenToClaim(funded, floor)).toBe(true);
+    expect(
+      isNearFloor(
+        proposal({
+          status: "listed",
+          balance_sats: floor / 2,
+          accepting_funds: false,
+          structured_state: "psbt_ready",
+        }),
+        floor,
+      ),
+    ).toBe(false);
+    expect(
+      claimFloorShortfall(
+        [proposal({ status: "listed", balance_sats: 1_000, accepting_funds: false })],
+        floor,
+      ).projectCount,
+    ).toBe(0);
+  });
+
+  it("voided or unreadable structure is not open to claim", () => {
+    const floor = 100_000;
+    expect(
+      isOpenToClaim(
+        proposal({ status: "listed", balance_sats: floor, structured_state: "voided" }),
+        floor,
+      ),
+    ).toBe(false);
+    expect(
+      isOpenToClaim(
+        proposal({ status: "listed", balance_sats: floor, structured_state: "unreadable" }),
+        floor,
+      ),
+    ).toBe(false);
+  });
+
   it("isNearFloor is half-to-floor exclusive of open", () => {
     const floor = 100_000;
     expect(

@@ -359,7 +359,10 @@ export function sharedEscrowPendingHtml(
   if (p.escrow_shared !== true || p.balance_sats != null) return null;
   const status = String(p.status || "");
   const fundable =
-    isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
+    isFundableStatus(status) &&
+    !isBlockedStatus(status) &&
+    p.accepting_funds !== false &&
+    !isCatalogVoided(p);
   if (!fundable) return "";
   return variant === "card"
     ? `<div class="project-card-meter">
