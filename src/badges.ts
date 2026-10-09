@@ -1,7 +1,9 @@
-/** Keep in sync with PARAMETERS.md / workers claim-params. */
-export const BADGE_NOTABLE_SATS = 21_000;
-export const BADGE_MAJOR_SATS = 100_000;
-export const BADGE_PATRON_SATS = 1_000_000;
+// Thresholds come from proposals/parameters.json (same source as workers claim-params).
+import {
+  BADGE_MAJOR_SATS,
+  BADGE_NOTABLE_SATS,
+  BADGE_PATRON_SATS,
+} from "./generated/parameters";
 
 export type ContributorBadge = "notable" | "major" | "patron";
 

@@ -315,8 +315,9 @@ describe("each Donate writer checks the project (unit)", () => {
     });
     releaseDoc();
     await vi.advanceTimersByTimeAsync(500);
-    expect(document.querySelector("#app")!.textContent).toContain("Relay fund");
-    expect(document.querySelector("#app")!.textContent).not.toContain("Signet faucet");
+    // The signet help line says "Alt Signet faucet", so the page text is not a
+    // safe place to look for X's title. The painted heading is.
+    expect(document.querySelector("#app h1")?.textContent).toBe("Relay fund");
     expectOnlyY();
   });
 });

@@ -170,7 +170,14 @@ function claimsPaneHtml(
     claim_bond_txid?: string;
   }[],
   ledger: ClaimLedgerView | null,
+  loadError: string | null = null,
 ): string {
+  if (loadError) {
+    return `<div class="empty-state" data-claims-load-error><div class="empty-state-inner">
+      <p class="empty-state-title">Couldn't load your claims</p>
+      <p class="empty-state-body">${escapeHtml(loadError)}</p>
+    </div></div>`;
+  }
   const summary = ledger?.summary;
   const summaryHtml = summary
     ? `<div class="claim-summary">
@@ -518,7 +525,11 @@ export async function renderAccount(
   const [watches, myClaims, allProps, reviewerMe, notifications, keyholderMe] =
     await Promise.all([
       fetchWatches().catch(() => []),
-      fetchMyClaims().catch(() => ({ pending: [], ledger: null })),
+      fetchMyClaims().catch((e: unknown) => ({
+        pending: [],
+        ledger: null,
+        loadError: e instanceof Error && e.message ? e.message : "Could not load your claims.",
+      })),
       needsCatalog
         ? listListedProposals().catch(() => [] as Proposal[])
         : Promise.resolve([] as Proposal[]),
@@ -545,6 +556,7 @@ export async function renderAccount(
   const cachedUnread = peekUnreadNotificationCount() ?? 0;
   const pendingClaims = myClaims.pending;
   const ledger = myClaims.ledger;
+  const claimsLoadError = "loadError" in myClaims ? myClaims.loadError : null;
   const byPath = new Map(allProps.map((p) => [p.path, p]));
   const watchRows = await Promise.all(
     watches.map(async (w) => {
@@ -657,7 +669,7 @@ export async function renderAccount(
       </div>
 
       <div class="account-pane" data-pane="claims" ${tab === "claims" ? "" : "hidden"}>
-        ${claimsPaneHtml(pendingClaims, ledger)}
+        ${claimsPaneHtml(pendingClaims, ledger, claimsLoadError)}
       </div>
 
       <div class="account-pane" data-pane="funds" ${tab === "funds" ? "" : "hidden"}>

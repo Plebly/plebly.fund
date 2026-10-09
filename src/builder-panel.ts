@@ -1,3 +1,4 @@
+import { isSharedEscrow } from "./escrow-shared";
 import {
   acceptClaimApplication,
   acceptClaimCollaboratorInvite,
@@ -17,6 +18,7 @@ import {
   requestClaimExtension,
   searchGithubUsers,
   flagProposalClose,
+  isClosedToFundsStatus,
   markProposalDone,
   submitAbandonedChallenge,
   submitCheckpoint,
@@ -72,8 +74,14 @@ import { avatarImgHtml } from "./media";
 import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
+  donateClosedNoteHtml,
+  donateClosedReason,
+  escrowClosedNoteHtml,
+} from "./donate-closed-note";
+import {
   claimStructuredState,
   isCatalogDonateBlocked,
+  escrowAddressText,
   isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
   nextActionCardHtml,
@@ -81,6 +89,7 @@ import {
   resolveNextAction,
   type NextButton,
 } from "./next-action";
+import { balanceAddressFor } from "./mempool";
 import {
   sessionIsClaimStatusFulfiller,
   sessionMatchesClaimer,
@@ -562,12 +571,29 @@ export async function bindBuilderPanel(
   const body = panel.querySelector<HTMLElement>("#builder-body");
   const msg = panel.querySelector<HTMLElement>("#builder-msg");
   const watchBtn = panel.querySelector<HTMLButtonElement>("#builder-watch");
+  // Catalog status as painted (declined, voided, refunding, unknown, …), read
+  // before the claim view merges its status into opts.proposal: no escrow row,
+  // no Donate, and the next card is built from this status, not the claim view's.
+  const catalogStatus = opts.proposal.status;
+  const closedToFunds = isClosedToFundsStatus(catalogStatus);
   const modal = panel.querySelector<HTMLElement>("#builder-claim-modal");
   const payoutInput = panel.querySelector<HTMLInputElement>("#claim-payout");
   const noteInput = panel.querySelector<HTMLInputElement>("#claim-note");
   const bondSlot = panel.querySelector<HTMLElement>("#claim-bond-slot");
   const finalize = panel.querySelector<HTMLElement>("#claim-finalize");
   const claimConfirm = panel.querySelector<HTMLButtonElement>("#claim-confirm");
+  // The page's hero updater (proposal-page onBalanceUpdate), carried over from
+  // the page's own Donate context for this proposal so the Donate watcher can
+  // still reach the hero once this panel replaces the context. Never taken
+  // from another proposal's context.
+  const pageBalanceUpdate = (() => {
+    const prev = getDonateChromeContext();
+    if (!prev) return undefined;
+    const sameProposal =
+      prev.panelOpts.proposalPath === opts.proposal.path ||
+      (Boolean(opts.proposal.id) && prev.panelOpts.proposalId === opts.proposal.id);
+    return sameProposal ? prev.panelOpts.onBalanceUpdate : undefined;
+  })();
 
   // Register Donate click context before any await so first-paint Donate works.
   let seededStatus = opts.initialStatus ?? null;
@@ -583,9 +609,10 @@ export async function bindBuilderPanel(
       proposalTitle: opts.proposal.title,
       signedIn: Boolean(opts.user),
       initialBalance: opts.balance ?? opts.proposal.balance_sats ?? null,
-      escrowShared: opts.proposal.escrow_shared === true,
+      escrowShared: isSharedEscrow(opts.proposal),
       claimFloorSats: CLAIM_FLOOR_SATS,
       targetSats: opts.proposal.target_sats,
+      onBalanceUpdate: pageBalanceUpdate,
       creditPrefs: opts.user?.funder_credit
         ? {
             public_credit: opts.user.funder_credit.public_credit !== false,
@@ -602,6 +629,7 @@ export async function bindBuilderPanel(
       claimStatusPromise,
       wantsDonateOpen: prevEarlyCtx?.wantsDonateOpen,
       wantsLnRail: prevEarlyCtx?.wantsLnRail,
+      fundsClosed: closedToFunds,
       catalogEscrowHidden,
     });
     bindDonateModal(document);
@@ -1345,9 +1373,10 @@ export async function bindBuilderPanel(
         proposalTitle: opts.proposal.title,
         signedIn: Boolean(opts.user),
         initialBalance: opts.balance ?? opts.proposal.balance_sats ?? null,
-        escrowShared: opts.proposal.escrow_shared === true,
+        escrowShared: isSharedEscrow(opts.proposal),
         claimFloorSats: CLAIM_FLOOR_SATS,
         targetSats: opts.proposal.target_sats,
+        onBalanceUpdate: pageBalanceUpdate,
         creditPrefs: opts.user?.funder_credit
           ? {
               public_credit: opts.user.funder_credit.public_credit !== false,
@@ -1367,6 +1396,7 @@ export async function bindBuilderPanel(
         // Preserve deep link flags from earlier context
         wantsDonateOpen: prevCtx?.wantsDonateOpen,
         wantsLnRail: prevCtx?.wantsLnRail,
+        fundsClosed: closedToFunds,
         catalogEscrowHidden,
       });
       // Markdown may omit escrow; claim JSON often has it. Mount Donate modal now
@@ -1447,6 +1477,8 @@ export async function bindBuilderPanel(
             claimer: mergedProposal.claimer,
             proposal_type: mergedProposal.proposal_type,
           },
+          // Non-shared row only: a shared address's total never draws a meter.
+          { recoverUnknown: balanceAddressFor(opts.proposal) != null },
         );
       }
       syncHeroClaimChip(apps);
@@ -1457,11 +1489,18 @@ export async function bindBuilderPanel(
       );
       const asFulfiller = sessionIsClaimStatusFulfiller(opts.user, status);
       void bindPayoutCard(asFulfiller);
+      // Closed catalog status (declined, refunding, unknown, …): build the next
+      // card from it, so a claim view saying listed/pooling can't bring back
+      // "still raising" or Donate. resolveNextAction keeps its own precedence
+      // (voided, settled, release-blocked first).
+      const cardProposal = closedToFunds
+        ? { ...opts.proposal, status: catalogStatus }
+        : opts.proposal;
       renderClaimStatusBody(
         body,
         status,
         opts.user,
-        opts.proposal,
+        cardProposal,
         isProposer,
         apps,
         reviewerActive,
@@ -1474,7 +1513,7 @@ export async function bindBuilderPanel(
       await syncHybridReviewUi(root, opts.proposal, status, opts.user);
       if (!donateResultIsCurrent(opts.proposal)) return;
       const next = resolveNextAction({
-        proposal: opts.proposal,
+        proposal: cardProposal,
         claim: status,
         apps,
         user: opts.user,
@@ -1488,9 +1527,11 @@ export async function bindBuilderPanel(
       const catalogBlocked = isCatalogDonateBlocked(opts.proposal);
       const claimAllowed = isClaimViewDonateAllowed(status);
       const structured = String(claimStructuredState(status) || "");
-      // catalogEscrowHidden is read from the catalog row at bind time: a voided or
-      // settled row stays blocked even after the claim view merged its status.
-      const donateAllowed = !catalogEscrowHidden && !catalogBlocked && claimAllowed;
+      // catalogEscrowHidden (#58) and closedToFunds (#74) are both read from the
+      // catalog row at bind time: a voided, settled or closed-status row stays
+      // blocked even after the claim view merged its status.
+      const donateAllowed =
+        !closedToFunds && !catalogEscrowHidden && !catalogBlocked && claimAllowed;
       const sideDonateOk =
         donateAllowed &&
         next.button !== "donate" &&
@@ -1501,7 +1542,21 @@ export async function bindBuilderPanel(
       if (!donateAllowed) {
         closeDonateModalWhenBlocked();
         const onchainEscrowRow = root.querySelector<HTMLElement>("#onchain-escrow-row");
+        // workers#51 funds-closed row with no Donate slot (e.g. refunding): say
+        // why in the address row's place instead of leaving it blank.
+        const escrowClosedReason = donateSlot
+          ? null
+          : donateClosedReason(String(opts.proposal.status || ""), status);
+        if (
+          onchainEscrowRow &&
+          escrowClosedReason &&
+          !root.querySelector("#onchain-escrow-closed-note")
+        ) {
+          onchainEscrowRow.insertAdjacentHTML("beforebegin", escrowClosedNoteHtml(escrowClosedReason));
+        }
         if (onchainEscrowRow) onchainEscrowRow.remove();
+      } else {
+        root.querySelector("#onchain-escrow-closed-note")?.remove();
       }
 
       if (donateSlot) {
@@ -1511,8 +1566,10 @@ export async function bindBuilderPanel(
         if (errorEl) errorEl.remove();
 
         if (!donateAllowed) {
-          donateSlot.hidden = true;
-          donateSlot.innerHTML = "";
+          // workers#51 funds-closed row: short reason note, not a blank slot.
+          const closedReason = donateClosedReason(String(opts.proposal.status || ""), status);
+          donateSlot.hidden = !closedReason;
+          donateSlot.innerHTML = closedReason ? donateClosedNoteHtml(closedReason) : "";
         } else if (next.button === "donate") {
           donateSlot.hidden = true;
           donateSlot.innerHTML = "";
@@ -1548,13 +1605,11 @@ export async function bindBuilderPanel(
         }
       }
 
-      if (
-        onchainPanel &&
-        donateAllowed &&
-        opts.proposal.escrow_address
-      ) {
+      // Re-insert the row only for a real string address on this network.
+      const rowAddr = escrowAddressText(opts.proposal.escrow_address);
+      if (onchainPanel && donateAllowed && rowAddr && escrowAddressMatchesNetwork(rowAddr)) {
         if (!onchainPanel.querySelector("#onchain-escrow-row")) {
-          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(opts.proposal.escrow_address));
+          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(rowAddr));
         }
       }
       body.querySelector("#next-rebuttal")?.addEventListener("click", () => {

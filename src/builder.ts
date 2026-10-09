@@ -4,8 +4,9 @@ import {
   CLAIM_FLOOR_SATS,
   SUBMISSION_FEE_SATS,
   WORKERS_API,
+  isFundableStatus,
 } from "./config";
-import type { Proposal } from "./types";
+import { isKnownProposalStatus, type Proposal } from "./types";
 import { claimsProposalPath } from "./util";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
@@ -93,6 +94,8 @@ export type ClaimStatus = {
   accepting_funds?: boolean | null;
   /** True when bounty is settled (paid) — hide Donate/Apply but keep claimant's mark-done/flag (workers#41). */
   bounty_settled?: boolean | null;
+  /** Claim-level open-claimability (workers#44); false without bounty_settled blocks every action. */
+  accepting_claims?: boolean | null;
   escrow_address?: string | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
@@ -236,6 +239,23 @@ export function isTakenStatus(status: string): boolean {
 /** True when status is voided or otherwise blocked from funding/claiming. */
 export function isBlockedStatus(status: string): boolean {
   return BLOCKED_STATUSES.has(String(status || "").toLowerCase());
+}
+
+/**
+ * Closed to funds: the detail page shows no escrow address, no funding meter
+ * and no Donate. True for blocked, non-fundable statuses (declined, voided,
+ * underfunded, refunding, redirected, redirect_pending, bounty_settled) and,
+ * failing closed, for anything that is not an exact known status: unknown
+ * (`weird_status`), empty, or malformed (`" declined"`, `"Listed"`).
+ * declined_fundable is blocked but still fundable, so it is not closed.
+ * This is about the status string only; a row missing from the catalog keeps
+ * its git status and is decided by the claim view.
+ */
+export function isClosedToFundsStatus(status: string | null | undefined): boolean {
+  const raw = String(status ?? "");
+  const s = raw.trim().toLowerCase();
+  if (raw !== s || !isKnownProposalStatus(s)) return true;
+  return isBlockedStatus(s) && !isFundableStatus(s);
 }
 
 export function isDirectProposal(p: Proposal): boolean {
@@ -602,6 +622,8 @@ export async function fetchClaimParams(): Promise<ClaimParams> {
   return (await res.json()) as ClaimParams;
 }
 
+export const MY_CLAIMS_SIGNED_OUT = "Your session expired — sign in again to see your claims.";
+
 export async function fetchMyClaims(): Promise<{
   pending: {
     user_id: string;
@@ -619,6 +641,8 @@ export async function fetchMyClaims(): Promise<{
     headers: authHeaders(),
     credentials: "include",
   });
+  // Signed out is not "no claims": callers must not paint an empty claims list.
+  if (res.status === 401) throw new Error(MY_CLAIMS_SIGNED_OUT);
   if (!res.ok) return { pending: [], ledger: null };
   const data = (await res.json()) as {
     pending?: {

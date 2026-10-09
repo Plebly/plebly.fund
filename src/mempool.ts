@@ -1,16 +1,24 @@
+import { isSharedEscrow, type EscrowRow } from "./escrow-shared";
 import { MEMPOOL_API } from "./config";
 
 /**
  * Address to read a live chain balance from for this proposal, or null.
- * Never the address of a row the catalog marks `escrow_shared` (workers#50):
+ * Never the address of a shared row (`isSharedEscrow`: a null flag, a
+ * `true` flag, or several catalog rows on one address all count as shared):
  * that address holds several proposals' coins, so its balance is not this
- * proposal's. Those rows use the catalog's per-proposal balance_sats (null → 0).
+ * proposal's. Those rows use only the catalog's per-proposal balance_sats; null
+ * means no confirmed own funding yet and renders as "Awaiting confirmation"
+ * (fundable) or no meter (terminal) — never as 0 sats.
  */
 export function balanceAddressFor(
   p: { escrow_address?: string | null; escrow_shared?: boolean | null } | null | undefined,
+  catalog: ReadonlyArray<EscrowRow> = [],
 ): string | null {
-  if (!p || p.escrow_shared === true) return null;
-  const address = (p.escrow_address || "").trim();
+  // One shared-address rule (fails toward shared: a null flag is shared).
+  // A non-string address is bad data: no read, and no throw.
+  if (!p || isSharedEscrow(p, catalog)) return null;
+  if (typeof p.escrow_address !== "string") return null;
+  const address = p.escrow_address.trim();
   return address || null;
 }
 
@@ -105,5 +113,8 @@ export async function addressUtxos(address: string): Promise<AddressUtxo[]> {
   const res = await fetch(`${MEMPOOL_API}/address/${encodeURIComponent(address)}/utxo`);
   if (!res.ok) throw new Error(`mempool utxo ${res.status}`);
   const data = (await res.json()) as AddressUtxo[];
-  return Array.isArray(data) ? data : [];
+  // A 200 that isn't a list is an unreadable address, not an empty one: an
+  // empty baseline would turn every existing UTXO into "new" on the next read.
+  if (!Array.isArray(data)) throw new Error("mempool utxo: not a list");
+  return data;
 }

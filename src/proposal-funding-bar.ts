@@ -1,6 +1,14 @@
-import { isDirectProposal, isOpenToClaim, isTakenStatus } from "./builder";
+import {
+  isBlockedStatus,
+  isCatalogVoided,
+  isDirectProposal,
+  isOpenToClaim,
+  isTakenStatus,
+} from "./builder";
+import { isFundableStatus } from "./config";
 import type { Proposal, ProposalMilestone } from "./types";
 import { escapeHtml, formatSats } from "./util";
+import { isClosedToFundsStatus } from "./builder";
 
 /**
  * Compact meter for cards/lists.
@@ -187,14 +195,31 @@ function fundingClosedLabel(status: string): string {
   return "Applications closed";
 }
 
+/**
+ * True only for a real balance. `null` / `undefined` / NaN mean unknown: a
+ * shared row with `balance_sats: null`, a row missing from the catalog
+ * (treated as shared), or a mempool read that failed or timed out. 0 is a
+ * real balance and still draws the meter.
+ */
+export function isKnownBalance(balance: number | null | undefined): balance is number {
+  return typeof balance === "number" && Number.isFinite(balance);
+}
+
+/** Shown in place of the meter when the balance is unknown. Never a 0 meter. */
+export function balanceUnavailableHtml(): string {
+  return `<p class="funding-balance-unknown muted">Balance temporarily unavailable.</p>`;
+}
+
 export function fundingProgressHtml(
-  balance: number | undefined,
+  balance: number | null | undefined,
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
 ): string {
-  const funded = balance ?? 0;
+  // Unknown balance: no meter, no "0 raised", no "… to open" (BeTheChange777).
+  if (!isKnownBalance(balance)) return balanceUnavailableHtml();
+  const funded = balance;
   const { scale, markers } = fundingBarScale(floor, target, milestones);
   const pastFloor = funded >= floor;
   const eligibility = {
@@ -252,18 +277,38 @@ export function fundingProgressHtml(
 
 /** Slim funding strip under the hero: progress only, no duplicate stat cards. */
 export function proposalFundingBarHtml(
-  balance: number | undefined,
+  balance: number | null | undefined,
   floor: number,
   target: number | null,
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
 ): string {
+  // Declined, voided, refunding, unknown, …: no hero meter ("… to open" /
+  // "Applications closed"). Callers without a status context keep the meter.
+  if ("status" in ctx && isClosedToFundsStatus(ctx.status)) return "";
+  // Unknown balance: no .proposal-funding-bar at all, so nothing later
+  // (ballot chrome, claim-view confirmed balance) can paint a meter into it.
+  // Only updateProposalFundingBar with `recoverUnknown` (a non-shared row's
+  // own good read) may swap this placeholder for the meter.
+  if (!isKnownBalance(balance)) {
+    return `<div class="proposal-funding-unknown">${balanceUnavailableHtml()}</div>`;
+  }
   return `<div class="proposal-funding-bar" data-milestones="${milestones.length}">
     ${fundingProgressHtml(balance, floor, target, milestones, ctx)}
   </div>`;
 }
 
-/** Replace the live funding bar when confirmed balance changes. */
+/**
+ * Replace the live funding bar when confirmed balance changes.
+ *
+ * When first paint had no balance (hero shows "Balance temporarily
+ * unavailable." and no bar), a later good read only draws the meter if the
+ * caller passes `recoverUnknown: true`, which callers do only for a non-shared
+ * row reading its own address (`balanceAddressFor` non-null). Shared,
+ * escrow_shared, missing-row and ambiguous rows never get a meter this way.
+ * The meter is the first-paint markup (proposalFundingBarHtml); this path
+ * writes no "added" text.
+ */
 export function updateProposalFundingBar(
   root: ParentNode,
   balance: number,
@@ -271,9 +316,21 @@ export function updateProposalFundingBar(
   target: number | null,
   milestones: ProposalMilestone[] = [],
   ctx: FundingProgressContext = {},
+  opts: { recoverUnknown?: boolean } = {},
 ): void {
+  if (!isKnownBalance(balance)) return;
   const host = root.querySelector(".proposal-funding-bar");
-  if (!host) return;
+  if (!host) {
+    if (!opts.recoverUnknown) return;
+    const unknown = root.querySelector(".proposal-funding-unknown");
+    if (unknown) {
+      unknown.outerHTML = proposalFundingBarHtml(balance, floor, target, milestones, ctx);
+    }
+    return;
+  }
+  // A shared row's "Awaiting confirmation" block (#62, data-shared-pending) is
+  // not a meter and never becomes one from a balance update.
+  if (host.hasAttribute("data-shared-pending")) return;
   const prevUnlocked = new Set(
     [...host.querySelectorAll(".funding-marker.is-unlocked")].map(
       (el) => (el as HTMLElement).style.left,
@@ -286,4 +343,35 @@ export function updateProposalFundingBar(
       el.classList.add("funding-marker-pulse");
     }
   }
+}
+
+/**
+ * escrow_shared row (workers#50) with no confirmed own funding yet
+ * (balance_sats null): still fundable → "Awaiting confirmation" with no sats
+ * line and no bar; terminal (voided, settled, declined, completed,
+ * catalog-blocked) → "" (no meter). Null for every other row, which keeps the
+ * normal meter. Shared by the home card and the proposal detail page.
+ */
+export function sharedEscrowPendingHtml(
+  p: Proposal,
+  variant: "card" | "detail",
+): string | null {
+  if (p.escrow_shared !== true || p.balance_sats != null) return null;
+  const status = String(p.status || "");
+  const fundable =
+    isFundableStatus(status) && !isBlockedStatus(status) && !isCatalogVoided(p);
+  if (!fundable) return "";
+  return variant === "card"
+    ? `<div class="project-card-meter">
+    <div class="project-card-meter-top">
+      <span class="muted">Awaiting confirmation</span>
+    </div>
+  </div>`
+    : `<div class="proposal-funding-bar" data-shared-pending="1">
+    <div class="funding-meter">
+      <div class="funding-meter-top">
+        <span class="funding-meter-label muted">Awaiting confirmation</span>
+      </div>
+    </div>
+  </div>`;
 }

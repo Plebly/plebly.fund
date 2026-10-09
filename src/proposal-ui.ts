@@ -1,3 +1,11 @@
+import {
+  escrowAddressChunksHtml,
+  escrowAddressCopiedHtml,
+  escrowAddressSignetNoteHtml,
+  renderEscrowAddressInto,
+  showEscrowAddressCopied,
+  showEscrowAddressCopyFailed,
+} from "./escrow-address-display";
 import QRCode from "qrcode";
 import {
   authFetch,
@@ -15,6 +23,7 @@ import {
 } from "./gift-link";
 import {
   fetchClaimStatus,
+  isClosedToFundsStatus,
   isDirectProposal,
   isOpenToClaim,
   isTakenStatus,
@@ -23,6 +32,7 @@ import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
   claimContributionWithRetry,
+  claimFailureIsRetryable,
   creditPreferenceFieldsHtml,
   hasStoredCreditPreferences,
   loadStoredCreditPreferences,
@@ -61,13 +71,15 @@ import {
 } from "./lightning";
 import { balanceAddressFor, watchConfirmedBalance } from "./mempool";
 import { depKindLabel, pleblyDepHref } from "./propose-deps";
+import { isSharedEscrow } from "./escrow-shared";
+import { loadedCatalogRows } from "./github";
 import { href, proposalHref, SITE_ORIGIN } from "./router";
 import type { Proposal, ProposalMilestone } from "./types";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { isFreshLinkedOrgAdmin } from "./github-orgs-client";
 import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
-import { isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
+import { escrowAddressText, isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
 import type { ClaimViewForDonate } from "./next-action";
 import type { GithubOrgAttestation } from "./types";
 import {
@@ -120,6 +132,29 @@ export type DonateBindOpts = {
 };
 
 /** Hard-label beside Donate/escrow address — mirrors claim-bond feePay contrast. */
+/**
+ * Signed-out Donate line above the escrow address, before they send.
+ * Shared address (isSharedEscrow: fails toward shared): rows there can't take
+ * a session refund route, so the line doesn't promise one.
+ */
+export const DONATE_SIGNED_OUT_UNIQUE_COPY =
+  "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
+export const DONATE_SIGNED_OUT_SHARED_COPY =
+  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
+
+/** Signed-out donors only; signed-in donors see nothing here. */
+export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean }): string | null {
+  if (o.signedIn) return null;
+  return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
+}
+
+function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
+  const copy = donateRefundRouteCopy(o);
+  if (!copy) return "";
+  // Plain text: no link (the signed-refund form isn't reachable signed out).
+  return `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${escapeHtml(copy)}</p>`;
+}
+
 function donateEscrowHardLabelHtml(): string {
   const net = networkLabel();
   return `<p class="fee-pay-bond-label" id="donate-escrow-label">DONATE / ESCROW ADDRESS</p>
@@ -164,7 +199,7 @@ function donatePayStepHtml(
   onchainPresets: string,
   lnPresets: string,
   signedIn: boolean,
-  opts?: { endowment?: boolean },
+  opts?: { endowment?: boolean; shared?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
   const head = `<div class="donate-panel-head">
@@ -219,16 +254,22 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
+          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${donateEscrowHardLabelHtml()}
-          <code class="donate-address mono" id="donate-address" title="${escapeHtml(addr)}">${escapeHtml(addr)}</code>
+          <div class="donate-address-block" data-escrow-address-block>
+          <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
+          ${escrowAddressSignetNoteHtml()}
           <div class="donate-actions">
             <button type="button" class="btn donate-copy" id="donate-copy" data-copy="${escapeHtml(addr)}">Copy address</button>
             <a class="btn ghost donate-wallet" id="donate-wallet" href="${escapeHtml(bitcoinUri(addr))}">Open wallet</a>
+          </div>
+          ${escrowAddressCopiedHtml()}
           </div>
           <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
         </div>
       </div>
       <p class="donate-watch-hint muted" id="donate-watch-hint">Payment is detected automatically.</p>
+      <p class="donate-watch-unavailable" id="donate-watch-unavailable" role="status" hidden>${DONATE_WATCH_UNAVAILABLE_COPY}</p>
       <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
 
@@ -323,6 +364,11 @@ export {
 } from "./proposal-status-ui";
 
 import { fundingBarTrackHtml } from "./proposal-funding-bar";
+import { refundSignHtml } from "./refund-sign";
+
+/** Shown while the first UTXO read has failed: no credit promise, by design. */
+export const DONATE_WATCH_UNAVAILABLE_COPY =
+  "Can't check deposits right now. If you've already sent, the escrow balance will update once it confirms, but this page can't link it to your account.";
 
 export {
   fundingBarScale,
@@ -572,7 +618,9 @@ export function donatePanelHtml(
 
   return `<div class="donate-panel" id="donate" data-donate-step="credit">
     ${donateCreditStepHtml(signedIn)}
-    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn)}
+    ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn, {
+      shared: isSharedEscrow(p, loadedCatalogRows()),
+    })}
   </div>`;
 }
 
@@ -699,6 +747,7 @@ async function bindOnchainDonate(
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
+      showEscrowAddressCopied(copyBtnEl);
       const prev = copyBtnEl.textContent;
       copyBtnEl.textContent = "Copied";
       copyBtnEl.classList.add("copied");
@@ -707,7 +756,7 @@ async function bindOnchainDonate(
         copyBtnEl.classList.remove("copied");
       }, 1400);
     } catch {
-      /* ignore */
+      showEscrowAddressCopyFailed(copyBtnEl);
     }
   });
 }
@@ -760,13 +809,13 @@ function setLightningReady(panel: Element): void {
 function setDonateStatusEl(
   el: HTMLElement | null,
   message: string | null,
-  kind?: "ok" | "bad" | "live",
+  kind?: "ok" | "bad" | "live" | "warn",
 ): void {
   if (!el) return;
   if (!message) {
     el.hidden = true;
     el.textContent = "";
-    el.classList.remove("ok", "bad", "live");
+    el.classList.remove("ok", "bad", "live", "warn");
     return;
   }
   el.hidden = false;
@@ -774,9 +823,10 @@ function setDonateStatusEl(
   el.classList.toggle("ok", kind === "ok");
   el.classList.toggle("bad", kind === "bad");
   el.classList.toggle("live", kind === "live");
+  el.classList.toggle("warn", kind === "warn");
 }
 
-function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live"): void {
+function setDonateCreditStatus(panel: Element, message: string | null, kind?: "ok" | "bad" | "live" | "warn"): void {
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-credit-status"), message, kind);
 }
 
@@ -898,6 +948,25 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     if (!panel.isConnected) return false;
     const modal = panel.closest<HTMLElement>("#donate-modal");
     return !modal || !modal.hidden;
+  };
+
+  let hintHiddenForOutage = false;
+  let watchUnavailable = false;
+  const setWatchUnavailable = (unavailable: boolean) => {
+    watchUnavailable = unavailable;
+    const line = panel.querySelector<HTMLElement>("#donate-watch-unavailable");
+    if (line) line.hidden = !unavailable;
+    const hint = panel.querySelector<HTMLElement>("#donate-watch-hint");
+    if (unavailable) {
+      // "Detected automatically" is not true while the read is failing.
+      if (hint && !hint.hidden) {
+        hint.hidden = true;
+        hintHiddenForOutage = true;
+      }
+    } else if (hintHiddenForOutage) {
+      hintHiddenForOutage = false;
+      if (hint) hint.hidden = false;
+    }
   };
 
   const linkOutpoint = async (utxo: {
@@ -1071,6 +1140,12 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       showAnonymousReceipt(utxos[0]!);
       return;
     }
+    // Don't offer manual linking on shared addresses.
+    if (opts.escrowShared !== false) {
+      claimWrap.hidden = true;
+      claimWrap.innerHTML = "";
+      return;
+    }
     claimWrap.hidden = false;
     claimWrap.innerHTML = `<p class="donate-credit-seen">Couldn’t auto-link — pick your payment:</p>
       <ul class="donate-credit-utxos">${utxos
@@ -1155,7 +1230,10 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
         }
         showAnonymousReceipt(pick);
       },
-      { intervalMs: opts.utxoPollMs ?? 8000 },
+      {
+        intervalMs: opts.utxoPollMs ?? 8000,
+        onBaselineState: (state) => setWatchUnavailable(state === "unavailable"),
+      },
     );
     utxoStop = watcher.stop;
   };
@@ -1198,7 +1276,14 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
     setDonateStep(panel, "pay");
     setDonateCreditStatus(panel, null);
     setDonateConfirmStatus(panel, null);
-    setWatchHintVisible(true);
+    // Edit -> Continue during an outage: the can't-check line is still up, so
+    // "detected automatically" stays hidden until a good read.
+    if (watchUnavailable) {
+      setWatchHintVisible(false);
+      hintHiddenForOutage = true;
+    } else {
+      setWatchHintVisible(true);
+    }
     if (claimWrap) {
       claimWrap.hidden = true;
       claimWrap.innerHTML = "";
@@ -1253,12 +1338,39 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
   });
 }
 
-async function linkLightningCredit(
+/**
+ * Lightning settled but the credit isn't linked yet: 5xx (incl. workers#90's 503 for a swap not
+ * indexed yet, claim busy, swap lookup failed) or no response. Retry is offered.
+ */
+export const LIGHTNING_LINK_FAILED_COPY =
+  "Your Lightning payment went through. Your funder credit isn't showing yet. Try again in a few minutes.";
+
+/** Lightning settled but the server refused the link (4xx, or a 2xx without ok): no Retry. */
+export const LIGHTNING_LINK_REFUSED_COPY =
+  "Your Lightning payment went through, but we couldn't link it to your account.";
+
+function setLightningRetry(panel: Element, onRetry: (() => void) | null): void {
+  panel.querySelector("#donate-ln-credit-retry")?.remove();
+  if (!onRetry) return;
+  const status = panel.querySelector<HTMLElement>("#donate-credit-status");
+  if (!status) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "donate-ln-credit-retry";
+  btn.className = "btn ghost";
+  btn.textContent = "Retry";
+  btn.addEventListener("click", onRetry, { once: true });
+  status.insertAdjacentElement("afterend", btn);
+}
+
+/** Exported for tests. */
+export async function linkLightningCredit(
   panel: Element,
   opts: DonateBindOpts,
   swapId: string,
 ): Promise<void> {
   if (!opts.signedIn || !opts.proposalId) return;
+  setLightningRetry(panel, null);
   setDonateCreditStatus(panel, "Linking Lightning funder credit…", "live");
   try {
     await claimContributionWithRetry({
@@ -1269,11 +1381,15 @@ async function linkLightningCredit(
     setDonateCreditStatus(panel, "Lightning credit linked.", "ok");
     opts.onCreditLinked?.();
   } catch (e) {
-    setDonateCreditStatus(
-      panel,
-      `${(e as Error).message} Try again after the swap indexes.`,
-      "bad",
-    );
+    // Never show server text here. The payment already settled, so this is a
+    // warning, not an error (no red). Only "try later" failures (5xx, no
+    // response) offer Retry; a refusal (4xx) won't change by retrying.
+    if (claimFailureIsRetryable(e)) {
+      setDonateCreditStatus(panel, LIGHTNING_LINK_FAILED_COPY, "warn");
+      setLightningRetry(panel, () => void linkLightningCredit(panel, opts, swapId));
+    } else {
+      setDonateCreditStatus(panel, LIGHTNING_LINK_REFUSED_COPY, "warn");
+    }
   }
 }
 
@@ -1697,6 +1813,12 @@ export type DonateChromeContext = {
   /** True when ?rail=lightning query param was present. */
   wantsLnRail?: boolean;
   /**
+   * Catalog status (read before the claim view merged in) is closed to funds
+   * (plebly.fund#74): never mount or open the Donate modal, whatever the
+   * claim view says.
+   */
+  fundsClosed?: boolean;
+  /**
    * isCatalogEscrowHidden(catalog row) read at page load. When true, Donate never
    * opens or mounts, whatever the claim view later says.
    */
@@ -1839,10 +1961,7 @@ export function syncDonateModalEscrow(
   const root =
     scope instanceof Document || scope instanceof Element ? scope : document;
   const code = root.querySelector<HTMLElement>("#donate-address");
-  if (code) {
-    code.textContent = addr;
-    code.setAttribute("title", addr);
-  }
+  if (code) renderEscrowAddressInto(code, addr);
   const copy = root.querySelector<HTMLElement>("#donate-copy");
   if (copy) copy.setAttribute("data-copy", addr);
   setDonateAddressTargetsHidden(root, false);
@@ -2241,6 +2360,11 @@ export async function ensureDonateModalMounted(
   let ctx = donateChromeContext;
   const locKeys = proposalKeysFromLocation();
 
+  if (ctx?.fundsClosed) {
+    closeDonateModalWhenBlocked();
+    return null;
+  }
+
   const applyClaimEscrow = (
     target: DonateChromeContext,
     status: {
@@ -2553,6 +2677,12 @@ export async function mountDonateChromeWhenEscrowKnown(
   // Started for a project that is no longer on screen: touch nothing.
   if (!donateResultIsCurrent(proposal)) return false;
 
+  // Catalog status closed to funds (plebly.fund#74): never mount.
+  if (donateChromeContext?.fundsClosed) {
+    closeDonateModalWhenBlocked();
+    return false;
+  }
+
   // Catalog-level blocking — also close any open modal
   if (isCatalogDonateBlocked(proposal)) {
     closeDonateModalWhenBlocked();
@@ -2581,6 +2711,7 @@ export async function mountDonateChromeWhenEscrowKnown(
     claimStatusPromise: donateChromeContext?.claimStatusPromise,
     wantsDonateOpen: donateChromeContext?.wantsDonateOpen,
     wantsLnRail: donateChromeContext?.wantsLnRail,
+    fundsClosed: donateChromeContext?.fundsClosed,
   });
 
   let existing = findDonateModal(root);
@@ -2634,15 +2765,20 @@ export async function mountDonateChromeWhenEscrowKnown(
 
 /** Escrow address row for on-chain panel (injected after claim view confirms). */
 export function onChainEscrowRowHtml(escrowAddress: string): string {
-  if (!escrowAddress) return "";
-  return `<div class="onchain-row" id="onchain-escrow-row">
+  const addr = String(escrowAddress || "").trim();
+  if (!addr) return "";
+  // Chunked for reading (CSS margin only, no inserted characters); Copy uses
+  // the exact address. Only rendered where the address row already was.
+  return `<div class="onchain-row" id="onchain-escrow-row" data-escrow-address-block>
     <span class="onchain-label">Escrow address</span>
     <div class="onchain-value">
-      <code class="mono">${escapeHtml(escrowAddress)}</code>
+      <code class="mono escrow-addr" id="onchain-escrow-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
       <span class="onchain-actions">
-        ${explorerLink(`${MEMPOOL_WEB}/address/${encodeURIComponent(escrowAddress)}`, "Explorer")}
-        ${copyBtn(escrowAddress, "address")}
+        ${explorerLink(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`, "Explorer")}
+        <button type="button" class="copy-btn" data-escrow-copy="${escapeHtml(addr)}" title="Copy address">Copy</button>
       </span>
+      ${escrowAddressSignetNoteHtml()}
+      ${escrowAddressCopiedHtml()}
     </div>
   </div>`;
 }
@@ -2653,8 +2789,16 @@ export function onChainPanelHtml(
 ): string {
   const rows: string[] = [];
 
-  if (p.escrow_address && !opts?.hideEscrow) {
-    rows.push(onChainEscrowRowHtml(p.escrow_address));
+  // Declined, voided, refunding, …: never show the escrow address.
+  // A non-string or wrong-network address (bc1… on signet) never paints either.
+  const escrowText = escrowAddressText(p.escrow_address);
+  if (
+    escrowText &&
+    escrowAddressMatchesNetwork(escrowText) &&
+    !opts?.hideEscrow &&
+    !isClosedToFundsStatus(p.status)
+  ) {
+    rows.push(onChainEscrowRowHtml(escrowText));
   }
 
   if (p.submission_fee_txid) {
@@ -2726,7 +2870,7 @@ export function metaChipsHtml(p: Proposal): string {
   return `<div class="proposal-meta-line">${bits.join('<span class="proposal-meta-sep" aria-hidden="true">·</span>')}</div>`;
 }
 
-export function refundRegisterHtml(proposalId: string | null): string {
+export function refundRegisterHtml(proposalId: string | null, signedIn = false): string {
   if (!proposalId) return "";
   return `<div class="refund-panel" id="refund-panel">
     <h3 class="milestones-title">Register refund</h3>
@@ -2757,7 +2901,8 @@ export function refundRegisterHtml(proposalId: string | null): string {
       <button type="button" class="btn" id="refund-submit">Register</button>
     </div>
     <p class="muted" id="refund-msg" hidden></p>
-  </div>`;
+  </div>
+  ${refundSignHtml(signedIn)}`;
 }
 
 export function ballotPanelHtml(proposalId: string | null): string {
