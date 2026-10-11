@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applicationsPanelHtml,
   builderPanelHtml,
@@ -1284,6 +1284,77 @@ describe("bindBuilderPanel donate modal after claim escrow", () => {
         expect(!modal || modal.hidden).toBe(true);
       },
       { timeout: 500 },
+    );
+  });
+});
+
+describe("bindBuilderPanel Apply stays when funds are closed", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.doUnmock("./builder");
+    vi.doUnmock("./reviewers");
+    document.body.innerHTML = "";
+  });
+
+  it("keeps the Apply button on a claimable bounty that stopped taking coins", async () => {
+    vi.resetModules();
+    vi.doMock("./builder", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./builder")>();
+      return {
+        ...actual,
+        fetchClaimStatus: vi.fn(async () => ({
+          proposal_id: "demo",
+          proposal_path: "proposals/listed/demo.md",
+          state: "open" as const,
+          status: "claimable",
+          confirmed_balance_sats: 200_000,
+          claim_floor_sats: 10_000,
+          accepting_funds: false,
+          accepting_claims: true,
+          escrow_address: "tb1qtest",
+          psbt: { structured_state: "psbt_ready" },
+        })),
+        fetchClaimApplications: vi.fn(async () => null),
+        fetchClaimParams: vi.fn(async () => ({
+          claim_bond_sats: 10_000,
+          max_active_claims: 1,
+          reclaim_cooldown_days: 30,
+          checkpoint_day: 45,
+          checkpoint_grace_days: 7,
+          fee_address: null,
+        })),
+        fetchPayoutStatus: vi.fn(async () => null),
+      };
+    });
+    vi.doMock("./reviewers", () => ({
+      fetchReviewerMe: vi.fn(async () => null),
+    }));
+
+    const { bindBuilderPanel, builderPanelHtml } = await import("./builder-panel");
+    const p = proposal({
+      status: "claimable",
+      accepting_funds: false,
+      structured_state: "psbt_ready",
+      balance_sats: 200_000,
+      proposer: { id: "github:1", github: "alice", username: "alice" },
+    });
+    const user = { id: "github:2", username: "bob", github: "bob" } as never;
+    document.body.innerHTML = `<div id="app"><article class="proposal-page">${builderPanelHtml(p, 200_000, false, user)}</article></div>`;
+    (await import("./proposal-ui")).beginDonateProject(p.path);
+    await bindBuilderPanel(document, {
+      proposal: p,
+      balance: 200_000,
+      user,
+      watching: false,
+    });
+
+    const apply = document.querySelector<HTMLButtonElement>("#builder-claim");
+    expect(apply).toBeTruthy();
+    expect(apply?.hidden).toBe(false);
+    expect(apply?.textContent).toMatch(/Apply with bond/);
+    expect(document.querySelector("[data-open-donate]")).toBeNull();
+    expect(document.querySelector("#next-card-sentence")?.textContent).toBe(
+      "Apply with a bond.",
     );
   });
 });

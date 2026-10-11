@@ -84,6 +84,7 @@ import {
   escrowAddressText,
   isCatalogEscrowHidden,
   isClaimViewDonateAllowed,
+  isStructuredTerminalOrUnknown,
   nextActionCardHtml,
   nextActionMoreHtml,
   resolveNextAction,
@@ -1634,7 +1635,16 @@ export async function bindBuilderPanel(
       void hydrateAvatarSlots(body);
       const claimBtn = body.querySelector<HTMLButtonElement>("#builder-claim");
       if (claimBtn) {
-        if (apps?.mine_application_id || catalogBlocked || !claimAllowed) {
+        // Donate gates (accepting_funds:false) must not hide Apply. A funded
+        // bounty that stopped taking coins can still be claimed. Hide only
+        // when this person already applied, claims are closed, or the
+        // structure itself is voided / unreadable / unknown.
+        const structureDead =
+          isStructuredTerminalOrUnknown(opts.proposal.structured_state ?? null) ||
+          isStructuredTerminalOrUnknown(status.psbt?.structured_state ?? null);
+        const claimsClosed =
+          status.accepting_claims === false && status.bounty_settled !== true;
+        if (apps?.mine_application_id || structureDead || claimsClosed) {
           claimBtn.hidden = true;
         }
       }
