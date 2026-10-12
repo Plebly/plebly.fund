@@ -183,6 +183,76 @@ describe("fail closed for Workers without accepting_claims (pre-#44)", () => {
     expect(resolveNextAction(input)).toMatchObject({ sentence: BLOCKED, button: null });
   });
 
+  it("claimable bounty that stopped taking coins still offers Apply", () => {
+    // Catalog accepting_funds:false hides Donate. It is not a voided structure.
+    // A funded claimable bounty must keep Apply (plebly.fund: Keep Apply open).
+    const input: NextActionInput = {
+      proposal: proposal({
+        status: "claimable",
+        accepting_funds: false,
+        structured_state: "psbt_ready",
+        balance_sats: 200_000,
+      }),
+      claim: claim({
+        state: "open",
+        status: "claimable",
+        accepting_funds: false,
+        accepting_claims: true,
+        confirmed_balance_sats: 200_000,
+        psbt: { structured_state: "psbt_ready" },
+      }),
+      user: builderUser,
+    };
+    const action = resolveNextAction(input);
+    expect(action.sentence).toBe("Apply with a bond.");
+    expect(action.button).toBe("apply");
+    expect(action.sentence).not.toBe(BLOCKED);
+  });
+
+  it("claimed row with catalog accepting_funds:false keeps Submit work", () => {
+    const input: NextActionInput = {
+      proposal: proposal({
+        status: "claimed",
+        claimer: "bob",
+        accepting_funds: false,
+        structured_state: "psbt_ready",
+      }),
+      claim: claim({
+        state: "claimed",
+        claimer: "bob",
+        accepting_funds: false,
+        accepting_claims: true,
+        psbt: { structured_state: "psbt_ready" },
+      }),
+      user: builderUser,
+    };
+    const action = resolveNextAction(input);
+    expect(action.button).toBe("deliverable");
+    expect(action.sentence).toContain("Submit the work when it is done.");
+    expect(action.sentence).not.toBe(BLOCKED);
+  });
+
+  it("catalog accepting_funds:false hides Donate without calling the structure dead", () => {
+    const input: NextActionInput = {
+      proposal: proposal({
+        status: "listed",
+        accepting_funds: false,
+        structured_state: "psbt_ready",
+      }),
+      claim: claim({
+        state: "below_floor",
+        accepting_funds: true,
+        accepting_claims: true,
+        psbt: { structured_state: "psbt_ready" },
+      }),
+      user: donorUser,
+    };
+    const action = resolveNextAction(input);
+    expect(action.sentence).not.toBe(BLOCKED);
+    expect(action.button).not.toBe("donate");
+    expect(action.detail || "").not.toMatch(/donations are open/i);
+  });
+
   it("isClaimViewBlocked with no status fails closed on accepting_funds:false", () => {
     expect(isClaimViewBlocked({ state: "claimed", accepting_funds: false })).toBe(true);
     expect(isClaimViewBlocked({ state: "claimed", accepting_funds: false }, "claimed")).toBe(false);

@@ -408,10 +408,19 @@ function roles(input: NextActionInput): {
  */
 export function resolveNextAction(input: NextActionInput): NextAction {
   const action = resolveNextActionInner(input);
-  if (action.button === "donate" && input.claim?.accepting_funds === false) {
-    return { ...action, button: null };
-  }
-  return action;
+  // Catalog or claim view: accepting_funds false hides Donate only.
+  const fundsClosed =
+    input.claim?.accepting_funds === false ||
+    input.proposal.accepting_funds === false;
+  if (action.button !== "donate" || !fundsClosed) return action;
+  const sentence = /donate/i.test(action.sentence)
+    ? NOT_ACCEPTING_FUNDS
+    : action.sentence;
+  const detail =
+    action.detail && /donations are open/i.test(action.detail)
+      ? NOT_ACCEPTING_FUNDS
+      : action.detail;
+  return { ...action, button: null, sentence, detail };
 }
 
 function resolveNextActionInner(input: NextActionInput): NextAction {
@@ -449,8 +458,12 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     return { sentence: "Bounty paid.", button: null, moreIds };
   }
 
-  // Check catalog-level blocking (structured_state voided/unknown, accepting_funds:false)
-  const catalogBlocked = isCatalogDonateBlocked(p);
+  // Voided / unreadable / unknown structure blocks every action.
+  // accepting_funds:false does not: it only hides Donate (see resolveNextAction).
+  // A funded bounty that stopped taking coins can still be claimed.
+  const catalogStructureBlocked = isStructuredTerminalOrUnknown(
+    p.structured_state ?? null,
+  );
 
   // Unknown claim state blocks (fail closed allowlist)
   if (isUnknownClaimState(claim?.state)) {
@@ -483,7 +496,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   // Claim-view blocked: only claim.bounty_settled can override (catalog flags cannot)
   // Catalog blocked: any bountySettled can override (catalog-level signals)
   const claimViewBlockedNotOverridden = claimViewBlocked && !claimBountySettled;
-  const catalogBlockedNotOverridden = catalogBlocked && !bountySettled;
+  const catalogBlockedNotOverridden = catalogStructureBlocked && !bountySettled;
   const structureBlocked = claimViewBlockedNotOverridden || catalogBlockedNotOverridden;
 
   // For rejected proposals, skip the structure-blocked early exit so rebuttal is still available.
