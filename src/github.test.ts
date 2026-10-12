@@ -97,4 +97,54 @@ describe("applyCatalogRuntimeToProposal", () => {
       ).status,
     ).toBe("in_review");
   });
+
+  it("keeps catalog accepting_funds and structured_state on a matching status", () => {
+    const merged = applyCatalogRuntimeToProposal(
+      doc({ status: "claimable" }),
+      doc({
+        status: "claimable",
+        accepting_funds: false,
+        structured_state: "psbt_ready",
+      }),
+    );
+    expect(merged.status).toBe("claimable");
+    expect(merged.accepting_funds).toBe(false);
+    expect(merged.structured_state).toBe("psbt_ready");
+  });
+});
+
+describe("worker catalog funding signals", () => {
+  afterEach(() => {
+    clearListedProposalsCache();
+    vi.unstubAllGlobals();
+  });
+
+  it("copies accepting_funds and structured_state off the catalog JSON", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/proposals/catalog")) {
+          return Response.json({
+            proposals: [
+              {
+                id: "PLEBLY-FUNDS-CLOSED",
+                path: "proposals/listed/PLEBLY-FUNDS-CLOSED.md",
+                title: "Closed to coins",
+                status: "claimable",
+                accepting_funds: false,
+                structured_state: "psbt_ready",
+                balance_sats: 200_000,
+              },
+            ],
+          });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    const [row] = await listListedProposals();
+    expect(row?.accepting_funds).toBe(false);
+    expect(row?.structured_state).toBe("psbt_ready");
+    expect(row?.balance_sats).toBe(200_000);
+  });
 });
