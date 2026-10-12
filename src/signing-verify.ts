@@ -131,10 +131,16 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
   }
   if (card.kind === "release") {
     const want = expected[0]?.amount_sats || 0;
-    const got = card.outputs
-      .filter((o) => o.label === "platform fee" || o.label === "keyholder pool")
-      .reduce((n, o) => n + o.amount_sats, 0);
-    if (got !== want) return { ok: false, error: "monthly fee does not match" };
+    const feeLabels = new Set(["platform fee", "keyholder pool"]);
+    let feeGot = 0;
+    let other = 0;
+    for (const output of card.outputs) {
+      if (feeLabels.has(output.label || "")) feeGot += output.amount_sats;
+      else other += output.amount_sats;
+    }
+    if (feeGot !== want) return { ok: false, error: "monthly fee does not match" };
+    const disbursed = card.recompute?.disbursed_sats ?? 0;
+    if (other !== disbursed - want) return { ok: false, error: "unexpected output" };
     return { ok: true };
   }
   if (card.kind === "structure") {

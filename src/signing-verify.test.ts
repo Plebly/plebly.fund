@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { amountsMatchCard, splitWorkOutput } from "./signing-verify";
+import { amountsMatchCard, computeMonthlyFeeOutput, splitWorkOutput } from "./signing-verify";
 import fixture from "./fixtures/signet-structure-001.json";
 
 describe("signing verify", () => {
@@ -43,6 +43,39 @@ describe("signing verify", () => {
       outputs: [{ label: "pool", amount_sats: 79_000 }],
     });
     expect(bad.ok).toBe(false);
+  });
+
+  it("rejects an extra output on a monthly release", () => {
+    const disbursed = 100_000;
+    const fee = computeMonthlyFeeOutput(disbursed);
+    const platform = Math.floor((disbursed * 3) / 100);
+    const lines = disbursed - fee;
+    const payout = [
+      { label: "builder", amount_sats: 60_000 },
+      { label: "builder", amount_sats: lines - 60_000 },
+      { label: "platform fee", amount_sats: platform },
+      { label: "keyholder pool", amount_sats: fee - platform },
+    ];
+    const match = amountsMatchCard({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed },
+      outputs: payout,
+    });
+    expect(match.ok).toBe(true);
+
+    const extraBuilder = amountsMatchCard({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed },
+      outputs: [...payout, { label: "builder", amount_sats: 10_000 }],
+    });
+    expect(extraBuilder).toEqual({ ok: false, error: "unexpected output" });
+
+    const extraLabel = amountsMatchCard({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed },
+      outputs: [...payout, { label: "bonus", amount_sats: 1 }],
+    });
+    expect(extraLabel).toEqual({ ok: false, error: "unexpected output" });
   });
 });
 
