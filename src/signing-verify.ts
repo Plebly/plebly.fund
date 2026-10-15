@@ -70,6 +70,7 @@ export type VerifyCard = {
     miner_fee_sats?: number;
     disbursed_sats?: number;
     input_sats?: number;
+    escrow_address?: string;
   };
 };
 
@@ -135,11 +136,14 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
     let feeGot = 0;
     let other = 0;
     let change = 0;
+    const changeOutputs: AmountRow[] = [];
     for (const output of card.outputs) {
       const label = output.label || "";
       if (feeLabels.has(label)) feeGot += output.amount_sats;
-      else if (label.startsWith("escrow change:")) change += output.amount_sats;
-      else other += output.amount_sats;
+      else if (label.startsWith("escrow change:")) {
+        change += output.amount_sats;
+        changeOutputs.push(output);
+      } else other += output.amount_sats;
     }
     if (feeGot !== want) return { ok: false, error: "monthly fee does not match" };
     const disbursed = card.recompute?.disbursed_sats ?? 0;
@@ -147,6 +151,17 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
     if (other !== disbursed - want) return { ok: false, error: "unexpected output" };
     // Change may only use what the escrow inputs hold beyond the package.
     const input = card.recompute?.input_sats;
+    if (changeOutputs.length) {
+      // Change is checked against the escrow budget and address; without them it is not signed.
+      if (input == null) return { ok: false, error: "escrow change without input total" };
+      const escrow = (card.recompute?.escrow_address || "").trim().toLowerCase();
+      if (!escrow) return { ok: false, error: "escrow change without escrow address" };
+      for (const o of changeOutputs) {
+        if ((o.address || "").trim().toLowerCase() !== escrow) {
+          return { ok: false, error: "escrow change does not pay the escrow address" };
+        }
+      }
+    }
     if (input != null && change > input - disbursed) {
       return { ok: false, error: "escrow change exceeds the escrow budget" };
     }

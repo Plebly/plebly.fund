@@ -90,25 +90,58 @@ describe("signing verify", () => {
       { label: "keyholder pool", amount_sats: fee - platform },
     ];
 
+    const ESCROW = "tb1qescrowaddress";
+    const changeOut = { label: "escrow change:p1", amount_sats: 20_000, address: ESCROW };
+
     it("accepts a monthly release that returns 20k change to the escrow", () => {
-      const outputs = [...payout, { label: "escrow change:p1", amount_sats: 20_000 }];
-      expect(
-        amountsMatchCard({ kind: "release", recompute: { disbursed_sats: disbursed }, outputs }),
-      ).toEqual({ ok: true });
+      const outputs = [...payout, changeOut];
       expect(
         amountsMatchCard({
           kind: "release",
-          recompute: { disbursed_sats: disbursed, input_sats: disbursed + 21_000 },
+          recompute: { disbursed_sats: disbursed, input_sats: disbursed + 21_000, escrow_address: ESCROW },
           outputs,
         }),
       ).toEqual({ ok: true });
     });
 
+    it("accepts a monthly release without change when input total and escrow are absent", () => {
+      expect(
+        amountsMatchCard({ kind: "release", recompute: { disbursed_sats: disbursed }, outputs: payout }),
+      ).toEqual({ ok: true });
+    });
+
+    it("rejects escrow change when the card has no input total", () => {
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed, escrow_address: ESCROW },
+        outputs: [...payout, changeOut],
+      });
+      expect(r).toEqual({ ok: false, error: "escrow change without input total" });
+    });
+
+    it("rejects escrow change when the card has no escrow address", () => {
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed, input_sats: disbursed + 21_000 },
+        outputs: [...payout, changeOut],
+      });
+      expect(r).toEqual({ ok: false, error: "escrow change without escrow address" });
+    });
+
+    it("rejects escrow change paying a different address", () => {
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed, input_sats: disbursed + 21_000, escrow_address: ESCROW },
+        outputs: [...payout, { ...changeOut, address: "tb1qsomethingelse" }],
+      });
+      expect(r).toEqual({ ok: false, error: "escrow change does not pay the escrow address" });
+    });
+
     it("rejects escrow change larger than the escrow inputs allow", () => {
       const r = amountsMatchCard({
         kind: "release",
-        recompute: { disbursed_sats: disbursed, input_sats: disbursed + 19_000 },
-        outputs: [...payout, { label: "escrow change:p1", amount_sats: 20_000 }],
+        recompute: { disbursed_sats: disbursed, input_sats: disbursed + 19_000, escrow_address: ESCROW },
+        outputs: [...payout, changeOut],
       });
       expect(r).toEqual({ ok: false, error: "escrow change exceeds the escrow budget" });
     });
