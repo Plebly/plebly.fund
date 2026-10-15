@@ -70,7 +70,7 @@ export type VerifyCard = {
     miner_fee_sats?: number;
     disbursed_sats?: number;
     input_sats?: number;
-    escrow_address?: string;
+    escrow_by_proposal?: Record<string, { address: string; budget_sats: number }>;
   };
 };
 
@@ -151,17 +151,28 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
     if (other !== disbursed - want) return { ok: false, error: "unexpected output" };
     // Change may only use what the escrow inputs hold beyond the package.
     const input = card.recompute?.input_sats;
+    // Each change output returns to its own proposal's escrow, within that escrow's surplus.
     if (changeOutputs.length) {
-      // Change is checked against the escrow budget and address; without them it is not signed.
-      if (input == null) return { ok: false, error: "escrow change without input total" };
-      const escrow = (card.recompute?.escrow_address || "").trim().toLowerCase();
-      if (!escrow) return { ok: false, error: "escrow change without escrow address" };
+      const map = card.recompute?.escrow_by_proposal;
+      if (!map) return { ok: false, error: "escrow change without escrow limits" };
+      const perPid = new Map<string, number>();
       for (const o of changeOutputs) {
-        if ((o.address || "").trim().toLowerCase() !== escrow) {
-          return { ok: false, error: "escrow change does not pay the escrow address" };
+        const pid = (o.label || "").slice("escrow change:".length);
+        const entry = Object.prototype.hasOwnProperty.call(map, pid) ? map[pid] : undefined;
+        if (!entry) return { ok: false, error: "escrow change without escrow limits" };
+        const want = (entry.address || "").trim().toLowerCase();
+        if (!want || (o.address || "").trim().toLowerCase() !== want) {
+          return { ok: false, error: "escrow change does not pay its escrow address" };
+        }
+        perPid.set(pid, (perPid.get(pid) || 0) + o.amount_sats);
+      }
+      for (const [pid, sum] of perPid) {
+        if (sum > map[pid].budget_sats) {
+          return { ok: false, error: "escrow change exceeds the escrow budget" };
         }
       }
     }
+    // Overall bound kept as a second check when the card carries the input total.
     if (input != null && change > input - disbursed) {
       return { ok: false, error: "escrow change exceeds the escrow budget" };
     }
