@@ -70,7 +70,8 @@ export type VerifyCard = {
     miner_fee_sats?: number;
     disbursed_sats?: number;
     input_sats?: number;
-    escrow_by_proposal?: Record<string, { address: string; budget_sats: number }>;
+    escrow_by_proposal?: Record<string, string>;
+    escrow_by_address?: Record<string, { budget_sats: number; pids?: string[] }>;
   };
 };
 
@@ -151,23 +152,32 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
     if (other !== disbursed - want) return { ok: false, error: "unexpected output" };
     // Change may only use what the escrow inputs hold beyond the package.
     const input = card.recompute?.input_sats;
-    // Each change output returns to its own proposal's escrow, within that escrow's surplus.
+    // Each change output returns to its own proposal's escrow; change per escrow
+    // address stays within that escrow's surplus (shared escrows share one budget).
     if (changeOutputs.length) {
-      const map = card.recompute?.escrow_by_proposal;
-      if (!map) return { ok: false, error: "escrow change without escrow limits" };
-      const perPid = new Map<string, number>();
+      const byPid = card.recompute?.escrow_by_proposal;
+      const byAddr = card.recompute?.escrow_by_address;
+      if (!byPid || !byAddr) return { ok: false, error: "escrow change without escrow limits" };
+      const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+      const budgets = new Map<string, number>();
+      for (const [addr, entry] of Object.entries(byAddr)) {
+        const key = addr.trim().toLowerCase();
+        if (key && typeof entry?.budget_sats === "number") budgets.set(key, entry.budget_sats);
+      }
+      const perAddr = new Map<string, number>();
       for (const o of changeOutputs) {
         const pid = (o.label || "").slice("escrow change:".length);
-        const entry = Object.prototype.hasOwnProperty.call(map, pid) ? map[pid] : undefined;
-        if (!entry) return { ok: false, error: "escrow change without escrow limits" };
-        const want = (entry.address || "").trim().toLowerCase();
-        if (!want || (o.address || "").trim().toLowerCase() !== want) {
+        const want = own(byPid, pid) ? (byPid[pid] || "").trim().toLowerCase() : "";
+        if (!want || !budgets.has(want)) {
+          return { ok: false, error: "escrow change without escrow limits" };
+        }
+        if ((o.address || "").trim().toLowerCase() !== want) {
           return { ok: false, error: "escrow change does not pay its escrow address" };
         }
-        perPid.set(pid, (perPid.get(pid) || 0) + o.amount_sats);
+        perAddr.set(want, (perAddr.get(want) || 0) + o.amount_sats);
       }
-      for (const [pid, sum] of perPid) {
-        if (sum > map[pid].budget_sats) {
+      for (const [addr, sum] of perAddr) {
+        if (sum > budgets.get(addr)!) {
           return { ok: false, error: "escrow change exceeds the escrow budget" };
         }
       }
