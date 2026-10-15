@@ -168,7 +168,7 @@ describe("signing verify", () => {
     });
 
     it("rejects change whose escrow has no budget entry", () => {
-      const l = { ...limits, escrow_by_address: { [ESC_1]: { budget_sats: 20_000 } } };
+      const l = { ...limits, escrow_by_address: { [ESC_1]: { budget_sats: 20_000, pids: ["p1"] } } };
       expect(amountsMatchCard(card([...payout, ch1, ch2], l))).toEqual({
         ok: false,
         error: "escrow change without escrow limits",
@@ -180,6 +180,17 @@ describe("signing verify", () => {
       expect(amountsMatchCard(card([...payout, ch1, wrong], limits))).toEqual({
         ok: false,
         error: "escrow change does not pay its escrow address",
+      });
+    });
+
+    it("rejects change for a proposal not listed on its escrow", () => {
+      const l = {
+        ...limits,
+        escrow_by_address: { ...limits.escrow_by_address, [ESC_2]: { budget_sats: 8_000, pids: ["p1"] } },
+      };
+      expect(amountsMatchCard(card([...payout, ch1, ch2], l))).toEqual({
+        ok: false,
+        error: "escrow change for a proposal not on that escrow",
       });
     });
 

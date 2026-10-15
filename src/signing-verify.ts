@@ -160,9 +160,13 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
       if (!byPid || !byAddr) return { ok: false, error: "escrow change without escrow limits" };
       const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
       const budgets = new Map<string, number>();
+      const pidsAt = new Map<string, Set<string>>();
       for (const [addr, entry] of Object.entries(byAddr)) {
         const key = addr.trim().toLowerCase();
-        if (key && typeof entry?.budget_sats === "number") budgets.set(key, entry.budget_sats);
+        if (key && typeof entry?.budget_sats === "number") {
+          budgets.set(key, entry.budget_sats);
+          pidsAt.set(key, new Set(entry.pids || []));
+        }
       }
       const perAddr = new Map<string, number>();
       for (const o of changeOutputs) {
@@ -173,6 +177,9 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
         }
         if ((o.address || "").trim().toLowerCase() !== want) {
           return { ok: false, error: "escrow change does not pay its escrow address" };
+        }
+        if (!pidsAt.get(want)!.has(pid)) {
+          return { ok: false, error: "escrow change for a proposal not on that escrow" };
         }
         perAddr.set(want, (perAddr.get(want) || 0) + o.amount_sats);
       }
