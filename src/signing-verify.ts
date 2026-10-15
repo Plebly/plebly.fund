@@ -134,13 +134,22 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
     const feeLabels = new Set(["platform fee", "keyholder pool"]);
     let feeGot = 0;
     let other = 0;
+    let change = 0;
     for (const output of card.outputs) {
-      if (feeLabels.has(output.label || "")) feeGot += output.amount_sats;
+      const label = output.label || "";
+      if (feeLabels.has(label)) feeGot += output.amount_sats;
+      else if (label.startsWith("escrow change:")) change += output.amount_sats;
       else other += output.amount_sats;
     }
     if (feeGot !== want) return { ok: false, error: "monthly fee does not match" };
     const disbursed = card.recompute?.disbursed_sats ?? 0;
+    // Disbursed is the gross of the lines; change back to an escrow is not part of it.
     if (other !== disbursed - want) return { ok: false, error: "unexpected output" };
+    // Change may only use what the escrow inputs hold beyond the package.
+    const input = card.recompute?.input_sats;
+    if (input != null && change > input - disbursed) {
+      return { ok: false, error: "escrow change exceeds the escrow budget" };
+    }
     return { ok: true };
   }
   if (card.kind === "structure") {

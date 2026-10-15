@@ -77,6 +77,64 @@ describe("signing verify", () => {
     });
     expect(extraLabel).toEqual({ ok: false, error: "unexpected output" });
   });
+
+  describe("monthly release lines", () => {
+    const disbursed = 100_000;
+    const fee = computeMonthlyFeeOutput(disbursed);
+    const platform = Math.floor((disbursed * 3) / 100);
+    const lines = disbursed - fee;
+    const payout = [
+      { label: "fulfiller payout:p1", amount_sats: 60_000 },
+      { label: "fulfiller payout:p2", amount_sats: lines - 60_000 },
+      { label: "platform fee", amount_sats: platform },
+      { label: "keyholder pool", amount_sats: fee - platform },
+    ];
+
+    it("accepts a monthly release that returns 20k change to the escrow", () => {
+      const outputs = [...payout, { label: "escrow change:p1", amount_sats: 20_000 }];
+      expect(
+        amountsMatchCard({ kind: "release", recompute: { disbursed_sats: disbursed }, outputs }),
+      ).toEqual({ ok: true });
+      expect(
+        amountsMatchCard({
+          kind: "release",
+          recompute: { disbursed_sats: disbursed, input_sats: disbursed + 21_000 },
+          outputs,
+        }),
+      ).toEqual({ ok: true });
+    });
+
+    it("rejects escrow change larger than the escrow inputs allow", () => {
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed, input_sats: disbursed + 19_000 },
+        outputs: [...payout, { label: "escrow change:p1", amount_sats: 20_000 }],
+      });
+      expect(r).toEqual({ ok: false, error: "escrow change exceeds the escrow budget" });
+    });
+
+    it("rejects payout lines that fall short of the disbursed total", () => {
+      const short = payout.map((o, i) => (i === 1 ? { ...o, amount_sats: o.amount_sats - 5_000 } : o));
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed },
+        outputs: short,
+      });
+      expect(r).toEqual({ ok: false, error: "unexpected output" });
+    });
+
+    it("rejects a monthly fee mismatch", () => {
+      const low = payout.map((o) =>
+        o.label === "keyholder pool" ? { ...o, amount_sats: o.amount_sats - 1_000 } : o,
+      );
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed },
+        outputs: low,
+      });
+      expect(r).toEqual({ ok: false, error: "monthly fee does not match" });
+    });
+  });
 });
 
 describe("parsedPsbtOutputs network HRP", () => {
