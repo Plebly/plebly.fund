@@ -207,6 +207,11 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
       return { ok: false, error: `${row.label} amount does not match` };
     }
   }
+  // First match per label is not enough: a second builder output, or any
+  // output with a label outside the split, must not reach the device.
+  if (card.outputs.length !== expected.length) {
+    return { ok: false, error: "unexpected output" };
+  }
   return { ok: true };
 }
 

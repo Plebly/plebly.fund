@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { reviewKindPayLabel, tosDisplayMarkdown, tosStatus } from "./tos";
+import {
+  reviewKindPayLabel,
+  TOS_CURRENT,
+  TOS_GRACE_DAYS,
+  tosDisplayMarkdown,
+  tosStatus,
+} from "./tos";
 
 describe("tosDisplayMarkdown", () => {
   it("strips machine version keys from the public terms page", () => {
@@ -14,10 +20,20 @@ describe("tosDisplayMarkdown", () => {
 });
 
 describe("tosStatus", () => {
+  const published = Date.parse(TOS_CURRENT.published_at);
+  const graceEnd = published + TOS_GRACE_DAYS * 86400_000;
+  const inGrace = published + 86400_000;
+
   it("requires when missing", () => {
-    expect(tosStatus(null)).toBe("required");
-    expect(tosStatus({ tos_version: "tos-2026-09-13" })).toBe("current");
-    expect(tosStatus({ tos_version: "tos-2026-08-13" })).toBe("grace");
+    expect(tosStatus(null, inGrace)).toBe("required");
+    expect(tosStatus({ tos_version: "tos-2026-09-13" }, inGrace)).toBe("current");
+    expect(tosStatus({ tos_version: "tos-2026-08-13" }, inGrace)).toBe("grace");
+  });
+
+  it("ends the grace window for the previous version", () => {
+    expect(tosStatus({ tos_version: "tos-2026-08-13" }, graceEnd - 1)).toBe("grace");
+    expect(tosStatus({ tos_version: "tos-2026-08-13" }, graceEnd)).toBe("required");
+    expect(tosStatus({ tos_version: "tos-2026-09-13" }, graceEnd)).toBe("current");
   });
 });
 
