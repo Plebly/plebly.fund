@@ -70,6 +70,8 @@ export type VerifyCard = {
     miner_fee_sats?: number;
     disbursed_sats?: number;
     input_sats?: number;
+    escrow_by_proposal?: Record<string, string>;
+    escrow_by_address?: Record<string, { budget_sats: number; pids?: string[] }>;
   };
 };
 
@@ -131,10 +133,66 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
   }
   if (card.kind === "release") {
     const want = expected[0]?.amount_sats || 0;
-    const got = card.outputs
-      .filter((o) => o.label === "platform fee" || o.label === "keyholder pool")
-      .reduce((n, o) => n + o.amount_sats, 0);
-    if (got !== want) return { ok: false, error: "monthly fee does not match" };
+    const feeLabels = new Set(["platform fee", "keyholder pool"]);
+    let feeGot = 0;
+    let other = 0;
+    let change = 0;
+    const changeOutputs: AmountRow[] = [];
+    for (const output of card.outputs) {
+      const label = output.label || "";
+      if (feeLabels.has(label)) feeGot += output.amount_sats;
+      else if (label.startsWith("escrow change:")) {
+        change += output.amount_sats;
+        changeOutputs.push(output);
+      } else other += output.amount_sats;
+    }
+    if (feeGot !== want) return { ok: false, error: "monthly fee does not match" };
+    const disbursed = card.recompute?.disbursed_sats ?? 0;
+    // Disbursed is the gross of the lines; change back to an escrow is not part of it.
+    if (other !== disbursed - want) return { ok: false, error: "unexpected output" };
+    // Change may only use what the escrow inputs hold beyond the package.
+    const input = card.recompute?.input_sats;
+    // Each change output returns to its own proposal's escrow; change per escrow
+    // address stays within that escrow's surplus (shared escrows share one budget).
+    if (changeOutputs.length) {
+      const byPid = card.recompute?.escrow_by_proposal;
+      const byAddr = card.recompute?.escrow_by_address;
+      if (!byPid || !byAddr) return { ok: false, error: "escrow change without escrow limits" };
+      const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+      const budgets = new Map<string, number>();
+      const pidsAt = new Map<string, Set<string>>();
+      for (const [addr, entry] of Object.entries(byAddr)) {
+        const key = addr.trim().toLowerCase();
+        if (key && typeof entry?.budget_sats === "number") {
+          budgets.set(key, entry.budget_sats);
+          pidsAt.set(key, new Set(entry.pids || []));
+        }
+      }
+      const perAddr = new Map<string, number>();
+      for (const o of changeOutputs) {
+        const pid = (o.label || "").slice("escrow change:".length);
+        const want = own(byPid, pid) ? (byPid[pid] || "").trim().toLowerCase() : "";
+        if (!want || !budgets.has(want)) {
+          return { ok: false, error: "escrow change without escrow limits" };
+        }
+        if ((o.address || "").trim().toLowerCase() !== want) {
+          return { ok: false, error: "escrow change does not pay its escrow address" };
+        }
+        if (!pidsAt.get(want)!.has(pid)) {
+          return { ok: false, error: "escrow change for a proposal not on that escrow" };
+        }
+        perAddr.set(want, (perAddr.get(want) || 0) + o.amount_sats);
+      }
+      for (const [addr, sum] of perAddr) {
+        if (sum > budgets.get(addr)!) {
+          return { ok: false, error: "escrow change exceeds the escrow budget" };
+        }
+      }
+    }
+    // Overall bound kept as a second check when the card carries the input total.
+    if (input != null && change > input - disbursed) {
+      return { ok: false, error: "escrow change exceeds the escrow budget" };
+    }
     return { ok: true };
   }
   if (card.kind === "structure") {

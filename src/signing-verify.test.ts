@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { amountsMatchCard, splitWorkOutput } from "./signing-verify";
+import { amountsMatchCard, computeMonthlyFeeOutput, splitWorkOutput } from "./signing-verify";
 import fixture from "./fixtures/signet-structure-001.json";
 
 describe("signing verify", () => {
@@ -75,6 +75,195 @@ describe("signing verify", () => {
       outputs: [{ label: "pool", amount_sats: 79_000 }],
     });
     expect(bad.ok).toBe(false);
+  });
+
+  it("rejects an extra output on a monthly release", () => {
+    const disbursed = 100_000;
+    const fee = computeMonthlyFeeOutput(disbursed);
+    const platform = Math.floor((disbursed * 3) / 100);
+    const lines = disbursed - fee;
+    const payout = [
+      { label: "builder", amount_sats: 60_000 },
+      { label: "builder", amount_sats: lines - 60_000 },
+      { label: "platform fee", amount_sats: platform },
+      { label: "keyholder pool", amount_sats: fee - platform },
+    ];
+    const match = amountsMatchCard({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed },
+      outputs: payout,
+    });
+    expect(match.ok).toBe(true);
+
+    const extraBuilder = amountsMatchCard({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed },
+      outputs: [...payout, { label: "builder", amount_sats: 10_000 }],
+    });
+    expect(extraBuilder).toEqual({ ok: false, error: "unexpected output" });
+
+    const extraLabel = amountsMatchCard({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed },
+      outputs: [...payout, { label: "bonus", amount_sats: 1 }],
+    });
+    expect(extraLabel).toEqual({ ok: false, error: "unexpected output" });
+  });
+
+  describe("monthly release lines", () => {
+    const disbursed = 100_000;
+    const fee = computeMonthlyFeeOutput(disbursed);
+    const platform = Math.floor((disbursed * 3) / 100);
+    const lines = disbursed - fee;
+    const payout = [
+      { label: "fulfiller payout:p1", amount_sats: 60_000 },
+      { label: "fulfiller payout:p2", amount_sats: lines - 60_000 },
+      { label: "platform fee", amount_sats: platform },
+      { label: "keyholder pool", amount_sats: fee - platform },
+    ];
+
+    const ESC_1 = "tb1qescrowone";
+    const ESC_2 = "tb1qescrowtwo";
+    type Limits = {
+      escrow_by_proposal?: Record<string, string>;
+      escrow_by_address?: Record<string, { budget_sats: number; pids?: string[] }>;
+    };
+    const limits: Limits = {
+      escrow_by_proposal: { p1: ESC_1, p2: ESC_2 },
+      escrow_by_address: {
+        [ESC_1]: { budget_sats: 20_000, pids: ["p1"] },
+        [ESC_2]: { budget_sats: 8_000, pids: ["p2"] },
+      },
+    };
+    const ch1 = { label: "escrow change:p1", amount_sats: 20_000, address: ESC_1 };
+    const ch2 = { label: "escrow change:p2", amount_sats: 8_000, address: ESC_2 };
+    const card = (outputs: typeof payout, l: Limits = {}) => ({
+      kind: "release",
+      recompute: { disbursed_sats: disbursed, input_sats: disbursed + 30_000, ...l },
+      outputs,
+    });
+
+    it("accepts a two-proposal month with change back to each escrow", () => {
+      expect(amountsMatchCard(card([...payout, ch1, ch2], limits))).toEqual({ ok: true });
+    });
+
+    it("accepts change addresses regardless of case and surrounding space", () => {
+      const out = { ...ch1, address: `  ${ESC_1.toUpperCase()} ` };
+      expect(amountsMatchCard(card([...payout, out, ch2], limits))).toEqual({ ok: true });
+    });
+
+    it("accepts a release without change when no escrow limits are present", () => {
+      expect(
+        amountsMatchCard({ kind: "release", recompute: { disbursed_sats: disbursed }, outputs: payout }),
+      ).toEqual({ ok: true });
+    });
+
+    const shared: Limits = {
+      escrow_by_proposal: { p1: ESC_1, p2: ESC_1 },
+      escrow_by_address: { [ESC_1]: { budget_sats: 28_000, pids: ["p1", "p2"] } },
+    };
+
+    it("accepts a shared escrow when its total change fits the shared budget", () => {
+      const c2 = { ...ch2, address: ESC_1 };
+      expect(amountsMatchCard(card([...payout, ch1, c2], shared))).toEqual({ ok: true });
+    });
+
+    it("rejects a shared escrow whose total change exceeds the shared budget", () => {
+      const c2 = { ...ch2, address: ESC_1, amount_sats: 8_001 };
+      expect(amountsMatchCard(card([...payout, ch1, c2], shared))).toEqual({
+        ok: false,
+        error: "escrow change exceeds the escrow budget",
+      });
+    });
+
+    it("rejects change when the card has no escrow limits", () => {
+      expect(amountsMatchCard(card([...payout, ch1]))).toEqual({
+        ok: false,
+        error: "escrow change without escrow limits",
+      });
+    });
+
+    it("rejects change when the address budgets are missing", () => {
+      const l = { escrow_by_proposal: limits.escrow_by_proposal };
+      expect(amountsMatchCard(card([...payout, ch1], l))).toEqual({
+        ok: false,
+        error: "escrow change without escrow limits",
+      });
+    });
+
+    it("rejects change for a proposal missing from the escrow map", () => {
+      const l = { ...limits, escrow_by_proposal: { p1: ESC_1 } };
+      expect(amountsMatchCard(card([...payout, ch1, ch2], l))).toEqual({
+        ok: false,
+        error: "escrow change without escrow limits",
+      });
+    });
+
+    it("rejects change whose escrow has no budget entry", () => {
+      const l = { ...limits, escrow_by_address: { [ESC_1]: { budget_sats: 20_000, pids: ["p1"] } } };
+      expect(amountsMatchCard(card([...payout, ch1, ch2], l))).toEqual({
+        ok: false,
+        error: "escrow change without escrow limits",
+      });
+    });
+
+    it("rejects change paid to another proposal's escrow", () => {
+      const wrong = { ...ch2, address: ESC_1 };
+      expect(amountsMatchCard(card([...payout, ch1, wrong], limits))).toEqual({
+        ok: false,
+        error: "escrow change does not pay its escrow address",
+      });
+    });
+
+    it("rejects change for a proposal not listed on its escrow", () => {
+      const l = {
+        ...limits,
+        escrow_by_address: { ...limits.escrow_by_address, [ESC_2]: { budget_sats: 8_000, pids: ["p1"] } },
+      };
+      expect(amountsMatchCard(card([...payout, ch1, ch2], l))).toEqual({
+        ok: false,
+        error: "escrow change for a proposal not on that escrow",
+      });
+    });
+
+    it("rejects change over that escrow's budget", () => {
+      const over = { ...ch2, amount_sats: 8_001 };
+      expect(amountsMatchCard(card([...payout, ch1, over], limits))).toEqual({
+        ok: false,
+        error: "escrow change exceeds the escrow budget",
+      });
+    });
+
+    it("rejects change over the overall input total", () => {
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed, input_sats: disbursed + 19_000, ...limits },
+        outputs: [...payout, ch1],
+      });
+      expect(r).toEqual({ ok: false, error: "escrow change exceeds the escrow budget" });
+    });
+
+    it("rejects payout lines that fall short of the disbursed total", () => {
+      const short = payout.map((o, i) => (i === 1 ? { ...o, amount_sats: o.amount_sats - 5_000 } : o));
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed },
+        outputs: short,
+      });
+      expect(r).toEqual({ ok: false, error: "unexpected output" });
+    });
+
+    it("rejects a monthly fee mismatch", () => {
+      const low = payout.map((o) =>
+        o.label === "keyholder pool" ? { ...o, amount_sats: o.amount_sats - 1_000 } : o,
+      );
+      const r = amountsMatchCard({
+        kind: "release",
+        recompute: { disbursed_sats: disbursed },
+        outputs: low,
+      });
+      expect(r).toEqual({ ok: false, error: "monthly fee does not match" });
+    });
   });
 });
 
