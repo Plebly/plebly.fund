@@ -30,6 +30,38 @@ describe("signing verify", () => {
     expect(tampered.ok).toBe(false);
   });
 
+  it("rejects an extra payout on a clean or disputed card", () => {
+    const work = 100_000;
+    const cleanSplit = splitWorkOutput(work, 4);
+    const extraLabel = amountsMatchCard({
+      kind: "clean",
+      recompute: { work_sats: work },
+      outputs: [
+        { label: "builder", amount_sats: cleanSplit.clean_builder_sats },
+        { label: "bdi_fee", amount_sats: cleanSplit.bdi_sats },
+        { label: "ops_fee", amount_sats: cleanSplit.ops_sats },
+        { label: "kh_fee", amount_sats: cleanSplit.kh_sats },
+        { label: "bonus", amount_sats: 10_000 },
+      ],
+    });
+    expect(extraLabel).toEqual({ ok: false, error: "unexpected output" });
+
+    const disputedSplit = splitWorkOutput(work, 5);
+    const secondBuilder = amountsMatchCard({
+      kind: "disputed",
+      recompute: { work_sats: work },
+      outputs: [
+        { label: "builder", amount_sats: disputedSplit.disputed_builder_sats },
+        { label: "builder", amount_sats: 5_000 },
+        { label: "reviewer_penalty", amount_sats: disputedSplit.penalty_sats },
+        { label: "bdi_fee", amount_sats: disputedSplit.bdi_sats },
+        { label: "ops_fee", amount_sats: disputedSplit.ops_sats },
+        { label: "kh_fee", amount_sats: disputedSplit.kh_sats },
+      ],
+    });
+    expect(secondBuilder).toEqual({ ok: false, error: "unexpected output" });
+  });
+
   it("uses the frozen miner fee for a refund", () => {
     const match = amountsMatchCard({
       kind: "refund",
