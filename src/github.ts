@@ -192,7 +192,29 @@ type CatalogProposal = {
   endowment_funded?: boolean;
   /** Settle txid when release/settle has been broadcast. */
   settle_txid?: string | null;
+  /** Runtime signals. Git markdown does not carry these. */
+  accepting_funds?: boolean | null;
+  structured_state?: string | null;
+  bounty_settled?: boolean | null;
 };
+
+/** Catalog flags the markdown doc does not carry. Missing stays missing. */
+function catalogFundingSignals(
+  catalog: Proposal | null | undefined,
+): Partial<Proposal> {
+  if (!catalog) return {};
+  const signals: Partial<Proposal> = {};
+  if (typeof catalog.accepting_funds === "boolean") {
+    signals.accepting_funds = catalog.accepting_funds;
+  }
+  if (typeof catalog.structured_state === "string" && catalog.structured_state) {
+    signals.structured_state = catalog.structured_state;
+  }
+  if (typeof catalog.bounty_settled === "boolean") {
+    signals.bounty_settled = catalog.bounty_settled;
+  }
+  return signals;
+}
 
 function proposalFromCatalog(entry: CatalogProposal): Proposal {
   return {
@@ -254,6 +276,15 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
       typeof entry.rescue_gap_sats === "number" ? entry.rescue_gap_sats : null,
     endowment_funded: Boolean(entry.endowment_funded),
     settle_txid: entry.settle_txid ?? null,
+    ...(typeof entry.accepting_funds === "boolean"
+      ? { accepting_funds: entry.accepting_funds }
+      : {}),
+    ...(typeof entry.structured_state === "string" && entry.structured_state
+      ? { structured_state: entry.structured_state }
+      : {}),
+    ...(typeof entry.bounty_settled === "boolean"
+      ? { bounty_settled: entry.bounty_settled }
+      : {}),
   };
 }
 
@@ -281,6 +312,10 @@ export function applyCatalogRuntimeToProposal(
   doc: Proposal,
   catalog: Proposal | null | undefined,
 ): Proposal {
+  const withSignals = (proposal: Proposal): Proposal => ({
+    ...proposal,
+    ...catalogFundingSignals(catalog),
+  });
   // No catalog row (KNOTS, 2026-10-08): sharing is unknown, so treat the
   // escrow as shared for its balance (workers#50 fail-closed). The page never
   // shows the address total; the claim view still decides Donate.
@@ -300,18 +335,18 @@ export function applyCatalogRuntimeToProposal(
       catalog.claimer &&
       (docStatus === "listed" || docStatus === "funding" || docStatus === "claimable")
     ) {
-      return {
+      return withSignals({
         ...doc,
         claimer: catalog.claimer,
         claimer_type: catalog.claimer_type ?? doc.claimer_type,
         claim_agent: catalog.claim_agent ?? doc.claim_agent,
         escrow_address: catalog.escrow_address || doc.escrow_address,
         balance_sats: catalog.balance_sats ?? doc.balance_sats,
-      };
+      });
     }
-    return doc;
+    return withSignals(doc);
   }
-  return {
+  return withSignals({
     ...doc,
     status: catStatus as Proposal["status"],
     claimer: catalog.claimer ?? doc.claimer,
@@ -328,7 +363,7 @@ export function applyCatalogRuntimeToProposal(
     claim_decision_ends_at:
       catalog.claim_decision_ends_at ?? doc.claim_decision_ends_at,
     claim_phase: catalog.claim_phase ?? doc.claim_phase,
-  };
+  });
 }
 
 /**
