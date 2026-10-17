@@ -42,16 +42,30 @@ export function topModal(doc: Document = document): HTMLElement | null {
   return all.length ? all[all.length - 1] : null;
 }
 
+/**
+ * True when `el` is actually on screen inside `root`: no `hidden`/`inert`
+ * ancestor, no `display: none` from CSS on it or an ancestor (e.g. the
+ * Lightning compose row in its wait/done phases), and not `visibility: hidden`.
+ */
+export function isRenderedIn(el: HTMLElement, root: Element): boolean {
+  const view = el.ownerDocument.defaultView;
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+    if (n !== root && (n.hidden || n.hasAttribute("inert"))) return false;
+    if (view && view.getComputedStyle(n).display === "none") return false;
+    if (n === root) break;
+  }
+  if (view && view.getComputedStyle(el).visibility === "hidden") return false;
+  return true;
+}
+
 /** Tabbable controls inside `root`, in DOM order. */
 export function focusableIn(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     (el) => {
       const ti = el.getAttribute("tabindex");
       if (ti !== null && Number(ti) < 0) return false;
-      const hiddenAncestor = el.closest("[hidden],[inert]");
-      if (hiddenAncestor && root.contains(hiddenAncestor)) return false;
       if (el.getAttribute("aria-hidden") === "true") return false;
-      return true;
+      return isRenderedIn(el, root);
     },
   );
 }

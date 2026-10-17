@@ -163,4 +163,57 @@ describe("installModalA11y", () => {
     modal.querySelector(".site-modal-close")!.remove();
     expect(modalCloseControl(modal)?.className).toBe("site-modal-backdrop");
   });
+
+  it("Tab with no focusable control keeps focus on the dialog itself", async () => {
+    document.body.innerHTML = `
+      <button type="button" id="open">Open</button>
+      <div class="site-modal" id="busy" hidden>
+        <div class="site-modal-card" role="dialog" aria-modal="true" id="busy-card">
+          <p>Working…</p>
+        </div>
+      </div>`;
+    const opener = document.getElementById("open") as HTMLButtonElement;
+    opener.focus();
+    document.getElementById("busy")!.hidden = false;
+    await flush();
+    const card = document.getElementById("busy-card")!;
+    expect(document.activeElement).toBe(card);
+    opener.focus(); // focus escaped to the page
+    const ev = press("Tab");
+    expect(ev.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(card);
+    expect(card.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("skips controls hidden only by CSS (display:none ancestor, visibility:hidden)", async () => {
+    document.body.innerHTML = `
+      <style>
+        #ln-ready[data-ln-phase="wait"] #ln-compose { display: none; }
+        .ghosted { visibility: hidden; }
+      </style>
+      <button type="button" id="open">Open</button>
+      <div class="site-modal" id="m" hidden>
+        <div class="site-modal-card" role="dialog" aria-modal="true">
+          <button type="button" class="site-modal-close" id="x">x</button>
+          <div id="ln-ready" data-ln-phase="wait">
+            <div id="ln-compose">
+              <input id="ln-amount" />
+              <button type="button" id="ln-create">Create</button>
+            </div>
+            <button type="button" id="ln-copy">Copy invoice</button>
+          </div>
+          <button type="button" class="ghosted" id="ghost">ghost</button>
+        </div>
+      </div>`;
+    const modal = document.getElementById("m")!;
+    modal.hidden = false;
+    await flush();
+    expect(focusableIn(modal).map((el) => el.id)).toEqual(["x", "ln-copy"]);
+    document.getElementById("ln-copy")!.focus();
+    expect(press("Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe("x");
+    // Back to the compose phase: the amount field and Create count again.
+    document.getElementById("ln-ready")!.setAttribute("data-ln-phase", "compose");
+    expect(focusableIn(modal).map((el) => el.id)).toEqual(["x", "ln-amount", "ln-create", "ln-copy"]);
+  });
 });

@@ -55,4 +55,24 @@ describe("Donate modal initial focus", () => {
     focusDonateEntry(modal);
     expect(document.activeElement?.id).toBe("donate-close");
   });
+
+  it("does not pick the Lightning amount while CSS hides it (wait/done phase)", () => {
+    const modal = mount();
+    showPayStep(modal);
+    modal.querySelector<HTMLElement>('[data-pane="onchain"]')!.hidden = true;
+    modal.querySelector<HTMLElement>('[data-pane="lightning"]')!.hidden = false;
+    const ready = modal.querySelector<HTMLElement>("#donate-ln-ready")!;
+    ready.hidden = false;
+    const style = document.createElement("style");
+    style.textContent = '#donate-ln-ready[data-ln-phase="wait"] #donate-ln-compose { display: none; }';
+    document.head.appendChild(style);
+    try {
+      ready.setAttribute("data-ln-phase", "wait");
+      expect(visibleDonateAmountInput(modal)).toBeNull();
+      ready.setAttribute("data-ln-phase", "compose");
+      expect(visibleDonateAmountInput(modal)?.id).toBe("donate-ln-amount");
+    } finally {
+      style.remove();
+    }
+  });
 });
