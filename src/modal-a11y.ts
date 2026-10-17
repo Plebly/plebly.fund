@@ -56,10 +56,15 @@ export function focusableIn(root: HTMLElement): HTMLElement[] {
   );
 }
 
+function hiddenWithin(el: HTMLElement, root: HTMLElement): boolean {
+  const h = el.closest("[hidden]");
+  return !!h && h !== root && root.contains(h);
+}
+
 /** The control that closes `modal` when pressed, if it has one. */
 export function modalCloseControl(modal: HTMLElement): HTMLElement | null {
   const close = modal.querySelector<HTMLElement>(".site-modal-close");
-  if (close && !close.closest("[hidden]")) return close;
+  if (close && !hiddenWithin(close, modal)) return close;
   const backdrop = modal.querySelector<HTMLElement>(".site-modal-backdrop");
   if (
     backdrop &&
@@ -96,18 +101,23 @@ export function installModalA11y(doc: Document = document): () => void {
   if (installed) return installed;
   const win = doc.defaultView || window;
 
-  /** Last control the user focused or pressed outside any modal. */
-  let lastOutside: HTMLElement | null = null;
+  /** Recent controls the user focused or pressed, newest last. */
+  const recent: HTMLElement[] = [];
+  const remember = (el: HTMLElement) => {
+    const i = recent.indexOf(el);
+    if (i !== -1) recent.splice(i, 1);
+    recent.push(el);
+    if (recent.length > 8) recent.shift();
+  };
   const openers = new Map<HTMLElement, HTMLElement | null>();
   let known = new Set<HTMLElement>();
 
-  const outsideModal = (el: Element | null): el is HTMLElement =>
-    el instanceof HTMLElement && !el.closest(".site-modal") && el !== doc.body;
+  const isControl = (el: Element | null): el is HTMLElement =>
+    el instanceof HTMLElement && el !== doc.body && el !== doc.documentElement;
 
   const onFocusIn = (ev: FocusEvent) => {
-    if (outsideModal(ev.target as Element | null)) {
-      lastOutside = ev.target as HTMLElement;
-    }
+    const t = ev.target as Element | null;
+    if (isControl(t)) remember(t);
   };
   // Safari does not focus buttons on click, so record the pressed control too.
   const onPointer = (ev: Event) => {
@@ -116,7 +126,7 @@ export function installModalA11y(doc: Document = document): () => void {
     const ctl = t.closest<HTMLElement>(
       "button, a[href], [role='button'], input, select, textarea, [tabindex]",
     );
-    if (outsideModal(ctl)) lastOutside = ctl;
+    if (isControl(ctl)) remember(ctl);
   };
 
   const sync = () => {
@@ -124,8 +134,17 @@ export function installModalA11y(doc: Document = document): () => void {
     for (const modal of now) {
       if (known.has(modal)) continue;
       const active = doc.activeElement;
-      const opener = outsideModal(active) ? active : lastOutside;
-      openers.set(modal, opener && opener.isConnected ? opener : null);
+      // The opener is the newest control outside this modal (it may sit in
+      // another modal underneath, e.g. a confirm opened from a keyholder card).
+      let opener: HTMLElement | null = null;
+      for (let i = recent.length - 1; i >= 0; i--) {
+        const el = recent[i];
+        if (el.isConnected && !modal.contains(el)) {
+          opener = el;
+          break;
+        }
+      }
+      openers.set(modal, opener);
       const inside = active instanceof Node && modal.contains(active);
       if (!inside && modal === topModal(doc)) focusInto(modal);
     }
