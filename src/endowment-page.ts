@@ -1,5 +1,11 @@
 import { fetchCurrentUser } from "./auth";
 import { CLAIM_FLOOR_SATS, mempoolWeb, WORKERS_API } from "./config";
+import {
+  endowmentBalanceView,
+  endowmentFiguresHtml,
+  endowmentGiveAllowed,
+  type EndowmentBalanceView,
+} from "./endowment-balance";
 import { ENDOWMENT_BLURB, ENDOWMENT_HOW_STEPS } from "./endowment-copy";
 import { listListedProposals } from "./github";
 import { bindCardWatches, proposalCardHtml } from "./home-page";
@@ -8,7 +14,6 @@ import {
   bindDonateModal,
   bindDonatePanel,
   endowmentDonateModalHtml,
-  endowmentMeterHtml,
 } from "./proposal-ui";
 import { applySeo, href, proposalHref, projectsHref, seoForRoute } from "./router";
 import type { Proposal } from "./types";
@@ -35,52 +40,54 @@ type EndowmentContribution = {
 };
 
 type EndowmentPublic = {
-  address: string | null;
   configured: boolean;
-  display_balance_sats: number;
-  goal_sats: number;
-  display_updated_at: string;
+  balance: EndowmentBalanceView;
   funded_proposal_ids: string[];
   contributions: EndowmentContribution[];
   lightning_available: boolean;
 };
 
-async function fetchEndowment(): Promise<EndowmentPublic> {
+export async function fetchEndowment(): Promise<EndowmentPublic> {
   const res = await fetch(`${API()}/endowment`);
   if (!res.ok) throw new Error(`Could not load endowment (${res.status})`);
-  const body = (await res.json()) as Partial<EndowmentPublic>;
+  const body = (await res.json()) as Record<string, unknown>;
+  // display_balance_sats is never read: on the older API it counted gifts to
+  // proposals that share the endowment address.
   return {
-    address: body.address ?? null,
     configured: Boolean(body.configured),
-    display_balance_sats: Math.max(
-      0,
-      Math.floor(Number(body.display_balance_sats) || 0),
-    ),
-    goal_sats: Math.max(0, Math.floor(Number(body.goal_sats) || 0)),
-    display_updated_at: body.display_updated_at || "",
+    balance: endowmentBalanceView(body),
     funded_proposal_ids: Array.isArray(body.funded_proposal_ids)
-      ? body.funded_proposal_ids
+      ? (body.funded_proposal_ids as string[])
       : [],
-    contributions: Array.isArray(body.contributions) ? body.contributions : [],
+    contributions: Array.isArray(body.contributions)
+      ? (body.contributions as EndowmentContribution[])
+      : [],
     lightning_available: Boolean(body.lightning_available),
   };
 }
 
-function heroHtml(opts: {
-  open: boolean;
-  sats: number;
-  goal: number;
+/** Hero: amounts (or the shared line) and the Donate button only when allowed. */
+export function heroHtml(opts: {
+  loading?: boolean;
+  configured: boolean;
+  balance: EndowmentBalanceView;
 }): string {
-  const signal = opts.open
-    ? endowmentMeterHtml(opts.sats, opts.goal, { size: "hero" })
-    : "";
-
-  const cta = opts.open
-    ? `<div class="endowment-cta-row">
+  const give = !opts.loading && opts.configured && endowmentGiveAllowed(opts.balance);
+  const signal = opts.loading
+    ? ""
+    : opts.configured
+      ? endowmentFiguresHtml(opts.balance, { size: "hero" })
+      : "";
+  const cta = opts.loading
+    ? ""
+    : give
+      ? `<div class="endowment-cta-row">
         <button type="button" class="btn endowment-donate-btn" data-open-donate>Donate</button>
         <a class="endowment-secondary-link" href="#contributions">Contributions</a>
       </div>`
-    : `<p class="endowment-hero-closed">Donations open soon.</p>`;
+      : opts.configured
+        ? ""
+        : `<p class="endowment-hero-closed">Donations open soon.</p>`;
 
   return `<section class="endowment-hero">
     <div class="endowment-hero-bg" aria-hidden="true"></div>
@@ -219,7 +226,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
   }
 
   app.innerHTML = shell(`
-    ${heroHtml({ open: false, sats: 0, goal: 0 })}
+    ${heroHtml({ loading: true, configured: false, balance: { kind: "shared" } })}
     ${bodyHtml(`<p class="muted">Loading…</p>`)}
   `);
 
@@ -247,16 +254,15 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         fundedSet.has(p.id.trim().toLowerCase()) &&
         ACTIVE.has(String(p.status)),
     );
-    const open = Boolean(view.configured && view.address);
+    const give =
+      view.configured && view.balance.kind === "own" && endowmentGiveAllowed(view.balance)
+        ? view.balance.address
+        : null;
     const countLabel =
       funded.length === 1 ? "1 project" : `${funded.length} projects`;
 
     app.innerHTML = shell(`
-      ${heroHtml({
-        open,
-        sats: view.display_balance_sats,
-        goal: view.goal_sats,
-      })}
+      ${heroHtml({ configured: view.configured, balance: view.balance })}
       ${bodyHtml(`
         ${howItWorksHtml()}
         ${contributionsHtml(view.contributions, titleById, pathById)}
@@ -268,20 +274,16 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
           ${fundedCardsHtml(funded, Boolean(view.lightning_available))}
         </section>
       `)}
-      ${
-        open && view.address
-          ? endowmentDonateModalHtml(view.address, { signedIn })
-          : ""
-      }
+      ${give ? endowmentDonateModalHtml(give, { signedIn }) : ""}
     `);
 
-    if (view.address && open) {
+    if (give) {
       bindDonateModal(app, {
         open: wantsDonateOpen(),
         rail: wantsLnRail() ? "lightning" : undefined,
       });
       await bindDonatePanel(app, {
-        address: view.address,
+        address: give,
         proposalId: "endowment",
         proposalPath: "/endowment",
         proposalTitle: "Endowment",
@@ -304,7 +306,7 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
     scrollToHashIfNeeded();
   } catch {
     app.innerHTML = shell(`
-      ${heroHtml({ open: false, sats: 0, goal: 0 })}
+      ${heroHtml({ loading: true, configured: false, balance: { kind: "shared" } })}
       ${bodyHtml(`<p class="muted">Could not load endowment right now.</p>`)}
     `);
   }

@@ -38,17 +38,35 @@ const p = (id: string, status: string, over: Partial<Proposal> = {}): Proposal =
     ...over,
   }) as Proposal;
 
+/** workers#115 shape for an endowment with its own address. */
 const view = (over: Record<string, unknown> = {}) => ({
   address: ADDR,
   configured: true,
-  display_balance_sats: 12_345,
+  give_address_usable: true,
+  balance_shared_with_escrow: false,
+  balance_sats: 10_586,
+  balance_unavailable: false,
+  total_given_sats: 20_000,
   goal_sats: 1_000_000,
-  display_updated_at: "2026-10-01T00:00:00Z",
   funded_proposal_ids: [],
   contributions: [],
   lightning_available: false,
   ...over,
 });
+
+/** The live API before workers#115: no new fields, a lifetime figure that counts proposal gifts. */
+const legacyView = () => ({
+  address: ADDR,
+  configured: true,
+  display_balance_sats: 148_106,
+  goal_sats: 1_000_000_000,
+  display_updated_at: "2026-08-10T04:10:32.202Z",
+  funded_proposal_ids: [],
+  contributions: [],
+  lightning_available: false,
+});
+
+const SHARED_LINE = "Endowment balance will show once it has its own address.";
 
 let endowment: () => Response;
 const fetchMock = vi.fn(async (url: string) => {
@@ -90,7 +108,6 @@ describe("renderEndowment: Donate gate", () => {
 
   it.each([
     ["not configured", { configured: false }],
-    ["no address", { address: null }],
   ])("%s: 'Donations open soon.', no Donate, no meter, nothing bound", async (_n, over) => {
     endowment = () => Response.json(view(over));
     await renderEndowment(shell);
@@ -188,5 +205,74 @@ describe("renderEndowment: contributions and funded projects", () => {
     await renderEndowment(shell);
     expect(app().querySelector("[data-open-donate]")).not.toBeNull();
     expect(text()).toContain("0 projects");
+  });
+});
+
+describe("renderEndowment: shared address and balance", () => {
+  function expectSharedPanel() {
+    expect(text()).toContain(SHARED_LINE);
+    expect(app().querySelector("[data-open-donate]")).toBeNull();
+    expect(app().querySelector("#donate-modal")).toBeNull();
+    expect(app().querySelector(".endowment-meter")).toBeNull();
+    expect(app().querySelector(".endowment-figures")).toBeNull();
+    expect(text()).not.toContain("Balance");
+    expect(text()).not.toContain("Total given to date");
+    expect(text()).not.toContain("Donations open soon.");
+    expect(app().innerHTML).not.toContain(ADDR);
+    expect(m.bindModal).not.toHaveBeenCalled();
+    expect(m.bindPanel).not.toHaveBeenCalled();
+  }
+
+  it("current live API (no balance_shared_with_escrow): unknown, so amounts and Donate are hidden", async () => {
+    endowment = () => Response.json(legacyView());
+    history.replaceState(null, "", "/endowment?donate");
+    await renderEndowment(shell);
+    expectSharedPanel();
+    expect(text()).not.toContain("148,106");
+    expect(text()).not.toContain("148106");
+  });
+
+  it.each([
+    ["balance_shared_with_escrow: true", { balance_shared_with_escrow: true, address: null, give_address_usable: false, balance_sats: undefined, total_given_sats: undefined }],
+    ["shared flag true even with an address and amounts", { balance_shared_with_escrow: true }],
+    ["give_address_usable: false", { give_address_usable: false }],
+    ["address null", { address: null }],
+    ["shared flag not a boolean", { balance_shared_with_escrow: "false" }],
+  ])("%s: shared line only", async (_n, over) => {
+    endowment = () => Response.json(view(over));
+    await renderEndowment(shell);
+    expectSharedPanel();
+    expect(text()).not.toContain("10,586");
+    expect(text()).not.toContain("20,000");
+  });
+
+  it("own address: Balance and Total given to date; never display_balance_sats", async () => {
+    endowment = () => Response.json(view({ display_balance_sats: 148_106 }));
+    await renderEndowment(shell);
+    expect(text()).not.toContain(SHARED_LINE);
+    const figures = app().querySelector(".endowment-figures")!;
+    expect(figures).not.toBeNull();
+    expect(figures.querySelector(".endowment-figure-balance")!.textContent).toContain("Balance");
+    expect(figures.querySelector(".endowment-figure-balance")!.textContent).toContain("10,586");
+    expect(figures.querySelector(".endowment-figure-total")!.textContent).toContain("Total given to date");
+    expect(figures.querySelector(".endowment-figure-total")!.textContent).toContain("20,000 sats");
+    expect(text()).not.toContain("148,106");
+    expect(app().querySelector("[data-open-donate]")).not.toBeNull();
+  });
+
+  it("own address, balance_unavailable: 'Balance temporarily unavailable', no stale number, Donate kept", async () => {
+    endowment = () => Response.json(view({ balance_sats: null, balance_unavailable: true }));
+    await renderEndowment(shell);
+    expect(text()).toContain("Balance temporarily unavailable");
+    expect(app().querySelector(".endowment-meter")).toBeNull();
+    expect(text()).toContain("20,000 sats");
+    expect(app().querySelector("[data-open-donate]")).not.toBeNull();
+  });
+
+  it("own address, balance_unavailable with a number present: still unavailable", async () => {
+    endowment = () => Response.json(view({ balance_sats: 99_999, balance_unavailable: true }));
+    await renderEndowment(shell);
+    expect(text()).toContain("Balance temporarily unavailable");
+    expect(text()).not.toContain("99,999");
   });
 });

@@ -4911,6 +4911,30 @@ a.proposal-meta-chip-endowment:hover {
   text-decoration-color: var(--muted);
 }
 
+.endowment-shared-note {
+  margin: 1rem 0 0;
+  color: var(--muted, inherit);
+}
+
+.endowment-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.endowment-figure-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.endowment-figure-value {
+  margin: 0;
+}
+
 .endowment-hero-closed {
   margin: 0 0 1.1rem;
   font-size: 1.05rem;
