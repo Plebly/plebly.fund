@@ -25,7 +25,7 @@ import {
 import type { Proposal } from "./types";
 
 const COPY =
-  "Sign in so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total.";
+  "Sign in before you send so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total, and refunds need a signed message from the sending address, which exchanges and some wallets can't do.";
 const UNIQUE_ADDR = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
 /** Live signet 001–008 share this address; their catalog flag is null. */
 const LIVE_SHARED = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";

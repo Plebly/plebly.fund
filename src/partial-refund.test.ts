@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { partialRefundCopy, partialRefundHtml } from "./partial-refund";
+import { partialRefundCopy, partialRefundHtml, refundStatusLabel } from "./partial-refund";
 import { structuredFundingBodyHtml } from "./proposal-structured-funding";
 
 const COPY =
-  "Partly refunded: 19,700 sats sent, 50,000 sats still owed. The rest will be refunded when more escrow funds are available.";
+  "Partly refunded: 19,700 sats sent, 50,300 sats still owed. The rest will be refunded when more escrow funds are available.";
 const owed = {
   owed_sats: 70_000,
-  covered_sats: 20_000,
-  outstanding_sats: 50_000,
+  covered_sats: 19_700,
+  outstanding_sats: 50_300,
   sent_sats: 19_700,
   settled: true,
 };
@@ -17,11 +17,21 @@ describe("partial refund copy", () => {
     expect(partialRefundCopy(owed)).toBe(COPY);
   });
 
-  it("falls back to covered sats when the donor-pool output is missing", () => {
+  it("without sent_sats: only what is still owed, never covered_sats as sent", () => {
     const { sent_sats: _s, ...rest } = owed;
-    expect(partialRefundCopy(rest)).toBe(
-      "Partly refunded: 20,000 sats sent, 50,000 sats still owed. The rest will be refunded when more escrow funds are available.",
-    );
+    const copy = "Partly refunded: 50,300 sats still owed. The rest will be refunded when more escrow funds are available.";
+    expect(partialRefundCopy(rest)).toBe(copy);
+    expect(partialRefundCopy({ ...rest, covered_sats: 12_345 })).toBe(copy);
+    expect(partialRefundCopy({ ...rest, sent_sats: "x" as unknown as number })).toBe(copy);
+    expect(partialRefundCopy(rest)).not.toContain("sent");
+  });
+
+  it("status pill reads Partly refunded exactly when the note shows", () => {
+    expect(refundStatusLabel("refunded", owed)).toBe("Partly refunded");
+    expect(refundStatusLabel("refunded", owed, false)).toBe("refunded");
+    expect(refundStatusLabel("refunded", { ...owed, settled: false })).toBe("refunded");
+    expect(refundStatusLabel("refunded", { ...owed, outstanding_sats: 0 })).toBe("refunded");
+    expect(refundStatusLabel("refunded", undefined)).toBe("refunded");
   });
 
   it("nothing when the field is absent, not settled, fully covered, or malformed", () => {
@@ -31,7 +41,6 @@ describe("partial refund copy", () => {
     expect(partialRefundCopy({ ...owed, outstanding_sats: 0 })).toBeNull();
     expect(partialRefundCopy({ ...owed, outstanding_sats: -5 })).toBeNull();
     expect(partialRefundCopy({ ...owed, outstanding_sats: "x" as unknown as number })).toBeNull();
-    expect(partialRefundCopy({ settled: true, outstanding_sats: 5 })).toBeNull();
     expect(partialRefundHtml(undefined)).toBe("");
   });
 

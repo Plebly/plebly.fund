@@ -21,7 +21,7 @@ vi.mock("./github", async (importOriginal) => {
 });
 
 import {
-  DONATE_SIGNED_OUT_SHARED_COPY,
+  DONATE_SHARED_COUNT_COPY,
   DONATE_SIGNED_OUT_UNIQUE_COPY,
   donateModalHtml,
   donateRefundRouteCopy,
@@ -34,8 +34,9 @@ import type { Proposal } from "./types";
 /** UI UX / Review / Tester final copy, pinned literally. */
 const UNIQUE =
   "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
+/** Shared address: the one combined sign-in note (UI UX, verbatim). */
 const SHARED =
-  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
+  "Sign in before you send so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total, and refunds need a signed message from the sending address, which exchanges and some wallets can't do.";
 const BANNED = ["Refund addresses aren't available", "Your gift stays in escrow"];
 
 const ADDR = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
@@ -58,7 +59,8 @@ const proposal = (shared: boolean): Proposal => row(9, ADDR, shared);
 function renderRow(p: Proposal, catalog: Proposal[], signedIn = false): HTMLElement | null {
   catalogRows = catalog;
   document.body.innerHTML = donateModalHtml(p, { signedIn });
-  return document.querySelector<HTMLElement>("#donate-refund-route");
+  // Unique: the refund-route line. Shared: the single combined note.
+  return document.querySelector<HTMLElement>("#donate-refund-route, #donate-shared-count");
 }
 
 function render(shared: boolean, signedIn: boolean): HTMLElement | null {
@@ -68,7 +70,7 @@ function render(shared: boolean, signedIn: boolean): HTMLElement | null {
 describe("signed-out Donate refund-route line", () => {
   it("copy constants are the agreed strings", () => {
     expect(DONATE_SIGNED_OUT_UNIQUE_COPY).toBe(UNIQUE);
-    expect(DONATE_SIGNED_OUT_SHARED_COPY).toBe(SHARED);
+    expect(DONATE_SHARED_COUNT_COPY).toBe(SHARED);
   });
 
   it("unique address, signed out: the unique line, in the pay step, above the address", () => {
@@ -85,6 +87,17 @@ describe("signed-out Donate refund-route line", () => {
     expect(line?.textContent).not.toContain("refund route");
     const addr = document.querySelector("#donate-address")!;
     expect(line!.compareDocumentPosition(addr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shared address, signed out: exactly one sign-in note, the combined copy", () => {
+    render(true, false);
+    expect(document.querySelector("#donate-refund-route")).toBeNull();
+    const notes = [...document.querySelectorAll("#donate-step-pay [role=note]")].filter((n) =>
+      /sign in (before|so)/i.test(n.textContent || ""),
+    );
+    expect(notes.map((n) => n.textContent)).toEqual([SHARED]);
+    expect(document.body.textContent).not.toContain("Sign in so your gift counts");
+    expect(document.body.textContent).not.toContain("Refunds on this proposal need");
   });
 
   it("both lines are plain text: no link, no anchor, the text word for word", () => {
@@ -108,7 +121,7 @@ describe("signed-out Donate refund-route line", () => {
 
   it("donateRefundRouteCopy covers all four cases", () => {
     expect(donateRefundRouteCopy({ signedIn: false, shared: false })).toBe(UNIQUE);
-    expect(donateRefundRouteCopy({ signedIn: false, shared: true })).toBe(SHARED);
+    expect(donateRefundRouteCopy({ signedIn: false, shared: true })).toBeNull();
     expect(donateRefundRouteCopy({ signedIn: true, shared: false })).toBeNull();
     expect(donateRefundRouteCopy({ signedIn: true, shared: true })).toBeNull();
   });

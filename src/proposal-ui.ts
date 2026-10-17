@@ -139,12 +139,13 @@ export type DonateBindOpts = {
  */
 export const DONATE_SIGNED_OUT_UNIQUE_COPY =
   "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
-export const DONATE_SIGNED_OUT_SHARED_COPY =
-  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
 
-/** Signed-out donors on a shared escrow address (isSharedEscrow). */
+/**
+ * Signed-out donors on a shared escrow address (isSharedEscrow): the single
+ * sign-in note there (count and refund route in one; no separate route line).
+ */
 export const DONATE_SHARED_COUNT_COPY =
-  "Sign in so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total.";
+  "Sign in before you send so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total, and refunds need a signed message from the sending address, which exchanges and some wallets can't do.";
 
 export function donateSharedCountCopy(o: { signedIn: boolean; shared: boolean }): string | null {
   return !o.signedIn && o.shared ? DONATE_SHARED_COUNT_COPY : null;
@@ -157,10 +158,13 @@ function donateSharedCountHtml(o: { signedIn: boolean; shared: boolean }): strin
     : "";
 }
 
-/** Signed-out donors only; signed-in donors see nothing here. */
+/**
+ * Signed-out donors on a unique address only. A shared address has one note,
+ * DONATE_SHARED_COUNT_COPY; signed-in donors see nothing here.
+ */
 export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean }): string | null {
-  if (o.signedIn) return null;
-  return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
+  if (o.signedIn || o.shared) return null;
+  return DONATE_SIGNED_OUT_UNIQUE_COPY;
 }
 
 function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
