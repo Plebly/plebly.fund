@@ -108,6 +108,40 @@ describe("signed-out Donate refund-route line", () => {
     // Endowment: no route or count note, so the anonymous-credit line is the one.
     document.body.innerHTML = endowmentDonatePanelHtml(ADDR, { signedIn: false });
     expect(signInNotes()).toEqual(["Giving anonymously. Sign in now if you want credit."]);
+  });
+
+  /** Sign in buttons on the payment step, outside the Lightning tab. */
+  const signInButtons = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("#donate-step-pay .donate-credit-signin")].filter(
+      (b) => !b.closest('[data-pane="lightning"]'),
+    );
+
+  it("exactly one Sign in button on the payment step, directly under the note, outside it", () => {
+    for (const [shared, copy] of [
+      [true, SHARED],
+      [false, UNIQUE],
+    ] as const) {
+      const note = render(shared, false)!;
+      expect(note.textContent).toBe(copy);
+      expect(note.children).toHaveLength(0);
+      const buttons = signInButtons();
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]!.textContent).toBe("Sign in");
+      expect(buttons[0]!.id).toBe("donate-credit-signin");
+      expect(note.nextElementSibling?.contains(buttons[0]!)).toBe(true);
+    }
+    // Endowment: the existing line and its Sign in now button, no duplicate.
+    document.body.innerHTML = endowmentDonatePanelHtml(ADDR, { signedIn: false });
+    const endow = signInButtons();
+    expect(endow).toHaveLength(1);
+    expect(endow[0]!.textContent).toBe("Sign in now");
+    expect(endow[0]!.closest(".donate-credit-advisory")).toBeTruthy();
+    expect(document.querySelector(".donate-note-signin")).toBeNull();
+    // Signed in: none.
+    render(true, true);
+    expect(signInButtons()).toHaveLength(0);
+    render(false, true);
+    expect(signInButtons()).toHaveLength(0);
     expect(document.body.textContent).not.toContain("Sign in so your gift counts");
     expect(document.body.textContent).not.toContain("Refunds on this proposal need");
   });

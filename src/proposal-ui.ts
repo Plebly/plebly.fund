@@ -282,6 +282,11 @@ function donatePayStepHtml(
           <div class="donate-presets">${onchainPresets}</div>
           ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${
+            otherSignInNote
+              ? `<p class="donate-note-signin"><button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in</button></p>`
+              : ""
+          }
           ${donateEscrowHardLabelHtml()}
           <div class="donate-address-block" data-escrow-address-block>
           <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
