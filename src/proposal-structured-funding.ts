@@ -2,6 +2,7 @@ import { BITCOIN_NETWORK, WORKERS_API } from "./config";
 import { solidIcon } from "./icons";
 import { bindHashGate, hashGateHtml } from "./psbt-hash-gate";
 import { bindProposalCopyButtons } from "./proposal-copy-buttons";
+import { partialRefundHtml, type DonateRemainderOwed } from "./partial-refund";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -55,6 +56,7 @@ export type StructuredFundingView = {
   reserve_sats?: number;
   donate_address?: string;
   pool_refund_address?: string;
+  donate_remainder_owed?: DonateRemainderOwed;
   structured?: {
     state?: string;
     sha256?: string;
@@ -364,6 +366,8 @@ export function structuredFundingBodyHtml(data: StructuredFundingView): string {
       </div>
     </div>`);
   }
+  const partial = partialRefundHtml(data.donate_remainder_owed);
+  if (partial) rows.push(partial);
   if (data.reserve_sats != null) {
     rows.push(`<div class="onchain-row onchain-row-inline">
       <span class="onchain-label">Reviewer reserve</span>

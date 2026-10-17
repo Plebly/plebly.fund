@@ -1,3 +1,4 @@
+import { partialRefundHtml, type DonateRemainderOwed } from "./partial-refund";
 import {
   authFetch,
   claimUsername,
@@ -1007,6 +1008,7 @@ export async function renderAccount(
             refund_txid?: string;
             needs_address?: boolean;
             non_refundable_dust?: boolean;
+            donate_remainder_owed?: DonateRemainderOwed;
           }[];
         };
         refundsEl.innerHTML = data.refunds.length
@@ -1026,7 +1028,7 @@ export async function renderAccount(
                 }
                 ${
                   r.refund_txid
-                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>`
+                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>${partialRefundHtml(r.donate_remainder_owed)}`
                     : r.non_refundable_dust
                       ? `<p class="muted">Below dust — not packaged for refund.</p>`
                       : r.refund_address

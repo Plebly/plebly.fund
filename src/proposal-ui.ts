@@ -142,6 +142,21 @@ export const DONATE_SIGNED_OUT_UNIQUE_COPY =
 export const DONATE_SIGNED_OUT_SHARED_COPY =
   "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
 
+/** Signed-out donors on a shared escrow address (isSharedEscrow). */
+export const DONATE_SHARED_COUNT_COPY =
+  "Sign in so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total.";
+
+export function donateSharedCountCopy(o: { signedIn: boolean; shared: boolean }): string | null {
+  return !o.signedIn && o.shared ? DONATE_SHARED_COUNT_COPY : null;
+}
+
+function donateSharedCountHtml(o: { signedIn: boolean; shared: boolean }): string {
+  const copy = donateSharedCountCopy(o);
+  return copy
+    ? `<p class="donate-shared-count muted" id="donate-shared-count" role="note">${escapeHtml(copy)}</p>`
+    : "";
+}
+
 /** Signed-out donors only; signed-in donors see nothing here. */
 export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean }): string | null {
   if (o.signedIn) return null;
@@ -254,6 +269,7 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
+          ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${donateEscrowHardLabelHtml()}
           <div class="donate-address-block" data-escrow-address-block>
