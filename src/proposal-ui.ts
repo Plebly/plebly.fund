@@ -842,11 +842,36 @@ function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
 }
 
+/**
+ * The amount field a donor types into first: the on-chain or Lightning
+ * amount of the rail on screen, or null while the pay step is hidden.
+ */
+export function visibleDonateAmountInput(root: Element): HTMLInputElement | null {
+  const inputs = root.querySelectorAll<HTMLInputElement>("#donate-amount, #donate-ln-amount");
+  for (const el of Array.from(inputs)) {
+    const hiddenAncestor = el.closest("[hidden]");
+    if (!hiddenAncestor || !root.contains(hiddenAncestor)) return el;
+  }
+  return null;
+}
+
+/** Initial focus in the Donate modal: the amount field when it's on screen, else Close. */
+export function focusDonateEntry(modal: Element): void {
+  const target =
+    visibleDonateAmountInput(modal) ||
+    modal.querySelector<HTMLButtonElement>("#donate-close");
+  target?.focus();
+}
+
 function setDonateStep(panel: Element, step: "credit" | "pay"): void {
   panel.setAttribute("data-donate-step", step);
   panel.querySelectorAll<HTMLElement>(".donate-step").forEach((el) => {
     el.hidden = el.dataset.donateStep !== step;
   });
+  // Arriving on the pay step: start in the amount field.
+  if (step === "pay" && !panel.closest(".site-modal")?.hasAttribute("hidden")) {
+    visibleDonateAmountInput(panel)?.focus();
+  }
   const dialog = panel.closest<HTMLElement>("[aria-labelledby]");
   if (dialog) {
     dialog.setAttribute(
@@ -2555,7 +2580,14 @@ export function bindDonateModal(
     if (opts?.rail === "lightning" && panel) {
       selectDonateRail(panel, "lightning");
     }
-    modal.querySelector<HTMLButtonElement>("#donate-close")?.focus();
+    // reveal() runs again once the claim check mounts the panel; don't pull
+    // focus off a field the donor is already in.
+    const active = document.activeElement;
+    const typing =
+      active instanceof HTMLElement &&
+      modal.contains(active) &&
+      active.id !== "donate-close";
+    if (!typing) focusDonateEntry(modal);
     window.addEventListener("keydown", onEscape);
   };
 
