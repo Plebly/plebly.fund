@@ -388,6 +388,8 @@ export type WantedRow = {
   target_sats: number | null;
   cover_image: string | null;
   excerpt: string;
+  /** Present once the API sends it; false is closed. */
+  accepting_funds?: boolean;
 };
 
 /** Drop duplicate wanted rows that share an id (preferred) or path. */
@@ -403,13 +405,25 @@ export function dedupeWantedRows(rows: WantedRow[]): WantedRow[] {
   return out;
 }
 
+/**
+ * Keep only rows that may take gifts: a fundable status (the shared
+ * FUNDABLE_STATUSES set) and not accepting_funds === false. Workers filters
+ * too (workers#114); this keeps the site right against an older API that
+ * still ranks voided, settled and in-review rows.
+ */
+export function fundableWantedRows(rows: WantedRow[]): WantedRow[] {
+  return rows.filter(
+    (r) => isFundableStatus(r.status) && r.accepting_funds !== false,
+  );
+}
+
 export async function fetchWanted(limit = 12): Promise<WantedRow[]> {
   if (!WORKERS_API) return [];
   const res = await fetch(`${API()}/wanted?limit=${limit}`);
   if (!res.ok) return [];
   const data = (await res.json()) as { proposals?: WantedRow[] };
   const rows = Array.isArray(data.proposals) ? data.proposals : [];
-  return dedupeWantedRows(rows);
+  return fundableWantedRows(dedupeWantedRows(rows));
 }
 
 export async function addWatch(proposalPath: string): Promise<void> {

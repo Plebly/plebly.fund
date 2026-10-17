@@ -22,7 +22,12 @@ import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
 import {
-  endowmentMeterHtml,
+  endowmentBalanceView,
+  endowmentFiguresHtml,
+  endowmentGiveAllowed,
+  type EndowmentBalanceView,
+} from "./endowment-balance";
+import {
   fundingBarTrackHtml,
   fundingTargetSats,
   isPastFundingTarget,
@@ -42,7 +47,7 @@ import {
   proposalHref,
 } from "./router";
 import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
-import { wantedRowHtml } from "./wanted-page";
+import { wantedEmptyHtml, wantedRowHtml } from "./wanted-page";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
@@ -132,8 +137,7 @@ function landingHeroHtml(): string {
 
 type EndowmentTeaser = {
   configured: boolean;
-  display_balance_sats: number;
-  goal_sats: number;
+  balance: EndowmentBalanceView;
 };
 
 async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
@@ -141,22 +145,24 @@ async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
   try {
     const res = await fetch(`${WORKERS_API.replace(/\/$/, "")}/endowment`);
     if (!res.ok) return null;
-    const body = (await res.json()) as Partial<EndowmentTeaser>;
+    const body = (await res.json()) as Record<string, unknown>;
+    // Never display_balance_sats: missing balance_shared_with_escrow is unknown.
     return {
       configured: Boolean(body.configured),
-      display_balance_sats: Number(body.display_balance_sats) || 0,
-      goal_sats: Math.max(0, Math.floor(Number(body.goal_sats) || 0)),
+      balance: endowmentBalanceView(body),
     };
   } catch {
     return null;
   }
 }
 
-function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
+/** Home endowment strip. Amounts and Donate only when the endowment has its own address. */
+export function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
   const progress =
-    teaser && teaser.configured
-      ? endowmentMeterHtml(teaser.display_balance_sats, teaser.goal_sats)
-      : "";
+    teaser && teaser.configured ? endowmentFiguresHtml(teaser.balance) : "";
+  const give = Boolean(
+    teaser && teaser.configured && endowmentGiveAllowed(teaser.balance),
+  );
   return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
     <div class="endowment-strip">
       <div class="endowment-strip-head">
@@ -165,7 +171,7 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
           <h2 id="endowment-strip-heading">Monthly gifts to popular projects</h2>
         </div>
         <div class="landing-cta-row endowment-strip-cta">
-          <a class="btn" href="${href("/endowment")}?donate">Donate</a>
+          ${give ? `<a class="btn" href="${href("/endowment")}?donate">Donate</a>` : ""}
           <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
         </div>
       </div>
@@ -863,19 +869,21 @@ export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void
   });
 }
 
-function wantedRailHtml(
+export function wantedRailHtml(
   rows: Awaited<ReturnType<typeof fetchWanted>>,
 ): string {
-  if (!rows.length) return "";
+  const list = rows.length
+    ? rows
+        .slice(0, 4)
+        .map((r) => wantedRowHtml(r, { fundedSuffix: false }))
+        .join("")
+    : wantedEmptyHtml();
   return `<section class="wrap-wide project-rail" aria-labelledby="wanted-projects">
     <div class="rail-head">
       <div><h2 id="wanted-projects">Most wanted</h2><p>Watched more than funded.</p></div>
-      <a href="${href("/wanted")}">Full list →</a>
+      ${rows.length ? `<a href="${href("/wanted")}">Full list →</a>` : ""}
     </div>
-    <div class="wanted-list">${rows
-      .slice(0, 4)
-      .map((r) => wantedRowHtml(r, { fundedSuffix: false }))
-      .join("")}</div>
+    <div class="wanted-list">${list}</div>
   </section>`;
 }
 

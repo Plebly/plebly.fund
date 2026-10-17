@@ -8,6 +8,7 @@ vi.mock("./config", async (importOriginal) => {
 import {
   donationRowCopy,
   donationTargetHref,
+  fetchEndowmentOpen,
   fetchPublicDonations,
   renderDonations,
   type PublicDonation,
@@ -26,6 +27,10 @@ const d = (over: Partial<PublicDonation> = {}): PublicDonation => ({
 });
 
 const fetchMock = vi.fn();
+/** Ledger fetches only (the page also reads /endowment for the endowment wording). */
+const donationCalls = () =>
+  fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/donations"));
+
 const reply = (body: unknown, status = 200) =>
   fetchMock.mockResolvedValueOnce(
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }),
@@ -46,30 +51,38 @@ afterEach(() => {
 
 describe("donationRowCopy", () => {
   it("shows @handle (no double @), formatted sats and the target label", () => {
-    expect(donationRowCopy(d())).toEqual({
+    expect(donationRowCopy(d(), false)).toEqual({
       donor: "@alice",
       amount: "12,345 sats",
       target: "Relay hardening",
     });
-    expect(donationRowCopy(d({ donor_display: "@bob" })).donor).toBe("@bob");
+    expect(donationRowCopy(d({ donor_display: "@bob" }), false).donor).toBe("@bob");
   });
 
   it("anonymous wins over a display name; a missing name is also Anonymous", () => {
-    expect(donationRowCopy(d({ anonymous: true })).donor).toBe("Anonymous");
-    expect(donationRowCopy(d({ donor_display: null })).donor).toBe("Anonymous");
-    expect(donationRowCopy(d({ donor_display: "" })).donor).toBe("Anonymous");
+    expect(donationRowCopy(d({ anonymous: true }), false).donor).toBe("Anonymous");
+    expect(donationRowCopy(d({ donor_display: null }), false).donor).toBe("Anonymous");
+    expect(donationRowCopy(d({ donor_display: "" }), false).donor).toBe("Anonymous");
   });
 
   it("falls back from label to id to 'a project'", () => {
-    expect(donationRowCopy(d({ target_label: "" })).target).toBe("PLEBLY-2026-003");
-    expect(donationRowCopy(d({ target_label: "", target_id: "" })).target).toBe("a project");
+    expect(donationRowCopy(d({ target_label: "" }), false).target).toBe("PLEBLY-2026-003");
+    expect(donationRowCopy(d({ target_label: "", target_id: "" }), false).target).toBe("a project");
   });
 });
 
 describe("donationTargetHref", () => {
   it("endowment gifts link to /endowment; project gifts to the stable proposal path", () => {
-    expect(donationTargetHref(d({ target_type: "endowment", target_id: "endowment" }))).toBe("/endowment");
-    expect(donationTargetHref(d())).toBe("/p/plebly-2026-003");
+    expect(donationTargetHref(d({ target_type: "endowment", target_id: "endowment" }), true)).toBe("/endowment");
+    expect(donationTargetHref(d(), false)).toBe("/p/plebly-2026-003");
+  });
+
+  it("endowment rows have no link and read as the shared escrow while the endowment isn't open", () => {
+    const row = d({ target_type: "endowment", target_id: "endowment", target_label: "Endowment" });
+    expect(donationTargetHref(row, false)).toBeNull();
+    expect(donationRowCopy(row, false).target).toBe("Shared escrow (001–008)");
+    expect(donationRowCopy(row, true).target).toBe("Endowment");
+    expect(donationRowCopy(d(), false).target).toBe("Relay hardening");
   });
 });
 
@@ -140,7 +153,7 @@ describe("renderDonations", () => {
     history.replaceState(null, "", "/donations?page=-4");
     reply({ donations: [d()], total: 41 });
     await renderDonations(shell);
-    expect(fetchMock).toHaveBeenLastCalledWith("https://api.test/donations?limit=40&offset=0");
+    expect(donationCalls().at(-1)).toBe("https://api.test/donations?limit=40&offset=0");
     let pager = app().querySelector(".donations-pager")!;
     expect(pager.textContent).toContain("Page 1 of 2");
     expect([...pager.querySelectorAll("a")].map((a) => a.textContent)).toEqual(["Older →"]);
@@ -158,5 +171,170 @@ describe("renderDonations", () => {
     expect(app().textContent).toContain("Could not load the donations ledger right now.");
     expect(app().querySelector(".donations-list")).toBeNull();
     expect(app().textContent).not.toContain("500");
+  });
+});
+
+describe("shared escrow and the endowment wording", () => {
+  const SHARED_ROW = d({
+    id: "s1",
+    target_type: "shared_escrow",
+    target_id: "shared-escrow",
+    target_label: "Shared escrow (001–008)",
+    anonymous: true,
+  });
+  const OWN = {
+    address: "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz",
+    configured: true,
+    give_address_usable: true,
+    balance_shared_with_escrow: false,
+    balance_sats: 1,
+    balance_unavailable: false,
+    total_given_sats: 1,
+    goal_sats: 0,
+  };
+  const LEGACY = { address: OWN.address, configured: true, display_balance_sats: 148_106, goal_sats: 0 };
+
+  function route(donations: PublicDonation[], endowment: unknown, endowmentStatus = 200) {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/donations")) {
+        return new Response(JSON.stringify({ donations, total: donations.length }), { status: 200 });
+      }
+      if (String(url).endsWith("/endowment")) {
+        return new Response(JSON.stringify(endowment), { status: endowmentStatus });
+      }
+      return new Response("not mocked", { status: 599 });
+    });
+  }
+  const lede = () => app().querySelector(".lede")!.textContent;
+
+  it("donationTargetHref: shared escrow and unknown types have no link", () => {
+    for (const open of [false, true]) {
+      expect(donationTargetHref(SHARED_ROW, open)).toBeNull();
+      expect(donationTargetHref(d({ target_type: "other" as PublicDonation["target_type"] }), open)).toBeNull();
+    }
+    expect(donationTargetHref(d({ target_type: "endowment", target_id: "endowment" }), true)).toBe("/endowment");
+  });
+
+  it("fetchEndowmentOpen: a 500 with an own-address-shaped body is false", async () => {
+    route([], OWN, 500);
+    expect(await fetchEndowmentOpen()).toBe(false);
+    route([], OWN, 200);
+    expect(await fetchEndowmentOpen()).toBe(true);
+  });
+
+  it("an endowment row (older workers) shows the shared label with no link while shared", async () => {
+    const ENDOWMENT_ROW = d({ id: "e1", target_type: "endowment", target_id: "endowment", target_label: "Endowment" });
+    route([ENDOWMENT_ROW, d()], LEGACY);
+    await renderDonations(shell);
+    const target = app().querySelector(".donations-row .donations-target")!;
+    expect(target.tagName).toBe("SPAN");
+    expect(target.textContent).toBe("Shared escrow (001–008)");
+    expect(app().textContent).not.toContain("Endowment");
+    expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+  });
+
+  it("own address: an endowment row links to /endowment with its label", async () => {
+    route([d({ id: "e1", target_type: "endowment", target_id: "endowment", target_label: "Endowment" })], OWN);
+    await renderDonations(shell);
+    const target = app().querySelector(".donations-row .donations-target")!;
+    expect(target.tagName).toBe("A");
+    expect(target.getAttribute("href")).toMatch(/\/endowment$/);
+    expect(target.textContent).toBe("Endowment");
+  });
+
+  it("escapes HTML in shared-escrow and unknown-type labels (plain-text rows)", async () => {
+    route(
+      [
+        d({ id: "s1", target_type: "shared_escrow", target_label: "<img src=x onerror=alert(1)>" }),
+        d({ id: "u1", target_type: "other" as PublicDonation["target_type"], target_label: "<b>u</b>" }),
+      ],
+      LEGACY,
+    );
+    await renderDonations(shell);
+    expect(app().querySelector("img, b")).toBeNull();
+    const targets = [...app().querySelectorAll(".donations-target")];
+    expect(targets.map((t) => t.tagName)).toEqual(["SPAN", "SPAN"]);
+    expect(targets.map((t) => t.textContent)).toEqual(["<img src=x onerror=alert(1)>", "<b>u</b>"]);
+  });
+
+  it.each([
+    ["the current live API (no shared flag)", LEGACY, 200],
+    ["balance_shared_with_escrow: true", { ...OWN, balance_shared_with_escrow: true, address: null, give_address_usable: false }, 200],
+    ["give_address_usable: false", { ...OWN, give_address_usable: false }, 200],
+    ["a failed /endowment read", { error: "down" }, 502],
+  ])("%s: no endowment wording or link", async (_label, endowment, status) => {
+    route([], endowment, status);
+    await renderDonations(shell);
+    expect(lede()).toBe("Confirmed gifts to projects.");
+    expect(app().textContent).not.toContain("endowment");
+    expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+    expect(app().textContent).toContain("Fund a project.");
+  });
+
+  it.each([
+    ["a network error", () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["a non-JSON body", async () => new Response("<html>oops</html>", { status: 200 })],
+  ])("/endowment %s: no endowment wording or link", async (_label, endowmentReply) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes("/donations")
+        ? new Response(JSON.stringify({ donations: [], total: 0 }), { status: 200 })
+        : endowmentReply(),
+    );
+    await renderDonations(shell);
+    expect(lede()).toBe("Confirmed gifts to projects.");
+    expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+  });
+
+  it("a /endowment that never answers: the ledger still paints after 4 s, wording hidden, request aborted", async () => {
+    vi.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes("/donations")) {
+          return Promise.resolve(new Response(JSON.stringify({ donations: [d()], total: 1 }), { status: 200 }));
+        }
+        signal = init?.signal ?? undefined;
+        return new Promise<Response>(() => {});
+      });
+      let done = false;
+      const rendering = renderDonations(shell).then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(3_999);
+      expect(done).toBe(false);
+      expect(app().textContent).toContain("Loading…");
+      expect(lede()).toBe("Confirmed gifts to projects.");
+      await vi.advanceTimersByTimeAsync(1);
+      await rendering;
+      expect(lede()).toBe("Confirmed gifts to projects (1).");
+      expect(app().querySelectorAll(".donations-row")).toHaveLength(1);
+      expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("own address: the endowment wording and link come back", async () => {
+    route([], OWN);
+    await renderDonations(shell);
+    expect(lede()).toBe("Confirmed gifts to projects and the endowment.");
+    expect(app().querySelector('a[href$="/endowment"]')!.textContent).toBe("give to the endowment");
+  });
+
+  it("with rows: lede carries the total; a shared-escrow row is plain text, not /endowment", async () => {
+    route([SHARED_ROW, d()], LEGACY);
+    await renderDonations(shell);
+    expect(lede()).toBe("Confirmed gifts to projects (2).");
+    const rows = app().querySelectorAll(".donations-row");
+    const target = rows[0]!.querySelector(".donations-target")!;
+    expect(target.tagName).toBe("SPAN");
+    expect(target.textContent).toBe("Shared escrow (001–008)");
+    expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+    expect(rows[1]!.querySelector("a.donations-target")).not.toBeNull();
+  });
+
+  it("own address with rows: lede names the endowment with the total", async () => {
+    route([d()], OWN);
+    await renderDonations(shell);
+    expect(lede()).toBe("Confirmed gifts to projects and the endowment (1).");
   });
 });
