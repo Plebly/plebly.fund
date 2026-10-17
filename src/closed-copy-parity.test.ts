@@ -122,3 +122,73 @@ describe("rendered next card uses the shared copy", () => {
     expect(text).toContain(donateClosedReason("listed", c)!);
   });
 });
+
+describe("structure unavailable: temporary (unreadable) vs final (voided)", () => {
+  // Workers: KV/parse failure on the funding record -> catalog row
+  // status "voided" + structured_state "unreadable" (fail closed), claim view
+  // state "unavailable", accepting_claims false, no psbt. Next good read restores it.
+  const unreadableClaim = () =>
+    claim({ status: "listed", state: "unavailable", accepting_claims: false });
+
+  it("catalog voided+unreadable, claim view listed -> paused in both places", () => {
+    expect(donateClosedReason("voided", unreadableClaim(), "unreadable")).toBe(DONATE_PAUSED_LINE);
+    expect(
+      notAcceptingFunds({ status: "voided", structured_state: "unreadable" }, unreadableClaim()),
+    ).toBe(DONATE_PAUSED_LINE);
+  });
+
+  it("catalog listed+unreadable, claim view listed -> paused in both places", () => {
+    expect(donateClosedReason("listed", unreadableClaim(), "unreadable")).toBe(DONATE_PAUSED_LINE);
+    expect(
+      notAcceptingFunds({ status: "listed", structured_state: "unreadable" }, unreadableClaim()),
+    ).toBe(DONATE_PAUSED_LINE);
+  });
+
+  it("real void: claim view record voided on a listed row -> closed", () => {
+    const c = claim({
+      status: "listed",
+      state: "unavailable",
+      accepting_claims: false,
+      psbt: { structured_state: "voided" } as ClaimStatus["psbt"],
+    });
+    expect(donateClosedReason("listed", c, "voided")).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "listed", structured_state: "voided" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+
+  it("catalog voided+voided (live 001-005, 008) -> closed", () => {
+    const c = claim({ status: "voided", state: "unavailable" });
+    expect(donateClosedReason("voided", c, "voided")).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "voided", structured_state: "voided" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+
+  it("catalog voided with no structured_state passed -> closed (fail closed)", () => {
+    expect(donateClosedReason("voided", claim({ status: "listed" }))).toBe(DONATE_CLOSED_OTHER);
+  });
+
+  it("unreadable but not a fundable status (declined) -> closed", () => {
+    expect(donateClosedReason("declined", claim({ status: "declined" }), "unreadable")).toBe(DONATE_CLOSED_OTHER);
+  });
+});
+
+describe("next card headlines (UI UX: short; the note says what happens to gifts)", () => {
+  it("voided row: 'Voided'", () => {
+    const a = resolveNextAction({ proposal: proposal({ status: "voided" }), claim: null });
+    expect(a.sentence).toBe("Voided");
+    expect(a.button).toBeNull();
+  });
+
+  it("unreadable structure on a listed row: 'Structure unavailable'", () => {
+    const p = proposal({ status: "listed", structured_state: "unreadable" } as Partial<Proposal>);
+    const a = resolveNextAction({ proposal: p, claim: null });
+    expect(a.sentence).toBe("Structure unavailable");
+    expect(a.button).toBeNull();
+  });
+
+  it("claim view unreadable (accepting_claims false, no psbt): 'Structure unavailable'", () => {
+    const a = resolveNextAction({
+      proposal: proposal({ status: "listed" }),
+      claim: claim({ status: "listed", state: "unavailable", accepting_claims: false }),
+    });
+    expect(a.sentence).toBe("Structure unavailable");
+  });
+});

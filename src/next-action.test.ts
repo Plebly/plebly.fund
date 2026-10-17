@@ -779,7 +779,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -793,7 +793,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -805,7 +805,7 @@ describe("resolveNextAction", () => {
           psbt: { structured_state: "voided" },
         }),
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -819,7 +819,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -833,7 +833,7 @@ describe("resolveNextAction", () => {
         }),
         user: donor,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -845,7 +845,7 @@ describe("resolveNextAction", () => {
           psbt: { structured_state: "some_future_state" },
         }),
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -853,7 +853,7 @@ describe("resolveNextAction", () => {
       input: {
         proposal: proposal({ status: "voided" }),
       },
-      sentence: "Voided, not accepting funds.",
+      sentence: "Voided",
       button: null,
     },
     {
@@ -1323,7 +1323,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: proposer,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {
@@ -1345,7 +1345,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: proposer,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     // stale catalog settled row + claim-view block → blocked (catalog flags cannot override claim-view)
@@ -1369,7 +1369,7 @@ describe("resolveNextAction", () => {
         } as never),
         user: proposer,
       },
-      sentence: "Structure unavailable, not accepting funds.",
+      sentence: "Structure unavailable",
       button: null,
     },
     {

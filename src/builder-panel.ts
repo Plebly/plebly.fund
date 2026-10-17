@@ -1547,7 +1547,7 @@ export async function bindBuilderPanel(
         // why in the address row's place instead of leaving it blank.
         const escrowClosedReason = donateSlot
           ? null
-          : donateClosedReason(String(opts.proposal.status || ""), status);
+          : donateClosedReason(String(opts.proposal.status || ""), status, opts.proposal.structured_state ?? null);
         if (
           onchainEscrowRow &&
           escrowClosedReason &&
@@ -1568,7 +1568,7 @@ export async function bindBuilderPanel(
 
         if (!donateAllowed) {
           // workers#51 funds-closed row: short reason note, not a blank slot.
-          const closedReason = donateClosedReason(String(opts.proposal.status || ""), status);
+          const closedReason = donateClosedReason(String(opts.proposal.status || ""), status, opts.proposal.structured_state ?? null);
           donateSlot.hidden = !closedReason;
           donateSlot.innerHTML = closedReason ? donateClosedNoteHtml(closedReason) : "";
         } else if (next.button === "donate") {

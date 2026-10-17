@@ -90,7 +90,7 @@ describe("resolveNextAction: declined row", () => {
 
   it("voided keeps its own copy", () => {
     expect(resolveNextAction({ proposal: proposal({ status: "voided" }) }).sentence).toBe(
-      "Voided, not accepting funds.",
+      "Voided",
     );
   });
 
@@ -124,7 +124,7 @@ describe("resolveNextAction: earlier exits still win over declined", () => {
       claim: claim({ state: "open", psbt: { structured_state: "voided" } }),
       user: visitor,
     });
-    expect(action.sentence).toBe("Structure unavailable, not accepting funds.");
+    expect(action.sentence).toBe("Structure unavailable");
     expect(action.button).toBeNull();
   });
 

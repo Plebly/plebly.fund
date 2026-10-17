@@ -15,10 +15,14 @@ import { escapeHtml } from "./util";
  * never shows two wordings.
  */
 export function notAcceptingFunds(
-  proposal: Pick<Proposal, "status">,
-  claim?: Pick<ClaimStatus, "state" | "status"> | null,
+  proposal: Pick<Proposal, "status" | "structured_state">,
+  claim?: Pick<ClaimStatus, "state" | "status" | "psbt"> | null,
 ): string {
-  return closedFundsCopy(String(proposal.status || ""), claim ?? null);
+  return closedFundsCopy(
+    String(proposal.status || ""),
+    claim ?? null,
+    proposal.structured_state ?? null,
+  );
 }
 
 /** States that are always blocked (terminal or errored). */
@@ -447,7 +451,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   // FIRST: check catalog status "voided" or unknown — terminal, no actions at all.
   if (status === "voided") {
     return {
-      sentence: "Voided, not accepting funds.",
+      sentence: "Voided",
       button: null,
       moreIds,
     };
@@ -495,7 +499,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   if (psbTerminal && status !== "rejected" && status !== "completed") {
     if (!p.release_blocked_reason) {
       return {
-        sentence: "Structure unavailable, not accepting funds.",
+        sentence: "Structure unavailable",
         button: null,
         moreIds,
       };
@@ -514,7 +518,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     // Exception: release_blocked_reason should still show for stalled releases
     if (!p.release_blocked_reason) {
       return {
-        sentence: "Structure unavailable, not accepting funds.",
+        sentence: "Structure unavailable",
         button: null,
         moreIds,
       };
