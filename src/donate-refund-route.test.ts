@@ -21,7 +21,7 @@ vi.mock("./github", async (importOriginal) => {
 });
 
 import {
-  DONATE_SIGNED_OUT_SHARED_COPY,
+  DONATE_SHARED_COUNT_COPY,
   DONATE_SIGNED_OUT_UNIQUE_COPY,
   donateModalHtml,
   donateRefundRouteCopy,
@@ -34,8 +34,9 @@ import type { Proposal } from "./types";
 /** UI UX / Review / Tester final copy, pinned literally. */
 const UNIQUE =
   "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
+/** Shared address: the one combined sign-in note (UI UX, verbatim). */
 const SHARED =
-  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
+  "Sign in before you send so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total, and refunds need a signed message from the sending address, which exchanges and some wallets can't do.";
 const BANNED = ["Refund addresses aren't available", "Your gift stays in escrow"];
 
 const ADDR = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
@@ -58,7 +59,8 @@ const proposal = (shared: boolean): Proposal => row(9, ADDR, shared);
 function renderRow(p: Proposal, catalog: Proposal[], signedIn = false): HTMLElement | null {
   catalogRows = catalog;
   document.body.innerHTML = donateModalHtml(p, { signedIn });
-  return document.querySelector<HTMLElement>("#donate-refund-route");
+  // Unique: the refund-route line. Shared: the single combined note.
+  return document.querySelector<HTMLElement>("#donate-refund-route, #donate-shared-count");
 }
 
 function render(shared: boolean, signedIn: boolean): HTMLElement | null {
@@ -68,7 +70,7 @@ function render(shared: boolean, signedIn: boolean): HTMLElement | null {
 describe("signed-out Donate refund-route line", () => {
   it("copy constants are the agreed strings", () => {
     expect(DONATE_SIGNED_OUT_UNIQUE_COPY).toBe(UNIQUE);
-    expect(DONATE_SIGNED_OUT_SHARED_COPY).toBe(SHARED);
+    expect(DONATE_SHARED_COUNT_COPY).toBe(SHARED);
   });
 
   it("unique address, signed out: the unique line, in the pay step, above the address", () => {
@@ -85,6 +87,63 @@ describe("signed-out Donate refund-route line", () => {
     expect(line?.textContent).not.toContain("refund route");
     const addr = document.querySelector("#donate-address")!;
     expect(line!.compareDocumentPosition(addr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  /** Every visible sign-in note on the pay step, any wording. */
+  const signInNotes = () =>
+    [...document.querySelectorAll<HTMLElement>("#donate-step-pay [role=note]")]
+      .filter((n) => !n.closest("[hidden]") || n.closest("[hidden]") === n.closest("#donate-step-pay"))
+      .filter((n) => /sign in/i.test(n.textContent || ""))
+      .map((n) => (n.textContent || "").replace(/\s+/g, " ").trim());
+
+  it("one sign-in note per modal: shared shows only the combined note, unique only its route line", () => {
+    render(true, false);
+    expect(document.querySelector("#donate-refund-route")).toBeNull();
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeNull();
+    expect(signInNotes()).toEqual([SHARED]);
+    render(false, false);
+    expect(document.querySelector("#donate-shared-count")).toBeNull();
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeNull();
+    expect(signInNotes()).toEqual([UNIQUE]);
+    // Endowment: no route or count note, so the anonymous-credit line is the one.
+    document.body.innerHTML = endowmentDonatePanelHtml(ADDR, { signedIn: false });
+    expect(signInNotes()).toEqual(["Giving anonymously. Sign in now if you want credit."]);
+  });
+
+  /** Sign in buttons on the payment step, outside the Lightning tab. */
+  const signInButtons = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("#donate-step-pay .donate-credit-signin")].filter(
+      (b) => !b.closest('[data-pane="lightning"]'),
+    );
+
+  it("exactly one Sign in button on the payment step, directly under the note, outside it", () => {
+    for (const [shared, copy] of [
+      [true, SHARED],
+      [false, UNIQUE],
+    ] as const) {
+      const note = render(shared, false)!;
+      expect(note.textContent).toBe(copy);
+      expect(note.children).toHaveLength(0);
+      const buttons = signInButtons();
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]!.textContent).toBe("Sign in");
+      expect(buttons[0]!.id).toBe("donate-credit-signin");
+      expect(note.nextElementSibling?.contains(buttons[0]!)).toBe(true);
+    }
+    // Endowment: the existing line and its Sign in now button, no duplicate.
+    document.body.innerHTML = endowmentDonatePanelHtml(ADDR, { signedIn: false });
+    const endow = signInButtons();
+    expect(endow).toHaveLength(1);
+    expect(endow[0]!.textContent).toBe("Sign in now");
+    expect(endow[0]!.closest(".donate-credit-advisory")).toBeTruthy();
+    expect(document.querySelector(".donate-note-signin")).toBeNull();
+    // Signed in: none.
+    render(true, true);
+    expect(signInButtons()).toHaveLength(0);
+    render(false, true);
+    expect(signInButtons()).toHaveLength(0);
+    expect(document.body.textContent).not.toContain("Sign in so your gift counts");
+    expect(document.body.textContent).not.toContain("Refunds on this proposal need");
   });
 
   it("both lines are plain text: no link, no anchor, the text word for word", () => {
@@ -108,7 +167,7 @@ describe("signed-out Donate refund-route line", () => {
 
   it("donateRefundRouteCopy covers all four cases", () => {
     expect(donateRefundRouteCopy({ signedIn: false, shared: false })).toBe(UNIQUE);
-    expect(donateRefundRouteCopy({ signedIn: false, shared: true })).toBe(SHARED);
+    expect(donateRefundRouteCopy({ signedIn: false, shared: true })).toBeNull();
     expect(donateRefundRouteCopy({ signedIn: true, shared: false })).toBeNull();
     expect(donateRefundRouteCopy({ signedIn: true, shared: true })).toBeNull();
   });

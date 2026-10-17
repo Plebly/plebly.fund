@@ -1,3 +1,4 @@
+import { partialRefundHtml, refundStatusLabel, type DonateRemainderOwed } from "./partial-refund";
 import {
   authFetch,
   claimUsername,
@@ -307,6 +308,51 @@ async function fetchGithubOrgAccessUrl(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export type ContributionRefundRow = {
+  proposal_id: string;
+  amount_sats: number;
+  status: string;
+  rail?: string;
+  swap_id?: string;
+  txid?: string;
+  vout?: number;
+  refund_address?: string;
+  refund_txid?: string;
+  needs_address?: boolean;
+  non_refundable_dust?: boolean;
+  donate_remainder_owed?: DonateRemainderOwed;
+};
+
+/** One row of the account page's contribution refunds list. */
+export function contributionRefundRowHtml(r: ContributionRefundRow): string {
+  return `<li class="work-row">
+                <a href="${href(`/p/${encodeURIComponent(r.proposal_id)}`)}">${escapeHtml(r.proposal_id)}</a>
+                <span class="pill">${escapeHtml(
+                  refundStatusLabel(r.status, r.donate_remainder_owed, Boolean(r.refund_txid)),
+                )}</span>
+                ${r.rail ? `<span class="pill">${escapeHtml(r.rail)}</span>` : ""}
+                <span class="muted">${formatSats(r.amount_sats)}</span>
+                ${
+                  r.swap_id
+                    ? `<p class="mono muted">swap ${escapeHtml(r.swap_id)}</p>`
+                    : r.txid != null
+                      ? `<p class="mono muted">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout ?? 0}</p>`
+                      : ""
+                }
+                ${
+                  r.refund_txid
+                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>${partialRefundHtml(r.donate_remainder_owed)}`
+                    : r.non_refundable_dust
+                      ? `<p class="muted">Below dust — not packaged for refund.</p>`
+                      : r.refund_address
+                        ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
+                        : `<p class="muted">Needs address — register on the proposal when status is refunding${
+                            r.rail === "lightning" ? " (use your swap id)" : ""
+                          }.</p>`
+                }
+              </li>`;
 }
 
 export function connectedAccountsHtml(user: AuthUser): string {
@@ -995,47 +1041,12 @@ export async function renderAccount(
         refundsEl.innerHTML = `<p class="muted">Could not load contribution refunds.</p>`;
       } else {
         const data = (await refundsRes.json()) as {
-          refunds: {
-            proposal_id: string;
-            amount_sats: number;
-            status: string;
-            rail?: string;
-            swap_id?: string;
-            txid?: string;
-            vout?: number;
-            refund_address?: string;
-            refund_txid?: string;
-            needs_address?: boolean;
-            non_refundable_dust?: boolean;
-          }[];
+          refunds: ContributionRefundRow[];
         };
         refundsEl.innerHTML = data.refunds.length
           ? `<ul class="work-list">${data.refunds
               .map(
-                (r) => `<li class="work-row">
-                <a href="${href(`/p/${encodeURIComponent(r.proposal_id)}`)}">${escapeHtml(r.proposal_id)}</a>
-                <span class="pill">${escapeHtml(r.status)}</span>
-                ${r.rail ? `<span class="pill">${escapeHtml(r.rail)}</span>` : ""}
-                <span class="muted">${formatSats(r.amount_sats)}</span>
-                ${
-                  r.swap_id
-                    ? `<p class="mono muted">swap ${escapeHtml(r.swap_id)}</p>`
-                    : r.txid != null
-                      ? `<p class="mono muted">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout ?? 0}</p>`
-                      : ""
-                }
-                ${
-                  r.refund_txid
-                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>`
-                    : r.non_refundable_dust
-                      ? `<p class="muted">Below dust — not packaged for refund.</p>`
-                      : r.refund_address
-                        ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
-                        : `<p class="muted">Needs address — register on the proposal when status is refunding${
-                            r.rail === "lightning" ? " (use your swap id)" : ""
-                          }.</p>`
-                }
-              </li>`,
+                contributionRefundRowHtml,
               )
               .join("")}</ul>`
           : `<div class="empty-state"><div class="empty-state-inner">
