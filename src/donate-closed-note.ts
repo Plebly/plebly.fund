@@ -1,3 +1,4 @@
+import { isFundableStatus } from "./config";
 import { escapeHtml } from "./util";
 
 /**
@@ -9,6 +10,11 @@ import { escapeHtml } from "./util";
 export const DONATE_CLOSED_COMPLETE = "Funding for this proposal is complete.";
 /** declined, rejected, voided, refunding, and any other non-fundable status. */
 export const DONATE_CLOSED_OTHER = "This proposal is closed and isn't accepting gifts.";
+/**
+ * Status still fundable but funds closed for now (e.g. the funding PSBT is
+ * built). Also used by the Donate modal's paused state (proposal-ui).
+ */
+export const DONATE_PAUSED_LINE = "Donations are paused for this proposal right now.";
 
 const FUNDING_COMPLETE = new Set(["in_review", "claimed", "completed", "bounty_settled", "settled"]);
 
@@ -27,7 +33,26 @@ export function donateClosedReason(
   if (FUNDING_COMPLETE.has(state) || FUNDING_COMPLETE.has(status)) {
     return DONATE_CLOSED_COMPLETE;
   }
+  // Paused only when every source still says fundable: a catalog declined or
+  // voided row stays closed even if the claim view still says listed.
+  const catalogStatus = String(proposalStatus || "").toLowerCase();
+  const fundable =
+    state !== "voided" &&
+    isFundableStatus(status) &&
+    (!catalogStatus || isFundableStatus(catalogStatus));
+  if (fundable) return DONATE_PAUSED_LINE;
   return DONATE_CLOSED_OTHER;
+}
+
+/**
+ * Closed-funds copy for a row already known to be closed (the next card uses
+ * this so it never shows a second wording next to the Donate-slot note).
+ */
+export function closedFundsCopy(
+  proposalStatus: string | null | undefined,
+  claim?: { state?: string | null; status?: string | null } | null,
+): string {
+  return donateClosedReason(proposalStatus, { ...(claim || {}), accepting_funds: false })!;
 }
 
 /**

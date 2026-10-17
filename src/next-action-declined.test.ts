@@ -9,7 +9,7 @@ import type { Proposal } from "./types";
  * button. These pin the declined copy instead.
  */
 
-const NOT_ACCEPTING = "This listing isn't accepting funds.";
+const NOT_ACCEPTING = "This proposal is closed and isn't accepting gifts.";
 
 function proposal(partial: Partial<Proposal> = {}): Proposal {
   return {
