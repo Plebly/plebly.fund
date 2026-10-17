@@ -128,7 +128,12 @@ describe("Donate modal focus (real open flow)", () => {
     await openDonate();
     expect(payStep().hidden).toBe(true);
     expect(document.activeElement?.id).toBe("donate-close");
-    document.querySelector<HTMLButtonElement>("#donate-credit-continue")!.click();
+    // A keyboard donor tabs to Continue and presses it: Continue has focus when
+    // the step changes, then is hidden, so focus must still move to the amount.
+    const cont = document.querySelector<HTMLButtonElement>("#donate-credit-continue")!;
+    cont.focus();
+    expect(document.activeElement).toBe(cont);
+    cont.click();
     expect(payStep().hidden).toBe(false);
     expect(document.activeElement?.id).toBe("donate-amount");
   });

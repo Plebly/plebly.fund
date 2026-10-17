@@ -216,4 +216,61 @@ describe("installModalA11y", () => {
     document.getElementById("ln-ready")!.setAttribute("data-ln-phase", "compose");
     expect(focusableIn(modal).map((el) => el.id)).toEqual(["x", "ln-amount", "ln-create", "ln-copy"]);
   });
+
+  it("skips controls under an inert subtree", async () => {
+    const { modal } = await openIt();
+    const card = modal.querySelector(".site-modal-card")!;
+    const wrap = document.createElement("div");
+    wrap.setAttribute("inert", "");
+    wrap.innerHTML = `<button type="button" id="inert-btn">inert</button>`;
+    card.appendChild(wrap); // after #ok, so it would be the last control
+    expect(focusableIn(modal).map((el) => el.id)).toEqual(["x", "amount", "ok"]);
+    document.getElementById("x")!.focus();
+    expect(press("Tab", true).defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe("ok");
+  });
+
+  it("Tab and Shift+Tab pull escaped focus back to the first / last control", async () => {
+    await openIt();
+    const home = document.getElementById("home")!;
+    home.focus();
+    const fwd = press("Tab");
+    expect(fwd.defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe("x");
+    home.focus();
+    const back = press("Tab", true);
+    expect(back.defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe("ok");
+  });
+
+  it("returns focus to the opener inside the lower modal when a stacked modal closes", async () => {
+    const { modal } = await openIt();
+    const ok = document.getElementById("ok") as HTMLButtonElement;
+    ok.focus();
+    // A second shared-markup modal opened from inside the first.
+    const top = document.createElement("div");
+    top.className = "site-modal";
+    top.innerHTML = `<div class="site-modal-card" role="dialog" aria-modal="true">
+      <button type="button" class="site-modal-close" id="top-x">x</button></div>`;
+    document.body.appendChild(top);
+    await flush();
+    expect(document.activeElement?.id).toBe("top-x");
+    top.remove();
+    await flush();
+    expect(modal.hidden).toBe(false);
+    expect(document.activeElement).toBe(ok);
+  });
+
+  it("uninstall removes the Tab handler and stops watching modals", async () => {
+    const { opener, modal } = await openIt();
+    uninstall();
+    document.getElementById("ok")!.focus();
+    expect(press("Tab").defaultPrevented).toBe(false);
+    // No observer: closing no longer restores focus to the opener.
+    document.getElementById("ok")!.focus();
+    modal.hidden = true;
+    await flush();
+    expect(document.activeElement).not.toBe(opener);
+    uninstall = installModalA11y(); // afterEach uninstalls again
+  });
 });
