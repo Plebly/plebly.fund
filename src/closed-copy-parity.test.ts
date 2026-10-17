@@ -130,17 +130,19 @@ describe("structure unavailable: temporary (unreadable) vs final (voided)", () =
   // Workers: KV/parse failure on the funding record -> catalog row
   // status "voided" + structured_state "unreadable" (fail closed), claim view
   // state "unavailable", accepting_claims false, no psbt. Next good read restores it.
+  // The worker's claim view for an unreadable claim sends status "unavailable"
+  // (builder-claim :259), so the fixture uses that real shape.
   const unreadableClaim = () =>
-    claim({ status: "listed", state: "unavailable", accepting_claims: false });
+    claim({ status: "unavailable", state: "unavailable", accepting_claims: false });
 
-  it("catalog voided+unreadable, claim view listed -> paused in both places", () => {
+  it("catalog voided+unreadable, claim view status unavailable -> paused in both places", () => {
     expect(donateClosedReason("voided", unreadableClaim(), "unreadable")).toBe(DONATE_PAUSED_LINE);
     expect(
       notAcceptingFunds({ status: "voided", structured_state: "unreadable" }, unreadableClaim()),
     ).toBe(DONATE_PAUSED_LINE);
   });
 
-  it("catalog listed+unreadable, claim view listed -> paused in both places", () => {
+  it("catalog listed+unreadable, claim view status unavailable -> paused in both places", () => {
     expect(donateClosedReason("listed", unreadableClaim(), "unreadable")).toBe(DONATE_PAUSED_LINE);
     expect(
       notAcceptingFunds({ status: "listed", structured_state: "unreadable" }, unreadableClaim()),
@@ -267,5 +269,65 @@ describe("Review Low @af668a8: paused needs a known open claim state and a catal
   it("missing catalog status (claim listed) -> closed, not paused", () => {
     expect(donateClosedReason(null, claim({ status: "listed", state: "open" }))).toBe(DONATE_CLOSED_OTHER);
     expect(donateClosedReason("", claim({ status: "listed", state: "open" }))).toBe(DONATE_CLOSED_OTHER);
+  });
+});
+
+describe("Review HOLD @567e33e: each claim-side closed signal closes on its own", () => {
+  it("catalog in_review + claim {voided, claimed} -> closed, not complete", () => {
+    const c = claim({ status: "voided", state: "claimed" });
+    expect(donateClosedReason("in_review", c)).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "in_review" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+  it("catalog in_review + claim {rejected, claimed} -> closed, not complete", () => {
+    const c = claim({ status: "rejected", state: "claimed" });
+    expect(donateClosedReason("in_review", c)).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "in_review" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+  it("catalog claimed + claim {refunding, claimed} (workers refunding row) -> closed, not complete", () => {
+    const c = claim({ status: "refunding", state: "claimed" });
+    expect(donateClosedReason("claimed", c)).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "claimed" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+  it("catalog listed + unknown claim status -> closed, not paused", () => {
+    const c = claim({ status: "frobnicated", state: "open" });
+    expect(donateClosedReason("listed", c)).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "listed" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+});
+
+describe("claim status unavailable (unreadable claim) defers to the catalog", () => {
+  const unavailable = () => claim({ status: "unavailable", state: "unavailable", accepting_claims: false });
+
+  for (const catalogStatus of ["listed", "funding", "claimable", "declined_fundable"]) {
+    it(`{unavailable} + fundable catalog ${catalogStatus} -> paused in both places`, () => {
+      expect(donateClosedReason(catalogStatus, unavailable())).toBe(DONATE_PAUSED_LINE);
+      expect(notAcceptingFunds({ status: catalogStatus }, unavailable())).toBe(DONATE_PAUSED_LINE);
+    });
+  }
+  for (const catalogStatus of ["in_review", "frobnicated", ""]) {
+    it(`{unavailable} + non-fundable catalog '${catalogStatus}' -> not paused`, () => {
+      expect(donateClosedReason(catalogStatus, unavailable())).not.toBe(DONATE_PAUSED_LINE);
+      expect(notAcceptingFunds({ status: catalogStatus }, unavailable())).not.toBe(DONATE_PAUSED_LINE);
+    });
+  }
+  it("{unavailable} + catalog listed with structured_state voided -> closed", () => {
+    expect(donateClosedReason("listed", unavailable(), "voided")).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "listed", structured_state: "voided" }, unavailable())).toBe(DONATE_CLOSED_OTHER);
+  });
+  it("{unavailable} + catalog declined -> closed", () => {
+    expect(donateClosedReason("declined", unavailable())).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "declined" }, unavailable())).toBe(DONATE_CLOSED_OTHER);
+  });
+  it("status only, never state: claim {unknown status, state unavailable} on a listed row -> closed, not paused", () => {
+    const c = claim({ status: "frobnicated", state: "unavailable" });
+    expect(donateClosedReason("listed", c)).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "listed" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+  it("Tester's live 001-008 shape, claim {voided, unavailable} -> closed (live catalog and a lagging listed catalog)", () => {
+    const c = claim({ status: "voided", state: "unavailable" });
+    expect(donateClosedReason("voided", c, "voided")).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "voided", structured_state: "voided" }, c)).toBe(DONATE_CLOSED_OTHER);
+    expect(donateClosedReason("listed", c)).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "listed" }, c)).toBe(DONATE_CLOSED_OTHER);
   });
 });

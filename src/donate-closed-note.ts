@@ -90,9 +90,15 @@ export function donateClosedReason(
   }
   // 5. Paused only when every source still says fundable and the claim state
   //    is a known open one. A missing catalog status is not fundable here.
+  //    A claim STATUS of `unavailable` (workers builder-claim: the claim record
+  //    could not be read) is temporary, so it defers to the catalog: paused
+  //    only when the catalog status is fundable. Status only, never state; the
+  //    settled, voided/closed and complete checks above have already run.
   const catalogFundable =
     isFundableStatus(catalogStatus) || (catalogStatus === "voided" && catalogTemporary);
-  if (isFundableStatus(status) && catalogFundable && PAUSABLE_CLAIM_STATES.has(state)) {
+  const claimUnavailable = claimStatus === "unavailable";
+  const statusFundable = isFundableStatus(status) || claimUnavailable;
+  if (statusFundable && catalogFundable && PAUSABLE_CLAIM_STATES.has(state)) {
     return DONATE_PAUSED_LINE;
   }
   return DONATE_CLOSED_OTHER;
