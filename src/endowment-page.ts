@@ -254,10 +254,9 @@ export async function renderEndowment(shell: EndowmentShell): Promise<void> {
         fundedSet.has(p.id.trim().toLowerCase()) &&
         ACTIVE.has(String(p.status)),
     );
+    // Only an "own" view carries a give address (see endowmentBalanceView).
     const give =
-      view.configured && view.balance.kind === "own" && endowmentGiveAllowed(view.balance)
-        ? view.balance.address
-        : null;
+      view.configured && view.balance.kind === "own" ? view.balance.address : null;
     const countLabel =
       funded.length === 1 ? "1 project" : `${funded.length} projects`;
 
