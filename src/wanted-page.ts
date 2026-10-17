@@ -5,6 +5,14 @@ import { escapeHtml } from "./util";
 
 export type WantedShell = (inner: string) => string;
 
+export const WANTED_EMPTY_LINE = "Nothing is open for gifts right now.";
+export const WANTED_EMPTY_LINK = "See all proposals";
+
+/** Empty /wanted (page and home rail): nothing fundable to point gifts at. */
+export function wantedEmptyHtml(): string {
+  return `<p class="muted wanted-empty">${escapeHtml(WANTED_EMPTY_LINE)} <a href="${projectsHref()}">${escapeHtml(WANTED_EMPTY_LINK)}</a></p>`;
+}
+
 export type WantedRowHtmlOpts = {
   /** Home rail shows bare `%`; full /wanted page appends ` funded`. */
   fundedSuffix?: boolean;
@@ -71,7 +79,7 @@ export async function renderWanted(shell: WantedShell): Promise<void> {
   const host = app.querySelector("#wanted-full")!;
   const rows = await fetchWanted(50).catch(() => []);
   if (!rows.length) {
-    host.innerHTML = `<p class="muted">No watched projects yet. <a href="${projectsHref()}">Browse projects</a> and watch ones you care about.</p>`;
+    host.innerHTML = wantedEmptyHtml();
     return;
   }
   host.innerHTML = rows.map((r) => wantedRowHtml(r)).join("");

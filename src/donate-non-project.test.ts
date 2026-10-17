@@ -99,11 +99,16 @@ function stubNet() {
       }
       if (url.endsWith("/endowment")) {
         return Response.json({
+          // workers#115 shape for an endowment with its own address (the
+          // older shape without balance_shared_with_escrow hides Donate).
           address: ADDR_E,
           configured: true,
-          display_balance_sats: 1_000,
+          give_address_usable: true,
+          balance_shared_with_escrow: false,
+          balance_sats: 1_000,
+          balance_unavailable: false,
+          total_given_sats: 1_000,
           goal_sats: 1_000_000,
-          display_updated_at: "2026-10-01T00:00:00Z",
           funded_proposal_ids: [],
           contributions: [],
           lightning_available: false,
