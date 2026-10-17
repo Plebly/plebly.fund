@@ -46,6 +46,17 @@ describe("account refunds row status pill", () => {
     expect(out.pill).toBe("Partly refunded");
   });
 
+  it("sent_sats 0 renders exactly like a missing sent_sats: owed-only note, no \"0 sats sent\"", () => {
+    const { sent_sats: _s, ...rest } = owed;
+    const zero = render({ ...row, donate_remainder_owed: { ...owed, sent_sats: 0 } });
+    expect(zero).toEqual(render({ ...row, donate_remainder_owed: rest }));
+    expect(zero.note).toBe(
+      "Partly refunded: 50,300 sats still owed. The rest will be refunded when more escrow funds are available.",
+    );
+    expect(zero.note).not.toMatch(/sats sent/);
+    expect(document.body.textContent).not.toContain("0 sats sent");
+  });
+
   it("keeps the server status when no partial note shows", () => {
     expect(render(row)).toEqual({ pill: "refunded", note: null });
     expect(render({ ...row, donate_remainder_owed: { ...owed, outstanding_sats: 0 } })).toEqual({

@@ -13,22 +13,29 @@ export type DonateRemainderOwed = {
   settle_txid?: string;
 };
 
-/** A non-negative finite number, floored; anything else (null, strings, -1) is null. */
-function sats(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
+/**
+ * A positive whole number of sats (floored), or null. Zero, negatives, null,
+ * strings, NaN and Infinity are all null: nothing is coerced, and 0 reads the
+ * same as a missing value.
+ */
+function positiveSats(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.floor(v);
+  return n > 0 ? n : null;
 }
 
 /**
  * "Partly refunded" copy, or null. Only for a settled remainder that still
  * owes something; a missing or malformed outstanding amount shows nothing.
- * The sent amount is `sent_sats` only (never covered_sats); without it the
- * line names only what is still owed.
+ * The sent amount is `sent_sats` only (never covered_sats); without a
+ * positive one (missing, malformed or 0) the line names only what is still
+ * owed: "0 sats sent" would contradict "Partly refunded".
  */
 export function partialRefundCopy(owed: DonateRemainderOwed | null | undefined): string | null {
   if (!owed || owed.settled !== true) return null;
-  const outstanding = sats(owed.outstanding_sats);
-  if (outstanding == null || outstanding <= 0) return null;
-  const sent = sats(owed.sent_sats);
+  const outstanding = positiveSats(owed.outstanding_sats);
+  if (outstanding == null) return null;
+  const sent = positiveSats(owed.sent_sats);
   if (sent == null) {
     return `Partly refunded: ${formatSats(outstanding)} still owed. The rest will be refunded when more escrow funds are available.`;
   }

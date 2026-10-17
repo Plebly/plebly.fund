@@ -36,9 +36,20 @@ describe("partial refund copy", () => {
     }
   });
 
-  it("sent_sats 0 is a real figure and is shown", () => {
-    expect(partialRefundCopy({ ...owed, sent_sats: 0 })).toBe(
-      "Partly refunded: 0 sats sent, 50,300 sats still owed. The rest will be refunded when more escrow funds are available.",
+  it("sent_sats 0 (or below 1 sat) behaves like a missing value: owed-only line, no \"0 sats sent\"", () => {
+    const { sent_sats: _s, ...rest } = owed;
+    const copy = partialRefundCopy(rest);
+    for (const zero of [0, -0, 0.4]) {
+      const got = partialRefundCopy({ ...owed, sent_sats: zero });
+      expect(got).toBe(copy);
+      expect(got).not.toMatch(/sats sent/);
+    }
+    expect(partialRefundHtml({ ...owed, sent_sats: 0 })).toBe(partialRefundHtml(rest));
+  });
+
+  it("1 sat sent is a real figure and is shown", () => {
+    expect(partialRefundCopy({ ...owed, sent_sats: 1 })).toBe(
+      "Partly refunded: 1 sats sent, 50,300 sats still owed. The rest will be refunded when more escrow funds are available.",
     );
   });
 
