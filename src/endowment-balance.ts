@@ -6,7 +6,7 @@ export const ENDOWMENT_SHARED_LINE =
   "Endowment balance will show once it has its own address.";
 export const ENDOWMENT_BALANCE_LABEL = "Balance";
 export const ENDOWMENT_TOTAL_GIVEN_LABEL = "Total given to date";
-export const ENDOWMENT_BALANCE_UNAVAILABLE = "Balance temporarily unavailable";
+export const ENDOWMENT_BALANCE_UNAVAILABLE = "Balance temporarily unavailable.";
 
 /**
  * What the endowment panel may show.

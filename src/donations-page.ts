@@ -1,4 +1,5 @@
 import { WORKERS_API } from "./config";
+import { endowmentBalanceView, endowmentGiveAllowed } from "./endowment-balance";
 import { applySeo, href, proposalHref, projectsHref, seoForRoute } from "./router";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 
@@ -7,7 +8,8 @@ export type DonationsShell = (inner: string) => string;
 export type PublicDonation = {
   id: string;
   amount_sats: number;
-  target_type: "endowment" | "project";
+  /** shared_escrow: gifts to 001–008's shared address (workers reads former endowment rows so while shared). */
+  target_type: "endowment" | "project" | "shared_escrow";
   target_id: string;
   target_label: string;
   donated_at: string;
@@ -39,9 +41,42 @@ export async function fetchPublicDonations(opts?: {
   };
 }
 
-export function donationTargetHref(d: PublicDonation): string {
+/** Link for a donation's target, or null when it has no page (shared escrow, unknown types). */
+export function donationTargetHref(d: PublicDonation): string | null {
   if (d.target_type === "endowment") return href("/endowment");
-  return proposalHref("", d.target_id);
+  if (d.target_type === "project") return proposalHref("", d.target_id);
+  return null;
+}
+
+/** Target as a link, or plain text when it has no page. */
+export function donationTargetHtml(d: PublicDonation, className: string, label: string): string {
+  const to = donationTargetHref(d);
+  return to
+    ? `<a class="${className}" href="${to}">${escapeHtml(label)}</a>`
+    : `<span class="${className}">${escapeHtml(label)}</span>`;
+}
+
+/**
+ * True only when the endowment has its own address (workers#115 view). A
+ * shared address, a missing flag (older API) or a failed read all hide the
+ * endowment wording and links.
+ */
+export async function fetchEndowmentOpen(): Promise<boolean> {
+  if (!WORKERS_API) return false;
+  try {
+    const res = await fetch(`${API()}/endowment`);
+    if (!res || !res.ok) return false;
+    return endowmentGiveAllowed(endowmentBalanceView(await res.json()));
+  } catch {
+    return false;
+  }
+}
+
+export function donationsLedeText(endowmentOpen: boolean, total = 0): string {
+  const base = endowmentOpen
+    ? "Confirmed gifts to projects and the endowment"
+    : "Confirmed gifts to projects";
+  return `${base}${total ? ` (${total})` : ""}.`;
 }
 
 export function donationRowCopy(d: PublicDonation): {
@@ -68,7 +103,7 @@ function rowHtml(d: PublicDonation): string {
     <span class="donations-verb">donated</span>
     <span class="donations-amount mono">${escapeHtml(amount)}</span>
     <span class="donations-verb">to</span>
-    <a class="donations-target" href="${donationTargetHref(d)}">${escapeHtml(target)}</a>
+    ${donationTargetHtml(d, "donations-target", target)}
     ${when ? `<span class="donations-when muted">${when}</span>` : ""}
   </li>`;
 }
@@ -86,17 +121,17 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
       <header class="declined-head">
         <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ledger</p>
         <h1>Donations</h1>
-        <p class="lede">Confirmed gifts to projects and the endowment.</p>
+        <p class="lede">${escapeHtml(donationsLedeText(false))}</p>
       </header>
       <p class="muted">Loading…</p>
     </section>
   `);
 
   try {
-    const { donations, total } = await fetchPublicDonations({
-      limit: PAGE_SIZE,
-      offset,
-    });
+    const [{ donations, total }, endowmentOpen] = await Promise.all([
+      fetchPublicDonations({ limit: PAGE_SIZE, offset }),
+      fetchEndowmentOpen(),
+    ]);
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     // ?page past the end (e.g. a stale link): go to the last real page instead
     // of "Page 99 of 3" over an empty "No confirmed donations yet".
@@ -108,7 +143,9 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
       ? `<ul class="donations-list">${donations.map((d) => rowHtml(d)).join("")}</ul>`
       : `<div class="empty-state">
           <p class="empty-state-title">No confirmed donations yet</p>
-          <p class="empty-state-body"><a href="${projectsHref()}">Fund a project</a> or <a href="${href("/endowment")}">give to the endowment</a>.</p>
+          <p class="empty-state-body"><a href="${projectsHref()}">Fund a project</a>${
+            endowmentOpen ? ` or <a href="${href("/endowment")}">give to the endowment</a>` : ""
+          }.</p>
         </div>`;
 
     const pager =
@@ -133,9 +170,7 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
         <header class="declined-head">
           <p class="eyebrow"><a href="${projectsHref()}">Projects</a> · Ledger</p>
           <h1>Donations</h1>
-          <p class="lede">Confirmed gifts to projects and the endowment${
-            total ? ` (${total})` : ""
-          }.</p>
+          <p class="lede">${escapeHtml(donationsLedeText(endowmentOpen, total))}</p>
         </header>
         ${list}
         ${pager}

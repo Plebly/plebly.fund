@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { endowmentBalanceView, ENDOWMENT_SHARED_LINE } from "./endowment-balance";
+import {
+  endowmentBalanceView,
+  ENDOWMENT_BALANCE_UNAVAILABLE,
+  ENDOWMENT_SHARED_LINE,
+} from "./endowment-balance";
 import { endowmentStripHtml } from "./home-page";
 
 const ADDR = "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz";
@@ -88,5 +92,18 @@ describe("home endowment strip", () => {
     document.body.innerHTML = endowmentStripHtml(null);
     expect(document.body.querySelector('a[href*="?donate"]')).toBeNull();
     expect(document.body.querySelector(".endowment-figures")).toBeNull();
+  });
+});
+
+describe("copy", () => {
+  it("unavailable copy ends with a period", () => {
+    expect(ENDOWMENT_BALANCE_UNAVAILABLE).toBe("Balance temporarily unavailable.");
+    document.body.innerHTML = endowmentStripHtml({
+      configured: true,
+      balance: endowmentBalanceView({ ...own, balance_unavailable: true }),
+    });
+    expect(document.body.querySelector(".endowment-balance-unavailable")!.textContent).toBe(
+      "Balance temporarily unavailable.",
+    );
   });
 });

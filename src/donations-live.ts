@@ -1,6 +1,6 @@
 import {
   donationRowCopy,
-  donationTargetHref,
+  donationTargetHtml,
   fetchPublicDonations,
   type PublicDonation,
 } from "./donations-page";
@@ -18,7 +18,7 @@ function liveRowHtml(d: PublicDonation, isNew: boolean): string {
       donated
       <span class="donations-live-amount mono">${escapeHtml(amount)}</span>
       to
-      <a class="donations-live-target" href="${donationTargetHref(d)}">${escapeHtml(target)}</a>
+      ${donationTargetHtml(d, "donations-live-target", target)}
     </p>
     ${when ? `<p class="donations-live-when muted">${when}</p>` : ""}
   </li>`;

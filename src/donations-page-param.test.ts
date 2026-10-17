@@ -13,6 +13,10 @@ import { renderDonations } from "./donations-page";
  * offset=NaN to 0, so page 1's rows were shown with no way forward).
  */
 const fetchMock = vi.fn();
+/** Ledger fetches only (the page also reads /endowment for the endowment wording). */
+const donationCalls = () =>
+  fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/donations"));
+
 const app = () => document.querySelector<HTMLDivElement>("#app")!;
 const row = {
   id: "don-1",
@@ -66,7 +70,7 @@ describe("donations ?page parsing", () => {
     );
     history.replaceState(null, "", "/donations?page=99");
     await renderDonations((inner) => inner);
-    expect(fetchMock).toHaveBeenLastCalledWith("https://api.test/donations?limit=40&offset=80");
+    expect(donationCalls().at(-1)).toBe("https://api.test/donations?limit=40&offset=80");
     expect(location.search).toBe("?page=3");
     const pager = app().querySelector(".donations-pager")!;
     expect(pager.textContent).toContain("Page 3 of 3");
@@ -78,7 +82,7 @@ describe("donations ?page parsing", () => {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ donations: [], total: 0 }), { status: 200 }));
     history.replaceState(null, "", "/donations?page=2");
     await renderDonations((inner) => inner);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(donationCalls()).toHaveLength(1);
     expect(app().textContent).toContain("No confirmed donations yet");
   });
 });

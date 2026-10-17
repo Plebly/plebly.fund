@@ -56,6 +56,16 @@ describe("bindDonationsLive", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("a shared-escrow row is plain text, never a link (and never to /endowment)", async () => {
+    pages = [[don("s", { target_type: "shared_escrow", target_id: "shared-escrow", target_label: "Shared escrow (001–008)" })]];
+    await bindDonationsLive(document);
+    const li = document.querySelector(".donations-live-row")!;
+    const target = li.querySelector(".donations-live-target")!;
+    expect(target.tagName).toBe("SPAN");
+    expect(target.textContent).toBe("Shared escrow (001–008)");
+    expect(li.querySelector("a")).toBeNull();
+  });
+
   it("paints the latest 10 confirmed gifts, none marked new on first paint", async () => {
     pages = [[don("a"), don("b", { anonymous: true }), don("c", { target_type: "endowment", target_label: "Endowment" })]];
     await bindDonationsLive(document);
