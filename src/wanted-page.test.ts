@@ -145,6 +145,15 @@ describe("wanted empty state", () => {
     expect(document.body.innerHTML).toContain("PLEBLY-KNOTS-SIZE-VALUE-SPAM");
   });
 
+  it("home rail: 'Full list →' only when the rail has rows", () => {
+    document.body.innerHTML = wantedRailHtml([]);
+    expect(document.body.textContent).not.toContain("Full list");
+    expect(document.body.querySelector('.rail-head a[href$="/wanted"]')).toBeNull();
+    document.body.innerHTML = wantedRailHtml([apiRow("PLEBLY-KNOTS-SIZE-VALUE-SPAM", "listed")]);
+    expect(document.body.textContent).toContain("Full list →");
+    expect(document.body.querySelector('.rail-head a[href$="/wanted"]')).not.toBeNull();
+  });
+
   async function renderWith(rows: WantedRow[]) {
     document.body.innerHTML = `<div id="app"></div>`;
     vi.stubGlobal(

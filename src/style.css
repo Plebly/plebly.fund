@@ -4928,7 +4928,7 @@ a.proposal-meta-chip-endowment:hover {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.75;
+  color: var(--muted);
 }
 
 .endowment-figure-value {

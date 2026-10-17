@@ -881,7 +881,7 @@ export function wantedRailHtml(
   return `<section class="wrap-wide project-rail" aria-labelledby="wanted-projects">
     <div class="rail-head">
       <div><h2 id="wanted-projects">Most wanted</h2><p>Watched more than funded.</p></div>
-      <a href="${href("/wanted")}">Full list →</a>
+      ${rows.length ? `<a href="${href("/wanted")}">Full list →</a>` : ""}
     </div>
     <div class="wanted-list">${list}</div>
   </section>`;
