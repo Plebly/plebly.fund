@@ -6,9 +6,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaimStatus } from "./builder";
 import {
-  DONATE_CLOSED_BUILDING,
+  DONATE_CLOSED_COMPLETE,
   DONATE_CLOSED_OTHER,
-  DONATE_CLOSED_REFUNDING,
   donateClosedNoteHtml,
   donateClosedReason,
   escrowClosedNoteHtml,
@@ -36,20 +35,28 @@ function proposal(partial: Partial<Proposal> = {}): Proposal {
 }
 
 describe("donateClosedReason copy", () => {
-  it("claimed: funding closed while being built", () => {
-    expect(DONATE_CLOSED_BUILDING).toBe("Funding is closed while this is being built.");
-    expect(donateClosedReason("claimed", { accepting_funds: false, state: "claimed" })).toBe(DONATE_CLOSED_BUILDING);
+  it("UI UX copy, exact strings", () => {
+    expect(DONATE_CLOSED_COMPLETE).toBe("Funding for this proposal is complete.");
+    expect(DONATE_CLOSED_OTHER).toBe("This proposal is closed and isn't accepting gifts.");
   });
-  it("in_review: funding closed while being built", () => {
-    expect(donateClosedReason("in_review", { accepting_funds: false, state: "in_review" })).toBe(DONATE_CLOSED_BUILDING);
+  for (const s of ["in_review", "claimed", "completed", "bounty_settled"]) {
+    it(`${s}: funding complete (status)`, () => {
+      expect(donateClosedReason(s, { accepting_funds: false, state: "unavailable" })).toBe(DONATE_CLOSED_COMPLETE);
+      expect(donateClosedReason(null, { accepting_funds: false, status: s })).toBe(DONATE_CLOSED_COMPLETE);
+    });
+  }
+  it("claim state claimed / in_review / settled: funding complete", () => {
+    for (const st of ["claimed", "in_review", "settled"]) {
+      expect(donateClosedReason("listed", { accepting_funds: false, state: st })).toBe(DONATE_CLOSED_COMPLETE);
+    }
   });
-  it("refunding: refunds in progress", () => {
-    expect(DONATE_CLOSED_REFUNDING).toBe("Refunds in progress.");
-    expect(donateClosedReason("refunding", { accepting_funds: false, state: "unavailable" })).toBe(DONATE_CLOSED_REFUNDING);
-  });
-  it("any other non-fundable state: generic copy", () => {
-    expect(DONATE_CLOSED_OTHER).toBe("This listing isn't accepting funds.");
-    for (const s of ["declined", "completed", "underfunded", "redirected", "rejected"]) {
+  for (const s of ["declined", "rejected", "voided", "refunding"]) {
+    it(`${s}: closed, not accepting gifts`, () => {
+      expect(donateClosedReason(s, { accepting_funds: false, state: "unavailable" })).toBe(DONATE_CLOSED_OTHER);
+    });
+  }
+  it("any other non-fundable status falls back to the closed line", () => {
+    for (const s of ["underfunded", "redirected", "redirect_pending", "abandoned_vote", "unindexed", "frobnicated", ""]) {
       expect(donateClosedReason(s, { accepting_funds: false, state: "unavailable" })).toBe(DONATE_CLOSED_OTHER);
     }
   });
@@ -62,9 +69,9 @@ describe("donateClosedReason copy", () => {
     const html = donateClosedNoteHtml(DONATE_CLOSED_OTHER);
     expect(html).toContain('class="donate-closed-note"');
     expect(html).not.toMatch(/class="[^"]*\bmuted\b/);
-    expect(escrowClosedNoteHtml(DONATE_CLOSED_REFUNDING)).toContain('class="donate-closed-note"');
-    expect(escrowClosedNoteHtml(DONATE_CLOSED_REFUNDING)).not.toMatch(/class="[^"]*\bmuted\b/);
-    expect(html).toContain(">This listing isn't accepting funds.</p>");
+    expect(escrowClosedNoteHtml(DONATE_CLOSED_COMPLETE)).toContain('class="donate-closed-note"');
+    expect(escrowClosedNoteHtml(DONATE_CLOSED_COMPLETE)).not.toMatch(/class="[^"]*\bmuted\b/);
+    expect(html).toContain(">This proposal is closed and isn't accepting gifts.</p>");
     expect(html).not.toMatch(/role=|aria-live/);
   });
   it("style.css: .donate-closed-note uses --ink-secondary (AA), not --muted", () => {
@@ -157,7 +164,7 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     document.body.innerHTML = "";
   });
 
-  it("claimed row: donate slot shows the building note, no Donate, no address", async () => {
+  it("claimed row: donate slot shows the funding-complete note, no Donate, no address", async () => {
     vi.resetModules();
     mockBuilder({ state: "claimed", status: "claimed", claimer: "bob", accepting_funds: false });
     const p = proposal({ status: "claimed", claimer: "bob", path: "proposals/claimed/demo.md" });
@@ -167,7 +174,7 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
       const slot = document.querySelector<HTMLElement>(".proposal-donate-slot")!;
       expect(slot.hidden).toBe(false);
       const note = slot.querySelector<HTMLElement>("#donate-closed-note")!;
-      expect(note.textContent).toBe("Funding is closed while this is being built.");
+      expect(note.textContent).toBe("Funding for this proposal is complete.");
       expect(note.classList.contains("donate-closed-note")).toBe(true);
       expect(note.classList.contains("muted")).toBe(false);
       expect(slot.innerHTML).not.toMatch(/role="status"|aria-live/);
@@ -175,7 +182,7 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     assertNoDonateOrAddress();
   });
 
-  it("in_review row: donate slot shows the building note", async () => {
+  it("in_review row: donate slot shows the funding-complete note", async () => {
     vi.resetModules();
     mockBuilder({ state: "in_review", status: "in_review", claimer: "bob", accepting_funds: false });
     const p = proposal({ status: "in_review", claimer: "bob" });
@@ -183,13 +190,13 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     await bind(p);
     await vi.waitFor(() => {
       expect(document.querySelector("#donate-closed-note")?.textContent).toBe(
-        "Funding is closed while this is being built.",
+        "Funding for this proposal is complete.",
       );
     });
     assertNoDonateOrAddress();
   });
 
-  it("refunding row: the escrow address row is replaced by 'Refunds in progress.'", async () => {
+  it("refunding row: the escrow address row is replaced by the closed note", async () => {
     vi.resetModules();
     mockBuilder({ state: "unavailable", status: "refunding", accepting_funds: false });
     const p = proposal({ status: "refunding" });
@@ -197,7 +204,7 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     await bind(p);
     await vi.waitFor(() => {
       const note = document.querySelector<HTMLElement>(".onchain-panel #onchain-escrow-closed-note");
-      expect(note?.textContent).toBe("Refunds in progress.");
+      expect(note?.textContent).toBe("This proposal is closed and isn't accepting gifts.");
       expect(note!.classList.contains("donate-closed-note")).toBe(true);
       expect(note!.classList.contains("muted")).toBe(false);
       expect(note!.outerHTML).not.toMatch(/role=|aria-live/);
@@ -215,7 +222,7 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     await bind(p);
     await vi.waitFor(() => {
       expect(document.querySelector("#onchain-escrow-closed-note")?.textContent).toBe(
-        "This listing isn't accepting funds.",
+        "This proposal is closed and isn't accepting gifts.",
       );
     });
     assertNoDonateOrAddress();
@@ -232,7 +239,7 @@ describe("bindBuilderPanel: reason in place of Donate / the address", () => {
     await bind(p);
     await vi.waitFor(() => {
       expect(document.querySelector("#onchain-escrow-closed-note")?.textContent).toBe(
-        "This listing isn't accepting funds.",
+        "This proposal is closed and isn't accepting gifts.",
       );
     });
     // Tab becomes visible again -> bindBuilderPanel re-fetches the claim view.

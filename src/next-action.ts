@@ -4,12 +4,26 @@ import { CLAIM_FLOOR_SATS, isFundableStatus } from "./config";
 import { btnWithIcon } from "./icons";
 import { sessionMatchesClaimer, sessionMatchesPendingClaim } from "./claimer-match";
 import { userMatchesProposer } from "./proposal-ui";
+import { closedFundsCopy } from "./donate-closed-note";
 import { STRUCTURED_FUNDING_KNOWN_STATES } from "./proposal-structured-funding";
 import { isKnownProposalStatus, type Proposal } from "./types";
 import { escapeHtml } from "./util";
 
-/** Next-card copy for a row that is not fundable (UI UX agreed wording). */
-const NOT_ACCEPTING_FUNDS = "This listing isn't accepting funds.";
+/**
+ * Next-card copy for a row that is not fundable: same status groups and
+ * wording as the Donate-slot note (donate-closed-note.ts), so a closed page
+ * never shows two wordings.
+ */
+export function notAcceptingFunds(
+  proposal: Pick<Proposal, "status" | "structured_state">,
+  claim?: Pick<ClaimStatus, "state" | "status" | "psbt"> | null,
+): string {
+  return closedFundsCopy(
+    String(proposal.status || ""),
+    claim ?? null,
+    proposal.structured_state ?? null,
+  );
+}
 
 /** States that are always blocked (terminal or errored). */
 const ALWAYS_BLOCKED_STATES = ["voided", "unreadable"] as const;
@@ -413,12 +427,11 @@ export function resolveNextAction(input: NextActionInput): NextAction {
     input.claim?.accepting_funds === false ||
     input.proposal.accepting_funds === false;
   if (action.button !== "donate" || !fundsClosed) return action;
-  const sentence = /donate/i.test(action.sentence)
-    ? NOT_ACCEPTING_FUNDS
-    : action.sentence;
+  const closed = notAcceptingFunds(input.proposal, input.claim);
+  const sentence = /donate/i.test(action.sentence) ? closed : action.sentence;
   const detail =
     action.detail && /donations are open/i.test(action.detail)
-      ? NOT_ACCEPTING_FUNDS
+      ? closed
       : action.detail;
   return { ...action, button: null, sentence, detail };
 }
@@ -438,7 +451,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   // FIRST: check catalog status "voided" or unknown — terminal, no actions at all.
   if (status === "voided") {
     return {
-      sentence: "Voided, not accepting funds.",
+      sentence: "Voided",
       button: null,
       moreIds,
     };
@@ -486,7 +499,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   if (psbTerminal && status !== "rejected" && status !== "completed") {
     if (!p.release_blocked_reason) {
       return {
-        sentence: "Structure unavailable, not accepting funds.",
+        sentence: "Structure unavailable",
         button: null,
         moreIds,
       };
@@ -505,7 +518,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     // Exception: release_blocked_reason should still show for stalled releases
     if (!p.release_blocked_reason) {
       return {
-        sentence: "Structure unavailable, not accepting funds.",
+        sentence: "Structure unavailable",
         button: null,
         moreIds,
       };
@@ -530,7 +543,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   if (status === "declined") {
     return {
       sentence: "Listing declined.",
-      detail: NOT_ACCEPTING_FUNDS,
+      detail: notAcceptingFunds(p, claim),
       button: null,
       moreIds,
     };
@@ -708,7 +721,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     const structured = structuredState(claim);
     if (isStructuredTerminalOrUnknown(structured)) {
       return {
-        sentence: "Structure voided, not accepting funds.",
+        sentence: "Structure voided",
         button: null,
         moreIds,
       };
@@ -739,7 +752,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     const structured = structuredState(claim);
     if (isStructuredTerminalOrUnknown(structured)) {
       return {
-        sentence: "Structure voided, not accepting funds.",
+        sentence: "Structure voided",
         button: null,
         moreIds,
       };
@@ -810,7 +823,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
       const structured = structuredState(claim);
       if (isStructuredTerminalOrUnknown(structured)) {
         return {
-          sentence: "Structure voided, not accepting funds.",
+          sentence: "Structure voided",
           button: null,
           moreIds,
         };

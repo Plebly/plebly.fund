@@ -11,7 +11,7 @@ import { CLAIM_FLOOR_SATS } from "./config";
 import type { Proposal } from "./types";
 
 const ESCROW = "tb1q3ujq9473rc9smza7djsm8snmaxv9ccqwzn447x98r97pyr2c6ljqawv6qx";
-const NOT_ACCEPTING = "This listing isn't accepting funds.";
+const NOT_ACCEPTING = "This proposal is closed and isn't accepting gifts.";
 
 function row(over: Partial<Proposal> = {}): Proposal {
   return {

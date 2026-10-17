@@ -14,7 +14,7 @@ import {
 } from "./next-action";
 import type { Proposal } from "./types";
 
-const BLOCKED = "Structure unavailable, not accepting funds.";
+const BLOCKED = "Structure unavailable";
 
 const proposal = (p: Partial<Proposal> = {}): Proposal => ({
   id: "demo",
