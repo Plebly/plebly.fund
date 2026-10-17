@@ -221,6 +221,11 @@ function donatePayStepHtml(
   opts?: { endowment?: boolean; shared?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
+  // One sign-in note per modal: the anonymous-credit line shows only when no
+  // shared-count or refund-route note is on the pay step.
+  const noteOpts = { signedIn, shared: Boolean(opts?.shared) };
+  const otherSignInNote =
+    !endowment && Boolean(donateSharedCountCopy(noteOpts) || donateRefundRouteCopy(noteOpts));
   const head = `<div class="donate-panel-head">
       ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
       <h2 class="donate-title" id="donate-pay-title">${
@@ -233,7 +238,9 @@ function donatePayStepHtml(
              <label class="donate-amount-label" for="donate-legal-name">Legal name for tax receipt (optional)</label>
              <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
              <p class="muted donate-legal-hint">Private. Used for a receipt after confirmation.</p>`
-          : `<aside class="donate-credit-advisory" role="note">
+          : otherSignInNote
+            ? ""
+            : `<aside class="donate-credit-advisory" role="note">
                <p>Giving anonymously. <button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in now</button> if you want credit.</p>
              </aside>`
       }

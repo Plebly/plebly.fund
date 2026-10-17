@@ -411,15 +411,9 @@ describe("donate credit UX (signed out)", () => {
     expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
       "pay",
     );
-    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeTruthy();
-    document.querySelector<HTMLButtonElement>("#donate-credit-signin")!.click();
-    expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
-      "credit",
-    );
-    continueToPay();
-    expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
-      "pay",
-    );
+    // One sign-in note per modal: the route/count note covers it on a project.
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeNull();
+    expect(document.querySelector("#donate-credit-signin")).toBeNull();
     // Anonymous pay still polls for confirmation status (no credit-claim UI).
     await vi.waitFor(() => {
       expect(addressUtxos).toHaveBeenCalled();

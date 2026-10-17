@@ -89,13 +89,25 @@ describe("signed-out Donate refund-route line", () => {
     expect(line!.compareDocumentPosition(addr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("shared address, signed out: exactly one sign-in note, the combined copy", () => {
+  /** Every visible sign-in note on the pay step, any wording. */
+  const signInNotes = () =>
+    [...document.querySelectorAll<HTMLElement>("#donate-step-pay [role=note]")]
+      .filter((n) => !n.closest("[hidden]") || n.closest("[hidden]") === n.closest("#donate-step-pay"))
+      .filter((n) => /sign in/i.test(n.textContent || ""))
+      .map((n) => (n.textContent || "").replace(/\s+/g, " ").trim());
+
+  it("one sign-in note per modal: shared shows only the combined note, unique only its route line", () => {
     render(true, false);
     expect(document.querySelector("#donate-refund-route")).toBeNull();
-    const notes = [...document.querySelectorAll("#donate-step-pay [role=note]")].filter((n) =>
-      /sign in (before|so)/i.test(n.textContent || ""),
-    );
-    expect(notes.map((n) => n.textContent)).toEqual([SHARED]);
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeNull();
+    expect(signInNotes()).toEqual([SHARED]);
+    render(false, false);
+    expect(document.querySelector("#donate-shared-count")).toBeNull();
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeNull();
+    expect(signInNotes()).toEqual([UNIQUE]);
+    // Endowment: no route or count note, so the anonymous-credit line is the one.
+    document.body.innerHTML = endowmentDonatePanelHtml(ADDR, { signedIn: false });
+    expect(signInNotes()).toEqual(["Giving anonymously. Sign in now if you want credit."]);
     expect(document.body.textContent).not.toContain("Sign in so your gift counts");
     expect(document.body.textContent).not.toContain("Refunds on this proposal need");
   });
