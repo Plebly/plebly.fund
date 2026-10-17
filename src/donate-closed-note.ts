@@ -5,9 +5,12 @@ import { escapeHtml } from "./util";
  * claim view says `accepting_funds === false` (workers#51 sends that for every
  * row whose status is not FUNDABLE). Plain text, not a live region.
  */
-export const DONATE_CLOSED_BUILDING = "Funding is closed while this is being built.";
-export const DONATE_CLOSED_REFUNDING = "Refunds in progress.";
-export const DONATE_CLOSED_OTHER = "This listing isn't accepting funds.";
+/** in_review, claimed, completed, bounty_settled (UI UX copy). */
+export const DONATE_CLOSED_COMPLETE = "Funding for this proposal is complete.";
+/** declined, rejected, voided, refunding, and any other non-fundable status. */
+export const DONATE_CLOSED_OTHER = "This proposal is closed and isn't accepting gifts.";
+
+const FUNDING_COMPLETE = new Set(["in_review", "claimed", "completed", "bounty_settled", "settled"]);
 
 /** Reason copy for a funds-closed claim view; null when funds are not closed. */
 export function donateClosedReason(
@@ -21,15 +24,9 @@ export function donateClosedReason(
   if (!claim || claim.accepting_funds !== false) return null;
   const state = String(claim.state || "").toLowerCase();
   const status = String(claim.status || proposalStatus || "").toLowerCase();
-  if (
-    state === "claimed" ||
-    state === "in_review" ||
-    status === "claimed" ||
-    status === "in_review"
-  ) {
-    return DONATE_CLOSED_BUILDING;
+  if (FUNDING_COMPLETE.has(state) || FUNDING_COMPLETE.has(status)) {
+    return DONATE_CLOSED_COMPLETE;
   }
-  if (status === "refunding") return DONATE_CLOSED_REFUNDING;
   return DONATE_CLOSED_OTHER;
 }
 
