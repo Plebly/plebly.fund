@@ -154,6 +154,29 @@ describe("bindDonationsLive", () => {
     expect(document.querySelector('.donations-live-empty a[href$="/endowment"]')).not.toBeNull();
   });
 
+  it("first paint waits for a slow /endowment read (own heading on the first paint, no poll needed)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const ledgerOnly = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/endowment")) {
+        await gate;
+        return new Response(JSON.stringify(OWN_ENDOWMENT), { status: 200 });
+      }
+      return ledgerOnly(url);
+    });
+    pages = [[]];
+    const bound = bindDonationsLive(document);
+    await flush();
+    await flush();
+    release();
+    await bound;
+    expect(ledgerCalls()).toHaveLength(1);
+    expect(document.querySelector(".donations-live-head p:not(.donations-live-kicker)")!.textContent).toBe(
+      "Live gifts into projects and the endowment.",
+    );
+  });
+
   it("an initial ledger failure still paints the own-address heading on the next poll", async () => {
     endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
     pages = [new Error("down"), [don("a")]];
