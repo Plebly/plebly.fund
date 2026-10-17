@@ -273,4 +273,36 @@ describe("installModalA11y", () => {
     expect(document.activeElement).not.toBe(opener);
     uninstall = installModalA11y(); // afterEach uninstalls again
   });
+
+  it("closing the top modal keeps focus in the lower modal when both share a page opener", async () => {
+    document.body.innerHTML = `
+      <button type="button" id="page-btn">Open both</button>
+      <div class="site-modal" id="lower" hidden>
+        <div class="site-modal-card" role="dialog" aria-modal="true">
+          <button type="button" class="site-modal-close" id="lower-x">x</button>
+          <button type="button" id="lower-ok">OK</button>
+        </div>
+      </div>
+      <div class="site-modal" id="top" hidden>
+        <div class="site-modal-card" role="dialog" aria-modal="true">
+          <button type="button" class="site-modal-close" id="top-x">x</button>
+        </div>
+      </div>`;
+    const pageBtn = document.getElementById("page-btn") as HTMLButtonElement;
+    const lower = document.getElementById("lower")!;
+    const top = document.getElementById("top")!;
+    pageBtn.focus();
+    // Same tick: both modals record the page button as their opener.
+    lower.hidden = false;
+    top.hidden = false;
+    await flush();
+    expect(top.contains(document.activeElement)).toBe(true);
+    top.hidden = true;
+    await flush();
+    // The page button sits behind the still-open lower modal, so focus must
+    // stay inside the lower modal rather than go back to the page.
+    expect(lower.hidden).toBe(false);
+    expect(lower.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(pageBtn);
+  });
 });
