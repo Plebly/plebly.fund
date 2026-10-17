@@ -22,6 +22,27 @@ const don = (id: string, over: Partial<PublicDonation> = {}): PublicDonation => 
 
 let pages: Array<PublicDonation[] | Error>;
 let fetchMock: ReturnType<typeof vi.fn>;
+/** GET /endowment reply; null = network error. Default: the current live API (no shared flag). */
+let endowmentReply: { body: unknown; status: number } | null;
+const LEGACY_ENDOWMENT = {
+  address: "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz",
+  configured: true,
+  display_balance_sats: 148_106,
+  goal_sats: 0,
+};
+const OWN_ENDOWMENT = {
+  address: "tb1qhj27cegpek02g8g4peps0x7gqs0svvs888svyz",
+  configured: true,
+  give_address_usable: true,
+  balance_shared_with_escrow: false,
+  balance_sats: 1,
+  balance_unavailable: false,
+  total_given_sats: 1,
+  goal_sats: 0,
+};
+/** Ledger fetches only (the strip also reads /endowment once per mount). */
+const ledgerCalls = () =>
+  fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/donations"));
 
 const flush = async () => {
   for (let i = 0; i < 5; i++) await Promise.resolve();
@@ -36,7 +57,12 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: false });
   document.body.innerHTML = `<div id="root"><div id="donations-live-mount"></div></div>`;
   pages = [];
-  fetchMock = vi.fn(async () => {
+  endowmentReply = { body: LEGACY_ENDOWMENT, status: 200 };
+  fetchMock = vi.fn(async (url: string) => {
+    if (String(url).endsWith("/endowment")) {
+      if (!endowmentReply) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(endowmentReply.body), { status: endowmentReply.status });
+    }
     const next = pages.length > 1 ? pages.shift()! : pages[0]!;
     if (next instanceof Error) return new Response("down", { status: 503 });
     return Response.json({ donations: next, total: next.length });
@@ -69,7 +95,7 @@ describe("bindDonationsLive", () => {
   it("paints the latest 10 confirmed gifts, none marked new on first paint", async () => {
     pages = [[don("a"), don("b", { anonymous: true }), don("c", { target_type: "endowment", target_label: "Endowment" })]];
     await bindDonationsLive(document);
-    expect(String(fetchMock.mock.calls[0]![0])).toBe("https://api.test/donations?limit=10&offset=0");
+    expect(ledgerCalls()[0]).toBe("https://api.test/donations?limit=10&offset=0");
     expect(rows()).toEqual([
       { id: "a", isNew: false },
       { id: "b", isNew: false },
@@ -84,9 +110,13 @@ describe("bindDonationsLive", () => {
     expect(document.querySelector(".donations-live-when time")).toBeTruthy();
   });
 
-  it("shows the empty state with endowment and projects links when there are no gifts", async () => {
+  it("own address: heading names the endowment and the empty state links to it", async () => {
+    endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
     pages = [[]];
     await bindDonationsLive(document);
+    expect(document.querySelector(".donations-live-head p:not(.donations-live-kicker)")!.textContent).toBe(
+      "Live gifts into projects and the endowment.",
+    );
     const empty = document.querySelector(".donations-live-empty")!;
     expect(empty.textContent).toContain("No confirmed gifts yet");
     const links = [...empty.querySelectorAll("a")].map((a) => a.getAttribute("href"));
@@ -94,15 +124,55 @@ describe("bindDonationsLive", () => {
     expect(links.some((h) => /#projects$/.test(h!))).toBe(true);
   });
 
+  it.each([
+    ["the current live API (no shared flag)", { body: LEGACY_ENDOWMENT, status: 200 }],
+    ["balance_shared_with_escrow: true", { body: { ...OWN_ENDOWMENT, balance_shared_with_escrow: true, address: null, give_address_usable: false }, status: 200 }],
+    ["give_address_usable: false", { body: { ...OWN_ENDOWMENT, give_address_usable: false }, status: 200 }],
+    ["a 502", { body: { error: "down" }, status: 502 }],
+    ["a network error", null],
+  ])("%s: heading says projects only and the empty state has no endowment link", async (_l, reply) => {
+    endowmentReply = reply;
+    pages = [[]];
+    await bindDonationsLive(document);
+    expect(document.querySelector(".donations-live-head p:not(.donations-live-kicker)")!.textContent).toBe(
+      "Live gifts into projects.",
+    );
+    const empty = document.querySelector(".donations-live-empty")!;
+    expect(empty.textContent).toContain("No confirmed gifts yet");
+    expect(empty.textContent).not.toContain("endowment");
+    expect(empty.querySelector('a[href$="/endowment"]')).toBeNull();
+    expect(empty.querySelector('a[href$="#projects"]')).not.toBeNull();
+  });
+
+  it("reads /endowment once per mount, not on every poll; the state holds across polls", async () => {
+    endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
+    pages = [[]];
+    await bindDonationsLive(document);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(ledgerCalls()).toHaveLength(3);
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).endsWith("/endowment"))).toHaveLength(1);
+    expect(document.querySelector('.donations-live-empty a[href$="/endowment"]')).not.toBeNull();
+  });
+
+  it("an initial ledger failure still paints the own-address heading on the next poll", async () => {
+    endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
+    pages = [new Error("down"), [don("a")]];
+    await bindDonationsLive(document);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(document.querySelector(".donations-live-head p:not(.donations-live-kicker)")!.textContent).toBe(
+      "Live gifts into projects and the endowment.",
+    );
+  });
+
   it("polls every 15 s and marks only unseen gifts as new, then clears the mark", async () => {
     pages = [[don("a")], [don("b"), don("a")]];
     await bindDonationsLive(document);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ledgerCalls()).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(14_999);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ledgerCalls()).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(ledgerCalls()).toHaveLength(2);
     expect(rows()).toEqual([
       { id: "b", isNew: true },
       { id: "a", isNew: false },
@@ -110,7 +180,7 @@ describe("bindDonationsLive", () => {
     await vi.advanceTimersByTimeAsync(900);
     expect(rows().every((r) => !r.isNew)).toBe(true);
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(ledgerCalls()).toHaveLength(3);
   });
 
   it("an initial failure leaves the mount empty; a later failure keeps the last panel and keeps polling", async () => {
@@ -121,10 +191,10 @@ describe("bindDonationsLive", () => {
     await vi.advanceTimersByTimeAsync(15_000);
     expect(rows().map((r) => r.id)).toEqual(["a"]);
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(ledgerCalls()).toHaveLength(3);
     expect(rows().map((r) => r.id)).toEqual(["a"]);
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(ledgerCalls()).toHaveLength(4);
   });
 
   it("stops polling once the mount leaves the document (SPA navigation)", async () => {
@@ -133,7 +203,7 @@ describe("bindDonationsLive", () => {
     document.querySelector("#root")!.innerHTML = "<p>other page</p>";
     await flush();
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ledgerCalls()).toHaveLength(1);
   });
 
   it("a poll in flight when the mount leaves does not schedule another", async () => {
@@ -142,13 +212,13 @@ describe("bindDonationsLive", () => {
     let release!: (r: Response) => void;
     fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => (release = r)));
     await vi.advanceTimersByTimeAsync(15_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(ledgerCalls()).toHaveLength(2);
     document.querySelector("#root")!.innerHTML = "<p>other page</p>";
     await flush();
     release(Response.json({ donations: [don("b")], total: 1 }));
     await flush();
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(ledgerCalls()).toHaveLength(2);
   });
 
   it("escapes donor, target and id from the public ledger", async () => {

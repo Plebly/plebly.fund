@@ -134,4 +134,10 @@ describe("router governance paths", () => {
   });
 });
 
-
+describe("donations SEO", () => {
+  it("the static description does not mention the endowment", () => {
+    const seo = seoForRoute({ name: "donations" });
+    expect(seo.description).toBe("Public ledger of confirmed gifts to Plebly projects.");
+    expect(seo.description).not.toMatch(/endowment/i);
+  });
+});
