@@ -218,6 +218,20 @@ describe("shared escrow and the endowment wording", () => {
     expect(app().textContent).toContain("Fund a project.");
   });
 
+  it.each([
+    ["a network error", () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["a non-JSON body", async () => new Response("<html>oops</html>", { status: 200 })],
+  ])("/endowment %s: no endowment wording or link", async (_label, endowmentReply) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes("/donations")
+        ? new Response(JSON.stringify({ donations: [], total: 0 }), { status: 200 })
+        : endowmentReply(),
+    );
+    await renderDonations(shell);
+    expect(lede()).toBe("Confirmed gifts to projects.");
+    expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+  });
+
   it("own address: the endowment wording and link come back", async () => {
     route([], OWN);
     await renderDonations(shell);
