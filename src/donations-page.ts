@@ -61,14 +61,36 @@ export function donationTargetHtml(d: PublicDonation, className: string, label: 
  * shared address, a missing flag (older API) or a failed read all hide the
  * endowment wording and links.
  */
+export const ENDOWMENT_READ_TIMEOUT_MS = 4_000;
+
 export async function fetchEndowmentOpen(): Promise<boolean> {
   if (!WORKERS_API) return false;
+  // The ledger waits on this read (the /donations Promise.all, the live
+  // strip's first paint), so a hung /endowment must not hang the ledger: after
+  // ENDOWMENT_READ_TIMEOUT_MS give up (abort the request) and keep the
+  // endowment wording hidden. The race also covers a body that stalls after
+  // the headers arrive.
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => {
+      ctrl.abort();
+      resolve(false);
+    }, ENDOWMENT_READ_TIMEOUT_MS);
+  });
+  const read = (async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API()}/endowment`, { signal: ctrl.signal });
+      if (!res || !res.ok) return false;
+      return endowmentGiveAllowed(endowmentBalanceView(await res.json()));
+    } catch {
+      return false;
+    }
+  })();
   try {
-    const res = await fetch(`${API()}/endowment`);
-    if (!res || !res.ok) return false;
-    return endowmentGiveAllowed(endowmentBalanceView(await res.json()));
-  } catch {
-    return false;
+    return await Promise.race([read, timedOut]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

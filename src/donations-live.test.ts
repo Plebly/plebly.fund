@@ -177,6 +177,34 @@ describe("bindDonationsLive", () => {
     );
   });
 
+  it("a /endowment that never answers: the strip still paints after 4 s with the projects-only heading", async () => {
+    let signal: AbortSignal | undefined;
+    const ledgerOnly = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/endowment")) {
+        signal = init?.signal ?? undefined;
+        return new Promise<Response>(() => {});
+      }
+      return ledgerOnly(url);
+    });
+    pages = [[don("a")]];
+    let done = false;
+    const bound = bindDonationsLive(document).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(3_999);
+    expect(done).toBe(false);
+    expect(rows()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    await bound;
+    expect(rows().map((r) => r.id)).toEqual(["a"]);
+    expect(document.querySelector(".donations-live-head p:not(.donations-live-kicker)")!.textContent).toBe(
+      "Live gifts into projects.",
+    );
+    expect(signal?.aborted).toBe(true);
+    // Polling carries on and does not re-read /endowment.
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(ledgerCalls()).toHaveLength(2);
+  });
+
   it("an initial ledger failure still paints the own-address heading on the next poll", async () => {
     endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
     pages = [new Error("down"), [don("a")]];

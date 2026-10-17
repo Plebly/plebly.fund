@@ -232,6 +232,33 @@ describe("shared escrow and the endowment wording", () => {
     expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
   });
 
+  it("a /endowment that never answers: the ledger still paints after 4 s, wording hidden, request aborted", async () => {
+    vi.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        if (String(url).includes("/donations")) {
+          return Promise.resolve(new Response(JSON.stringify({ donations: [d()], total: 1 }), { status: 200 }));
+        }
+        signal = init?.signal ?? undefined;
+        return new Promise<Response>(() => {});
+      });
+      let done = false;
+      const rendering = renderDonations(shell).then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(3_999);
+      expect(done).toBe(false);
+      expect(app().textContent).toContain("Loading…");
+      await vi.advanceTimersByTimeAsync(1);
+      await rendering;
+      expect(lede()).toBe("Confirmed gifts to projects (1).");
+      expect(app().querySelectorAll(".donations-row")).toHaveLength(1);
+      expect(app().querySelector('a[href$="/endowment"]')).toBeNull();
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("own address: the endowment wording and link come back", async () => {
     route([], OWN);
     await renderDonations(shell);
