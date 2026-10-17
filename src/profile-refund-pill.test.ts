@@ -31,30 +31,59 @@ describe("account refunds row status pill", () => {
     });
   });
 
-  it("reads Partly refunded when the partial note shows", () => {
+  const PARTLY =
+    "Partly refunded: 19,700 sats sent, 50,300 sats still owed. The amount still owed is on record.";
+  const OWED = "50,300 sats still owed. The amount owed is on record.";
+  const PROMISE = /will be refunded|more escrow funds|pending/i;
+  const { sent_sats: _s, ...noSent } = owed;
+
+  it("sent_sats > 0: Partly refunded pill and line", () => {
     const out = render({ ...row, donate_remainder_owed: owed });
-    expect(out.note).toContain("Partly refunded");
-    expect(out.pill).toBe("Partly refunded");
+    expect(out).toEqual({ pill: "Partly refunded", note: PARTLY });
   });
 
-  it("without sent_sats the note shows owed only, and the pill still reads Partly refunded", () => {
-    const { sent_sats: _s, ...rest } = owed;
-    const out = render({ ...row, donate_remainder_owed: rest });
-    expect(out.note).toBe(
-      "Partly refunded: 50,300 sats still owed. The rest will be refunded when more escrow funds are available.",
-    );
+  it("1 sat sent: Partly refunded", () => {
+    const out = render({ ...row, donate_remainder_owed: { ...owed, sent_sats: 1 } });
     expect(out.pill).toBe("Partly refunded");
+    expect(out.note).toContain("1 sats sent");
   });
 
-  it("sent_sats 0 renders exactly like a missing sent_sats: owed-only note, no \"0 sats sent\"", () => {
-    const { sent_sats: _s, ...rest } = owed;
-    const zero = render({ ...row, donate_remainder_owed: { ...owed, sent_sats: 0 } });
-    expect(zero).toEqual(render({ ...row, donate_remainder_owed: rest }));
-    expect(zero.note).toBe(
-      "Partly refunded: 50,300 sats still owed. The rest will be refunded when more escrow funds are available.",
-    );
-    expect(zero.note).not.toMatch(/sats sent/);
-    expect(document.body.textContent).not.toContain("0 sats sent");
+  it("missing sent_sats: Refund owed pill and the owed line (on purpose)", () => {
+    expect(render({ ...row, donate_remainder_owed: noSent })).toEqual({
+      pill: "Refund owed",
+      note: OWED,
+    });
+  });
+
+  for (const v of [0, -1, null, "19700", Number.NaN]) {
+    it(`sent_sats ${String(v)}: renders exactly like missing (Refund owed, no sent figure)`, () => {
+      const out = render({ ...row, donate_remainder_owed: { ...owed, sent_sats: v as number } });
+      expect(out).toEqual({ pill: "Refund owed", note: OWED });
+      expect(document.body.textContent).not.toContain("sats sent");
+    });
+  }
+
+  it("no promise wording on the row, either case", () => {
+    for (const o of [owed, noSent]) {
+      render({ ...row, donate_remainder_owed: o });
+      expect(document.body.textContent).not.toMatch(PROMISE);
+    }
+  });
+
+  it("missing outstanding_sats hides the note and the pill, with or without sent_sats", () => {
+    for (const o of [owed, noSent]) {
+      const { outstanding_sats: _o, ...noOutstanding } = o;
+      expect(render({ ...row, donate_remainder_owed: noOutstanding })).toEqual({
+        pill: "refunded",
+        note: null,
+      });
+    }
+  });
+
+  it("server status in the pill is escaped when no note shows", () => {
+    render({ ...row, status: "<img src=x>" });
+    expect(document.querySelector(".pill")?.textContent).toBe("<img src=x>");
+    expect(document.querySelector("img")).toBeNull();
   });
 
   it("keeps the server status when no partial note shows", () => {
