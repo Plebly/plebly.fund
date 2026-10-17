@@ -41,16 +41,27 @@ export async function fetchPublicDonations(opts?: {
   };
 }
 
-/** Link for a donation's target, or null when it has no page (shared escrow, unknown types). */
-export function donationTargetHref(d: PublicDonation): string | null {
-  if (d.target_type === "endowment") return href("/endowment");
+export const SHARED_ESCROW_LABEL = "Shared escrow (001–008)";
+
+/**
+ * Link for a donation's target, or null when it has no page (shared escrow,
+ * unknown types, and `endowment` rows while the endowment isn't open: an older
+ * workers still stores shared-address gifts as `endowment`).
+ */
+export function donationTargetHref(d: PublicDonation, endowmentOpen: boolean): string | null {
+  if (d.target_type === "endowment") return endowmentOpen ? href("/endowment") : null;
   if (d.target_type === "project") return proposalHref("", d.target_id);
   return null;
 }
 
 /** Target as a link, or plain text when it has no page. */
-export function donationTargetHtml(d: PublicDonation, className: string, label: string): string {
-  const to = donationTargetHref(d);
+export function donationTargetHtml(
+  d: PublicDonation,
+  className: string,
+  label: string,
+  endowmentOpen: boolean,
+): string {
+  const to = donationTargetHref(d, endowmentOpen);
   return to
     ? `<a class="${className}" href="${to}">${escapeHtml(label)}</a>`
     : `<span class="${className}">${escapeHtml(label)}</span>`;
@@ -101,7 +112,7 @@ export function donationsLedeText(endowmentOpen: boolean, total = 0): string {
   return `${base}${total ? ` (${total})` : ""}.`;
 }
 
-export function donationRowCopy(d: PublicDonation): {
+export function donationRowCopy(d: PublicDonation, endowmentOpen: boolean): {
   donor: string;
   amount: string;
   target: string;
@@ -113,19 +124,22 @@ export function donationRowCopy(d: PublicDonation): {
   return {
     donor,
     amount: formatSats(d.amount_sats),
-    target: d.target_label || d.target_id || "a project",
+    target:
+      d.target_type === "endowment" && !endowmentOpen
+        ? SHARED_ESCROW_LABEL
+        : d.target_label || d.target_id || "a project",
   };
 }
 
-function rowHtml(d: PublicDonation): string {
-  const { donor, amount, target } = donationRowCopy(d);
+function rowHtml(d: PublicDonation, endowmentOpen: boolean): string {
+  const { donor, amount, target } = donationRowCopy(d, endowmentOpen);
   const when = timeAgoHtml(d.donated_at);
   return `<li class="donations-row" data-donation-id="${escapeHtml(d.id)}">
     <span class="donations-donor">${escapeHtml(donor)}</span>
     <span class="donations-verb">donated</span>
     <span class="donations-amount mono">${escapeHtml(amount)}</span>
     <span class="donations-verb">to</span>
-    ${donationTargetHtml(d, "donations-target", target)}
+    ${donationTargetHtml(d, "donations-target", target, endowmentOpen)}
     ${when ? `<span class="donations-when muted">${when}</span>` : ""}
   </li>`;
 }
@@ -162,7 +176,7 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
       return renderDonations(shell);
     }
     const list = donations.length
-      ? `<ul class="donations-list">${donations.map((d) => rowHtml(d)).join("")}</ul>`
+      ? `<ul class="donations-list">${donations.map((d) => rowHtml(d, endowmentOpen)).join("")}</ul>`
       : `<div class="empty-state">
           <p class="empty-state-title">No confirmed donations yet</p>
           <p class="empty-state-body"><a href="${projectsHref()}">Fund a project</a>${

@@ -93,6 +93,7 @@ describe("bindDonationsLive", () => {
   });
 
   it("paints the latest 10 confirmed gifts, none marked new on first paint", async () => {
+    endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
     pages = [[don("a"), don("b", { anonymous: true }), don("c", { target_type: "endowment", target_label: "Endowment" })]];
     await bindDonationsLive(document);
     expect(ledgerCalls()[0]).toBe("https://api.test/donations?limit=10&offset=0");
@@ -108,6 +109,30 @@ describe("bindDonationsLive", () => {
     expect(li[1]!.querySelector(".donations-live-donor")!.textContent).toBe("Anonymous");
     expect(li[2]!.querySelector("a")!.getAttribute("href")).toMatch(/\/endowment$/);
     expect(document.querySelector(".donations-live-when time")).toBeTruthy();
+  });
+
+  it("an endowment row (older workers) shows the shared label with no link while shared", async () => {
+    pages = [[don("e", { target_type: "endowment", target_id: "endowment", target_label: "Endowment" })]];
+    await bindDonationsLive(document);
+    const li = document.querySelector(".donations-live-row")!;
+    const target = li.querySelector(".donations-live-target")!;
+    expect(target.tagName).toBe("SPAN");
+    expect(target.textContent).toBe("Shared escrow (001–008)");
+    expect(li.querySelector("a")).toBeNull();
+    expect(document.querySelector('#donations-live a[href$="/endowment"]')).toBeNull();
+  });
+
+  it("escapes HTML in shared-escrow and unknown-type labels (plain-text rows)", async () => {
+    pages = [[
+      don("s", { target_type: "shared_escrow", target_label: "<img src=x onerror=alert(1)>" }),
+      don("u", { target_type: "other" as PublicDonation["target_type"], target_label: "<b>u</b>" }),
+    ]];
+    await bindDonationsLive(document);
+    const panel = document.querySelector("#donations-live")!;
+    expect(panel.querySelector("img, b")).toBeNull();
+    const targets = [...panel.querySelectorAll(".donations-live-target")];
+    expect(targets.map((t) => t.tagName)).toEqual(["SPAN", "SPAN"]);
+    expect(targets.map((t) => t.textContent)).toEqual(["<img src=x onerror=alert(1)>", "<b>u</b>"]);
   });
 
   it("own address: heading names the endowment and the empty state links to it", async () => {

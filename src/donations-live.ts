@@ -10,8 +10,8 @@ import { escapeHtml, timeAgoHtml } from "./util";
 
 const POLL_MS = 15_000;
 
-function liveRowHtml(d: PublicDonation, isNew: boolean): string {
-  const { donor, amount, target } = donationRowCopy(d);
+function liveRowHtml(d: PublicDonation, isNew: boolean, endowmentOpen: boolean): string {
+  const { donor, amount, target } = donationRowCopy(d, endowmentOpen);
   const when = timeAgoHtml(d.donated_at);
   return `<li class="donations-live-row${isNew ? " is-new" : ""}" data-donation-id="${escapeHtml(d.id)}">
     <p class="donations-live-copy">
@@ -19,7 +19,7 @@ function liveRowHtml(d: PublicDonation, isNew: boolean): string {
       donated
       <span class="donations-live-amount mono">${escapeHtml(amount)}</span>
       to
-      ${donationTargetHtml(d, "donations-live-target", target)}
+      ${donationTargetHtml(d, "donations-live-target", target, endowmentOpen)}
     </p>
     ${when ? `<p class="donations-live-when muted">${when}</p>` : ""}
   </li>`;
@@ -38,7 +38,7 @@ function panelHtml(
 ): string {
   const list = rows.length
     ? `<ul class="donations-live-list">${rows
-        .map((d) => liveRowHtml(d, knownIds.size > 0 && !knownIds.has(d.id)))
+        .map((d) => liveRowHtml(d, knownIds.size > 0 && !knownIds.has(d.id), endowmentOpen))
         .join("")}</ul>`
     : `<div class="donations-live-empty">
         <p>No confirmed gifts yet — be the first.</p>
