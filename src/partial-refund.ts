@@ -13,9 +13,9 @@ export type DonateRemainderOwed = {
   settle_txid?: string;
 };
 
+/** A non-negative finite number, floored; anything else (null, strings, -1) is null. */
 function sats(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
 }
 
 /**

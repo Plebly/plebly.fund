@@ -26,6 +26,22 @@ describe("partial refund copy", () => {
     expect(partialRefundCopy(rest)).not.toContain("sent");
   });
 
+  it("negative, null or non-number sent_sats: owed-only line, never \"-N sats sent\" or \"0 sats sent\"", () => {
+    const { sent_sats: _s, ...rest } = owed;
+    const copy = partialRefundCopy(rest);
+    for (const bad of [-1, -19_700, null, "19700", Number.NaN, Number.POSITIVE_INFINITY]) {
+      const got = partialRefundCopy({ ...rest, sent_sats: bad as unknown as number });
+      expect(got).toBe(copy);
+      expect(got).not.toMatch(/sats sent/);
+    }
+  });
+
+  it("sent_sats 0 is a real figure and is shown", () => {
+    expect(partialRefundCopy({ ...owed, sent_sats: 0 })).toBe(
+      "Partly refunded: 0 sats sent, 50,300 sats still owed. The rest will be refunded when more escrow funds are available.",
+    );
+  });
+
   it("status pill reads Partly refunded exactly when the note shows", () => {
     expect(refundStatusLabel("refunded", owed)).toBe("Partly refunded");
     expect(refundStatusLabel("refunded", owed, false)).toBe("refunded");
@@ -41,6 +57,8 @@ describe("partial refund copy", () => {
     expect(partialRefundCopy({ ...owed, outstanding_sats: 0 })).toBeNull();
     expect(partialRefundCopy({ ...owed, outstanding_sats: -5 })).toBeNull();
     expect(partialRefundCopy({ ...owed, outstanding_sats: "x" as unknown as number })).toBeNull();
+    expect(partialRefundCopy({ ...owed, outstanding_sats: null as unknown as number })).toBeNull();
+    expect(partialRefundCopy({ ...owed, outstanding_sats: "50300" as unknown as number })).toBeNull();
     expect(partialRefundHtml(undefined)).toBe("");
   });
 

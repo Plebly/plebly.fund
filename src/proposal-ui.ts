@@ -1478,9 +1478,9 @@ function bindLightningDonate(
     createBtn.disabled = true;
     createBtn.textContent = "Sign in to invoice";
   }
-  panel.querySelector("#donate-ln-signin")?.addEventListener("click", () => {
-    panel.querySelector<HTMLButtonElement>("#donate-credit-signin")?.click();
-  });
+  // #donate-ln-signin carries .donate-credit-signin, so bindDonateWizard already
+  // wires it to the credit step. A second listener here relayed a click to
+  // #donate-credit-signin and ran that handler twice.
   if (amountInput) {
     amountInput.min = String(min);
     amountInput.max = String(max);
