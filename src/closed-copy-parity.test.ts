@@ -1,5 +1,8 @@
 // One wording per closed page: the next card and the Donate-slot note
 // (donate-closed-note.ts) use the same status groups and copy (UI UX).
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ClaimStatus } from "./builder";
 import {
@@ -190,5 +193,16 @@ describe("next card headlines (UI UX: short; the note says what happens to gifts
       claim: claim({ status: "listed", state: "unavailable", accepting_claims: false }),
     });
     expect(a.sentence).toBe("Structure unavailable");
+  });
+});
+
+describe("next card: no long ', not accepting funds.' headlines left", () => {
+  // The three "Structure voided" returns sit behind the earlier
+  // "Structure unavailable" exit (same isStructuredTerminalOrUnknown check),
+  // so pin the source text instead of a render.
+  it("next-action.ts has no ', not accepting funds.' variant", () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "next-action.ts"), "utf8");
+    expect(src).not.toMatch(/, not accepting funds\./);
+    expect(src.match(/sentence: "Structure voided"/g)?.length).toBe(3);
   });
 });

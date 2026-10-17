@@ -721,7 +721,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     const structured = structuredState(claim);
     if (isStructuredTerminalOrUnknown(structured)) {
       return {
-        sentence: "Structure voided, not accepting funds.",
+        sentence: "Structure voided",
         button: null,
         moreIds,
       };
@@ -752,7 +752,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     const structured = structuredState(claim);
     if (isStructuredTerminalOrUnknown(structured)) {
       return {
-        sentence: "Structure voided, not accepting funds.",
+        sentence: "Structure voided",
         button: null,
         moreIds,
       };
@@ -823,7 +823,7 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
       const structured = structuredState(claim);
       if (isStructuredTerminalOrUnknown(structured)) {
         return {
-          sentence: "Structure voided, not accepting funds.",
+          sentence: "Structure voided",
           button: null,
           moreIds,
         };
