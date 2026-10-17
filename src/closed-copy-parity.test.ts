@@ -206,3 +206,66 @@ describe("next card: no long ', not accepting funds.' headlines left", () => {
     expect(src.match(/sentence: "Structure voided"/g)?.length).toBe(3);
   });
 });
+
+describe("Review HOLD @af668a8: each voided signal closes on its own", () => {
+  it("(a) catalog voided+unreadable, claim psbt voided (claim listed/unavailable) -> closed", () => {
+    const c = claim({
+      status: "listed",
+      state: "unavailable",
+      accepting_claims: false,
+      psbt: { structured_state: "voided" } as ClaimStatus["psbt"],
+    });
+    expect(donateClosedReason("voided", c, "unreadable")).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "voided", structured_state: "unreadable" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+
+  it("(b) catalog listed+structured voided, claim listed, no psbt -> closed", () => {
+    const c = claim({ status: "listed", state: "unavailable" });
+    expect(donateClosedReason("listed", c, "voided")).toBe(DONATE_CLOSED_OTHER);
+    expect(notAcceptingFunds({ status: "listed", structured_state: "voided" }, c)).toBe(DONATE_CLOSED_OTHER);
+  });
+});
+
+describe("Review HOLD @af668a8: contradictory rows read closed, not complete", () => {
+  const cases: [string, string | null, Partial<ClaimStatus>][] = [
+    ["catalog voided + claim claimed/claimed", "voided", { status: "claimed", state: "claimed" }],
+    ["catalog voided + claim state in_review", "voided", { state: "in_review" }],
+    ["catalog declined + claim claimed", "declined", { status: "claimed", state: "claimed" }],
+    ["catalog refunding + claim claimed", "refunding", { status: "claimed", state: "claimed" }],
+    ["catalog rejected + claim claimed", "rejected", { status: "claimed", state: "claimed" }],
+    ["listed + claim state voided, status completed", "listed", { status: "completed", state: "voided" }],
+    ["workers rejected row (status rejected, state claimed)", "rejected", { status: "rejected", state: "claimed" }],
+  ];
+  for (const [label, catalogStatus, c] of cases) {
+    it(`${label} -> closed in both places`, () => {
+      const cv = claim(c);
+      expect(donateClosedReason(catalogStatus, cv)).toBe(DONATE_CLOSED_OTHER);
+      expect(notAcceptingFunds({ status: catalogStatus ?? "" }, cv)).toBe(DONATE_CLOSED_OTHER);
+    });
+  }
+
+  it("settled beats voided: claim state settled on a catalog voided row -> complete", () => {
+    expect(donateClosedReason("voided", claim({ state: "settled" }), "voided")).toBe(DONATE_CLOSED_COMPLETE);
+  });
+  it("settled beats voided: catalog bounty_settled with claim psbt voided -> complete", () => {
+    const c = claim({ status: "bounty_settled", psbt: { structured_state: "voided" } as ClaimStatus["psbt"] });
+    expect(donateClosedReason("bounty_settled", c)).toBe(DONATE_CLOSED_COMPLETE);
+  });
+});
+
+describe("Review Low @af668a8: paused needs a known open claim state and a catalog status", () => {
+  for (const state of ["refunding", "frobnicated", "completed_ish"]) {
+    it(`listed row, claim state ${state} -> closed`, () => {
+      expect(donateClosedReason("listed", claim({ status: "listed", state }))).toBe(DONATE_CLOSED_OTHER);
+    });
+  }
+  for (const state of ["open", "below_floor", "claim_pending", "unavailable", ""]) {
+    it(`listed row, claim state '${state}' -> paused`, () => {
+      expect(donateClosedReason("listed", claim({ status: "listed", state }))).toBe(DONATE_PAUSED_LINE);
+    });
+  }
+  it("missing catalog status (claim listed) -> closed, not paused", () => {
+    expect(donateClosedReason(null, claim({ status: "listed", state: "open" }))).toBe(DONATE_CLOSED_OTHER);
+    expect(donateClosedReason("", claim({ status: "listed", state: "open" }))).toBe(DONATE_CLOSED_OTHER);
+  });
+});

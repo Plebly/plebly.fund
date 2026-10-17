@@ -6,7 +6,7 @@ import { escapeHtml } from "./util";
  * claim view says `accepting_funds === false` (workers#51 sends that for every
  * row whose status is not FUNDABLE). Plain text, not a live region.
  */
-/** in_review, claimed, completed, bounty_settled (UI UX copy). */
+/** in_review, claimed, completed, bounty_settled, settled (UI UX copy). */
 export const DONATE_CLOSED_COMPLETE = "Funding for this proposal is complete.";
 /** declined, rejected, voided, refunding, and any other non-fundable status. */
 export const DONATE_CLOSED_OTHER = "This proposal is closed and isn't accepting gifts.";
@@ -16,7 +16,22 @@ export const DONATE_CLOSED_OTHER = "This proposal is closed and isn't accepting 
  */
 export const DONATE_PAUSED_LINE = "Donations are paused for this proposal right now.";
 
-const FUNDING_COMPLETE = new Set(["in_review", "claimed", "completed", "bounty_settled", "settled"]);
+/**
+ * Settled beats voided (workers catalogStructuredFields checks settled first;
+ * the claim view's `settled` state / catalog `bounty_settled` status come from
+ * isBountySettled). Claim state `settled`, status `bounty_settled` or `settled`.
+ */
+const SETTLED = new Set(["bounty_settled", "settled"]);
+/** Complete group once nothing says voided / closed. */
+const FUNDING_COMPLETE = new Set(["in_review", "claimed", "completed"]);
+/** Statuses that close funds outright, checked before the complete group. */
+const CLOSED_STATUSES = new Set(["declined", "rejected", "refunding"]);
+/**
+ * Claim-view states a still-fundable row can be in while funds are paused.
+ * `unavailable` covers the unreadable-record case. Anything else (unknown,
+ * or a non-open state) reads closed.
+ */
+const PAUSABLE_CLAIM_STATES = new Set(["", "open", "below_floor", "claim_pending", "unavailable"]);
 
 /**
  * Structured states that can clear on their own: workers reports
@@ -45,30 +60,41 @@ export function donateClosedReason(
 ): string | null {
   if (!claim || claim.accepting_funds !== false) return null;
   const state = String(claim.state || "").toLowerCase();
-  const status = String(claim.status || proposalStatus || "").toLowerCase();
-  if (FUNDING_COMPLETE.has(state) || FUNDING_COMPLETE.has(status)) {
-    return DONATE_CLOSED_COMPLETE;
-  }
+  const claimStatus = String(claim.status || "").toLowerCase();
   const catalogStatus = String(proposalStatus || "").toLowerCase();
+  const status = claimStatus || catalogStatus;
   const catalogStructured = String(catalogStructuredState || "").toLowerCase();
   const claimStructured = String(claim.psbt?.structured_state || "").toLowerCase();
   const catalogTemporary = TEMPORARY_STRUCTURED.has(catalogStructured);
-  // Voided is final: claim view (status, state or record) or a catalog void
-  // that is not the catalog's fail-closed stand-in for an unreadable record.
+
+  // 1. Settled wins over everything, voided included (workers: settled first).
+  if (state === "settled" || SETTLED.has(claimStatus) || SETTLED.has(catalogStatus)) {
+    return DONATE_CLOSED_COMPLETE;
+  }
+  // 2. Any source that says voided closes it, except the catalog's
+  //    fail-closed stand-in for an unreadable record (status voided +
+  //    structured_state unreadable), which is temporary.
   const voided =
     state === "voided" ||
-    status === "voided" ||
+    claimStatus === "voided" ||
     claimStructured === "voided" ||
     catalogStructured === "voided" ||
     (catalogStatus === "voided" && !catalogTemporary);
-  // Paused only when every source still says fundable (or the catalog only
-  // reads voided because the record was temporarily unreadable): a catalog
-  // declined row stays closed even if the claim view still says listed.
+  // 3. Declined / rejected / refunding close it, even with a claimer.
+  if (voided || CLOSED_STATUSES.has(catalogStatus) || CLOSED_STATUSES.has(claimStatus)) {
+    return DONATE_CLOSED_OTHER;
+  }
+  // 4. Complete group.
+  if (FUNDING_COMPLETE.has(state) || FUNDING_COMPLETE.has(status)) {
+    return DONATE_CLOSED_COMPLETE;
+  }
+  // 5. Paused only when every source still says fundable and the claim state
+  //    is a known open one. A missing catalog status is not fundable here.
   const catalogFundable =
-    !catalogStatus ||
-    isFundableStatus(catalogStatus) ||
-    (catalogStatus === "voided" && catalogTemporary);
-  if (!voided && isFundableStatus(status) && catalogFundable) return DONATE_PAUSED_LINE;
+    isFundableStatus(catalogStatus) || (catalogStatus === "voided" && catalogTemporary);
+  if (isFundableStatus(status) && catalogFundable && PAUSABLE_CLAIM_STATES.has(state)) {
+    return DONATE_PAUSED_LINE;
+  }
   return DONATE_CLOSED_OTHER;
 }
 
