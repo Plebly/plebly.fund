@@ -655,7 +655,9 @@ describe("proposal UI critical render helpers", () => {
     expect(claimed).not.toContain("Open to apply");
     expect(claimed).not.toContain("claimable");
     expect(claimed).not.toContain("to open");
-    expect(claimed).toContain("50,000 of 100,000 sats goal (50%)");
+    // No longer raising: just "X raised", no target (UI UX H2).
+    expect(claimed).toContain("50,000 sats raised");
+    expect(visibleText(claimed)).not.toMatch(/goal|of 100,000/);
     expect(visibleText(claimed)).not.toMatch(/floor/i);
     expect(claimed).not.toContain("Opens for builders");
     expect(claimed).toContain("Opened at 10,000 sats, reached");

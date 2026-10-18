@@ -13,7 +13,7 @@ import {
 } from "./builder";
 import { isKnownProposalStatus } from "./types";
 import { isCatalogDonateBlocked } from "./next-action";
-import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API, isFundableStatus, lightningUiAllowed, mempoolWeb } from "./config";
 import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
@@ -310,7 +310,8 @@ function discoverToolbarHtml(count: number): string {
   </div>`;
 }
 
-function progressHtml(p: Proposal, floor: number): string {
+/** Card meter (exported for tests). */
+export function progressHtml(p: Proposal, floor: number): string {
   const sharedPending = sharedEscrowPendingHtml(p, "card");
   if (sharedPending != null) return sharedPending;
   const bal = p.balance_sats ?? 0;
@@ -327,18 +328,23 @@ function progressHtml(p: Proposal, floor: number): string {
   const over = isPastFundingTarget(bal, target);
   const campaignGoal = target || floor;
   const campaignRemaining = Math.max(0, campaignGoal - bal);
+  const taken = isTakenStatus(String(p.status)) || Boolean(p.claimer);
+  // "to open" / goal copy only while still raising (fundable, nobody on it).
+  const stillRaising = !taken && isFundableStatus(String(p.status || ""));
   const label = over
     ? "Fully funded"
-    : isDirect
-      ? bal >= campaignGoal
-        ? "Receiving"
-        : `${formatSats(campaignRemaining)} to goal`
-      : open
-        ? "Open to apply"
-        : near
-          ? "Almost open"
-          : isTakenStatus(String(p.status)) || p.claimer
-            ? "Taken"
+    : !stillRaising
+      ? taken
+        ? "Taken"
+        : statusLabel(String(p.status || ""))
+      : isDirect
+        ? bal >= campaignGoal
+          ? "Receiving"
+          : `${formatSats(campaignRemaining)} to goal`
+        : open
+          ? "Open to apply"
+          : near
+            ? "Almost open"
             : `${formatSats(remaining)} to open`;
   const labelClass = over
     ? "overfunded"
@@ -346,19 +352,25 @@ function progressHtml(p: Proposal, floor: number): string {
       ? "claimable"
       : "";
   // One target at a time, one term ("to open", never "floor"): the amount to
-  // open until it opens, then the goal.
+  // open until it opens, then the goal. Not raising any more: "X raised".
   const n = (v: number) => Math.max(0, Math.floor(v)).toLocaleString("en-US");
-  const satsLine = isDirect
-    ? target
-      ? `${n(bal)} of ${formatSats(target)} goal`
-      : formatSats(bal)
-    : bal < floor
-      ? `${n(bal)} of ${formatSats(floor)} to open`
-      : target
-        ? over
-          ? `${formatSats(bal)} raised · goal ${formatSats(target)}`
-          : `${n(bal)} of ${formatSats(target)} goal`
-        : `${formatSats(bal)} raised`;
+  const st = String(p.status || "").toLowerCase();
+  const paidOut = (st === "completed" || st === "bounty_settled") && bal <= 0;
+  const satsLine = paidOut
+    ? "Paid out on-chain"
+    : !stillRaising
+      ? `${n(bal)} sats raised`
+      : isDirect
+        ? target
+          ? `${n(bal)} of ${formatSats(target)} goal`
+          : formatSats(bal)
+        : bal < floor
+          ? `${n(bal)} of ${formatSats(floor)} to open`
+          : target
+            ? over
+              ? `${n(bal)} sats raised · goal ${formatSats(target)}`
+              : `${n(bal)} of ${formatSats(target)} goal`
+            : `${n(bal)} sats raised`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>

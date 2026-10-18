@@ -79,13 +79,33 @@ export function formatSats(n: number): string {
   return `${n.toLocaleString("en-US")} sats`;
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Parse a date value. A plain 'YYYY-MM-DD' is a calendar date: local midnight
+ * of that day, never UTC midnight (which is the day before west of UTC).
+ * Anything else goes through `new Date`.
+ */
+export function parseDateValue(value: string | number): Date {
+  if (typeof value === "string") {
+    const m = DATE_ONLY.exec(value.trim());
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  return new Date(value);
+}
+
+/** True for a plain 'YYYY-MM-DD' (no time, no zone). */
+export function isDateOnly(value: string): boolean {
+  return DATE_ONLY.test(String(value || "").trim());
+}
+
 /**
  * The one site date format: "Sep 25, 2026". Accepts an ISO string, epoch ms
  * or a Date; an unparseable value comes back as given ("" for empty).
  */
 export function formatDate(value: string | number | Date | null | undefined): string {
   if (value == null || value === "") return "";
-  const d = value instanceof Date ? value : new Date(value);
+  const d = value instanceof Date ? value : parseDateValue(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleDateString("en-US", {
     year: "numeric",
@@ -96,6 +116,8 @@ export function formatDate(value: string | number | Date | null | undefined): st
 
 /** Exact local date/time for `title` tooltips. */
 export function formatAbsoluteDateTime(iso: string): string {
+  // A calendar date has no time to show (and must not shift a day).
+  if (isDateOnly(iso)) return formatDate(iso);
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
@@ -156,7 +178,7 @@ export function formatTimeAhead(
   iso: string,
   nowMs = Date.now(),
 ): { text: string; title: string } | null {
-  const d = new Date(iso);
+  const d = parseDateValue(iso);
   if (Number.isNaN(d.getTime())) return null;
   const title = formatAbsoluteDateTime(iso);
   const deltaMs = d.getTime() - nowMs;

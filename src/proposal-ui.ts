@@ -91,6 +91,7 @@ import {
   formatSats,
   formatTimeAhead,
   linkifyText,
+  parseDateValue,
   themeQrColors,
   timeAgoHtml,
 } from "./util";
@@ -3027,13 +3028,8 @@ export function deliverableChipHtml(url: string | null | undefined): string {
 }
 
 function formatMilestoneDeadline(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  // formatDate keeps 'YYYY-MM-DD' on its calendar day in every zone.
+  return formatDate(iso);
 }
 
 function milestoneDueHtml(
@@ -3044,7 +3040,9 @@ function milestoneDueHtml(
   const due = formatMilestoneDeadline(iso);
   const ahead = formatTimeAhead(iso, nowMs);
   // Nothing raised yet: a past date isn't anyone's late delivery.
-  const overdue = Boolean(ahead && new Date(iso).getTime() < nowMs && ahead.text !== "due today");
+  const overdue = Boolean(
+    ahead && parseDateValue(iso).getTime() < nowMs && ahead.text !== "due today",
+  );
   const rel = ahead && !(opts?.hideOverdue && overdue)
     ? ` <span class="milestone-rail-due-rel">· ${escapeHtml(ahead.text)}</span>`
     : "";

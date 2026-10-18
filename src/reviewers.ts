@@ -354,7 +354,8 @@ export function shortUserId(userId: string): string {
   if (userId === AI_REVIEWER_ID || userId === AI_REVIEWER_USERNAME) {
     return AI_REVIEWER_NAME;
   }
-  // Raw nostr keys and long numeric GitHub ids read as a short key (a5a2…33f6).
+  // Raw nostr keys read as a short key (a5a2…33f6); numeric GitHub ids as
+  // "GitHub user 123" (never "gh:123" or "@123").
   if (isRawIdentityKey(userId)) return displayIdentity(userId);
   if (userId.startsWith("github:")) return `gh:${userId.slice(7)}`;
   if (userId.startsWith("x:")) return `x:${userId.slice(2)}`;

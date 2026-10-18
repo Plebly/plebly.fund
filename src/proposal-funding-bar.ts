@@ -210,9 +210,14 @@ export function balanceUnavailableHtml(): string {
   return `<p class="funding-balance-unknown muted">Balance temporarily unavailable.</p>`;
 }
 
+/** Never show a negative or fractional sats count. */
+function satsFloor(n: number): number {
+  return Math.max(0, Math.floor(n));
+}
+
 /** Bare sats count ("2,500") for "X of Y sats" copy. */
 function satsNumber(n: number): string {
-  return Math.max(0, Math.floor(n)).toLocaleString("en-US");
+  return n.toLocaleString("en-US");
 }
 
 export function fundingProgressHtml(
@@ -224,7 +229,8 @@ export function fundingProgressHtml(
 ): string {
   // Unknown balance: no meter, no "0 raised", no "… to open" (BeTheChange777).
   if (!isKnownBalance(balance)) return balanceUnavailableHtml();
-  const funded = balance;
+  // Clamp once: a negative or fractional read never shows as "-5 of …".
+  const funded = satsFloor(balance);
   const { scale, markers } = fundingBarScale(floor, target, milestones);
   const pastFloor = funded >= floor;
   const eligibility = {
@@ -258,11 +264,12 @@ export function fundingProgressHtml(
       </div>
     </div>`;
   }
+  const stillRaising = !taken && isFundableStatus(s);
   const label = over
     ? "Fully funded"
     : open
       ? "Open to apply"
-      : taken
+      : taken || !stillRaising
         ? fundingClosedLabel(String(eligibility.status))
         : pastFloor
           ? isDirectProposal(eligibility)
@@ -274,16 +281,19 @@ export function fundingProgressHtml(
     : open
       ? " claimable"
       : "";
-  // One target at a time, one term ("to open"; never "floor"): the amount to
-  // open until it opens, then the goal. Past the goal: "Fully funded", no %.
+  // One target at a time, one term ("to open"; never "floor"): while still
+  // raising, the amount to open until it opens, then the goal (past the goal:
+  // "Fully funded", no %). Once taken / in review / finished: just "X raised".
   const openCopy = !taken && (open || !pastFloor);
-  const goalLine = !pastFloor
-    ? `${satsNumber(funded)} of ${formatSats(floor)} to open`
-    : hasTarget
-      ? over || targetPct >= 100
-        ? `${formatSats(funded)} raised · goal ${formatSats(targetSats!)}`
-        : `${satsNumber(funded)} of ${formatSats(targetSats!)} goal (${targetPct}%)`
-      : `${formatSats(funded)} raised`;
+  const goalLine = !stillRaising
+    ? `${formatSats(funded)} raised`
+    : !pastFloor
+      ? `${satsNumber(funded)} of ${formatSats(floor)} to open`
+      : hasTarget
+        ? over || targetPct >= 100
+          ? `${formatSats(funded)} raised · goal ${formatSats(targetSats!)}`
+          : `${satsNumber(funded)} of ${formatSats(targetSats!)} goal (${targetPct}%)`
+        : `${formatSats(funded)} raised`;
 
   return `<div class="funding-meter" data-funding-scale="${scale}">
       <div class="funding-meter-top">

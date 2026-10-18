@@ -65,8 +65,8 @@ describe("names, not raw ids (item 3)", () => {
     expect(displayIdentity(`nostr:${HEX}`)).toBe("a5a2…33f6");
     expect(displayIdentity(HEX)).toBe("a5a2…33f6");
     expect(displayIdentity("a5a22eaf…33f6")).toBe("a5a2…33f6");
-    expect(displayIdentity("github:184555205")).toBe("1845…5205");
-    expect(displayIdentity("gh:184555205")).toBe("1845…5205");
+    expect(displayIdentity("github:184555205")).toBe("GitHub user 184555205");
+    expect(displayIdentity("gh:123")).toBe("GitHub user 123");
   });
 
   it("handles stay handles; keys never get an @", () => {
@@ -74,7 +74,9 @@ describe("names, not raw ids (item 3)", () => {
     expect(displayHandle("secsovereign")).toBe("@secsovereign");
     expect(displayHandle(`nostr:${HEX}`)).toBe("a5a2…33f6");
     expect(isRawIdentityKey("alice")).toBe(false);
-    expect(isRawIdentityKey("gh:42")).toBe(false);
+    expect(isRawIdentityKey("gh:42")).toBe(true);
+    expect(displayHandle("gh:123")).toBe("GitHub user 123"); // never "@123"
+    expect(displayHandle("github:ada")).toBe("@ada");
     expect(displayIdentity("")).toBe("");
   });
 
@@ -87,10 +89,10 @@ describe("names, not raw ids (item 3)", () => {
     expect(evil).toContain("&lt;img");
   });
 
-  it("governance short ids: raw keys shortened, small ids unchanged", () => {
+  it("governance short ids: nostr keys shortened, numeric GitHub ids named", () => {
     expect(shortUserId(`nostr:${HEX}`)).toBe("a5a2…33f6");
-    expect(shortUserId("github:184555205")).toBe("1845…5205");
-    expect(shortUserId("github:42")).toBe("gh:42");
+    expect(shortUserId("github:184555205")).toBe("GitHub user 184555205");
+    expect(shortUserId("github:42")).toBe("GitHub user 42");
   });
 
   it("statuses come from one label map: no raw snake_case", () => {

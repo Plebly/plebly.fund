@@ -22,7 +22,7 @@ import {
 
 describe("governance UI helpers", () => {
   it("shortens provider-prefixed user ids", () => {
-    expect(shortUserId("github:12345")).toBe("gh:12345");
+    expect(shortUserId("github:12345")).toBe("GitHub user 12345");
     expect(shortUserId("x:99")).toBe("x:99");
   });
 
