@@ -12,7 +12,7 @@
   --accent: #8e3fd4;
   --accent-rgb: 142, 63, 212;
   --accent-deep: #7828b8;
-  --accent-hover: #9d55e0;
+  --accent-hover: #9748dc; /* 4.66:1 under --accent-on (was #9d55e0, 4.15:1) */
   --accent-text: #b57aef;
   --accent-soft: rgba(var(--accent-rgb), 0.14);
   --accent-border: rgba(var(--accent-rgb), 0.35);

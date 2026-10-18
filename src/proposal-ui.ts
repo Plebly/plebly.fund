@@ -1,3 +1,4 @@
+import { isRenderedIn } from "./modal-a11y";
 import {
   escrowAddressChunksHtml,
   escrowAddressCopiedHtml,
@@ -842,11 +843,51 @@ function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
 }
 
+/**
+ * The amount field a donor types into first: the on-chain or Lightning
+ * amount of the rail on screen, or null while the pay step is hidden.
+ */
+export function visibleDonateAmountInput(root: Element): HTMLInputElement | null {
+  const inputs = root.querySelectorAll<HTMLInputElement>("#donate-amount, #donate-ln-amount");
+  for (const el of Array.from(inputs)) {
+    if (isRenderedIn(el, root)) return el;
+  }
+  return null;
+}
+
+/**
+ * True when the donor is already on a control inside the Donate modal (other
+ * than Close, and still on screen), so a re-render must not move focus.
+ */
+function donorIsUsingDonateModal(modal: Element): boolean {
+  const active = document.activeElement;
+  return (
+    active instanceof HTMLElement &&
+    modal.contains(active) &&
+    active.id !== "donate-close" &&
+    isRenderedIn(active, modal)
+  );
+}
+
+/** Initial focus in the Donate modal: the amount field when it's on screen, else Close. */
+export function focusDonateEntry(modal: Element): void {
+  const target =
+    visibleDonateAmountInput(modal) ||
+    modal.querySelector<HTMLButtonElement>("#donate-close");
+  target?.focus();
+}
+
 function setDonateStep(panel: Element, step: "credit" | "pay"): void {
   panel.setAttribute("data-donate-step", step);
   panel.querySelectorAll<HTMLElement>(".donate-step").forEach((el) => {
     el.hidden = el.dataset.donateStep !== step;
   });
+  // Arriving on the pay step: start in the amount field, unless the donor is
+  // already using another control (the claim check re-binds on reopen).
+  const modal = panel.closest(".site-modal");
+  if (step === "pay" && modal && !modal.hasAttribute("hidden") && !donorIsUsingDonateModal(modal)) {
+    visibleDonateAmountInput(panel)?.focus();
+  }
   const dialog = panel.closest<HTMLElement>("[aria-labelledby]");
   if (dialog) {
     dialog.setAttribute(
@@ -2555,7 +2596,9 @@ export function bindDonateModal(
     if (opts?.rail === "lightning" && panel) {
       selectDonateRail(panel, "lightning");
     }
-    modal.querySelector<HTMLButtonElement>("#donate-close")?.focus();
+    // reveal() runs again once the claim check mounts the panel; don't pull
+    // focus off a field the donor is already in.
+    if (!donorIsUsingDonateModal(modal)) focusDonateEntry(modal);
     window.addEventListener("keydown", onEscape);
   };
 
