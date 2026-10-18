@@ -104,7 +104,14 @@ import {
   proposalJsonLd,
   seoForRoute,
 } from "./router";
-import { escapeHtml, formatDate, formatSats, linkifyText, proposalStablePath } from "./util";
+import {
+  escapeHtml,
+  formatDate,
+  formatSats,
+  linkifyText,
+  pluralUnit,
+  proposalStablePath,
+} from "./util";
 import { recordProposalView } from "./views";
 
 export type ProposalShell = (inner: string) => string;
@@ -390,7 +397,7 @@ function bindRefundAndBallot(
         return;
       }
       if (statusEl) {
-        statusEl.textContent = `${data.ballot.vote_count} vote(s) · closes ${formatDate(data.ballot.closes_at)}`;
+        statusEl.textContent = `${pluralUnit(data.ballot.vote_count, "vote", "votes")} · closes ${formatDate(data.ballot.closes_at)}`;
       }
       if (actions) {
         actions.hidden = false;

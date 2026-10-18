@@ -254,7 +254,7 @@ export function fundingProgressHtml(
     return `<div class="funding-meter funding-meter-settled">
       <div class="funding-meter-top">
         <span class="funding-meter-label">${s === "completed" ? "Completed" : "Bounty paid"}</span>
-        <span class="funding-meter-goal">Paid out · settled on-chain</span>
+        <span class="funding-meter-goal">Paid out on-chain</span>
       </div>
     </div>`;
   }

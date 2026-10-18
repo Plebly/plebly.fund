@@ -36,7 +36,7 @@ import {
 } from "./proposal-ui";
 import { breadcrumbListingHtml, isFinishedStatus } from "./proposal-page";
 import { shortUserId } from "./reviewers";
-import { formatDate } from "./util";
+import { formatDate, pluralUnit } from "./util";
 import type { Proposal } from "./types";
 
 const HEX = "a5a22eafd45e989049a63bf9be8259535aca162d9b4ae526b33edc35261733f6";
@@ -178,7 +178,8 @@ describe("one funder count per page (item 2)", () => {
   it("completed with nothing left in escrow: no 0% meter, says it settled", () => {
     const html = fundingProgressHtml(0, 10_000, 10_000, [], { status: "completed" });
     expect(html).toContain("Completed");
-    expect(html).toContain("settled on-chain");
+    expect(html).toContain("Paid out on-chain");
+    expect(html).not.toContain("settled on-chain");
     expect(html).not.toContain("0%");
     expect(html).not.toContain("progressbar");
   });
@@ -260,6 +261,12 @@ describe("one name and one date format (item 6)", () => {
     expect(formatDate("2026-11-09T12:00:00Z")).toBe("Nov 9, 2026");
     expect(formatDate("not a date")).toBe("not a date");
     expect(formatDate(null)).toBe("");
+  });
+
+  it("vote counts are real plurals", () => {
+    expect(pluralUnit(1, "vote", "votes")).toBe("1 vote");
+    expect(pluralUnit(0, "vote", "votes")).toBe("0 votes");
+    expect(pluralUnit(3, "vote", "votes")).toBe("3 votes");
   });
 
   it("breadcrumb uses the nav's listing name", () => {

@@ -143,7 +143,8 @@ export function timeAgoHtml(iso: string | null | undefined, nowMs = Date.now()):
   return `<time class="timeago" datetime="${escapeHtml(iso)}" title="${escapeHtml(ago.title)}">${escapeHtml(ago.text)}</time>`;
 }
 
-function pluralUnit(n: number, singular: string, plural: string): string {
+/** "1 vote" / "3 votes". */
+export function pluralUnit(n: number, singular: string, plural: string): string {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
