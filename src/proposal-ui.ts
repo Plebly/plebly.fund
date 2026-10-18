@@ -140,13 +140,32 @@ export type DonateBindOpts = {
  */
 export const DONATE_SIGNED_OUT_UNIQUE_COPY =
   "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
-export const DONATE_SIGNED_OUT_SHARED_COPY =
-  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
 
-/** Signed-out donors only; signed-in donors see nothing here. */
+/**
+ * Signed-out donors on a shared escrow address (isSharedEscrow): the single
+ * sign-in note there (count and refund route in one; no separate route line).
+ */
+export const DONATE_SHARED_COUNT_COPY =
+  "Sign in before you send so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total, and refunds need a signed message from the sending address, which exchanges and some wallets can't do.";
+
+export function donateSharedCountCopy(o: { signedIn: boolean; shared: boolean }): string | null {
+  return !o.signedIn && o.shared ? DONATE_SHARED_COUNT_COPY : null;
+}
+
+function donateSharedCountHtml(o: { signedIn: boolean; shared: boolean }): string {
+  const copy = donateSharedCountCopy(o);
+  return copy
+    ? `<p class="donate-shared-count muted" id="donate-shared-count" role="note">${escapeHtml(copy)}</p>`
+    : "";
+}
+
+/**
+ * Signed-out donors on a unique address only. A shared address has one note,
+ * DONATE_SHARED_COUNT_COPY; signed-in donors see nothing here.
+ */
 export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean }): string | null {
-  if (o.signedIn) return null;
-  return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
+  if (o.signedIn || o.shared) return null;
+  return DONATE_SIGNED_OUT_UNIQUE_COPY;
 }
 
 function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
@@ -203,6 +222,11 @@ function donatePayStepHtml(
   opts?: { endowment?: boolean; shared?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
+  // One sign-in note per modal: the anonymous-credit line shows only when no
+  // shared-count or refund-route note is on the pay step.
+  const noteOpts = { signedIn, shared: Boolean(opts?.shared) };
+  const otherSignInNote =
+    !endowment && Boolean(donateSharedCountCopy(noteOpts) || donateRefundRouteCopy(noteOpts));
   const head = `<div class="donate-panel-head">
       ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
       <h2 class="donate-title" id="donate-pay-title">${
@@ -215,7 +239,9 @@ function donatePayStepHtml(
              <label class="donate-amount-label" for="donate-legal-name">Legal name for tax receipt (optional)</label>
              <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
              <p class="muted donate-legal-hint">Private. Used for a receipt after confirmation.</p>`
-          : `<aside class="donate-credit-advisory" role="note">
+          : otherSignInNote
+            ? ""
+            : `<aside class="donate-credit-advisory" role="note">
                <p>Giving anonymously. <button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in now</button> if you want credit.</p>
              </aside>`
       }
@@ -255,7 +281,13 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
+          ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${
+            otherSignInNote
+              ? `<p class="donate-note-signin"><button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in</button></p>`
+              : ""
+          }
           ${donateEscrowHardLabelHtml()}
           <div class="donate-address-block" data-escrow-address-block>
           <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
@@ -1487,9 +1519,9 @@ function bindLightningDonate(
     createBtn.disabled = true;
     createBtn.textContent = "Sign in to invoice";
   }
-  panel.querySelector("#donate-ln-signin")?.addEventListener("click", () => {
-    panel.querySelector<HTMLButtonElement>("#donate-credit-signin")?.click();
-  });
+  // #donate-ln-signin carries .donate-credit-signin, so bindDonateWizard already
+  // wires it to the credit step. A second listener here relayed a click to
+  // #donate-credit-signin and ran that handler twice.
   if (amountInput) {
     amountInput.min = String(min);
     amountInput.max = String(max);
