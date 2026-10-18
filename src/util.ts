@@ -79,6 +79,21 @@ export function formatSats(n: number): string {
   return `${n.toLocaleString("en-US")} sats`;
 }
 
+/**
+ * The one site date format: "Sep 25, 2026". Accepts an ISO string, epoch ms
+ * or a Date; an unparseable value comes back as given ("" for empty).
+ */
+export function formatDate(value: string | number | Date | null | undefined): string {
+  if (value == null || value === "") return "";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 /** Exact local date/time for `title` tooltips. */
 export function formatAbsoluteDateTime(iso: string): string {
   const d = new Date(iso);

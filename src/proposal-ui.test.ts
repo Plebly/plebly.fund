@@ -55,6 +55,12 @@ beforeAll(() => {
   });
 });
 
+
+/** Text a reader sees (tags and attributes stripped). */
+function visibleText(html: string): string {
+  return html.replace(/<[^>]*>/g, " ");
+}
+
 describe("proposal UI critical render helpers", () => {
   it("proposerBylineHtml links site username to profile", () => {
     const html = proposerBylineHtml(
@@ -134,7 +140,7 @@ describe("proposal UI critical render helpers", () => {
   });
 
   it("status helpers cover ballot/refund states", () => {
-    expect(statusLabel("abandoned_vote")).toBe("abandoned vote");
+    expect(statusLabel("abandoned_vote")).toBe("Abandoned vote");
     expect(statusLabel("listed")).toBe("Listed — still raising");
     expect(statusLabel("claimable")).toBe("Claimable");
     expect(statusLabel("in_review")).toBe("In review");
@@ -192,7 +198,7 @@ describe("proposal UI critical render helpers", () => {
     expect(statusPillHtml("listed")).toContain("Listed — still raising");
     expect(statusPillHtml("claimable")).toContain("Claimable");
     expect(statusPillHtml("in_review")).toContain("In review");
-    expect(statusPillHtml("funding")).toContain("funding");
+    expect(statusPillHtml("funding")).toContain(">Funding<");
     expect(statusPillHtml("funding")).toContain("pill-status");
   });
 
@@ -566,9 +572,10 @@ describe("proposal UI critical render helpers", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
     expect(html).toContain("50,000 sats to open");
-    expect(html).toContain(
-      "50,000 sats / 100,000 sats to open (50%) · goal 500,000 sats (10%)",
-    );
+    // One target at a time: the amount to open, no goal until it opens.
+    expect(html).toContain("50,000 of 100,000 sats to open");
+    expect(html).not.toContain("goal 500,000");
+    expect(visibleText(html)).not.toMatch(/floor/i);
     expect(html).toContain("funding-marker-floor");
     expect(html).not.toContain("funding-marker-lock");
     expect(html).not.toContain("proposal-stats");
@@ -577,9 +584,14 @@ describe("proposal UI critical render helpers", () => {
   it("funding bar always labels the open threshold separately from target", () => {
     const html = proposalFundingBarHtml(5_000, 10_000, 100_000);
     expect(html).toContain("5,000 sats to open");
-    expect(html).toContain("10,000 sats to open");
-    expect(html).toContain("goal 100,000 sats");
+    expect(html).toContain("5,000 of 10,000 sats to open");
+    expect(html).not.toContain("goal 100,000 sats");
     expect(html).not.toMatch(/\/ 100,000 sats · /);
+
+    // Once open, the goal is the one target.
+    const open = proposalFundingBarHtml(50_000, 10_000, 100_000);
+    expect(open).toContain("50,000 of 100,000 sats goal (50%)");
+    expect(open).not.toContain("to open");
   });
 
   it("funding bar shows lock markers only for funding_threshold_sats", () => {
@@ -622,8 +634,10 @@ describe("proposal UI critical render helpers", () => {
     expect(pastFloor).not.toContain("Overfunded");
 
     const pastTarget = fundingProgressHtml(250_000, 10_000, 100_000);
-    expect(pastTarget).toContain("Overfunded");
-    expect(pastTarget).toContain("target");
+    expect(pastTarget).toContain("Fully funded");
+    expect(pastTarget).not.toContain("Overfunded");
+    expect(pastTarget).not.toMatch(/\d{3}%/);
+    expect(pastTarget).toContain("250,000 sats raised · goal 100,000 sats");
     expect(pastTarget).not.toContain("claim floor");
 
     const noTarget = fundingProgressHtml(50_000, 10_000, null);
@@ -641,16 +655,16 @@ describe("proposal UI critical render helpers", () => {
     expect(claimed).not.toContain("Open to apply");
     expect(claimed).not.toContain("claimable");
     expect(claimed).not.toContain("to open");
-    expect(claimed).toContain("50,000 sats / 10,000 sats floor");
+    expect(claimed).toContain("50,000 of 100,000 sats goal (50%)");
+    expect(visibleText(claimed)).not.toMatch(/floor/i);
     expect(claimed).not.toContain("Opens for builders");
-    expect(claimed).toContain("Claim floor 10,000 sats, reached");
+    expect(claimed).toContain("Opened at 10,000 sats, reached");
 
     const claimableOpen = fundingProgressHtml(50_000, 10_000, 100_000, [], {
       status: "claimable",
       proposal_type: "bounty",
     });
     expect(claimableOpen).toContain("Open to apply");
-    expect(claimableOpen).toContain("to open");
     expect(claimableOpen).toContain("Opens for builders");
 
     const withClaimer = fundingProgressHtml(50_000, 10_000, null, [], {
@@ -660,7 +674,8 @@ describe("proposal UI critical render helpers", () => {
     expect(withClaimer).not.toContain("Open to apply");
     expect(withClaimer).toContain("Applications closed");
     expect(withClaimer).not.toContain("to open");
-    expect(withClaimer).toContain("floor ·");
+    expect(withClaimer).toContain("50,000 sats raised");
+    expect(visibleText(withClaimer)).not.toMatch(/floor/i);
   });
 
   it("keeps to-open goal copy while still funding toward the floor", () => {
@@ -669,7 +684,7 @@ describe("proposal UI critical render helpers", () => {
       proposal_type: "bounty",
     });
     expect(funding).toContain("5,000 sats to open");
-    expect(funding).toContain("5,000 sats / 10,000 sats to open");
+    expect(funding).toContain("5,000 of 10,000 sats to open");
     expect(funding).toContain("Opens for builders");
   });
 

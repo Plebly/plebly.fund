@@ -31,7 +31,6 @@ import {
   fundingBarTrackHtml,
   fundingTargetSats,
   isPastFundingTarget,
-  overfundRatioLabel,
   statusLabel,
   statusPillHtml,
 } from "./proposal-ui";
@@ -326,11 +325,10 @@ function progressHtml(p: Proposal, floor: number): string {
   const target = fundingTargetSats(p.target_sats);
   // Claim floor is the minimum to start bounty work — "overfunded" only past the soft target.
   const over = isPastFundingTarget(bal, target);
-  const overLabel = over && target ? overfundRatioLabel(bal, target) : "";
   const campaignGoal = target || floor;
   const campaignRemaining = Math.max(0, campaignGoal - bal);
   const label = over
-    ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
+    ? "Fully funded"
     : isDirect
       ? bal >= campaignGoal
         ? "Receiving"
@@ -347,19 +345,20 @@ function progressHtml(p: Proposal, floor: number): string {
     : open || (isDirect && bal >= campaignGoal)
       ? "claimable"
       : "";
-  const taken = isTakenStatus(String(p.status)) || Boolean(p.claimer);
-  const openCopy = !taken && (open || bal < floor);
+  // One target at a time, one term ("to open", never "floor"): the amount to
+  // open until it opens, then the goal.
+  const n = (v: number) => Math.max(0, Math.floor(v)).toLocaleString("en-US");
   const satsLine = isDirect
     ? target
-      ? `${formatSats(bal)} / ${formatSats(target)} goal`
+      ? `${n(bal)} of ${formatSats(target)} goal`
       : formatSats(bal)
-    : target
-      ? openCopy
-        ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
-        : `${formatSats(bal)} · floor ${formatSats(floor)} · goal ${formatSats(target)}`
-      : openCopy
-        ? `${formatSats(bal)} / ${formatSats(floor)} to open`
-        : `${formatSats(bal)} / ${formatSats(floor)} floor`;
+    : bal < floor
+      ? `${n(bal)} of ${formatSats(floor)} to open`
+      : target
+        ? over
+          ? `${formatSats(bal)} raised · goal ${formatSats(target)}`
+          : `${n(bal)} of ${formatSats(target)} goal`
+        : `${formatSats(bal)} raised`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>

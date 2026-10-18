@@ -36,7 +36,8 @@ describe("wantedRowHtml", () => {
     expect(a).toContain("PLEBLY-2026-002");
     expect(a).toContain("Claimable");
     expect(a).toContain("pill-status");
-    expect(a).toContain("305.9% funded");
+    expect(a).toContain("Fully funded");
+    expect(a).not.toContain("305.9%");
 
     expect(b).toContain("PLEBLY-2026-003");
     expect(b).toContain("In review");

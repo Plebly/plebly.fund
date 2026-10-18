@@ -87,12 +87,14 @@ import type { GithubOrgAttestation } from "./types";
 import {
   bitcoinUri,
   escapeHtml,
+  formatDate,
   formatSats,
   formatTimeAhead,
   linkifyText,
   themeQrColors,
   timeAgoHtml,
 } from "./util";
+import { displayIdentity } from "./display-names";
 
 export { bitcoinUri };
 
@@ -192,12 +194,10 @@ function donateCreditStepHtml(signedIn: boolean): string {
       <aside class="donate-credit-advisory" role="note">
         <p>Anonymous gifts still fund the project. <button type="button" class="donate-credit-signin" id="donate-credit-signin-credit">Sign in now</button> if you want credit — gifts stay anonymous once sent.</p>
       </aside>
-      <div class="donate-credit-login">
+      <div class="donate-credit-login donate-credit-choices">
         ${loginChoicesHtml(undefined, currentReturnPath())}
+        <button type="button" class="btn ghost donate-credit-anon" id="donate-credit-continue">Continue anonymously</button>
         <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
-      </div>
-      <div class="donate-step-actions">
-        <button type="button" class="btn ghost" id="donate-credit-continue">Continue anonymously</button>
       </div>
     </section>`;
   }
@@ -272,6 +272,15 @@ function donatePayStepHtml(
     </div>
 
     <div class="donate-pane donate-pane-onchain" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
+      <div class="donate-pay-notes">
+          ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${
+            otherSignInNote
+              ? `<p class="donate-note-signin"><button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in</button></p>`
+              : ""
+          }
+      </div>
       <div class="donate-pay-layout">
         <div class="donate-qr-wrap">
           <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
@@ -282,13 +291,6 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
-          ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
-          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
-          ${
-            otherSignInNote
-              ? `<p class="donate-note-signin"><button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in</button></p>`
-              : ""
-          }
           ${donateEscrowHardLabelHtml()}
           <div class="donate-address-block" data-escrow-address-block>
           <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
@@ -460,7 +462,7 @@ function milestonesBanner(p: Proposal, balance?: number | null): string {
         "Milestones",
         overdue
           ? "This project needs a milestone list before it can pay out."
-          : `Milestones due by ${due.toLocaleDateString()}`,
+          : `Milestones due by ${formatDate(due)}`,
         overdue ? "lifecycle-warn" : "",
       );
     }
@@ -2908,18 +2910,36 @@ export function onChainPanelHtml(
 }
 
 
-/** One line. Names only for public credit. No sitewide leaderboard. */
-export function funderConcentrationLine(c: {
-  top_share_bps?: number;
-  unattributed_bps?: number;
-  funder_count?: number;
-  top_name?: string;
-}): string {
-  if (!c.funder_count) return "";
+/**
+ * One line. Names only for public credit. No sitewide leaderboard.
+ * `countText` is the page's single funder count (funderCountText over the same
+ * contributions the Funders list shows); without it, `funder_count` is used.
+ */
+export function funderConcentrationLine(
+  c: {
+    top_share_bps?: number;
+    unattributed_bps?: number;
+    funder_count?: number;
+    top_name?: string;
+  },
+  countText?: string,
+): string {
+  const count =
+    countText ??
+    (c.funder_count
+      ? `${c.funder_count} ${c.funder_count === 1 ? "funder" : "funders"}`
+      : "");
+  if (!count) return "";
   const top = Math.round((c.top_share_bps || 0) / 100);
   const anon = Math.round((c.unattributed_bps || 0) / 100);
-  const who = c.top_name || "Largest funder";
-  return `${who} ${top}% · unattributed ${anon}% · ${c.funder_count} funders`;
+  const who = displayIdentity(c.top_name) || "Largest funder";
+  // No "Largest funder 0%" when every gift is anonymous.
+  const bits = [
+    top > 0 ? `${who} ${top}%` : "",
+    anon > 0 ? `unattributed ${anon}%` : "",
+    count,
+  ].filter(Boolean);
+  return bits.join(" · ");
 }
 
 /** Quiet meta line: created date, id, type, claim mode, and tags (status/byline live elsewhere). */
@@ -3016,10 +3036,16 @@ function formatMilestoneDeadline(iso: string): string {
   });
 }
 
-function milestoneDueHtml(iso: string, nowMs = Date.now()): string {
+function milestoneDueHtml(
+  iso: string,
+  nowMs = Date.now(),
+  opts?: { hideOverdue?: boolean },
+): string {
   const due = formatMilestoneDeadline(iso);
   const ahead = formatTimeAhead(iso, nowMs);
-  const rel = ahead
+  // Nothing raised yet: a past date isn't anyone's late delivery.
+  const overdue = Boolean(ahead && new Date(iso).getTime() < nowMs && ahead.text !== "due today");
+  const rel = ahead && !(opts?.hideOverdue && overdue)
     ? ` <span class="milestone-rail-due-rel">· ${escapeHtml(ahead.text)}</span>`
     : "";
   const title = ahead?.title || due;
@@ -3069,6 +3095,7 @@ export function proposerBylineHtml(
 export function milestonesHtml(
   milestones: ProposalMilestone[],
   nowMs = Date.now(),
+  opts?: { hideOverdue?: boolean },
 ): string {
   if (!milestones.length) return "";
   const total = milestones.reduce(
@@ -3084,7 +3111,7 @@ export function milestonesHtml(
       ${milestones
         .map((m, i) => {
           const due = m.deadline
-            ? milestoneDueHtml(String(m.deadline), nowMs)
+            ? milestoneDueHtml(String(m.deadline), nowMs, opts)
             : "";
           const moreBits: string[] = [];
           if (m.verification) {

@@ -21,7 +21,8 @@ import {
 import type { ClaimSummary } from "./types";
 import { sanitizePublicError } from "./public-errors";
 import { avatarImgHtml } from "./media";
-import { escapeHtml } from "./util";
+import { escapeHtml, formatDate } from "./util";
+import { statusPillHtml } from "./proposal-status-ui";
 
 const API = () => WORKERS_API.replace(/\/$/, "");
 
@@ -107,7 +108,7 @@ function relativeSynced(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 48) return `${hours}h ago`;
-  return new Date(t).toLocaleDateString();
+  return formatDate(t);
 }
 
 function orgDisplayTitle(org: PublicOrg): string {
@@ -276,7 +277,7 @@ export async function renderPublicOrgProfile(
       : `<ul class="work-list">${proposed
           .map(
             (p) =>
-              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> ${statusPillHtml(String(p.status))}</li>`,
           )
           .join("")}</ul>`;
   const work = proposalsForOrgClaimer(all, org.login);
@@ -289,7 +290,7 @@ export async function renderPublicOrgProfile(
       : `<ul class="work-list">${work
           .map(
             (p) =>
-              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> ${statusPillHtml(String(p.status))}</li>`,
           )
           .join("")}</ul>`;
 

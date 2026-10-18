@@ -4,7 +4,7 @@ import { fetchAdminMe } from "./admin-me";
 import { confirmAction } from "./confirm-modal";
 import { listListedProposals } from "./github";
 import { applySeo, href, seoForRoute } from "./router";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml, formatDate, formatSats } from "./util";
 
 type EndowmentContribution = {
   id: string;
@@ -524,7 +524,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
               titleById.get(g.proposal_id.toLowerCase()) ||
               g.proposal_id;
             const when = g.granted_at
-              ? new Date(g.granted_at).toLocaleDateString()
+              ? formatDate(g.granted_at)
               : "—";
             return `<li>
               <span class="muted">${escapeHtml(when)}</span>

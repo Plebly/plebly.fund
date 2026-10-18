@@ -1692,6 +1692,12 @@ body.modal-open {
   font-size: 0.6875rem;
 }
 
+/* Project title first, catalog id as quiet secondary text (feeds, ledger). */
+.project-ref-id {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
 .activity-strip-date {
   color: var(--muted);
 }
@@ -4534,6 +4540,28 @@ a.project-card-by:hover .project-card-by-text {
 
 .donate-credit-login {
   margin-top: 0.75rem;
+}
+
+/* GitHub, Nostr and "Continue anonymously": one row, one button size. */
+.donate-credit-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.donate-credit-choices .login-choices,
+.donate-credit-choices .login-choices-actions {
+  display: contents;
+}
+
+.donate-credit-choices .builder-msg {
+  flex-basis: 100%;
+}
+
+/* Sign-in / refund notes sit above the QR and address, never under the QR. */
+.donate-pay-notes > * {
+  margin: 0 0 0.6rem;
 }
 
 /* Soft advisory — not an error/warning; points guests at funder credit. */
@@ -8678,6 +8706,8 @@ a.claim-app-bond:hover {
   }
   .proposal-sidebar {
     position: static;
+    /* Phones: status + Donate card before the long Problem/Deliverable text. */
+    order: -1;
   }
   .proposal-donate-slot {
     display: none;

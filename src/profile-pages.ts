@@ -78,7 +78,8 @@ import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
 import { isSafeHttpUrl, safeHrefAttr } from "./social-links";
 import { avatarImgHtml } from "./media";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml, formatDate, formatSats } from "./util";
+import { statusPillHtml } from "./proposal-status-ui";
 import { downloadReceiptPdf, fetchMyReceipts, type DonationReceipt } from "./receipts";
 import { bindWebPushPanel, webPushPanelHtml } from "./web-push";
 
@@ -254,7 +255,7 @@ function claimsPaneHtml(
           (c) => `<li>
             <span>${escapeHtml(c.proposal_id)}</span>
             <span class="pill">${escapeHtml(c.reason)}</span>
-            <span class="muted">until ${escapeHtml(new Date(c.until).toLocaleDateString())}</span>
+            <span class="muted">until ${escapeHtml(formatDate(c.until))}</span>
           </li>`,
         )
         .join("")}</ul>`
@@ -267,7 +268,7 @@ function claimsPaneHtml(
           (h) => `<li>
             <a href="${proposalHref(`proposals/claimed/${h.proposal_id}.md`, h.proposal_id)}">${escapeHtml(h.proposal_id)}</a>
             <span class="pill">${escapeHtml(h.outcome)}</span>
-            <span class="muted">${escapeHtml(new Date(h.at).toLocaleDateString())}</span>
+            <span class="muted">${escapeHtml(formatDate(h.at))}</span>
           </li>`,
         )
         .join("")}</ul>`
@@ -734,7 +735,7 @@ export async function renderAccount(
                 .map(
                   (p) => `<li>
                     <a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a>
-                    <span class="pill">${escapeHtml(String(p.status))}</span>
+                    ${statusPillHtml(String(p.status))}
                   </li>`,
                 )
                 .join("")}</ul>`
@@ -1546,7 +1547,7 @@ function formatNotifyWhen(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 48) return `${hours}h ago`;
-  return new Date(t).toLocaleDateString();
+  return formatDate(t);
 }
 
 function profilePublicOrgsHtml(
@@ -1623,7 +1624,7 @@ export async function renderPublicProfile(
       : `<ul class="work-list">${work
           .map(
             (p) =>
-              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> ${statusPillHtml(String(p.status))}</li>`,
           )
           .join("")}</ul>`;
 
@@ -1659,7 +1660,7 @@ export async function renderPublicProfile(
           : ""
       }${
         profile.claim_suspend_until
-          ? ` until ${escapeHtml(new Date(profile.claim_suspend_until).toLocaleDateString())}`
+          ? ` until ${escapeHtml(formatDate(profile.claim_suspend_until))}`
           : ""
       }.</p>`
     : "";
@@ -1670,7 +1671,7 @@ export async function renderPublicProfile(
           : ""
       }${
         profile.discussion_muted_until
-          ? ` until ${escapeHtml(new Date(profile.discussion_muted_until).toLocaleDateString())}`
+          ? ` until ${escapeHtml(formatDate(profile.discussion_muted_until))}`
           : ""
       }.</p>`
     : "";

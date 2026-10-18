@@ -497,7 +497,11 @@ async function syncHybridReviewUi(
     st === "in_review" && Boolean(proposal.id) && donor !== "window_open";
 
   const ai = status.ai_review || proposal.ai_review;
-  if (ai) {
+  // Finished projects: no "needs human review" card after the fact.
+  const finished = st === "completed" || st === "bounty_settled";
+  if (ai && finished) {
+    host.querySelectorAll(":scope > .ai-review-card").forEach((el) => el.remove());
+  } else if (ai) {
     // Skipped / unavailable cards tuck under the ballot — do not mount a
     // competing outer card when the review panel will own them.
     if (wantPanel && isDemotedAiOutcome(String(ai.outcome || ""))) {

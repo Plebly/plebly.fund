@@ -26,11 +26,14 @@ export function wantedRowHtml(
   >,
   opts?: WantedRowHtmlOpts,
 ): string {
+  // Past 100%: "Fully funded", not "360.3% funded".
   const funded =
     r.funded_pct != null
-      ? opts?.fundedSuffix === false
-        ? `${r.funded_pct}%`
-        : `${r.funded_pct}% funded`
+      ? r.funded_pct >= 100
+        ? "Fully funded"
+        : opts?.fundedSuffix === false
+          ? `${r.funded_pct}%`
+          : `${r.funded_pct}% funded`
       : "—";
   const idHtml = r.id
     ? `<span class="mono proposal-meta-id">${escapeHtml(r.id)}</span>`

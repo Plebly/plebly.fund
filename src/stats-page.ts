@@ -135,7 +135,7 @@ function gapSectionHtml(stats: PublicStats): string {
         aria-valuemax="${capacity}"
         aria-valuenow="${stats.fundedTowardFloor}"
       ><span style="width: ${percent}%"></span></div>
-      <p class="stats-gap-note"><a href="${projectsHref("?size=below-floor")}">Fund below-floor projects</a></p>
+      <p class="stats-gap-note"><a href="${projectsHref("?size=below-floor")}">Fund projects not yet open</a></p>
     </div>
   </section>`;
 }

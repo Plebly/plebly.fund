@@ -1095,7 +1095,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
     return html`<div class="form-panel kh-onboard-card">
       <p class="next-card-sentence">Sign in to continue.</p>
       ${raw(loginChoicesHtml(undefined, currentReturnPath()))}
-      <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
+      <p class="muted"><a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a></p>
     </div>`.value;
   }
   if (phase === "earn_reviewer") {
@@ -1107,7 +1107,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
       }</p>
       <p><a class="btn" href="${href("/reviewers")}">Reviewers</a>
       <a class="btn ghost" href="${href("/wanted")}">Most wanted</a></p>
-      <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
+      <p class="muted"><a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a></p>
     </div>`.value;
   }
   if (phase === "election") {
@@ -1164,7 +1164,7 @@ function keyholderOnboardCardHtml(input: KeyholderOnboardInput): string {
   }
   return html`<div class="form-panel kh-onboard-card">
     <p class="next-card-sentence">You are seated.</p>
-    <p class="muted"><a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
+    <p class="muted"><a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a></p>
   </div>`.value;
 }
 
@@ -1368,7 +1368,7 @@ export async function renderKeyholders(
           kh.fingerprint
             ? html` · <code class="mono">${kh.fingerprint}</code>`
             : ""
-        }. <a href="${href("/keyholder-responsibilities")}">Responsibilities</a></p>
+        }. <a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a></p>
         <div class="kh-balance">
           <p class="kh-balance-amt"><span>Spendable</span><strong>${formatSats(balance)}</strong></p>
           <p class="kh-earnings">Accrued ${formatSats(earnings)}</p>

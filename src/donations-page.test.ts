@@ -126,7 +126,9 @@ describe("renderDonations", () => {
     expect(app().querySelector("script")).toBeNull();
     expect(app().querySelector("b")).toBeNull();
     expect(rows[1]!.getAttribute("data-donation-id")).toBe('x"><b>');
-    expect(rows[1]!.querySelector(".donations-target")!.textContent).toBe("<script>t</script>");
+    // Title first, catalog id as escaped secondary text.
+    expect(rows[1]!.querySelector(".donations-target .project-ref-title")!.textContent).toBe("<script>t</script>");
+    expect(rows[1]!.querySelector(".donations-target .project-ref-id")!.textContent).toBe("PLEBLY-2026-003");
     expect(app().querySelector(".lede")!.textContent).toContain("(2)");
     expect(app().querySelector(".donations-pager")).toBeNull();
   });

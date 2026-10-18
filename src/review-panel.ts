@@ -12,7 +12,7 @@ import {
   voteReviewDecision,
   type ReviewDecisionView,
 } from "./reviewers";
-import { escapeHtml } from "./util";
+import { escapeHtml, formatDate } from "./util";
 
 export function aiOutcomeLabel(outcome: string): string {
   if (outcome === "pass") return "Clear pass";
@@ -319,7 +319,7 @@ export function reviewDecisionStatusLine(d: ReviewDecisionView): string {
     const aiBit = d.ai_decisive ? " · AI decisive" : "";
     return `${primary}${aiBit}`;
   }
-  const closes = new Date(d.closes_at).toLocaleDateString();
+  const closes = formatDate(d.closes_at);
   const second = d.round === 2 ? " · Second look" : "";
   const esc = d.escalated ? " · Escalated to humans" : "";
   return `${primary}${second}${esc} · closes ${closes}.`;

@@ -1,6 +1,7 @@
 import { WORKERS_API } from "./config";
 import { proposalHref } from "./router";
 import { escapeHtml, timeAgoHtml } from "./util";
+import { projectRefHtml, projectTitles } from "./project-titles";
 
 type ActivityEvent = {
   type?: string;
@@ -36,14 +37,20 @@ export async function bindActivityStrip(root: ParentNode): Promise<void> {
     const events = Array.isArray(data) ? data : data.events || [];
     const visible = events.filter((event) => event.proposal_id).slice(0, 5);
     if (!visible.length) return;
+    const titles = await projectTitles(visible.map((e) => e.proposal_id || ""));
     strip.innerHTML = `<span class="activity-strip-label">Recent</span>
       <ul>${visible
         .map((event) => {
           const when = timeAgoHtml(event.created_at);
           const id = event.proposal_id || "";
+          const title = titles.get(id.toLowerCase());
+          // Title first, id as quiet secondary text; id alone when no title.
           const shortId =
             id.length > 22 ? `${id.slice(0, 10)}…${id.slice(-6)}` : id;
-          return `<li><a href="${proposalHref(event.proposal_path || "", event.proposal_id)}"><span class="activity-event">${escapeHtml(eventLabel(event.type))}</span><span class="mono activity-id" title="${escapeHtml(id)}">${escapeHtml(shortId)}</span>${when ? `<span class="activity-strip-date">${when}</span>` : ""}</a></li>`;
+          const target = title
+            ? `<span class="activity-title">${projectRefHtml(shortId, title)}</span>`
+            : `<span class="mono activity-id" title="${escapeHtml(id)}">${escapeHtml(shortId)}</span>`;
+          return `<li><a href="${proposalHref(event.proposal_path || "", event.proposal_id)}"><span class="activity-event">${escapeHtml(eventLabel(event.type))}</span>${target}${when ? `<span class="activity-strip-date">${when}</span>` : ""}</a></li>`;
         })
         .join("")}</ul>`;
     strip.hidden = false;

@@ -1,3 +1,4 @@
+import { displayIdentity, isRawIdentityKey } from "./display-names";
 import { WORKERS_API } from "./config";
 import { authFetch } from "./auth";
 import { authFetchWithTos } from "./tos-modal";
@@ -353,6 +354,8 @@ export function shortUserId(userId: string): string {
   if (userId === AI_REVIEWER_ID || userId === AI_REVIEWER_USERNAME) {
     return AI_REVIEWER_NAME;
   }
+  // Raw nostr keys and long numeric GitHub ids read as a short key (a5a2…33f6).
+  if (isRawIdentityKey(userId)) return displayIdentity(userId);
   if (userId.startsWith("github:")) return `gh:${userId.slice(7)}`;
   if (userId.startsWith("x:")) return `x:${userId.slice(2)}`;
   if (userId.length > 22) return `${userId.slice(0, 18)}…`;

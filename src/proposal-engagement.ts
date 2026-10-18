@@ -15,8 +15,9 @@ import { avatarImgHtml } from "./media";
 import { escapeHtml, formatSats, linkifyText, timeAgoHtml } from "./util";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import { AI_REVIEWER_USERNAME, isAiReviewerAuthor } from "./reviewers";
+import { displayIdentity } from "./display-names";
 
-type PublicContribution = {
+export type PublicContribution = {
   identity: string | null;
   anonymous: boolean;
   amount_sats?: number;
@@ -148,8 +149,8 @@ export function profileUrlForIdentity(identity: string | null): string | null {
 }
 
 function funderDisplayName(contribution: PublicContribution): string {
-  const raw = (contribution.identity || "").trim();
-  return raw || "Anonymous";
+  // Short key (a5a2…33f6) for raw nostr/gh ids; handles as-is.
+  return displayIdentity(contribution.identity) || "Anonymous";
 }
 
 function isAnonymousFunderLabel(contribution: PublicContribution): boolean {
@@ -162,39 +163,83 @@ export type FunderListEntry = {
 };
 
 /**
- * Collapse identical Anonymous display names into one row with a count.
- * Named funders stay as-is; chronological order is preserved (collapsed
- * Anonymous sits where the first Anonymous appeared).
+ * Collapse all Anonymous gifts into one row with a count, and repeat gifts
+ * from one named funder into that funder's single row (count = their gifts).
+ * Chronological order is preserved (a collapsed row sits where its first gift
+ * appeared).
  */
 export function collapseAnonymousFunders(
   contributions: PublicContribution[],
 ): FunderListEntry[] {
   const anonCount = contributions.filter(isAnonymousFunderLabel).length;
-  if (anonCount <= 1) {
-    return contributions.map((contribution) => ({ contribution, count: 1 }));
-  }
   const out: FunderListEntry[] = [];
-  let emittedAnon = false;
+  const named = new Map<string, FunderListEntry>();
+  let anonEntry: FunderListEntry | null = null;
   for (const contribution of contributions) {
     if (isAnonymousFunderLabel(contribution)) {
-      if (!emittedAnon) {
-        out.push({ contribution, count: anonCount });
-        emittedAnon = true;
+      if (!anonEntry) {
+        anonEntry = { contribution, count: anonCount };
+        out.push(anonEntry);
       }
-    } else {
-      out.push({ contribution, count: 1 });
+      continue;
     }
+    const key = funderDisplayName(contribution).toLowerCase();
+    const prev = named.get(key);
+    if (prev) {
+      prev.count += 1;
+      const a = prev.contribution.amount_sats;
+      const b = contribution.amount_sats;
+      prev.contribution = {
+        ...prev.contribution,
+        amount_sats: typeof a === "number" && typeof b === "number" ? a + b : undefined,
+      };
+      continue;
+    }
+    const entry = { contribution, count: 1 };
+    named.set(key, entry);
+    out.push(entry);
   }
   return out;
 }
 
+/**
+ * One funder count for the whole page (header line and Funders list): distinct
+ * named funders, plus anonymous gifts counted as gifts. Anonymous gifts can't
+ * be told apart, so they are never called funders.
+ */
+export function funderSummary(contributions: PublicContribution[]): {
+  named: number;
+  anonymousGifts: number;
+} {
+  const entries = collapseAnonymousFunders(contributions);
+  let named = 0;
+  let anonymousGifts = 0;
+  for (const e of entries) {
+    if (isAnonymousFunderLabel(e.contribution)) anonymousGifts += e.count;
+    else named += 1;
+  }
+  return { named, anonymousGifts };
+}
+
+export function anonymousGiftsLabel(n: number): string {
+  return n === 1 ? "1 anonymous gift" : `${n} anonymous gifts`;
+}
+
+export function funderCountText(s: { named: number; anonymousGifts: number }): string {
+  const named = s.named === 1 ? "1 funder" : `${s.named} funders`;
+  if (s.named && s.anonymousGifts) return `${named} + ${anonymousGiftsLabel(s.anonymousGifts)}`;
+  if (s.anonymousGifts) return anonymousGiftsLabel(s.anonymousGifts);
+  return s.named ? named : "";
+}
+
 function funderTooltip(contribution: PublicContribution, count = 1): string {
-  if (count > 1) {
-    return `${count} anonymous funders`;
+  if (isAnonymousFunderLabel(contribution) && count > 1) {
+    return anonymousGiftsLabel(count);
   }
   const bits = [
-    contribution.identity || "Anonymous funder",
+    displayIdentity(contribution.identity) || "Anonymous funder",
     contribution.anonymous ? "anonymous credit" : "public credit",
+    count > 1 ? `${count} gifts` : "",
     typeof contribution.amount_sats === "number"
       ? formatSats(contribution.amount_sats)
       : "amount hidden",
@@ -217,11 +262,12 @@ export function fundersListHtml(contributions: PublicContribution[]): string {
   if (!contributions.length) return "";
   return `<div class="funder-chips">${collapseAnonymousFunders(contributions)
     .map(({ contribution, count }) => {
+      const anon = isAnonymousFunderLabel(contribution);
       const baseName = funderDisplayName(contribution);
-      const name = count > 1 ? `${count} ${baseName}` : baseName;
+      const name = anon && count > 1 ? anonymousGiftsLabel(count) : baseName;
       const tip = escapeHtml(funderTooltip(contribution, count));
       const label = escapeHtml(name);
-      const badge = count > 1 ? "" : badgeHtml(contribution);
+      const badge = anon && count > 1 ? "" : badgeHtml(contribution);
       const href = profileUrlForIdentity(contribution.identity);
       if (href) {
         return `<a class="funder-chip" href="${escapeHtml(href)}" title="${tip}">${label}${badge}</a>`;

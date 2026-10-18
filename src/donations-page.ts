@@ -2,6 +2,8 @@ import { WORKERS_API } from "./config";
 import { endowmentBalanceView, endowmentGiveAllowed } from "./endowment-balance";
 import { applySeo, href, proposalHref, projectsHref, seoForRoute } from "./router";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
+import { displayHandle, displayIdentity, isRawIdentityKey, looksLikeProjectId } from "./display-names";
+import { projectRefHtml, projectTitles } from "./project-titles";
 
 export type DonationsShell = (inner: string) => string;
 
@@ -36,9 +38,33 @@ export async function fetchPublicDonations(opts?: {
     total?: number;
   };
   return {
-    donations: Array.isArray(body.donations) ? body.donations : [],
+    donations: await withDisplayLabels(Array.isArray(body.donations) ? body.donations : []),
     total: Math.max(0, Math.floor(Number(body.total) || 0)),
   };
+}
+
+/**
+ * Ledger rows name people and projects for humans: a project row whose label
+ * is only its id gets the catalog title, and a raw key donor (`a5a22eaf…33f6`,
+ * `nostr:<hex>`) gets the short form. Rows stay as sent when no title is found.
+ */
+export async function withDisplayLabels(rows: PublicDonation[]): Promise<PublicDonation[]> {
+  const needTitle = rows.filter(
+    (d) => d.target_type === "project" && looksLikeProjectId(d.target_label, d.target_id),
+  );
+  const titles = needTitle.length
+    ? await projectTitles(needTitle.map((d) => d.target_id)).catch(() => new Map<string, string>())
+    : new Map<string, string>();
+  return rows.map((d) => {
+    let next = d;
+    const title =
+      d.target_type === "project" ? titles.get(String(d.target_id || "").toLowerCase()) : undefined;
+    if (title) next = { ...next, target_label: title };
+    if (next.donor_display && isRawIdentityKey(next.donor_display)) {
+      next = { ...next, donor_display: displayIdentity(next.donor_display) };
+    }
+    return next;
+  });
 }
 
 export const SHARED_ESCROW_LABEL = "Shared escrow (001–008)";
@@ -62,9 +88,14 @@ export function donationTargetHtml(
   endowmentOpen: boolean,
 ): string {
   const to = donationTargetHref(d, endowmentOpen);
+  // Projects: title first, catalog id as quiet secondary text.
+  const inner =
+    d.target_type === "project" && d.target_id && !looksLikeProjectId(label, d.target_id)
+      ? projectRefHtml(d.target_id, label)
+      : escapeHtml(label);
   return to
-    ? `<a class="${className}" href="${to}">${escapeHtml(label)}</a>`
-    : `<span class="${className}">${escapeHtml(label)}</span>`;
+    ? `<a class="${className}" href="${to}">${inner}</a>`
+    : `<span class="${className}">${inner}</span>`;
 }
 
 /**
@@ -120,7 +151,7 @@ export function donationRowCopy(d: PublicDonation, endowmentOpen: boolean): {
   const donor =
     d.anonymous || !d.donor_display
       ? "Anonymous"
-      : `@${d.donor_display.replace(/^@/, "")}`;
+      : displayHandle(d.donor_display);
   return {
     donor,
     amount: formatSats(d.amount_sats),
