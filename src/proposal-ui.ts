@@ -82,6 +82,7 @@ import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { escrowAddressText, isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
 import type { ClaimViewForDonate } from "./next-action";
+import { DONATE_PAUSED_LINE } from "./donate-closed-note";
 import type { GithubOrgAttestation } from "./types";
 import {
   bitcoinUri,
@@ -2066,7 +2067,8 @@ function hideDonateCopiedLine(panel: Element): void {
   });
 }
 
-export const DONATE_PAUSED_LINE = "Donations are paused for this proposal right now.";
+// Defined once in donate-closed-note.ts (shared with the closed note / next card).
+export { DONATE_PAUSED_LINE };
 
 /** On-chain controls that only make sense with a payable address. */
 const DONATE_PAUSED_HIDES = [
