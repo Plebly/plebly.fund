@@ -1,3 +1,4 @@
+import { partialRefundHtml, refundStatusLabel, type DonateRemainderOwed } from "./partial-refund";
 import {
   authFetch,
   claimUsername,
@@ -77,7 +78,8 @@ import { bindTagInput, tagInputHtml } from "./tag-input";
 import type { ProfileLink, Proposal } from "./types";
 import { isSafeHttpUrl, safeHrefAttr } from "./social-links";
 import { avatarImgHtml } from "./media";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml, formatDate, formatSats } from "./util";
+import { statusPillHtml } from "./proposal-status-ui";
 import { downloadReceiptPdf, fetchMyReceipts, type DonationReceipt } from "./receipts";
 import { bindWebPushPanel, webPushPanelHtml } from "./web-push";
 
@@ -253,7 +255,7 @@ function claimsPaneHtml(
           (c) => `<li>
             <span>${escapeHtml(c.proposal_id)}</span>
             <span class="pill">${escapeHtml(c.reason)}</span>
-            <span class="muted">until ${escapeHtml(new Date(c.until).toLocaleDateString())}</span>
+            <span class="muted">until ${escapeHtml(formatDate(c.until))}</span>
           </li>`,
         )
         .join("")}</ul>`
@@ -266,7 +268,7 @@ function claimsPaneHtml(
           (h) => `<li>
             <a href="${proposalHref(`proposals/claimed/${h.proposal_id}.md`, h.proposal_id)}">${escapeHtml(h.proposal_id)}</a>
             <span class="pill">${escapeHtml(h.outcome)}</span>
-            <span class="muted">${escapeHtml(new Date(h.at).toLocaleDateString())}</span>
+            <span class="muted">${escapeHtml(formatDate(h.at))}</span>
           </li>`,
         )
         .join("")}</ul>`
@@ -307,6 +309,51 @@ async function fetchGithubOrgAccessUrl(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export type ContributionRefundRow = {
+  proposal_id: string;
+  amount_sats: number;
+  status: string;
+  rail?: string;
+  swap_id?: string;
+  txid?: string;
+  vout?: number;
+  refund_address?: string;
+  refund_txid?: string;
+  needs_address?: boolean;
+  non_refundable_dust?: boolean;
+  donate_remainder_owed?: DonateRemainderOwed;
+};
+
+/** One row of the account page's contribution refunds list. */
+export function contributionRefundRowHtml(r: ContributionRefundRow): string {
+  return `<li class="work-row">
+                <a href="${href(`/p/${encodeURIComponent(r.proposal_id)}`)}">${escapeHtml(r.proposal_id)}</a>
+                <span class="pill">${escapeHtml(
+                  refundStatusLabel(r.status, r.donate_remainder_owed, Boolean(r.refund_txid)),
+                )}</span>
+                ${r.rail ? `<span class="pill">${escapeHtml(r.rail)}</span>` : ""}
+                <span class="muted">${formatSats(r.amount_sats)}</span>
+                ${
+                  r.swap_id
+                    ? `<p class="mono muted">swap ${escapeHtml(r.swap_id)}</p>`
+                    : r.txid != null
+                      ? `<p class="mono muted">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout ?? 0}</p>`
+                      : ""
+                }
+                ${
+                  r.refund_txid
+                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>${partialRefundHtml(r.donate_remainder_owed)}`
+                    : r.non_refundable_dust
+                      ? `<p class="muted">Below dust — not packaged for refund.</p>`
+                      : r.refund_address
+                        ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
+                        : `<p class="muted">Needs address — register on the proposal when status is refunding${
+                            r.rail === "lightning" ? " (use your swap id)" : ""
+                          }.</p>`
+                }
+              </li>`;
 }
 
 export function connectedAccountsHtml(user: AuthUser): string {
@@ -688,7 +735,7 @@ export async function renderAccount(
                 .map(
                   (p) => `<li>
                     <a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a>
-                    <span class="pill">${escapeHtml(String(p.status))}</span>
+                    ${statusPillHtml(String(p.status))}
                   </li>`,
                 )
                 .join("")}</ul>`
@@ -995,47 +1042,12 @@ export async function renderAccount(
         refundsEl.innerHTML = `<p class="muted">Could not load contribution refunds.</p>`;
       } else {
         const data = (await refundsRes.json()) as {
-          refunds: {
-            proposal_id: string;
-            amount_sats: number;
-            status: string;
-            rail?: string;
-            swap_id?: string;
-            txid?: string;
-            vout?: number;
-            refund_address?: string;
-            refund_txid?: string;
-            needs_address?: boolean;
-            non_refundable_dust?: boolean;
-          }[];
+          refunds: ContributionRefundRow[];
         };
         refundsEl.innerHTML = data.refunds.length
           ? `<ul class="work-list">${data.refunds
               .map(
-                (r) => `<li class="work-row">
-                <a href="${href(`/p/${encodeURIComponent(r.proposal_id)}`)}">${escapeHtml(r.proposal_id)}</a>
-                <span class="pill">${escapeHtml(r.status)}</span>
-                ${r.rail ? `<span class="pill">${escapeHtml(r.rail)}</span>` : ""}
-                <span class="muted">${formatSats(r.amount_sats)}</span>
-                ${
-                  r.swap_id
-                    ? `<p class="mono muted">swap ${escapeHtml(r.swap_id)}</p>`
-                    : r.txid != null
-                      ? `<p class="mono muted">${escapeHtml(r.txid.slice(0, 12))}…:${r.vout ?? 0}</p>`
-                      : ""
-                }
-                ${
-                  r.refund_txid
-                    ? `<p class="muted">Paid ${txExplorerLink(r.refund_txid)}</p>`
-                    : r.non_refundable_dust
-                      ? `<p class="muted">Below dust — not packaged for refund.</p>`
-                      : r.refund_address
-                        ? `<p class="mono muted">${escapeHtml(r.refund_address)}</p>`
-                        : `<p class="muted">Needs address — register on the proposal when status is refunding${
-                            r.rail === "lightning" ? " (use your swap id)" : ""
-                          }.</p>`
-                }
-              </li>`,
+                contributionRefundRowHtml,
               )
               .join("")}</ul>`
           : `<div class="empty-state"><div class="empty-state-inner">
@@ -1535,7 +1547,7 @@ function formatNotifyWhen(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 48) return `${hours}h ago`;
-  return new Date(t).toLocaleDateString();
+  return formatDate(t);
 }
 
 function profilePublicOrgsHtml(
@@ -1612,7 +1624,7 @@ export async function renderPublicProfile(
       : `<ul class="work-list">${work
           .map(
             (p) =>
-              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> <span class="pill">${escapeHtml(String(p.status))}</span></li>`,
+              `<li><a href="${proposalHref(p.path, p.id)}">${escapeHtml(p.title)}</a> ${statusPillHtml(String(p.status))}</li>`,
           )
           .join("")}</ul>`;
 
@@ -1648,7 +1660,7 @@ export async function renderPublicProfile(
           : ""
       }${
         profile.claim_suspend_until
-          ? ` until ${escapeHtml(new Date(profile.claim_suspend_until).toLocaleDateString())}`
+          ? ` until ${escapeHtml(formatDate(profile.claim_suspend_until))}`
           : ""
       }.</p>`
     : "";
@@ -1659,7 +1671,7 @@ export async function renderPublicProfile(
           : ""
       }${
         profile.discussion_muted_until
-          ? ` until ${escapeHtml(new Date(profile.discussion_muted_until).toLocaleDateString())}`
+          ? ` until ${escapeHtml(formatDate(profile.discussion_muted_until))}`
           : ""
       }.</p>`
     : "";

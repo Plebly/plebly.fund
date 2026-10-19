@@ -123,7 +123,7 @@ export function keyholdersHtml(live: {
     ${status}
     <div class="about-keyholders-roster">
       ${liveBody}
-      <p class="muted"><a href="${href("/keyholders")}">Apply</a> · <a href="${href("/keyholder-responsibilities")}">Responsibilities</a> · <a href="${href("/terms")}">Terms</a></p>
+      <p class="muted"><a href="${href("/keyholders")}">Apply</a> · <a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a> · <a href="${href("/terms")}">Terms</a></p>
     </div>
   </section>`;
 }

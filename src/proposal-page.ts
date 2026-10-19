@@ -88,11 +88,15 @@ import {
   bindProposalEngagement,
   commentsHtml,
   discussionClosedForStatus,
+  funderCountText,
   funderCreditHtml,
+  funderSummary,
+  type PublicContribution,
 } from "./proposal-engagement";
 import { fetchReviewerMe } from "./reviewers";
 import {
   applySeo,
+  campaignsHref,
   href,
   orgHref,
   projectsHref,
@@ -100,14 +104,43 @@ import {
   proposalJsonLd,
   seoForRoute,
 } from "./router";
-import { escapeHtml, formatSats, linkifyText, proposalStablePath } from "./util";
+import {
+  escapeHtml,
+  formatDate,
+  formatSats,
+  linkifyText,
+  pluralUnit,
+  proposalStablePath,
+} from "./util";
 import { recordProposalView } from "./views";
 
 export type ProposalShell = (inner: string) => string;
 
+/** Finished on-chain: review chrome from the run-up no longer applies. */
+export function isFinishedStatus(status: string): boolean {
+  const s = String(status || "").toLowerCase();
+  return s === "completed" || s === "bounty_settled";
+}
+
+/** Nothing raised (0 or unknown balance): a past milestone date isn't "overdue". */
+export function hideMilestoneOverdue(balance: number | null | undefined): boolean {
+  return !(typeof balance === "number" && balance > 0);
+}
+
+/**
+ * Breadcrumb names the listing the nav names: "Bounties" or "Campaigns"
+ * (never a third word for the same page).
+ */
+export function breadcrumbListingHtml(p: { proposal_type?: string | null }): string {
+  const direct = String(p.proposal_type || "bounty").toLowerCase() === "direct";
+  return direct
+    ? `<li><a href="${campaignsHref()}">Campaigns</a></li>`
+    : `<li><a href="${projectsHref()}">Bounties</a></li>`;
+}
+
 export function missingProposalHtml(id: string): string {
   return `<section class="wrap-wide detail">
-    <a class="back-link" href="${projectsHref()}">← Projects</a>
+    <a class="back-link" href="${projectsHref()}">← Bounties</a>
     <div class="empty-state">
       <div class="empty-state-inner">
         <p class="empty-state-title">Project not found</p>
@@ -369,7 +402,7 @@ function bindRefundAndBallot(
         return;
       }
       if (statusEl) {
-        statusEl.textContent = `${data.ballot.vote_count} vote(s) · closes ${new Date(data.ballot.closes_at).toLocaleDateString()}`;
+        statusEl.textContent = `${pluralUnit(data.ballot.vote_count, "vote", "votes")} · closes ${formatDate(data.ballot.closes_at)}`;
       }
       if (actions) {
         actions.hidden = false;
@@ -646,8 +679,10 @@ export async function renderProposalPage(
       match.proposer_type,
     );
     const status = String(match.status);
+    // Finished projects: no "needs human review" AI box after the fact.
+    const showAiCard = Boolean(match.ai_review) && !isFinishedStatus(status);
     const reviewParts = [
-      match.ai_review ? aiReviewCardHtml(match.ai_review) : "",
+      showAiCard && match.ai_review ? aiReviewCardHtml(match.ai_review) : "",
       status === "in_review" &&
       match.id &&
       match.donor_review_status !== "window_open"
@@ -674,7 +709,7 @@ export async function renderProposalPage(
             : status === "abandoned_vote" ||
                 (status === "underfunded" && (balance ?? 0) > 0)
               ? "Donor vote"
-              : match.ai_review
+              : showAiCard
                 ? "Review"
                 : "";
 
@@ -682,7 +717,7 @@ export async function renderProposalPage(
       <article class="wrap-wide detail proposal-page">
         <nav class="proposal-breadcrumbs" aria-label="Breadcrumb">
           <ol>
-            <li><a href="${projectsHref()}">Projects</a></li>
+            ${breadcrumbListingHtml(match)}
             <li aria-current="page">${escapeHtml(match.title)}</li>
           </ol>
         </nav>
@@ -725,7 +760,9 @@ export async function renderProposalPage(
         <div class="proposal-layout">
           <div class="proposal-main">
             <div class="proposal-sections">${sectionsHtml}</div>
-            ${milestonesHtml(match.milestones)}
+            ${milestonesHtml(match.milestones, Date.now(), {
+              hideOverdue: hideMilestoneOverdue(balance),
+            })}
             ${
               match.parent_initiative
                 ? `<section class="proposal-context" aria-labelledby="commons-heading">
@@ -942,10 +979,15 @@ export async function renderProposalPage(
             funder_count?: number;
             top_name?: string;
           };
+          contributions?: PublicContribution[];
         } | null) => {
           const el = app.querySelector("#funder-concentration");
           const c = data?.concentration;
-          const line = c ? funderConcentrationLine(c) : "";
+          // Same count as the Funders list (one source per page).
+          const list = Array.isArray(data?.contributions) ? data.contributions : null;
+          const line = c
+            ? funderConcentrationLine(c, list ? funderCountText(funderSummary(list)) : undefined)
+            : "";
           if (!(el instanceof HTMLElement) || !line) return;
           el.hidden = false;
           el.textContent = line;
@@ -1009,7 +1051,7 @@ export async function renderProposalPage(
     if (!donateResultIsCurrent({ path })) return;
     app.innerHTML = shell(`
       <section class="wrap-wide detail proposal-page">
-        <a class="back-link" href="${projectsHref()}">← Projects</a>
+        <a class="back-link" href="${projectsHref()}">← Bounties</a>
         <div class="empty-state">
           <div class="empty-state-inner">
             <p class="empty-state-title">Could not load proposal</p>

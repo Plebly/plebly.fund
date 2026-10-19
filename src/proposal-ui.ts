@@ -1,3 +1,4 @@
+import { isRenderedIn } from "./modal-a11y";
 import {
   escrowAddressChunksHtml,
   escrowAddressCopiedHtml,
@@ -81,16 +82,20 @@ import { avatarSlotHtml, orgAvatarSlotHtml } from "./profile-avatars";
 import { EDITABLE_PROPOSAL_STATUSES } from "./types";
 import { escrowAddressText, isDonateBlocked, isCatalogDonateBlocked, isClaimViewDonateAllowed } from "./next-action";
 import type { ClaimViewForDonate } from "./next-action";
+import { DONATE_PAUSED_LINE } from "./donate-closed-note";
 import type { GithubOrgAttestation } from "./types";
 import {
   bitcoinUri,
   escapeHtml,
+  formatDate,
   formatSats,
   formatTimeAhead,
   linkifyText,
+  parseDateValue,
   themeQrColors,
   timeAgoHtml,
 } from "./util";
+import { displayIdentity } from "./display-names";
 
 export { bitcoinUri };
 
@@ -139,13 +144,32 @@ export type DonateBindOpts = {
  */
 export const DONATE_SIGNED_OUT_UNIQUE_COPY =
   "Sign in before you send to get funder credit and a refund route. Anonymous gifts can only be refunded by signing a message from the sending address, which exchanges and some wallets can't do.";
-export const DONATE_SIGNED_OUT_SHARED_COPY =
-  "Sign in before you send to get funder credit. Refunds on this proposal need a signed message from the sending address, which exchanges and some wallets can't do.";
 
-/** Signed-out donors only; signed-in donors see nothing here. */
+/**
+ * Signed-out donors on a shared escrow address (isSharedEscrow): the single
+ * sign-in note there (count and refund route in one; no separate route line).
+ */
+export const DONATE_SHARED_COUNT_COPY =
+  "Sign in before you send so your gift counts toward this proposal. Gifts sent without signing in are held in escrow but won't show in the total, and refunds need a signed message from the sending address, which exchanges and some wallets can't do.";
+
+export function donateSharedCountCopy(o: { signedIn: boolean; shared: boolean }): string | null {
+  return !o.signedIn && o.shared ? DONATE_SHARED_COUNT_COPY : null;
+}
+
+function donateSharedCountHtml(o: { signedIn: boolean; shared: boolean }): string {
+  const copy = donateSharedCountCopy(o);
+  return copy
+    ? `<p class="donate-shared-count muted" id="donate-shared-count" role="note">${escapeHtml(copy)}</p>`
+    : "";
+}
+
+/**
+ * Signed-out donors on a unique address only. A shared address has one note,
+ * DONATE_SHARED_COUNT_COPY; signed-in donors see nothing here.
+ */
 export function donateRefundRouteCopy(o: { signedIn: boolean; shared: boolean }): string | null {
-  if (o.signedIn) return null;
-  return o.shared ? DONATE_SIGNED_OUT_SHARED_COPY : DONATE_SIGNED_OUT_UNIQUE_COPY;
+  if (o.signedIn || o.shared) return null;
+  return DONATE_SIGNED_OUT_UNIQUE_COPY;
 }
 
 function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): string {
@@ -171,12 +195,10 @@ function donateCreditStepHtml(signedIn: boolean): string {
       <aside class="donate-credit-advisory" role="note">
         <p>Anonymous gifts still fund the project. <button type="button" class="donate-credit-signin" id="donate-credit-signin-credit">Sign in now</button> if you want credit — gifts stay anonymous once sent.</p>
       </aside>
-      <div class="donate-credit-login">
+      <div class="donate-credit-login donate-credit-choices">
         ${loginChoicesHtml(undefined, currentReturnPath())}
+        <button type="button" class="btn ghost donate-credit-anon" id="donate-credit-continue">Continue anonymously</button>
         <p class="builder-msg" id="donate-credit-login-msg" hidden></p>
-      </div>
-      <div class="donate-step-actions">
-        <button type="button" class="btn ghost" id="donate-credit-continue">Continue anonymously</button>
       </div>
     </section>`;
   }
@@ -202,6 +224,11 @@ function donatePayStepHtml(
   opts?: { endowment?: boolean; shared?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
+  // One sign-in note per modal: the anonymous-credit line shows only when no
+  // shared-count or refund-route note is on the pay step.
+  const noteOpts = { signedIn, shared: Boolean(opts?.shared) };
+  const otherSignInNote =
+    !endowment && Boolean(donateSharedCountCopy(noteOpts) || donateRefundRouteCopy(noteOpts));
   const head = `<div class="donate-panel-head">
       ${signedIn ? `<p class="donate-step-kicker">Step 2 of 2</p>` : ""}
       <h2 class="donate-title" id="donate-pay-title">${
@@ -214,7 +241,9 @@ function donatePayStepHtml(
              <label class="donate-amount-label" for="donate-legal-name">Legal name for tax receipt (optional)</label>
              <input id="donate-legal-name" class="donate-amount" type="text" maxlength="120" autocomplete="name" />
              <p class="muted donate-legal-hint">Private. Used for a receipt after confirmation.</p>`
-          : `<aside class="donate-credit-advisory" role="note">
+          : otherSignInNote
+            ? ""
+            : `<aside class="donate-credit-advisory" role="note">
                <p>Giving anonymously. <button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in now</button> if you want credit.</p>
              </aside>`
       }
@@ -244,6 +273,15 @@ function donatePayStepHtml(
     </div>
 
     <div class="donate-pane donate-pane-onchain" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
+      <div class="donate-pay-notes">
+          ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${
+            otherSignInNote
+              ? `<p class="donate-note-signin"><button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in</button></p>`
+              : ""
+          }
+      </div>
       <div class="donate-pay-layout">
         <div class="donate-qr-wrap">
           <img class="donate-qr" id="donate-qr" alt="QR code for donation address" width="168" height="168" />
@@ -254,7 +292,6 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
-          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${donateEscrowHardLabelHtml()}
           <div class="donate-address-block" data-escrow-address-block>
           <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
@@ -426,7 +463,7 @@ function milestonesBanner(p: Proposal, balance?: number | null): string {
         "Milestones",
         overdue
           ? "This project needs a milestone list before it can pay out."
-          : `Milestones due by ${due.toLocaleDateString()}`,
+          : `Milestones due by ${formatDate(due)}`,
         overdue ? "lifecycle-warn" : "",
       );
     }
@@ -842,11 +879,51 @@ function setDonateConfirmStatus(panel: Element, message: string | null, kind?: "
   setDonateStatusEl(panel.querySelector<HTMLElement>("#donate-confirm-status"), message, kind);
 }
 
+/**
+ * The amount field a donor types into first: the on-chain or Lightning
+ * amount of the rail on screen, or null while the pay step is hidden.
+ */
+export function visibleDonateAmountInput(root: Element): HTMLInputElement | null {
+  const inputs = root.querySelectorAll<HTMLInputElement>("#donate-amount, #donate-ln-amount");
+  for (const el of Array.from(inputs)) {
+    if (isRenderedIn(el, root)) return el;
+  }
+  return null;
+}
+
+/**
+ * True when the donor is already on a control inside the Donate modal (other
+ * than Close, and still on screen), so a re-render must not move focus.
+ */
+function donorIsUsingDonateModal(modal: Element): boolean {
+  const active = document.activeElement;
+  return (
+    active instanceof HTMLElement &&
+    modal.contains(active) &&
+    active.id !== "donate-close" &&
+    isRenderedIn(active, modal)
+  );
+}
+
+/** Initial focus in the Donate modal: the amount field when it's on screen, else Close. */
+export function focusDonateEntry(modal: Element): void {
+  const target =
+    visibleDonateAmountInput(modal) ||
+    modal.querySelector<HTMLButtonElement>("#donate-close");
+  target?.focus();
+}
+
 function setDonateStep(panel: Element, step: "credit" | "pay"): void {
   panel.setAttribute("data-donate-step", step);
   panel.querySelectorAll<HTMLElement>(".donate-step").forEach((el) => {
     el.hidden = el.dataset.donateStep !== step;
   });
+  // Arriving on the pay step: start in the amount field, unless the donor is
+  // already using another control (the claim check re-binds on reopen).
+  const modal = panel.closest(".site-modal");
+  if (step === "pay" && modal && !modal.hasAttribute("hidden") && !donorIsUsingDonateModal(modal)) {
+    visibleDonateAmountInput(panel)?.focus();
+  }
   const dialog = panel.closest<HTMLElement>("[aria-labelledby]");
   if (dialog) {
     dialog.setAttribute(
@@ -1446,9 +1523,9 @@ function bindLightningDonate(
     createBtn.disabled = true;
     createBtn.textContent = "Sign in to invoice";
   }
-  panel.querySelector("#donate-ln-signin")?.addEventListener("click", () => {
-    panel.querySelector<HTMLButtonElement>("#donate-credit-signin")?.click();
-  });
+  // #donate-ln-signin carries .donate-credit-signin, so bindDonateWizard already
+  // wires it to the credit step. A second listener here relayed a click to
+  // #donate-credit-signin and ran that handler twice.
   if (amountInput) {
     amountInput.min = String(min);
     amountInput.max = String(max);
@@ -1993,7 +2070,8 @@ function hideDonateCopiedLine(panel: Element): void {
   });
 }
 
-export const DONATE_PAUSED_LINE = "Donations are paused for this proposal right now.";
+// Defined once in donate-closed-note.ts (shared with the closed note / next card).
+export { DONATE_PAUSED_LINE };
 
 /** On-chain controls that only make sense with a payable address. */
 const DONATE_PAUSED_HIDES = [
@@ -2555,7 +2633,9 @@ export function bindDonateModal(
     if (opts?.rail === "lightning" && panel) {
       selectDonateRail(panel, "lightning");
     }
-    modal.querySelector<HTMLButtonElement>("#donate-close")?.focus();
+    // reveal() runs again once the claim check mounts the panel; don't pull
+    // focus off a field the donor is already in.
+    if (!donorIsUsingDonateModal(modal)) focusDonateEntry(modal);
     window.addEventListener("keydown", onEscape);
   };
 
@@ -2831,18 +2911,36 @@ export function onChainPanelHtml(
 }
 
 
-/** One line. Names only for public credit. No sitewide leaderboard. */
-export function funderConcentrationLine(c: {
-  top_share_bps?: number;
-  unattributed_bps?: number;
-  funder_count?: number;
-  top_name?: string;
-}): string {
-  if (!c.funder_count) return "";
+/**
+ * One line. Names only for public credit. No sitewide leaderboard.
+ * `countText` is the page's single funder count (funderCountText over the same
+ * contributions the Funders list shows); without it, `funder_count` is used.
+ */
+export function funderConcentrationLine(
+  c: {
+    top_share_bps?: number;
+    unattributed_bps?: number;
+    funder_count?: number;
+    top_name?: string;
+  },
+  countText?: string,
+): string {
+  const count =
+    countText ??
+    (c.funder_count
+      ? `${c.funder_count} ${c.funder_count === 1 ? "funder" : "funders"}`
+      : "");
+  if (!count) return "";
   const top = Math.round((c.top_share_bps || 0) / 100);
   const anon = Math.round((c.unattributed_bps || 0) / 100);
-  const who = c.top_name || "Largest funder";
-  return `${who} ${top}% · unattributed ${anon}% · ${c.funder_count} funders`;
+  const who = displayIdentity(c.top_name) || "Largest funder";
+  // No "Largest funder 0%" when every gift is anonymous.
+  const bits = [
+    top > 0 ? `${who} ${top}%` : "",
+    anon > 0 ? `unattributed ${anon}%` : "",
+    count,
+  ].filter(Boolean);
+  return bits.join(" · ");
 }
 
 /** Quiet meta line: created date, id, type, claim mode, and tags (status/byline live elsewhere). */
@@ -2930,19 +3028,22 @@ export function deliverableChipHtml(url: string | null | undefined): string {
 }
 
 function formatMilestoneDeadline(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  // formatDate keeps 'YYYY-MM-DD' on its calendar day in every zone.
+  return formatDate(iso);
 }
 
-function milestoneDueHtml(iso: string, nowMs = Date.now()): string {
+function milestoneDueHtml(
+  iso: string,
+  nowMs = Date.now(),
+  opts?: { hideOverdue?: boolean },
+): string {
   const due = formatMilestoneDeadline(iso);
   const ahead = formatTimeAhead(iso, nowMs);
-  const rel = ahead
+  // Nothing raised yet: a past date isn't anyone's late delivery.
+  const overdue = Boolean(
+    ahead && parseDateValue(iso).getTime() < nowMs && ahead.text !== "due today",
+  );
+  const rel = ahead && !(opts?.hideOverdue && overdue)
     ? ` <span class="milestone-rail-due-rel">· ${escapeHtml(ahead.text)}</span>`
     : "";
   const title = ahead?.title || due;
@@ -2992,6 +3093,7 @@ export function proposerBylineHtml(
 export function milestonesHtml(
   milestones: ProposalMilestone[],
   nowMs = Date.now(),
+  opts?: { hideOverdue?: boolean },
 ): string {
   if (!milestones.length) return "";
   const total = milestones.reduce(
@@ -3007,7 +3109,7 @@ export function milestonesHtml(
       ${milestones
         .map((m, i) => {
           const due = m.deadline
-            ? milestoneDueHtml(String(m.deadline), nowMs)
+            ? milestoneDueHtml(String(m.deadline), nowMs, opts)
             : "";
           const moreBits: string[] = [];
           if (m.verification) {

@@ -411,11 +411,16 @@ describe("donate credit UX (signed out)", () => {
     expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
       "pay",
     );
-    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeTruthy();
-    document.querySelector<HTMLButtonElement>("#donate-credit-signin")!.click();
+    // One sign-in note per modal: the route/count note covers it on a project,
+    // with a plain Sign in button under it that starts sign-in.
+    expect(document.querySelector("#donate-step-pay .donate-credit-advisory")).toBeNull();
+    const signIn = document.querySelector<HTMLButtonElement>("#donate-step-pay .donate-note-signin #donate-credit-signin")!;
+    expect(signIn.textContent).toBe("Sign in");
+    signIn.click();
     expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
       "credit",
     );
+    expect(document.activeElement?.closest("#donate-step-credit .login-choices")).toBeTruthy();
     continueToPay();
     expect(document.querySelector("#donate")?.getAttribute("data-donate-step")).toBe(
       "pay",
@@ -623,6 +628,42 @@ describe("donate Lightning OpenNode UX", () => {
     document.querySelector<HTMLInputElement>("#donate-ln-amount")!.value = "50000";
     create.click();
     expect(createLightningInvoice).not.toHaveBeenCalled();
+  });
+
+  it("Lightning tab Sign in opens the credit step once (one handler run, not two)", async () => {
+    mountDonate({ signedIn: false, open: true });
+    await bindDonatePanel(document, {
+      address: proposal.escrow_address!,
+      proposalId: proposal.id,
+      proposalPath: proposal.path,
+      signedIn: false,
+    });
+    continueToPay();
+    document.querySelector<HTMLButtonElement>("#donate-rail-lightning")!.click();
+    const lnSignIn = document.querySelector<HTMLButtonElement>("#donate-ln-signin")!;
+    expect(lnSignIn.closest<HTMLElement>("#donate-ln-login")?.hidden).toBe(false);
+    const panel = document.querySelector("#donate")!;
+    expect(panel.getAttribute("data-donate-step")).toBe("pay");
+
+    const choice = document.querySelector<HTMLElement>(
+      "#donate-step-credit .login-choices a, #donate-step-credit .login-choices button",
+    )!;
+    expect(choice).toBeTruthy();
+    const focus = vi.spyOn(choice, "focus");
+    // The pay-step Sign in is a separate button; the Lightning one must not relay a click to it.
+    let relayed = 0;
+    document
+      .querySelector("#donate-credit-signin")
+      ?.addEventListener("click", () => {
+        relayed++;
+      });
+
+    lnSignIn.click();
+
+    expect(panel.getAttribute("data-donate-step")).toBe("credit");
+    expect(document.querySelector<HTMLElement>("#donate-step-credit")?.hidden).toBe(false);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(relayed).toBe(0);
   });
 
   it("rejects amounts outside OpenNode limits", async () => {

@@ -64,7 +64,7 @@ describe("reviewerRowHtml", () => {
     const earned = frag(reviewerRowHtml(reviewer()));
     expect(earned.querySelector(".pill.status-good")?.textContent).toBe("Earned");
     expect(earned.textContent).toContain("3 completed");
-    expect(earned.querySelector(".gov-user")?.textContent).toBe("gh:42");
+    expect(earned.querySelector(".gov-user")?.textContent).toBe("GitHub user 42");
   });
 
   it("no Select button unless selectable; bootstrap seats get a disabled one", () => {
@@ -179,8 +179,8 @@ describe("removalCardHtml", () => {
 
   it("shows target, initiator, counts and escapes evidence", () => {
     const el = frag(removalCardHtml(ballot({ evidence: XSS }), false));
-    expect(el.querySelector(".gov-card-title")?.textContent).toBe("gh:7");
-    expect(el.querySelector(".gov-closes")?.textContent).toContain("gh:8");
+    expect(el.querySelector(".gov-card-title")?.textContent).toBe("GitHub user 7");
+    expect(el.querySelector(".gov-closes")?.textContent).toContain("GitHub user 8");
     expect(el.querySelector(".review-count.yes")?.textContent).toBe("Remove 3");
     expect(el.querySelector(".review-count.no")?.textContent).toBe("Keep 1");
     expect(el.textContent).toContain("4 cast");

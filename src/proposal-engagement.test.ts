@@ -7,6 +7,8 @@ import {
   funderCreditHtml,
   fundersListHtml,
   workboardListHtml,
+  funderCountText,
+  funderSummary,
 } from "./proposal-engagement";
 
 const locationState = {
@@ -257,12 +259,38 @@ describe("fundersListHtml", () => {
       { identity: null, anonymous: true },
       { identity: null, anonymous: true },
     ]);
-    expect(html).toContain("6 Anonymous");
+    expect(html).toContain("6 anonymous gifts");
     expect(html).toContain("alice");
     expect(html).toContain("bob");
-    expect(html).toContain("6 anonymous funders");
-    expect(html.match(/Anonymous/g)?.length).toBe(1);
+    expect(html).not.toContain("6 Anonymous");
     expect(html).not.toMatch(/>Anonymous</);
+  });
+
+  it("merges repeat gifts from one named funder into one chip and shortens raw keys", () => {
+    const html = fundersListHtml([
+      { identity: "a5a22eaf…33f6", anonymous: false },
+      { identity: null, anonymous: true },
+      { identity: "a5a22eaf…33f6", anonymous: false, amount_sats: 1000 },
+      { identity: null, anonymous: true },
+    ]);
+    expect(html.match(/a5a2…33f6/g)?.length).toBe(2); // label + tooltip, one chip
+    expect(html).not.toContain("a5a22eaf");
+    expect(html).toContain("2 gifts");
+    expect(html).toContain("2 anonymous gifts");
+  });
+
+  it("one funder count from the same list: named funders + anonymous gifts", () => {
+    const list = [
+      { identity: "a5a22eaf…33f6", anonymous: false },
+      ...Array.from({ length: 17 }, () => ({ identity: null, anonymous: true })),
+      { identity: "a5a22eaf…33f6", anonymous: false },
+    ];
+    expect(funderSummary(list)).toEqual({ named: 1, anonymousGifts: 17 });
+    expect(funderCountText(funderSummary(list))).toBe("1 funder + 17 anonymous gifts");
+    expect(funderCountText({ named: 0, anonymousGifts: 2 })).toBe("2 anonymous gifts");
+    expect(funderCountText({ named: 0, anonymousGifts: 1 })).toBe("1 anonymous gift");
+    expect(funderCountText({ named: 2, anonymousGifts: 0 })).toBe("2 funders");
+    expect(funderCountText({ named: 0, anonymousGifts: 0 })).toBe("");
   });
 
   it("escapes identity HTML", () => {

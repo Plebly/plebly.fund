@@ -345,7 +345,7 @@ describe("(c) missing catalog row is shared/unknown for its balance; accepting_f
     await claimSettled(app);
     expect(app.querySelector(".proposal-funding-bar .funding-meter")).toBeTruthy();
     expect(app.querySelector(".funding-balance-unknown")).toBeNull();
-    expect(app.querySelector(".proposal-funding-bar")?.textContent || "").toMatch(/to open/);
+    expect(app.querySelector(".proposal-funding-bar")?.textContent || "").toMatch(/sats goal/);
   });
 
   for (const route of ["stable", "path"] as const) {

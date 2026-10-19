@@ -79,8 +79,56 @@ export function formatSats(n: number): string {
   return `${n.toLocaleString("en-US")} sats`;
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Parse a date value. A plain 'YYYY-MM-DD' is a calendar date: local midnight
+ * of that day, never UTC midnight (which is the day before west of UTC).
+ * Anything else goes through `new Date`. An impossible calendar date
+ * ('2026-02-30') is an Invalid Date, never rolled over.
+ */
+export function parseDateValue(value: string | number): Date {
+  if (typeof value === "string") {
+    const m = DATE_ONLY.exec(value.trim());
+    if (m) {
+      const y = Number(m[1]);
+      const mo = Number(m[2]) - 1;
+      const day = Number(m[3]);
+      const d = new Date(y, mo, day);
+      // Impossible dates ('2026-02-30') must not roll over to another day.
+      if (d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) {
+        return new Date(NaN);
+      }
+      return d;
+    }
+  }
+  return new Date(value);
+}
+
+/** True for a plain 'YYYY-MM-DD' (no time, no zone). */
+export function isDateOnly(value: string): boolean {
+  return DATE_ONLY.test(String(value || "").trim());
+}
+
+/**
+ * The one site date format: "Sep 25, 2026". Accepts an ISO string, epoch ms
+ * or a Date; an unparseable value comes back as given ("" for empty).
+ */
+export function formatDate(value: string | number | Date | null | undefined): string {
+  if (value == null || value === "") return "";
+  const d = value instanceof Date ? value : parseDateValue(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 /** Exact local date/time for `title` tooltips. */
 export function formatAbsoluteDateTime(iso: string): string {
+  // A calendar date has no time to show (and must not shift a day).
+  if (isDateOnly(iso)) return formatDate(iso);
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
@@ -128,7 +176,8 @@ export function timeAgoHtml(iso: string | null | undefined, nowMs = Date.now()):
   return `<time class="timeago" datetime="${escapeHtml(iso)}" title="${escapeHtml(ago.title)}">${escapeHtml(ago.text)}</time>`;
 }
 
-function pluralUnit(n: number, singular: string, plural: string): string {
+/** "1 vote" / "3 votes". */
+export function pluralUnit(n: number, singular: string, plural: string): string {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
@@ -140,12 +189,21 @@ export function formatTimeAhead(
   iso: string,
   nowMs = Date.now(),
 ): { text: string; title: string } | null {
-  const d = new Date(iso);
+  const d = parseDateValue(iso);
   if (Number.isNaN(d.getTime())) return null;
   const title = formatAbsoluteDateTime(iso);
-  const deltaMs = d.getTime() - nowMs;
-  const absSec = Math.abs(Math.round(deltaMs / 1000));
-  if (absSec < 12 * 3600) {
+  let deltaMs = d.getTime() - nowMs;
+  let absSec = Math.abs(Math.round(deltaMs / 1000));
+  if (isDateOnly(iso)) {
+    // A plain date is a whole local calendar day: "due today" all day long,
+    // overdue from the next day. Count calendar days, not a ±12h window.
+    const now = new Date(nowMs);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (days === 0) return { text: "due today", title };
+    deltaMs = days;
+    absSec = Math.abs(days) * 86400;
+  } else if (absSec < 12 * 3600) {
     return { text: "due today", title };
   }
 

@@ -540,7 +540,7 @@ export function seoForRoute(
       return {
         title: "Donations",
         description:
-          "Public ledger of confirmed gifts to Plebly projects and the endowment.",
+          "Public ledger of confirmed gifts to Plebly projects.",
         path: "/donations",
       };
     case "keyholders":

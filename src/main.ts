@@ -56,6 +56,7 @@ import type { Route } from "./types";
 import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
 import { installStaleChunkReload } from "./stale-chunk";
+import { installModalA11y } from "./modal-a11y";
 import { escapeHtml } from "./util";
 import { syncWebPushIfEnabled } from "./web-push";
 
@@ -69,6 +70,8 @@ installDonateClickCapture();
 // A deploy while this tab is open removes the old chunks: prompt a reload
 // instead of leaving a blank view when a lazy import fails.
 installStaleChunkReload();
+// Every .site-modal: Tab stays inside, Esc closes, focus returns to the opener.
+installModalA11y();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -163,7 +166,7 @@ function siteFooterHtml(routeName: string): string {
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
           <a href="${href("/reviewer-responsibilities")}"${fa("reviewerDuties")}>Reviewer rules</a>
           <a href="${href("/keyholders")}">Apply as keyholder</a>
-          <a href="${href("/keyholder-responsibilities")}"${fa("khDuties")}>Keyholder duties</a>
+          <a href="${href("/keyholder-responsibilities")}"${fa("khDuties")}>Keyholder responsibilities</a>
         </div>
         <div class="footer-col">
           <h2 class="footer-col-title">About</h2>

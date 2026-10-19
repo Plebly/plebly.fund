@@ -14,7 +14,7 @@ import {
 import { sessionIsClaimStatusFulfiller } from "./claimer-match";
 import type { Proposal } from "./types";
 import { safeHrefAttr } from "./social-links";
-import { escapeHtml } from "./util";
+import { escapeHtml, formatDate } from "./util";
 
 export function deliverableFormHtml(): string {
   return `<div id="deliverable-form" class="deliverable-form">
@@ -39,7 +39,7 @@ function metaBits(status: ClaimStatus): string {
     );
   }
   if (status.checkpoint_due_at) {
-    const due = new Date(status.checkpoint_due_at).toLocaleDateString();
+    const due = formatDate(status.checkpoint_due_at);
     bits.push(
       status.checkpoint_url
         ? `<span class="builder-meta">Checkpoint filed</span>`

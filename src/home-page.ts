@@ -13,7 +13,7 @@ import {
 } from "./builder";
 import { isKnownProposalStatus } from "./types";
 import { isCatalogDonateBlocked } from "./next-action";
-import { CLAIM_FLOOR_SATS, WORKERS_API, lightningUiAllowed, mempoolWeb } from "./config";
+import { CLAIM_FLOOR_SATS, WORKERS_API, isFundableStatus, lightningUiAllowed, mempoolWeb } from "./config";
 import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { listListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
@@ -22,11 +22,15 @@ import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
 import {
-  endowmentMeterHtml,
+  endowmentBalanceView,
+  endowmentFiguresHtml,
+  endowmentGiveAllowed,
+  type EndowmentBalanceView,
+} from "./endowment-balance";
+import {
   fundingBarTrackHtml,
   fundingTargetSats,
   isPastFundingTarget,
-  overfundRatioLabel,
   statusLabel,
   statusPillHtml,
 } from "./proposal-ui";
@@ -42,7 +46,7 @@ import {
   proposalHref,
 } from "./router";
 import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
-import { wantedRowHtml } from "./wanted-page";
+import { wantedEmptyHtml, wantedRowHtml } from "./wanted-page";
 import { escapeHtml, formatSats } from "./util";
 import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
@@ -132,8 +136,7 @@ function landingHeroHtml(): string {
 
 type EndowmentTeaser = {
   configured: boolean;
-  display_balance_sats: number;
-  goal_sats: number;
+  balance: EndowmentBalanceView;
 };
 
 async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
@@ -141,22 +144,24 @@ async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
   try {
     const res = await fetch(`${WORKERS_API.replace(/\/$/, "")}/endowment`);
     if (!res.ok) return null;
-    const body = (await res.json()) as Partial<EndowmentTeaser>;
+    const body = (await res.json()) as Record<string, unknown>;
+    // Never display_balance_sats: missing balance_shared_with_escrow is unknown.
     return {
       configured: Boolean(body.configured),
-      display_balance_sats: Number(body.display_balance_sats) || 0,
-      goal_sats: Math.max(0, Math.floor(Number(body.goal_sats) || 0)),
+      balance: endowmentBalanceView(body),
     };
   } catch {
     return null;
   }
 }
 
-function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
+/** Home endowment strip. Amounts and Donate only when the endowment has its own address. */
+export function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
   const progress =
-    teaser && teaser.configured
-      ? endowmentMeterHtml(teaser.display_balance_sats, teaser.goal_sats)
-      : "";
+    teaser && teaser.configured ? endowmentFiguresHtml(teaser.balance) : "";
+  const give = Boolean(
+    teaser && teaser.configured && endowmentGiveAllowed(teaser.balance),
+  );
   return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
     <div class="endowment-strip">
       <div class="endowment-strip-head">
@@ -165,7 +170,7 @@ function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
           <h2 id="endowment-strip-heading">Monthly gifts to popular projects</h2>
         </div>
         <div class="landing-cta-row endowment-strip-cta">
-          <a class="btn" href="${href("/endowment")}?donate">Donate</a>
+          ${give ? `<a class="btn" href="${href("/endowment")}?donate">Donate</a>` : ""}
           <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
         </div>
       </div>
@@ -305,7 +310,8 @@ function discoverToolbarHtml(count: number): string {
   </div>`;
 }
 
-function progressHtml(p: Proposal, floor: number): string {
+/** Card meter (exported for tests). */
+export function progressHtml(p: Proposal, floor: number): string {
   const sharedPending = sharedEscrowPendingHtml(p, "card");
   if (sharedPending != null) return sharedPending;
   const bal = p.balance_sats ?? 0;
@@ -320,40 +326,51 @@ function progressHtml(p: Proposal, floor: number): string {
   const target = fundingTargetSats(p.target_sats);
   // Claim floor is the minimum to start bounty work — "overfunded" only past the soft target.
   const over = isPastFundingTarget(bal, target);
-  const overLabel = over && target ? overfundRatioLabel(bal, target) : "";
   const campaignGoal = target || floor;
   const campaignRemaining = Math.max(0, campaignGoal - bal);
+  const taken = isTakenStatus(String(p.status)) || Boolean(p.claimer);
+  // "to open" / goal copy only while still raising (fundable, nobody on it).
+  const stillRaising = !taken && isFundableStatus(String(p.status || ""));
   const label = over
-    ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
-    : isDirect
-      ? bal >= campaignGoal
-        ? "Receiving"
-        : `${formatSats(campaignRemaining)} to goal`
-      : open
-        ? "Open to apply"
-        : near
-          ? "Almost open"
-          : isTakenStatus(String(p.status)) || p.claimer
-            ? "Taken"
+    ? "Fully funded"
+    : !stillRaising
+      ? taken
+        ? "Taken"
+        : statusLabel(String(p.status || ""))
+      : isDirect
+        ? bal >= campaignGoal
+          ? "Receiving"
+          : `${formatSats(campaignRemaining)} to goal`
+        : open
+          ? "Open to apply"
+          : near
+            ? "Almost open"
             : `${formatSats(remaining)} to open`;
   const labelClass = over
     ? "overfunded"
     : open || (isDirect && bal >= campaignGoal)
       ? "claimable"
       : "";
-  const taken = isTakenStatus(String(p.status)) || Boolean(p.claimer);
-  const openCopy = !taken && (open || bal < floor);
-  const satsLine = isDirect
-    ? target
-      ? `${formatSats(bal)} / ${formatSats(target)} goal`
-      : formatSats(bal)
-    : target
-      ? openCopy
-        ? `${formatSats(bal)} · opens at ${formatSats(floor)} · goal ${formatSats(target)}`
-        : `${formatSats(bal)} · floor ${formatSats(floor)} · goal ${formatSats(target)}`
-      : openCopy
-        ? `${formatSats(bal)} / ${formatSats(floor)} to open`
-        : `${formatSats(bal)} / ${formatSats(floor)} floor`;
+  // One target at a time, one term ("to open", never "floor"): the amount to
+  // open until it opens, then the goal. Not raising any more: "X raised".
+  const n = (v: number) => Math.max(0, Math.floor(v)).toLocaleString("en-US");
+  const st = String(p.status || "").toLowerCase();
+  const paidOut = (st === "completed" || st === "bounty_settled") && bal <= 0;
+  const satsLine = paidOut
+    ? "Paid out on-chain"
+    : !stillRaising
+      ? `${n(bal)} sats raised`
+      : isDirect
+        ? target
+          ? `${n(bal)} of ${formatSats(target)} goal`
+          : formatSats(bal)
+        : bal < floor
+          ? `${n(bal)} of ${formatSats(floor)} to open`
+          : target
+            ? over
+              ? `${n(bal)} sats raised · goal ${formatSats(target)}`
+              : `${n(bal)} of ${formatSats(target)} goal`
+            : `${n(bal)} sats raised`;
   return `<div class="project-card-meter">
     <div class="project-card-meter-top">
       <span class="${labelClass}">${label}</span>
@@ -863,19 +880,21 @@ export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void
   });
 }
 
-function wantedRailHtml(
+export function wantedRailHtml(
   rows: Awaited<ReturnType<typeof fetchWanted>>,
 ): string {
-  if (!rows.length) return "";
+  const list = rows.length
+    ? rows
+        .slice(0, 4)
+        .map((r) => wantedRowHtml(r, { fundedSuffix: false }))
+        .join("")
+    : wantedEmptyHtml();
   return `<section class="wrap-wide project-rail" aria-labelledby="wanted-projects">
     <div class="rail-head">
       <div><h2 id="wanted-projects">Most wanted</h2><p>Watched more than funded.</p></div>
-      <a href="${href("/wanted")}">Full list →</a>
+      ${rows.length ? `<a href="${href("/wanted")}">Full list →</a>` : ""}
     </div>
-    <div class="wanted-list">${rows
-      .slice(0, 4)
-      .map((r) => wantedRowHtml(r, { fundedSuffix: false }))
-      .join("")}</div>
+    <div class="wanted-list">${list}</div>
   </section>`;
 }
 

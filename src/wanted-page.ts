@@ -5,6 +5,14 @@ import { escapeHtml } from "./util";
 
 export type WantedShell = (inner: string) => string;
 
+export const WANTED_EMPTY_LINE = "Nothing is open for gifts right now.";
+export const WANTED_EMPTY_LINK = "See all proposals";
+
+/** Empty /wanted (page and home rail): nothing fundable to point gifts at. */
+export function wantedEmptyHtml(): string {
+  return `<p class="muted wanted-empty">${escapeHtml(WANTED_EMPTY_LINE)} <a href="${projectsHref()}">${escapeHtml(WANTED_EMPTY_LINK)}</a></p>`;
+}
+
 export type WantedRowHtmlOpts = {
   /** Home rail shows bare `%`; full /wanted page appends ` funded`. */
   fundedSuffix?: boolean;
@@ -18,11 +26,14 @@ export function wantedRowHtml(
   >,
   opts?: WantedRowHtmlOpts,
 ): string {
+  // Past 100%: "Fully funded", not "360.3% funded".
   const funded =
     r.funded_pct != null
-      ? opts?.fundedSuffix === false
-        ? `${r.funded_pct}%`
-        : `${r.funded_pct}% funded`
+      ? r.funded_pct >= 100
+        ? "Fully funded"
+        : opts?.fundedSuffix === false
+          ? `${r.funded_pct}%`
+          : `${r.funded_pct}% funded`
       : "—";
   const idHtml = r.id
     ? `<span class="mono proposal-meta-id">${escapeHtml(r.id)}</span>`
@@ -71,7 +82,7 @@ export async function renderWanted(shell: WantedShell): Promise<void> {
   const host = app.querySelector("#wanted-full")!;
   const rows = await fetchWanted(50).catch(() => []);
   if (!rows.length) {
-    host.innerHTML = `<p class="muted">No watched projects yet. <a href="${projectsHref()}">Browse projects</a> and watch ones you care about.</p>`;
+    host.innerHTML = wantedEmptyHtml();
     return;
   }
   host.innerHTML = rows.map((r) => wantedRowHtml(r)).join("");

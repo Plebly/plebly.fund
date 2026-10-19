@@ -121,7 +121,7 @@ function fundingDetailTrackHtml(
         m.kind === "floor"
           ? openCopy
             ? `Opens for builders at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
-            : `Claim floor ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
+            : `Opened at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
           : `Milestone ${m.label || m.id || ""} ${m.sats.toLocaleString()} sats, ${unlocked ? "unlocked" : "locked"}`;
       return `<span class="funding-marker funding-marker-${kind} ${state}" style="left:${left}%" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${lock}<span class="funding-marker-tick"></span></span>`;
     })
@@ -210,6 +210,16 @@ export function balanceUnavailableHtml(): string {
   return `<p class="funding-balance-unknown muted">Balance temporarily unavailable.</p>`;
 }
 
+/** Never show a negative or fractional sats count. */
+function satsFloor(n: number): number {
+  return Math.max(0, Math.floor(n));
+}
+
+/** Bare sats count ("2,500") for "X of Y sats" copy. */
+function satsNumber(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
 export function fundingProgressHtml(
   balance: number | null | undefined,
   floor: number,
@@ -219,7 +229,8 @@ export function fundingProgressHtml(
 ): string {
   // Unknown balance: no meter, no "0 raised", no "… to open" (BeTheChange777).
   if (!isKnownBalance(balance)) return balanceUnavailableHtml();
-  const funded = balance;
+  // Clamp once: a negative or fractional read never shows as "-5 of …".
+  const funded = satsFloor(balance);
   const { scale, markers } = fundingBarScale(floor, target, milestones);
   const pastFloor = funded >= floor;
   const eligibility = {
@@ -234,7 +245,6 @@ export function fundingProgressHtml(
   const targetSats = fundingTargetSats(target);
   const over = isPastFundingTarget(funded, targetSats);
   const remaining = Math.max(0, floor - funded);
-  const overLabel = over && targetSats ? overfundRatioLabel(funded, targetSats) : "";
   const hasTarget = targetSats != null;
   const floorPct = Math.min(
     999,
@@ -243,11 +253,23 @@ export function fundingProgressHtml(
   const targetPct = hasTarget
     ? Math.min(999, Math.round((funded / Math.max(1, targetSats!)) * 100))
     : floorPct;
+  const s = String(eligibility.status || "").toLowerCase();
+  // Finished: what it raised has left escrow, so a "0 sats (0%)" meter would
+  // read as a failure. Say it settled; never draw a 0% track.
+  if ((s === "completed" || s === "bounty_settled") && funded <= 0) {
+    return `<div class="funding-meter funding-meter-settled">
+      <div class="funding-meter-top">
+        <span class="funding-meter-label">${s === "completed" ? "Completed" : "Bounty paid"}</span>
+        <span class="funding-meter-goal">Paid out on-chain</span>
+      </div>
+    </div>`;
+  }
+  const stillRaising = !taken && isFundableStatus(s);
   const label = over
-    ? `Overfunded${overLabel ? ` · ${overLabel}` : ""}`
+    ? "Fully funded"
     : open
       ? "Open to apply"
-      : taken
+      : taken || !stillRaising
         ? fundingClosedLabel(String(eligibility.status))
         : pastFloor
           ? isDirectProposal(eligibility)
@@ -259,13 +281,20 @@ export function fundingProgressHtml(
     : open
       ? " claimable"
       : "";
-  // Always name the claim floor — never let target_sats look like the floor.
-  // Only say "to open" while still funding toward / open for apply; claimed etc. use "floor".
+  // One target at a time, one term ("to open"; never "floor"): while still
+  // raising, the amount to open until it opens, then the goal (past the goal:
+  // "Fully funded", no %). Once taken / in review / finished: just "X raised".
   const openCopy = !taken && (open || !pastFloor);
-  const floorWord = openCopy ? "to open" : "floor";
-  const goalLine = hasTarget
-    ? `${formatSats(funded)} / ${formatSats(floor)} ${floorWord} (${floorPct}%) · goal ${formatSats(target!)} (${targetPct}%)`
-    : `${formatSats(funded)} / ${formatSats(floor)} ${floorWord} · ${floorPct}%`;
+  const goalLine = !stillRaising
+    ? `${formatSats(funded)} raised`
+    : !pastFloor
+      ? `${satsNumber(funded)} of ${formatSats(floor)} to open`
+      : hasTarget
+        ? over || targetPct >= 100
+          ? `${formatSats(funded)} raised · goal ${formatSats(targetSats!)}`
+          : `${satsNumber(funded)} of ${formatSats(targetSats!)} goal (${targetPct}%)`
+        : `${formatSats(funded)} raised`;
+
   return `<div class="funding-meter" data-funding-scale="${scale}">
       <div class="funding-meter-top">
         <span class="funding-meter-label${labelClass}">${label}</span>

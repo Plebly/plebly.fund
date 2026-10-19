@@ -497,7 +497,11 @@ async function syncHybridReviewUi(
     st === "in_review" && Boolean(proposal.id) && donor !== "window_open";
 
   const ai = status.ai_review || proposal.ai_review;
-  if (ai) {
+  // Finished projects: no "needs human review" card after the fact.
+  const finished = st === "completed" || st === "bounty_settled";
+  if (ai && finished) {
+    host.querySelectorAll(":scope > .ai-review-card").forEach((el) => el.remove());
+  } else if (ai) {
     // Skipped / unavailable cards tuck under the ballot — do not mount a
     // competing outer card when the review panel will own them.
     if (wantPanel && isDemotedAiOutcome(String(ai.outcome || ""))) {
@@ -1547,7 +1551,7 @@ export async function bindBuilderPanel(
         // why in the address row's place instead of leaving it blank.
         const escrowClosedReason = donateSlot
           ? null
-          : donateClosedReason(String(opts.proposal.status || ""), status);
+          : donateClosedReason(String(opts.proposal.status || ""), status, opts.proposal.structured_state ?? null);
         if (
           onchainEscrowRow &&
           escrowClosedReason &&
@@ -1568,7 +1572,7 @@ export async function bindBuilderPanel(
 
         if (!donateAllowed) {
           // workers#51 funds-closed row: short reason note, not a blank slot.
-          const closedReason = donateClosedReason(String(opts.proposal.status || ""), status);
+          const closedReason = donateClosedReason(String(opts.proposal.status || ""), status, opts.proposal.structured_state ?? null);
           donateSlot.hidden = !closedReason;
           donateSlot.innerHTML = closedReason ? donateClosedNoteHtml(closedReason) : "";
         } else if (next.button === "donate") {

@@ -11,7 +11,7 @@ import {
   profileHref as profilePath,
 } from "./router";
 import type { ProfileLink, PublicProfile, UserProfile } from "./types";
-import { escapeHtml } from "./util";
+import { escapeHtml, formatDate } from "./util";
 
 export { currentReturnPath, profilePath };
 
@@ -714,7 +714,7 @@ export function bindNotificationDropdown(root: ParentNode = document): void {
             .map((n) => {
               const hrefPath = notificationTargetHref(n);
               const when = n.created_at
-                ? new Date(n.created_at).toLocaleDateString()
+                ? formatDate(n.created_at)
                 : "";
               return `<a class="nav-notify-item${n.read_at ? "" : " is-unread"}" href="${hrefPath}">
                 <span class="nav-notify-type">${escapeHtml(notifyTypeLabel(n.type, n.payload))}</span>

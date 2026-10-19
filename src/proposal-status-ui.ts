@@ -1,5 +1,6 @@
 import { isKnownProposalStatus, type Proposal } from "./types";
 import { escapeHtml, html } from "./util";
+import { displayHandle } from "./display-names";
 
 const CLOSED_OUTCOME: Record<string, string> = {
   completed: "Shipped",
@@ -17,9 +18,10 @@ export function projectOutcomeHtml(
 ): string {
   const label = CLOSED_OUTCOME[String(status || "").toLowerCase()];
   if (!label) return "";
-  const login = String(shippedBy || "").replace(/^@/, "").trim();
+  // Handle as @handle; a raw nostr/gh key as a short key (a5a2…33f6), no @.
+  const who = displayHandle(shippedBy);
   const text =
-    label === "Shipped" && login ? `Shipped by @${login}.` : `${label}.`;
+    label === "Shipped" && who ? `Shipped by ${who}.` : `${label}.`;
   return html`<p class="proposal-outcome muted" id="proposal-outcome">${text}</p>`.value;
 }
 
@@ -31,7 +33,9 @@ export function statusLabel(status: string): string {
   if (s === "voided") return "Voided";
   if (s === "bounty_settled") return "Bounty paid";
   if (!isKnownProposalStatus(s)) return "Unavailable";
-  return String(status || "").replace(/_/g, " ");
+  // One label map: never a raw `in_review`; sentence case like the cases above.
+  const words = s.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function statusClass(status: string): string {
