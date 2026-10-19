@@ -67,6 +67,13 @@ for (const [tz, janOffset] of ZONES) {
       });
     }
 
+    if (tz === "America/Los_Angeles") {
+      it("DST days count as one calendar day (23h spring-forward, 25h fall-back)", () => {
+        expect(rel("2026-03-09", at(2026, 3, 8, 12, 0))).toBe("in 1 day");
+        expect(rel("2026-11-01", at(2026, 11, 2, 12, 0))).toBe("1 day overdue");
+      });
+    }
+
     it("full timestamps keep the ±12h window", () => {
       const iso = "2026-01-15T12:00:00Z";
       const t = Date.parse(iso);
