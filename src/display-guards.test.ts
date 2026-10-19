@@ -249,3 +249,83 @@ describe("finished project: no AI review card", () => {
     expect(app.querySelector(".ai-review-card")).toBeNull();
   });
 });
+
+/* ---- Review B2: page wiring of hideOverdue, and "nobody has taken it" ---- */
+
+describe("page render: overdue hidden while nothing is raised (hideOverdue wiring)", () => {
+  beforeAll(async () => {
+    await import("./proposal-page");
+  }, 30_000);
+  beforeEach(() => vi.resetModules());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    sessionStorage.clear();
+  });
+
+  const pastMilestone = [
+    {
+      deliverable: "Ship",
+      verification: "v",
+      out_of_scope: "o",
+      allocation_sats: 5_000,
+      deadline: "2026-01-01",
+      id: "m1",
+    },
+  ];
+
+  it("balance 0 and a past milestone: no 'overdue' on the rendered page", async () => {
+    const app = await render(
+      preloaded({ status: "claimed", claimer: "alice", balance_sats: 0, milestones: pastMilestone }),
+      "pending",
+    );
+    const due = app.querySelector(".milestone-rail-due");
+    expect(due?.textContent).toContain("Due Jan 1, 2026");
+    expect(app.textContent).not.toContain("overdue");
+  });
+
+  it("control: with sats raised the same milestone reads overdue", async () => {
+    const app = await render(
+      preloaded({ status: "claimed", claimer: "alice", balance_sats: 5_000, milestones: pastMilestone }),
+      "pending",
+    );
+    expect(app.querySelector(".milestone-rail-due")?.textContent).toMatch(/overdue/);
+  });
+});
+
+describe("still raising needs nobody on it (fundable status with a claimer)", () => {
+  const visible = (html: string) => html.replace(/<[^>]*>/g, " ");
+
+  for (const status of ["listed", "funding", "claimable", "declined_fundable"]) {
+    it(`page meter, ${status} + claimer: just "X raised"`, async () => {
+      const { fundingProgressHtml } = await import("./proposal-funding-bar");
+      const below = fundingProgressHtml(4_000, 10_000, 1_500_000, [], { status, claimer: "alice" });
+      expect(below).toContain("4,000 sats raised");
+      expect(visible(below)).not.toMatch(/to open|goal|1,500,000/);
+      const past = fundingProgressHtml(40_000, 10_000, 100_000, [], { status, claimer: "alice" });
+      expect(past).toContain("40,000 sats raised");
+      expect(visible(past)).not.toMatch(/to open|goal|of 100,000/);
+    });
+
+    it(`home card, ${status} + claimer: just "X sats raised"`, async () => {
+      const { progressHtml } = await import("./home-page");
+      const base = {
+        id: "PLEBLY-2026-099",
+        path: "proposals/listed/PLEBLY-2026-099.md",
+        title: "T",
+        proposal_type: "bounty",
+        escrow_address: null,
+        escrow_shared: false,
+        milestones: [],
+        status,
+        claimer: "alice",
+      };
+      const below = progressHtml({ ...base, target_sats: 1_500_000, balance_sats: 4_000 } as Proposal, 10_000);
+      expect(below).toContain("4,000 sats raised");
+      expect(visible(below)).not.toMatch(/to open|goal/);
+      const past = progressHtml({ ...base, target_sats: 100_000, balance_sats: 40_000 } as Proposal, 10_000);
+      expect(past).toContain("40,000 sats raised");
+      expect(visible(past)).not.toMatch(/to open|goal|of 100,000/);
+    });
+  }
+});

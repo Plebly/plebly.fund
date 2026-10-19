@@ -84,12 +84,23 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 /**
  * Parse a date value. A plain 'YYYY-MM-DD' is a calendar date: local midnight
  * of that day, never UTC midnight (which is the day before west of UTC).
- * Anything else goes through `new Date`.
+ * Anything else goes through `new Date`. An impossible calendar date
+ * ('2026-02-30') is an Invalid Date, never rolled over.
  */
 export function parseDateValue(value: string | number): Date {
   if (typeof value === "string") {
     const m = DATE_ONLY.exec(value.trim());
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (m) {
+      const y = Number(m[1]);
+      const mo = Number(m[2]) - 1;
+      const day = Number(m[3]);
+      const d = new Date(y, mo, day);
+      // Impossible dates ('2026-02-30') must not roll over to another day.
+      if (d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) {
+        return new Date(NaN);
+      }
+      return d;
+    }
   }
   return new Date(value);
 }
@@ -181,9 +192,18 @@ export function formatTimeAhead(
   const d = parseDateValue(iso);
   if (Number.isNaN(d.getTime())) return null;
   const title = formatAbsoluteDateTime(iso);
-  const deltaMs = d.getTime() - nowMs;
-  const absSec = Math.abs(Math.round(deltaMs / 1000));
-  if (absSec < 12 * 3600) {
+  let deltaMs = d.getTime() - nowMs;
+  let absSec = Math.abs(Math.round(deltaMs / 1000));
+  if (isDateOnly(iso)) {
+    // A plain date is a whole local calendar day: "due today" all day long,
+    // overdue from the next day. Count calendar days, not a ±12h window.
+    const now = new Date(nowMs);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (days === 0) return { text: "due today", title };
+    deltaMs = days;
+    absSec = Math.abs(days) * 86400;
+  } else if (absSec < 12 * 3600) {
     return { text: "due today", title };
   }
 
