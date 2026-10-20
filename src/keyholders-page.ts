@@ -11,7 +11,12 @@ import { payoutLooksValid } from "./payout-destination";
 import { disableSiblingOutpoints, signingCardHtml, signingQueueHtml } from "./signing-queue-ui";
 import type { SigningCard } from "./signing-types";
 import { sha256HexOfPsbtBase64 } from "./psbt-hash-gate";
-import { amountsMatchCard, outputsMatchPublished, parsedPsbtOutputs } from "./signing-verify";
+import {
+  amountsMatchCard,
+  outputsMatchPublished,
+  parsedPsbtOutputs,
+  psbtStructureMatches,
+} from "./signing-verify";
 import { joinScannedParts, openLedgerSession, scanQrParts, seedSignerParts } from "./signing-device";
 
 export type KeyholdersShell = (inner: string) => string;
@@ -1873,6 +1878,19 @@ export async function renderKeyholders(
             }
           }
           if (!partial) break;
+          // The scanned QR is untrusted. Do not store it unless it spends the
+          // same prevouts and pays the same outputs as the published PSBT.
+          if (!(await psbtStructureMatches(next.psbt_base64, partial))) {
+            if (!alive()) break;
+            paintSigningCard(next);
+            setVerifyStatus("Signed transaction does not match the published one.");
+            setSignMsg(`${next.title}: signed transaction does not match the published one.`);
+            detailEl.querySelectorAll("button").forEach((btn) => {
+              btn.disabled = true;
+            });
+            hold = true;
+            break;
+          }
           const posted = await postPartial(next, partial);
           const body = (await posted.json().catch(() => ({}))) as { error?: string };
           if (!posted.ok) {

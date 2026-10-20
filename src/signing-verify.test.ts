@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { amountsMatchCard, computeMonthlyFeeOutput, splitWorkOutput } from "./signing-verify";
+import {
+  amountsMatchCard,
+  computeMonthlyFeeOutput,
+  psbtStructureMatches,
+  splitWorkOutput,
+} from "./signing-verify";
 import fixture from "./fixtures/signet-structure-001.json";
 
 describe("signing verify", () => {
@@ -295,5 +300,31 @@ describe("parsedPsbtOutputs network HRP", () => {
     expect("error" in parsed).toBe(false);
     if ("error" in parsed) return;
     expect(parsed.every((o) => o.address.startsWith("bc1"))).toBe(true);
+  });
+});
+
+describe("psbtStructureMatches", () => {
+  function toBase64(bytes: Uint8Array): string {
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }
+
+  it("accepts the same PSBT and rejects one whose output amount changed", async () => {
+    const { Transaction } = await import("@scure/btc-signer");
+    expect(await psbtStructureMatches(fixture.psbt_base64, fixture.psbt_base64)).toBe(true);
+    const raw = Uint8Array.from(atob(fixture.psbt_base64), (c) => c.charCodeAt(0));
+    const tx = Transaction.fromPSBT(raw, { allowUnknown: true });
+    const out = tx.getOutput(0);
+    tx.updateOutput(0, { amount: (out.amount ?? 0n) + 1n });
+    const changed = toBase64(tx.toPSBT());
+    expect(await psbtStructureMatches(fixture.psbt_base64, changed)).toBe(false);
+    expect(await psbtStructureMatches(fixture.psbt_base64, "not-a-psbt")).toBe(false);
+  });
+
+  it("still matches after partial signatures are merged onto the same PSBT", async () => {
+    const { applyPartialSigs } = await import("./signing-device");
+    const merged = await applyPartialSigs(fixture.psbt_base64, []);
+    expect(await psbtStructureMatches(fixture.psbt_base64, merged)).toBe(true);
   });
 });
