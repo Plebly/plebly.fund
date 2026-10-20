@@ -6,6 +6,38 @@ function API(): string {
   return (WORKERS_API || "").replace(/\/$/, "");
 }
 
+const PUSH_FALLBACK_PATH = "/account?tab=notifications";
+/** Placeholder origin used only to reject scheme-relative paths. Not a navigation target. */
+const PUSH_PATH_ORIGIN = "https://plebly.invalid";
+
+/**
+ * Path a notification click may open.
+ * Absolute http(s) URLs are reduced to their path. Scheme-relative (`//host`)
+ * and backslash paths are refused: `new URL("//evil.com", origin)` leaves the origin.
+ * Kept in sync with `pushNavigationPath` in public/sw.js.
+ */
+export function pushNavigationPath(raw: string | null | undefined): string {
+  let url = typeof raw === "string" ? raw.trim() : "";
+  if (!url) return PUSH_FALLBACK_PATH;
+  if (/^https?:\/\//i.test(url)) {
+    try {
+      const abs = new URL(url);
+      url = `${abs.pathname}${abs.search}${abs.hash}` || "/";
+    } catch {
+      return PUSH_FALLBACK_PATH;
+    }
+  }
+  if (!url.startsWith("/")) url = `/${url}`;
+  if (url.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(url)) return PUSH_FALLBACK_PATH;
+  try {
+    const resolved = new URL(url, PUSH_PATH_ORIGIN);
+    if (resolved.origin !== PUSH_PATH_ORIGIN) return PUSH_FALLBACK_PATH;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}` || "/";
+  } catch {
+    return PUSH_FALLBACK_PATH;
+  }
+}
+
 /** Parse service-worker push JSON (kept in sync with public/sw.js). */
 export function parsePushEventData(raw: string | null | undefined): {
   title: string;
@@ -35,21 +67,9 @@ export function parsePushEventData(raw: string | null | undefined): {
       typeof data.body === "string" && data.body.trim()
         ? data.body.trim()
         : "Open Plebly for details.";
-    let url =
-      typeof data.url === "string" && data.url.trim()
-        ? data.url.trim()
-        : "/account?tab=notifications";
-    // Only allow same-origin relative paths or absolute https URLs we will re-scope on click.
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      try {
-        const u = new URL(url);
-        url = `${u.pathname}${u.search}${u.hash}` || "/";
-      } catch {
-        url = "/account?tab=notifications";
-      }
-    } else if (!url.startsWith("/")) {
-      url = `/${url}`;
-    }
+    const url = pushNavigationPath(
+      typeof data.url === "string" ? data.url : PUSH_FALLBACK_PATH,
+    );
     const tag = typeof data.tag === "string" ? data.tag : undefined;
     return { title, body, url, tag };
   } catch {
