@@ -5,7 +5,8 @@
  *
  * Fails toward shared: an address counts as shared unless its row says
  * `escrow_shared === false` AND no more than one loaded catalog row uses the
- * same (trimmed) address. A null or missing flag is shared, whatever the
+ * same address (trimmed, then lower-cased: bech32 is case-insensitive, so
+ * `tb1q…` and `TB1Q…` are one address). A null or missing flag is shared, whatever the
  * catalog holds, so a direct link with no catalog loaded, a partial catalog
  * or a failed catalog load all read as shared. Computed at read time from
  * the catalog field names (`escrow_address`, `escrow_shared`); nothing stored.
@@ -16,7 +17,7 @@ export type EscrowRow = {
 };
 
 function trimmedAddress(v: unknown): string {
-  return typeof v === "string" ? v.trim() : "";
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
 
 export function isSharedEscrow(row: EscrowRow, catalog: ReadonlyArray<EscrowRow> = []): boolean {
