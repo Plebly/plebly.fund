@@ -35,6 +35,14 @@ describe("balanceAddressFor uses isSharedEscrow", () => {
     expect(balanceAddressFor(row, [row, { escrow_address: ` ${UNIQUE} `, escrow_shared: false }])).toBeNull();
     expect(balanceAddressFor({ escrow_address: UNIQUE, escrow_shared: true })).toBeNull();
   });
+
+  it("the same bech32 address in another case is one shared address, not a chain-balance read", () => {
+    const lower = { escrow_address: UNIQUE, escrow_shared: false as const };
+    const upper = { escrow_address: UNIQUE.toUpperCase(), escrow_shared: false as const };
+    expect(balanceAddressFor(lower, [lower, upper])).toBeNull();
+    expect(balanceAddressFor(upper, [lower, upper])).toBeNull();
+    expect(balanceAddressFor(upper, [upper])).toBe(UNIQUE.toUpperCase());
+  });
 });
 
 describe("home/stats enrichBalances pass the catalog", () => {
