@@ -105,9 +105,24 @@ describe("fetchOpenReports", () => {
     await expect(fetchOpenReports()).resolves.toEqual([]);
   });
 
-  it.each([401, 403, 500, 502])("is empty (not a throw) on %i, even with an HTML body", async (status) => {
+  it.each([401, 403])("is empty (not a throw) on %i, even with an HTML body", async (status) => {
     fetchMock.mockResolvedValue(html(status));
     await expect(fetchOpenReports()).resolves.toEqual([]);
+  });
+
+  it.each([500, 502, 503])("throws on %i instead of looking empty", async (status) => {
+    fetchMock.mockResolvedValue(html(status));
+    await expect(fetchOpenReports()).rejects.toThrow("reports_unavailable");
+  });
+
+  it("throws on a network failure", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(fetchOpenReports()).rejects.toThrow();
+  });
+
+  it("throws on a 200 whose body is not JSON", async () => {
+    fetchMock.mockResolvedValue(html(200));
+    await expect(fetchOpenReports()).rejects.toThrow("reports_unavailable");
   });
 });
 
