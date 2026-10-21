@@ -3,14 +3,17 @@
  * Refresh public/llms.txt with a curated index + live Projects section
  * (from Worker catalog when available). Follows https://llmstxt.org/
  */
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { liveWorkersApi } from "./live-api.mjs";
+import { withNetworkNotice } from "./llms-network-notice.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "public", "llms.txt");
+const outFull = join(root, "public", "llms-full.txt");
+const NETWORK = process.env.VITE_BITCOIN_NETWORK || "signet";
 const WORKERS = process.env.VITE_WORKERS_API || liveWorkersApi();
 const SITE = "https://plebly.fund";
 
@@ -89,10 +92,14 @@ ${projectLines.join("\n")}
 
 async function main() {
   const projects = await loadProjects();
-  writeFileSync(out, render(projects));
+  writeFileSync(out, withNetworkNotice(render(projects), NETWORK, "llms"));
   console.log(
-    `Wrote llms.txt (${projects.length} project link${projects.length === 1 ? "" : "s"})`,
+    `Wrote llms.txt (${projects.length} project link${projects.length === 1 ? "" : "s"}, ${NETWORK})`,
   );
+  // llms-full.txt is hand-written; only the network notice is managed here.
+  const full = readFileSync(outFull, "utf8");
+  writeFileSync(outFull, withNetworkNotice(full, NETWORK, "full"));
+  console.log(`Wrote llms-full.txt (${NETWORK})`);
 }
 
 await main();
