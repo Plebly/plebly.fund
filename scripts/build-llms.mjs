@@ -52,7 +52,7 @@ function render(projects) {
 
   return `# Plebly
 
-> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. No custodian can freeze or redirect escrow.
+> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. No custodian can freeze or redirect on-chain escrow; Lightning donations (when enabled) are held by OpenNode, a custodial processor, until a batched on-chain sweep.
 
 Listings and escrow balances are on the site at ${SITE}. Published fees and keyholder rules are in git. Lightning donations (when enabled) settle into the same on-chain escrow after an on-chain sweep.
 

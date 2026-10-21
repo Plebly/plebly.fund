@@ -1,10 +1,10 @@
 ## About Plebly
 
-Plebly funds Bitcoin work without a custodian. Each project has a public address. Donations sit there until payout.
+Plebly funds Bitcoin work without a custodian holding on-chain donations. Each project has a public address. Donations sit there until payout.
 
 ## What we believe
 
-**No keys at Plebly.** Funds stay in public escrow. We cannot freeze, redirect, or take them.
+**No keys at Plebly.** On-chain funds stay in public escrow. We cannot freeze, redirect, or take them. Lightning donations (when enabled) are held by OpenNode until the on-chain sweep.
 
 **Public listings.** Every project and address is visible.
 
@@ -25,7 +25,7 @@ Watch to follow — it does not reserve the work. Apply when funded. A bond hold
 
 ## Lightning
 
-Same address as on-chain. Unpaid invoices do not count. Mainnet only.
+Paid to OpenNode, a custodial processor, then swept on-chain in batches to the same escrow address. Counts only after that sweep confirms; unpaid invoices never count. Mainnet only, when enabled.
 
 ## Key numbers
 

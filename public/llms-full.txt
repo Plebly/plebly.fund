@@ -5,7 +5,7 @@ Plebly (https://plebly.bitcoin) is a public funding platform for Bitcoin develop
 ## What it is
 
 - Lists open projects with publicly verifiable Bitcoin escrow balances (mempool).
-- Connects donors and builders without a custodian that can freeze or redirect escrow.
+- Connects donors and builders without a custodian that can freeze or redirect on-chain escrow. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until the batched on-chain sweep into escrow.
 - Listings live on the site (Worker catalog). Published fees and keyholder rules are in git.
 - On-chain escrow history is independent of the website.
 - Curated agent index: https://plebly.bitcoin/llms.txt (https://llmstxt.org/)
