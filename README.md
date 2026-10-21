@@ -21,9 +21,12 @@ Open `http://localhost:5173/`. The SPA talks to the deployed Workers API by defa
 
 ## Deploy
 
-Pushes to `develop` build a signet SPA (`VITE_BITCOIN_NETWORK=signet`, `VITE_WORKERS_API=https://api.signet.plebly.fund`) and `wrangler deploy --env signet`.
+`.github/workflows/deploy.yml` deploys only from `main` (on push, or `workflow_dispatch` run on `main`; on any other ref every step is skipped). `develop` is retired and no longer deploys. One job runs `npm test` with `VITE_BITCOIN_NETWORK=signet`, then deploys both Workers in order:
 
-Pushes to `main` still deploy the unnamed apex Worker (signet content) until the cutover commit that moves apex routes into `[env.production]` and bakes `VITE_BITCOIN_NETWORK=mainnet` + `VITE_LIGHTNING=0`.
+1. **Apex** (`plebly.fund`, `www.plebly.fund`): builds with `VITE_BITCOIN_NETWORK=signet`, `VITE_WORKERS_API=https://api.plebly.fund`, then `wrangler deploy` (the unnamed top-level Worker in `wrangler.toml`).
+2. **Signet** (`signet.plebly.fund`): rebuilds with `VITE_BITCOIN_NETWORK=signet`, `VITE_WORKERS_API=https://api.signet.plebly.fund`, then `wrangler deploy --env signet` (`plebly-fund-signet`).
+
+Until cutover, the apex serves signet content too. The cutover commit moves the apex routes into `[env.production]` and switches the apex build to `VITE_BITCOIN_NETWORK=mainnet`, `VITE_WORKERS_API=https://api.plebly.fund`, `VITE_LIGHTNING=0` with `wrangler deploy --env production`.
 
 The site uses **path-based SPA routes** (`/propose`, `/about`, `/proposal/…`). The build copies `index.html` to `404.html` so deep links load the app. Legacy `#/…` URLs redirect to the path equivalent.
 
