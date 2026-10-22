@@ -17,16 +17,7 @@ Listings and escrow balances are on the site at https://plebly.fund. Published f
 
 ## Projects
 
-- [Josh KH 2-of-3 Release cosign rehearsal](https://plebly.fund/p/plebly-2026-010): in_review — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [Signet 2-of-3 Release rehearsal](https://plebly.fund/p/plebly-2026-009): in_review — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [Structure UTXO-selection fee recheck](https://plebly.fund/p/plebly-2026-008): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [A2b reserve_reviewers fee-floor E2E](https://plebly.fund/p/plebly-2026-007): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [A2b reserve_reviewers approve E2E](https://plebly.fund/p/plebly-2026-006): in_review — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [Docs Flag escalate E2E](https://plebly.fund/p/plebly-2026-005): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [Docs listing for escalate gate](https://plebly.fund/p/plebly-2026-004): claimable — Signet fixture listing for ops / Tester gates (AI bypass tags). Listing present in KV catalog with the reque
-- [[Wave B] Signet escrow+bonds 20260921](https://plebly.fund/p/plebly-2026-003): in_review — Validate signet escrow and contributor bond flows for Wave B. Produce a concise test report documenting escr
-- [[Wave B] Signet escrow+bonds 20260921](https://plebly.fund/p/plebly-2026-002): claimable — Validate signet escrow and contributor bond flows for Wave B. Produce a concise test report documenting escr
-- [[Tester E2E] Signet poster smoke 20260919-1625](https://plebly.fund/p/plebly-2026-001): in_review — Plebly signet end-to-end smoke test for the proposal wizard. Audience: maintainers and independent testers v
+- [Open projects on the home page](https://plebly.fund/): Live listed projects (catalog unavailable at build time)
 
 ## Protocol (published rules)
 

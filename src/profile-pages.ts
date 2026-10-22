@@ -90,6 +90,13 @@ function txExplorerLink(txid: string, label?: string): string {
   return `<a class="mono" href="${escapeHtml(`${MEMPOOL_WEB}/tx/${encodeURIComponent(txid)}`)}" target="_blank" rel="noreferrer noopener">${escapeHtml(label || short)}</a>`;
 }
 
+
+/** Host shown before the username field (plebly.fund, or signet.plebly.fund on the signet deploy). */
+function profileUrlHost(): string {
+  const host = typeof location !== "undefined" ? location.host : "";
+  return host || "plebly.fund";
+}
+
 export type ShellContext = {
   user: AuthUser | null;
   routeName: string;
@@ -468,7 +475,7 @@ export function accountProfilePaneHtml(
           <fieldset class="form-block">
             <legend>Username</legend>
             <div class="field-row">
-              <span class="field-prefix">plebly.bitcoin/u/</span>
+              <span class="field-prefix">${escapeHtml(profileUrlHost())}/u/</span>
               <input id="username-input" type="text" value="${escapeHtml(user.username || "")}" placeholder="yourname" pattern="[a-z0-9-]+" minlength="3" maxlength="32" ${user.username ? "readonly" : ""} />
               ${user.username ? "" : `<button type="button" class="btn" id="claim-username-btn">Claim</button>`}
             </div>
