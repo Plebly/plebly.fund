@@ -90,14 +90,22 @@ function initialGovTab(): GovTab {
   return "roster";
 }
 
+/** `reports === null` means the inbox could not be loaded (not the same as empty). */
 export function reportsInboxHtml(
-  reports: ModerationReportView[],
+  reports: ModerationReportView[] | null,
   isReviewer: boolean,
 ): string {
   if (!isReviewer) {
     return `<div class="empty-state gov-empty"><div class="empty-state-inner">
       <p class="empty-state-title">Reviewers only</p>
       <p class="empty-state-body">Open moderation reports for listings and comments appear here for the active roster.</p>
+    </div></div>`;
+  }
+  if (!reports) {
+    return `<div class="empty-state gov-empty"><div class="empty-state-inner">
+      <p class="empty-state-title">Couldn't load reports</p>
+      <p class="empty-state-body">The reports service didn't answer. There may be open reports.</p>
+      <button type="button" class="btn ghost" data-reports-retry>Try again</button>
     </div></div>`;
   }
   if (!reports.length) {
@@ -761,14 +769,19 @@ export async function renderGovernance(
     });
 
   if (user) {
-    void fetchOpenReports()
-      .catch(() => [] as ModerationReportView[])
-      .then((reports) => {
-        if (!app.querySelector(".gov-page")) return;
-        const host = app.querySelector("#gov-reports-host");
-        if (host) host.innerHTML = reportsInboxHtml(reports, isReviewer);
-        setGovCount("reports", "Reports", reports.length);
-      });
+    const loadReports = () =>
+      void fetchOpenReports()
+        .catch(() => null)
+        .then((reports) => {
+          if (!app.querySelector(".gov-page")) return;
+          const host = app.querySelector("#gov-reports-host");
+          if (host) host.innerHTML = reportsInboxHtml(reports, isReviewer);
+          setGovCount("reports", "Reports", reports?.length ?? 0);
+        });
+    app.querySelector("#gov-reports-host")?.addEventListener("click", (e) => {
+      if ((e.target as Element).closest("[data-reports-retry]")) loadReports();
+    });
+    loadReports();
     void authFetch(`${govApi()}/keyholders/applications`)
       .then(async (r) =>
         r.ok

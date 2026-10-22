@@ -372,6 +372,10 @@ describe("governance UI helpers", () => {
   it("renders reports inbox for reviewers and gates guests", () => {
     expect(reportsInboxHtml([], false)).toContain("Reviewers only");
     expect(reportsInboxHtml([], true)).toContain("No open reports");
+    const failed = reportsInboxHtml(null, true);
+    expect(failed).toContain("Couldn't load reports");
+    expect(failed).not.toContain("No open reports");
+    expect(failed).toContain("data-reports-retry");
     const html = reportsInboxHtml(
       [
         {

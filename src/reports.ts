@@ -59,8 +59,10 @@ export async function fetchOpenReports(): Promise<ModerationReportView[]> {
   if (!WORKERS_API) return [];
   const res = await authFetch(`${api()}/reports?limit=50`);
   if (res.status === 401 || res.status === 403) return [];
-  if (!res.ok) return [];
-  const data = (await res.json()) as { reports?: ModerationReportView[] };
+  const data = res.ok
+    ? ((await res.json().catch(() => null)) as { reports?: ModerationReportView[] } | null)
+    : null;
+  if (!data) throw new Error("reports_unavailable");
   return data.reports || [];
 }
 
