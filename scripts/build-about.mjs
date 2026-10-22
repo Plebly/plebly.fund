@@ -459,7 +459,10 @@ export const ABOUT_KEYHOLDERS: AboutKeyholders = ${JSON.stringify(
       2,
     )};
 
-export const ABOUT_BITCOIN_NETWORK = ${JSON.stringify(bitcoinNetwork)};`,
+/** Build-time network. Typed as the union so code type-checks under either build. */
+export type AboutBitcoinNetwork = "signet" | "mainnet";
+
+export const ABOUT_BITCOIN_NETWORK: AboutBitcoinNetwork = ${JSON.stringify(bitcoinNetwork)};`,
   );
 
   const paramsTs = emitFundParametersTs(resolved);
