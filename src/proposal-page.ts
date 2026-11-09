@@ -761,7 +761,8 @@ export async function renderProposalPage(
           <div class="proposal-main">
             <div class="proposal-sections">${sectionsHtml}</div>
             ${milestonesHtml(match.milestones, Date.now(), {
-              hideOverdue: hideMilestoneOverdue(balance),
+              hideOverdue:
+                hideMilestoneOverdue(balance) || isFinishedStatus(status),
             })}
             ${
               match.parent_initiative

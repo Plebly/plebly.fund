@@ -60,9 +60,10 @@ for (const [tz, janOffset] of ZONES) {
         expect(before).toContain("· in 1 day");
         expect(before).not.toMatch(/overdue|due today/);
         const next = milestonesHtml(ms(due), at(y, m, d + 1, 0, 0));
-        expect(next).toContain("· 1 day overdue");
+        expect(next).toContain("· Due date passed");
+        expect(next).not.toContain("overdue");
         expect(milestonesHtml(ms(due), at(y, m, d + 1, 0, 0), { hideOverdue: true })).not.toContain(
-          "overdue",
+          "Due date passed",
         );
       });
     }

@@ -3043,9 +3043,11 @@ function milestoneDueHtml(
   const overdue = Boolean(
     ahead && parseDateValue(iso).getTime() < nowMs && ahead.text !== "due today",
   );
-  const rel = ahead && !(opts?.hideOverdue && overdue)
-    ? ` <span class="milestone-rail-due-rel">· ${escapeHtml(ahead.text)}</span>`
-    : "";
+  let rel = "";
+  if (ahead && !(opts?.hideOverdue && overdue)) {
+    const relText = overdue ? "Due date passed" : ahead.text;
+    rel = ` <span class="milestone-rail-due-rel">· ${escapeHtml(relText)}</span>`;
+  }
   const title = ahead?.title || due;
   return `<time class="milestone-rail-due" datetime="${escapeHtml(iso)}" title="${escapeHtml(title)}">Due ${escapeHtml(due)}${rel}</time>`;
 }
@@ -3102,7 +3104,7 @@ export function milestonesHtml(
   );
   return `<section class="proposal-milestones" aria-labelledby="milestones-heading">
     <header class="proposal-milestones-head">
-      <h2 id="milestones-heading" class="proposal-block-title">Milestones</h2>
+      <h2 id="milestones-heading" class="proposal-block-title">Planned milestone payouts</h2>
       <p class="proposal-block-lede">${escapeHtml(formatSats(total))} allocated across ${milestones.length} stage${milestones.length === 1 ? "" : "s"}</p>
     </header>
     <ol class="milestone-rail">

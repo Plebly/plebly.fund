@@ -65,8 +65,16 @@ describe("donationRowCopy", () => {
     expect(donationRowCopy(d({ donor_display: "" }), false).donor).toBe("Anonymous");
   });
 
-  it("falls back from label to id to 'a project'", () => {
-    expect(donationRowCopy(d({ target_label: "" }), false).target).toBe("PLEBLY-2026-003");
+  it("untitled project when label is empty or equals the id", () => {
+    expect(donationRowCopy(d({ target_label: "" }), false).target).toBe(
+      "Untitled project (PLEBLY-2026-003)",
+    );
+    expect(
+      donationRowCopy(
+        d({ target_label: "PLEBLY-2026-008", target_id: "PLEBLY-2026-008" }),
+        false,
+      ).target,
+    ).toBe("Untitled project (PLEBLY-2026-008)");
     expect(donationRowCopy(d({ target_label: "", target_id: "" }), false).target).toBe("a project");
   });
 });

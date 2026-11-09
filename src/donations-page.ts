@@ -152,13 +152,22 @@ export function donationRowCopy(d: PublicDonation, endowmentOpen: boolean): {
     d.anonymous || !d.donor_display
       ? "Anonymous"
       : displayHandle(d.donor_display);
+  let target: string;
+  if (d.target_type === "endowment" && !endowmentOpen) {
+    target = SHARED_ESCROW_LABEL;
+  } else if (
+    d.target_type === "project" &&
+    d.target_id &&
+    (!d.target_label || d.target_label === d.target_id)
+  ) {
+    target = `Untitled project (${d.target_id})`;
+  } else {
+    target = d.target_label || d.target_id || "a project";
+  }
   return {
     donor,
     amount: formatSats(d.amount_sats),
-    target:
-      d.target_type === "endowment" && !endowmentOpen
-        ? SHARED_ESCROW_LABEL
-        : d.target_label || d.target_id || "a project",
+    target,
   };
 }
 
