@@ -120,7 +120,7 @@ function fundingDetailTrackHtml(
       const label =
         m.kind === "floor"
           ? openCopy
-            ? `Opens for builders at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
+            ? `Applications open at ${formatSats(m.sats)}, ${unlocked ? "reached" : "not yet"}`
             : `Opened at ${m.sats.toLocaleString()} sats, ${unlocked ? "reached" : "not yet"}`
           : `Milestone ${m.label || m.id || ""} ${m.sats.toLocaleString()} sats, ${unlocked ? "unlocked" : "locked"}`;
       return `<span class="funding-marker funding-marker-${kind} ${state}" style="left:${left}%" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${lock}<span class="funding-marker-tick"></span></span>`;
@@ -288,7 +288,7 @@ export function fundingProgressHtml(
   const goalLine = !stillRaising
     ? `${formatSats(funded)} raised`
     : !pastFloor
-      ? `${satsNumber(funded)} of ${formatSats(floor)} to open`
+      ? `${satsNumber(funded)} raised · Applications open at ${formatSats(floor)}`
       : hasTarget
         ? over || targetPct >= 100
           ? `${formatSats(funded)} raised · goal ${formatSats(targetSats!)}`

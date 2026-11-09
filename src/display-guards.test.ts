@@ -39,7 +39,7 @@ describe("funding meter guards (page)", () => {
   it("negative balance is clamped: never '-5 of'", async () => {
     const { fundingProgressHtml } = await import("./proposal-funding-bar");
     const html = fundingProgressHtml(-5, 10_000, null, [], { status: "listed" });
-    expect(html).toContain("0 of 10,000 sats to open");
+    expect(html).toContain("0 raised · Applications open at 10,000 sats");
     expect(html).not.toContain("-5");
   });
 
@@ -55,10 +55,10 @@ describe("funding meter guards (page)", () => {
     });
   }
 
-  it("still raising: 'to open' and then the goal", async () => {
+  it("still raising: applications-open floor, then the goal", async () => {
     const { fundingProgressHtml } = await import("./proposal-funding-bar");
     expect(fundingProgressHtml(4_000, 10_000, 1_500_000, [], { status: "listed" })).toContain(
-      "4,000 of 10,000 sats to open",
+      "4,000 raised · Applications open at 10,000 sats",
     );
     expect(fundingProgressHtml(40_000, 10_000, 100_000, [], { status: "claimable" })).toContain(
       "40,000 of 100,000 sats goal (40%)",
@@ -136,7 +136,8 @@ describe("milestone overdue guards", () => {
 
   it("a past date is hidden only with hideOverdue", async () => {
     const { milestonesHtml } = await import("./proposal-ui");
-    expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now)).toContain("overdue");
+    expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now)).toContain("Due date passed");
+    expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now, { hideOverdue: true })).not.toContain("Due date passed");
     expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now, { hideOverdue: true })).not.toContain("overdue");
   });
 });
@@ -289,7 +290,7 @@ describe("page render: overdue hidden while nothing is raised (hideOverdue wirin
       preloaded({ status: "claimed", claimer: "alice", balance_sats: 5_000, milestones: pastMilestone }),
       "pending",
     );
-    expect(app.querySelector(".milestone-rail-due")?.textContent).toMatch(/overdue/);
+    expect(app.querySelector(".milestone-rail-due")?.textContent).toMatch(/Due date passed/);
   });
 });
 

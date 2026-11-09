@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFloorShortfall } from "./builder";
-import { landingMarketingHtml, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList } from "./home-page";
+import { gapTickerHtml, landingMarketingHtml, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList } from "./home-page";
 import type { Proposal } from "./types";
 
 function proposal(
@@ -48,6 +48,29 @@ describe("claimFloorShortfall", () => {
       projectCount: 0,
       fundedTowardFloor: 0,
     });
+  });
+});
+
+describe("gapTickerHtml", () => {
+  it("names the shortfall for a single project below the floor", () => {
+    const html = gapTickerHtml(
+      [proposal({ status: "listed", balance_sats: 2_500, id: "one" })],
+      10_000,
+    );
+    expect(html).toContain("1 project needs 7,500 sats before applications open");
+    expect(html).not.toContain("still raising before builders can apply");
+  });
+
+  it("uses plural funding copy when several projects are short", () => {
+    const html = gapTickerHtml(
+      [
+        proposal({ status: "listed", balance_sats: 2_000, id: "a" }),
+        proposal({ status: "funding", balance_sats: 8_000, id: "b" }),
+      ],
+      10_000,
+    );
+    expect(html).toContain("2 projects still need funding before applications open");
+    expect(html).toContain("10,000 sats");
   });
 });
 

@@ -131,6 +131,7 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain('href="https://example.com/verify"');
     expect(html).toMatch(/100[,.]?000|100k/i);
     expect(html).toContain("Due");
+    expect(html).toContain("Planned milestone payouts");
     expect(html).toContain("milestone-rail-due-rel");
     expect(html).toMatch(/in \d+ (week|month)s?/);
   });
@@ -572,8 +573,8 @@ describe("proposal UI critical render helpers", () => {
     const html = proposalFundingBarHtml(50_000, 100_000, 500_000);
     expect(html).toContain("funding-meter");
     expect(html).toContain("50,000 sats to open");
-    // One target at a time: the amount to open, no goal until it opens.
-    expect(html).toContain("50,000 of 100,000 sats to open");
+    // Floor target label: applications open at the claim floor.
+    expect(html).toContain("50,000 raised · Applications open at 100,000 sats");
     expect(html).not.toContain("goal 500,000");
     expect(visibleText(html)).not.toMatch(/floor/i);
     expect(html).toContain("funding-marker-floor");
@@ -584,7 +585,7 @@ describe("proposal UI critical render helpers", () => {
   it("funding bar always labels the open threshold separately from target", () => {
     const html = proposalFundingBarHtml(5_000, 10_000, 100_000);
     expect(html).toContain("5,000 sats to open");
-    expect(html).toContain("5,000 of 10,000 sats to open");
+    expect(html).toContain("5,000 raised · Applications open at 10,000 sats");
     expect(html).not.toContain("goal 100,000 sats");
     expect(html).not.toMatch(/\/ 100,000 sats · /);
 
@@ -659,7 +660,7 @@ describe("proposal UI critical render helpers", () => {
     expect(claimed).toContain("50,000 sats raised");
     expect(visibleText(claimed)).not.toMatch(/goal|of 100,000/);
     expect(visibleText(claimed)).not.toMatch(/floor/i);
-    expect(claimed).not.toContain("Opens for builders");
+    expect(claimed).not.toContain("Applications open at");
     expect(claimed).toContain("Opened at 10,000 sats, reached");
 
     const claimableOpen = fundingProgressHtml(50_000, 10_000, 100_000, [], {
@@ -667,7 +668,7 @@ describe("proposal UI critical render helpers", () => {
       proposal_type: "bounty",
     });
     expect(claimableOpen).toContain("Open to apply");
-    expect(claimableOpen).toContain("Opens for builders");
+    expect(claimableOpen).toContain("Applications open at 10,000 sats");
 
     const withClaimer = fundingProgressHtml(50_000, 10_000, null, [], {
       status: "claimable",
@@ -686,8 +687,7 @@ describe("proposal UI critical render helpers", () => {
       proposal_type: "bounty",
     });
     expect(funding).toContain("5,000 sats to open");
-    expect(funding).toContain("5,000 of 10,000 sats to open");
-    expect(funding).toContain("Opens for builders");
+    expect(funding).toContain("5,000 raised · Applications open at 10,000 sats");
   });
 
   it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {

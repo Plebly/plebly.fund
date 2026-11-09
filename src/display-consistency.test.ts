@@ -206,16 +206,17 @@ describe("funding meter and milestones (item 5)", () => {
   ];
   const now = Date.parse("2026-10-18T12:00:00Z");
 
-  it("hides 'overdue' when nothing has been raised", () => {
-    expect(milestonesHtml(ms, now)).toContain("overdue");
+  it("hides 'Due date passed' when nothing has been raised", () => {
+    expect(milestonesHtml(ms, now)).toContain("Due date passed");
     const hidden = milestonesHtml(ms, now, { hideOverdue: true });
+    expect(hidden).not.toContain("Due date passed");
     expect(hidden).not.toContain("overdue");
     expect(hidden).toContain("Due Jan 1, 2026");
   });
 
-  it("before open: only the amount to open; past goal: Fully funded", () => {
+  it("before open: applications-open floor label; past goal: Fully funded", () => {
     const before = fundingProgressHtml(0, 10_000, 1_500_000, [], { status: "listed" });
-    expect(before).toContain("0 of 10,000 sats to open");
+    expect(before).toContain("0 raised · Applications open at 10,000 sats");
     expect(before).not.toContain("1,500,000");
     const over = fundingProgressHtml(36_030, 10_000, 10_000, [], { status: "claimable" });
     expect(over).toContain("Fully funded");

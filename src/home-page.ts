@@ -197,7 +197,7 @@ function howItWorksHtml(): string {
   </section>`;
 }
 
-function gapTickerHtml(
+export function gapTickerHtml(
   proposals: Proposal[],
   floor = CLAIM_FLOOR_SATS,
 ): string {
@@ -220,12 +220,14 @@ function gapTickerHtml(
     100,
     Math.round((fundedTowardFloor / Math.max(1, capacity)) * 100),
   );
-  const projectLabel =
-    projectCount === 1 ? "1 project" : `${projectCount} projects`;
+  const note =
+    projectCount === 1
+      ? `1 project needs ${formatSats(shortfallSats)} before applications open`
+      : `${projectCount} projects still need funding before applications open`;
   return `<section class="wrap-wide gap-ticker">
     <div>
       <span class="gap-ticker-label">Need funding</span>
-      <span class="gap-ticker-note">${escapeHtml(projectLabel)} still raising before builders can apply</span>
+      <span class="gap-ticker-note">${escapeHtml(note)}</span>
       <strong>${escapeHtml(formatSats(shortfallSats))} <span>to open</span></strong>
     </div>
     <div class="gap-ticker-meter" role="progressbar" aria-label="Funding progress toward opening for builders" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
