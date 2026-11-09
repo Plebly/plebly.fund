@@ -216,7 +216,7 @@ describe("funding meter and milestones (item 5)", () => {
 
   it("before open: applications-open floor label; past goal: Fully funded", () => {
     const before = fundingProgressHtml(0, 10_000, 1_500_000, [], { status: "listed" });
-    expect(before).toContain("0 raised · Applications open at 10,000 sats");
+    expect(before).toContain("0 sats raised · Applications open at 10,000 sats");
     expect(before).not.toContain("1,500,000");
     const over = fundingProgressHtml(36_030, 10_000, 10_000, [], { status: "claimable" });
     expect(over).toContain("Fully funded");

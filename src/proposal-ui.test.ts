@@ -574,7 +574,7 @@ describe("proposal UI critical render helpers", () => {
     expect(html).toContain("funding-meter");
     expect(html).toContain("50,000 sats to open");
     // Floor target label: applications open at the claim floor.
-    expect(html).toContain("50,000 raised · Applications open at 100,000 sats");
+    expect(html).toContain("50,000 sats raised · Applications open at 100,000 sats");
     expect(html).not.toContain("goal 500,000");
     expect(visibleText(html)).not.toMatch(/floor/i);
     expect(html).toContain("funding-marker-floor");
@@ -585,7 +585,7 @@ describe("proposal UI critical render helpers", () => {
   it("funding bar always labels the open threshold separately from target", () => {
     const html = proposalFundingBarHtml(5_000, 10_000, 100_000);
     expect(html).toContain("5,000 sats to open");
-    expect(html).toContain("5,000 raised · Applications open at 10,000 sats");
+    expect(html).toContain("5,000 sats raised · Applications open at 10,000 sats");
     expect(html).not.toContain("goal 100,000 sats");
     expect(html).not.toMatch(/\/ 100,000 sats · /);
 
@@ -687,7 +687,7 @@ describe("proposal UI critical render helpers", () => {
       proposal_type: "bounty",
     });
     expect(funding).toContain("5,000 sats to open");
-    expect(funding).toContain("5,000 raised · Applications open at 10,000 sats");
+    expect(funding).toContain("5,000 sats raised · Applications open at 10,000 sats");
   });
 
   it("fundingBarScale always includes floor and ignores allocation-only milestones", () => {

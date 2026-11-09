@@ -288,7 +288,7 @@ export function fundingProgressHtml(
   const goalLine = !stillRaising
     ? `${formatSats(funded)} raised`
     : !pastFloor
-      ? `${satsNumber(funded)} raised · Applications open at ${formatSats(floor)}`
+      ? `${formatSats(funded)} raised · Applications open at ${formatSats(floor)}`
       : hasTarget
         ? over || targetPct >= 100
           ? `${formatSats(funded)} raised · goal ${formatSats(targetSats!)}`

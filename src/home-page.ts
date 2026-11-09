@@ -222,7 +222,7 @@ export function gapTickerHtml(
   );
   const note =
     projectCount === 1
-      ? `1 project needs ${formatSats(shortfallSats)} before applications open`
+      ? `1 project still needs funding before applications open`
       : `${projectCount} projects still need funding before applications open`;
   return `<section class="wrap-wide gap-ticker">
     <div>

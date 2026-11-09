@@ -57,7 +57,7 @@ describe("gapTickerHtml", () => {
       [proposal({ status: "listed", balance_sats: 2_500, id: "one" })],
       10_000,
     );
-    expect(html).toContain("1 project needs 7,500 sats before applications open");
+    expect(html).toContain("1 project still needs funding before applications open");
     expect(html).not.toContain("still raising before builders can apply");
   });
 
