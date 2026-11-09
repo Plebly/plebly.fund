@@ -122,7 +122,7 @@ export function isFinishedStatus(status: string): boolean {
   return s === "completed" || s === "bounty_settled";
 }
 
-/** Nothing raised (0 or unknown balance): a past milestone date isn't "overdue". */
+/** Nothing raised (0 or unknown balance): a past date reads "Planned date passed", not overdue. */
 export function hideMilestoneOverdue(balance: number | null | undefined): boolean {
   return !(typeof balance === "number" && balance > 0);
 }
@@ -761,8 +761,8 @@ export async function renderProposalPage(
           <div class="proposal-main">
             <div class="proposal-sections">${sectionsHtml}</div>
             ${milestonesHtml(match.milestones, Date.now(), {
-              hideOverdue:
-                hideMilestoneOverdue(balance) || isFinishedStatus(status),
+              hideOverdue: isFinishedStatus(status),
+              unraised: hideMilestoneOverdue(balance),
             })}
             ${
               match.parent_initiative

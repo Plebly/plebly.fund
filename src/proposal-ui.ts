@@ -3035,7 +3035,7 @@ function formatMilestoneDeadline(iso: string): string {
 function milestoneDueHtml(
   iso: string,
   nowMs = Date.now(),
-  opts?: { hideOverdue?: boolean },
+  opts?: { hideOverdue?: boolean; unraised?: boolean },
 ): string {
   const due = formatMilestoneDeadline(iso);
   const ahead = formatTimeAhead(iso, nowMs);
@@ -3045,8 +3045,13 @@ function milestoneDueHtml(
   );
   let rel = "";
   if (ahead && !(opts?.hideOverdue && overdue)) {
-    const relText = overdue ? "Due date passed" : ahead.text;
-    rel = ` <span class="milestone-rail-due-rel">· ${escapeHtml(relText)}</span>`;
+    const planned = overdue && opts?.unraised;
+    const relText = overdue
+      ? planned
+        ? "Planned date passed"
+        : "Due date passed"
+      : ahead.text;
+    rel = ` <span class="milestone-rail-due-rel${planned ? " muted" : ""}">· ${escapeHtml(relText)}</span>`;
   }
   const title = ahead?.title || due;
   return `<time class="milestone-rail-due" datetime="${escapeHtml(iso)}" title="${escapeHtml(title)}">Due ${escapeHtml(due)}${rel}</time>`;
@@ -3095,7 +3100,7 @@ export function proposerBylineHtml(
 export function milestonesHtml(
   milestones: ProposalMilestone[],
   nowMs = Date.now(),
-  opts?: { hideOverdue?: boolean },
+  opts?: { hideOverdue?: boolean; unraised?: boolean },
 ): string {
   if (!milestones.length) return "";
   const total = milestones.reduce(

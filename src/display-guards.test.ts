@@ -120,7 +120,7 @@ describe("milestone overdue guards", () => {
     { deliverable: "d", verification: "v", out_of_scope: "o", allocation_sats: 1, deadline, id: "m" },
   ];
 
-  it("page hides 'overdue' only while nothing is raised", async () => {
+  it("nothing raised counts as unraised for milestone dates", async () => {
     const { hideMilestoneOverdue } = await import("./proposal-page");
     expect(hideMilestoneOverdue(0)).toBe(true);
     expect(hideMilestoneOverdue(null)).toBe(true);
@@ -138,6 +138,9 @@ describe("milestone overdue guards", () => {
     const { milestonesHtml } = await import("./proposal-ui");
     expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now)).toContain("Due date passed");
     expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now, { hideOverdue: true })).not.toContain("Due date passed");
+    const planned = milestonesHtml(ms("2026-01-01T12:00:00Z"), now, { unraised: true });
+    expect(planned).toContain("Planned date passed");
+    expect(planned).not.toContain("Due date passed");
     expect(milestonesHtml(ms("2026-01-01T12:00:00Z"), now, { hideOverdue: true })).not.toContain("overdue");
   });
 });
