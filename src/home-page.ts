@@ -225,7 +225,7 @@ function gapTickerHtml(
   return `<section class="wrap-wide gap-ticker">
     <div>
       <span class="gap-ticker-label">Need funding</span>
-      <span class="gap-ticker-note">${escapeHtml(projectLabel)} below the apply floor</span>
+      <span class="gap-ticker-note">${escapeHtml(projectLabel)} still raising before builders can apply</span>
       <strong>${escapeHtml(formatSats(shortfallSats))} <span>to open</span></strong>
     </div>
     <div class="gap-ticker-meter" role="progressbar" aria-label="Funding progress toward opening for builders" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${fundedTowardFloor}"><span style="width: ${percent}%"></span></div>
