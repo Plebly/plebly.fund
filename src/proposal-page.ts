@@ -122,11 +122,6 @@ export function isFinishedStatus(status: string): boolean {
   return s === "completed" || s === "bounty_settled";
 }
 
-/** Nothing raised (0 or unknown balance): a past milestone date isn't "overdue". */
-export function hideMilestoneOverdue(balance: number | null | undefined): boolean {
-  return !(typeof balance === "number" && balance > 0);
-}
-
 /**
  * Breadcrumb names the listing the nav names: "Bounties" or "Campaigns"
  * (never a third word for the same page).
@@ -761,8 +756,7 @@ export async function renderProposalPage(
           <div class="proposal-main">
             <div class="proposal-sections">${sectionsHtml}</div>
             ${milestonesHtml(match.milestones, Date.now(), {
-              hideOverdue:
-                hideMilestoneOverdue(balance) || isFinishedStatus(status),
+              hideOverdue: isFinishedStatus(status),
             })}
             ${
               match.parent_initiative
