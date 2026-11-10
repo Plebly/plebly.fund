@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://plebly.fund/</loc></url>
-  <url><loc>https://plebly.fund/about</loc></url>
-  <url><loc>https://plebly.fund/propose</loc></url>
-  <url><loc>https://plebly.fund/stats</loc></url>
-  <url><loc>https://plebly.fund/archive</loc></url>
-  <url><loc>https://plebly.fund/donations</loc></url>
-  <url><loc>https://plebly.fund/reviewers</loc></url>
-  <url><loc>https://plebly.fund/keyholder-responsibilities</loc></url>
-  <url><loc>https://plebly.fund/reviewer-responsibilities</loc></url>
-  <url><loc>https://plebly.fund/terms</loc></url>
+  <url><loc>https://plebly.fund/about/</loc></url>
+  <url><loc>https://plebly.fund/propose/</loc></url>
+  <url><loc>https://plebly.fund/stats/</loc></url>
+  <url><loc>https://plebly.fund/archive/</loc></url>
+  <url><loc>https://plebly.fund/donations/</loc></url>
+  <url><loc>https://plebly.fund/reviewers/</loc></url>
+  <url><loc>https://plebly.fund/keyholder-responsibilities/</loc></url>
+  <url><loc>https://plebly.fund/reviewer-responsibilities/</loc></url>
+  <url><loc>https://plebly.fund/terms/</loc></url>
   <url><loc>https://plebly.fund/llms.txt</loc></url>
   <url><loc>https://plebly.fund/llms-full.txt</loc></url>
   <url><loc>https://plebly.fund/humans.txt</loc></url>
-  <url><loc>https://plebly.fund/p/plebly-knots-size-value-spam</loc></url>
-  <url><loc>https://plebly.fund/p/plebly-signet-demo</loc></url>
+  <url><loc>https://plebly.fund/p/plebly-knots-size-value-spam/</loc></url>
 </urlset>

@@ -24,6 +24,15 @@ describe("projectRefHtml escapes the id in both branches", () => {
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img src=x onerror=1&gt;");
   });
+
+  it("ids wrap only at hyphens via wbr, without changing text", async () => {
+    const { projectRefHtml } = await import("./project-titles");
+    const html = projectRefHtml("PLEBLY-2026-011", "Untitled project");
+    expect(html).toContain("PLEBLY-<wbr>2026-<wbr>011");
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    expect(root.textContent).toContain("PLEBLY-2026-011");
+  });
 });
 
 describe("funding meter guards (page)", () => {

@@ -827,7 +827,7 @@ export async function renderProposalPage(
     `);
 
     bindProposalCopyButtons(app);
-    if (match.id) bindStructuredFunding(app, match.id);
+    if (match.id) bindStructuredFunding(app, match.id, match.structured_state);
     bindShareButtons(app);
     let reloadEngagement: (() => Promise<void>) | null = null;
     // Register Donate click context immediately (even without markdown escrow)

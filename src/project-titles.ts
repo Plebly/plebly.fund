@@ -56,14 +56,19 @@ export async function projectTitles(ids: string[]): Promise<Map<string, string>>
   return out;
 }
 
+/** Escape an id and allow wraps only at hyphens. */
+export function hyphenateIdHtml(id: string): string {
+  return escapeHtml(id).replace(/-/g, "-<wbr>");
+}
+
 /** Title as the primary label, the catalog id as quiet secondary text. */
 export function projectRefHtml(id: string, title?: string | null): string {
   const t = String(title || "").trim();
   const i = String(id || "").trim();
   if (!t || t.toLowerCase() === i.toLowerCase()) {
-    return `<span class="project-ref-title">${escapeHtml(i)}</span>`;
+    return `<span class="project-ref-title">${hyphenateIdHtml(i)}</span>`;
   }
   return `<span class="project-ref-title">${escapeHtml(t)}</span>${
-    i ? ` <span class="project-ref-id mono muted">${escapeHtml(i)}</span>` : ""
+    i ? ` <span class="project-ref-id mono muted">${hyphenateIdHtml(i)}</span>` : ""
   }`;
 }
