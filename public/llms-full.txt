@@ -53,4 +53,4 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. OpenNo
 
 ## Trust notes
 
-Escrow is 3-of-5 multisig at launch. Plebly does not hold spending keys. Completed bounties pay in a monthly batch. Keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address. There is no on-chain timelock in v1. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.
+Escrow is multisig. Interim launch is 2-of-3 (three named keys), with a target of 3-of-5 (see KEYHOLDERS.md). Plebly does not hold spending keys. Completed bounties pay in a monthly batch. Keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address. There is no on-chain timelock in v1. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.
