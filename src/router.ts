@@ -3,7 +3,7 @@ import { proposalRepoPath, proposalSlug, proposalStablePath } from "./util";
 
 export const SITE_ORIGIN = "https://plebly.fund";
 const DEFAULT_DESCRIPTION =
-  "Fund open Bitcoin work with publicly verifiable on-chain escrow. Signet test build: Plebly's server holds no keys.";
+  "Fund open Bitcoin work with publicly verifiable on-chain escrow. Signet test build: Plebly's server holds no keys; keyholders aren't yet independent of the operator.";
 
 /** Vite base path, always with trailing slash (e.g. "/" or "/plebly.fund/"). */
 export function basePath(): string {
