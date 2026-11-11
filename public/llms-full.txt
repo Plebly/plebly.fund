@@ -5,14 +5,14 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 ## What it is
 
 - Lists open projects with publicly verifiable Bitcoin escrow balances (mempool).
-- Connects donors and builders without a custodian that can freeze or redirect on-chain escrow. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until the batched on-chain sweep into escrow.
+- Connects donors and builders to publicly verifiable on-chain escrow. On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the current listed project uses an operator-controlled test address. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until the batched on-chain sweep into escrow.
 - Listings live on the site (Worker catalog). Published fees and keyholder rules are in git.
 - On-chain escrow history is independent of the website.
 - Curated agent index: https://plebly.fund/llms.txt (https://llmstxt.org/)
 
 ## Core beliefs
 
-1. Non-custodial escrow: publicly verifiable addresses; payment follows published rules.
+1. On-chain escrow: the server never holds keys; signet release is 2-of-3 on a public multisig script. Keyholders are not yet independent of the operator, and the listed project uses an operator-controlled test address. Payment follows published rules.
 2. Public listings: every live project has a page and an escrow address you can check.
 3. Published rules: fees, keyholders, and process changes are public with notice.
 
@@ -53,4 +53,4 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. OpenNo
 
 ## Trust notes
 
-Escrow is 3-of-5 multisig at launch. Plebly does not hold spending keys. Completed bounties pay in a monthly batch. Keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address. There is no on-chain timelock in v1. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.
+On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the current listed project uses an operator-controlled test address. Lightning, when enabled, is custodial (OpenNode) until swept on-chain. Completed bounties pay in a monthly batch. Keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address. There is no on-chain timelock in v1. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.

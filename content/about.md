@@ -1,10 +1,10 @@
 ## About Plebly
 
-Plebly funds Bitcoin work without a custodian holding on-chain donations. Each project has a public address. Donations sit there until payout.
+Plebly funds Bitcoin work with publicly verifiable on-chain escrow. On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the current listed project uses an operator-controlled test address.
 
 ## What we believe
 
-**No keys at Plebly.** On-chain funds stay in public escrow. We cannot freeze, redirect, or take them. Lightning donations (when enabled) are held by OpenNode until the on-chain sweep.
+**The server holds no keys.** On signet, release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the current listed project uses an operator-controlled test address. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until the on-chain sweep.
 
 **Public listings.** Every project and address is visible.
 
@@ -38,7 +38,7 @@ These come from the published parameters on **{{bitcoin_network}}**:
 
 ## Trust
 
-Keyholders sign payouts. Plebly never holds a spending key. See [Keyholders](#keyholders).
+Keyholders sign payouts. The server never holds a spending key. Keyholders are not yet independent of the operator, and the current listed project uses an operator-controlled test address. See [Keyholders](#keyholders).
 
 ## Testing vs launch
 

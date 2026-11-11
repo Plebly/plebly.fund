@@ -16,7 +16,7 @@ export function tosAckCardHtml(opts: {
   return `<section class="propose-wizard-nav propose-tos-card" id="propose-wizard-nav" aria-labelledby="propose-tos-title">
     <div class="propose-tos-card-copy">
       <h3 class="propose-tos-card-title" id="propose-tos-title">${escapeHtml(opts.heading)}</h3>
-      <p class="propose-tos-card-lede">Plebly does not sell your account or listing. Identity is used to run claims, reviews, and payouts. The listing is public. Plebly never holds your keys.</p>
+      <p class="propose-tos-card-lede">Plebly does not sell your account or listing. Identity is used to run claims, reviews, and payouts. The listing is public. The server never holds your keys.</p>
       <label class="propose-tos-ack">
         <input type="checkbox" id="${escapeHtml(opts.checkboxId)}" required />
         <span>I accept the <a class="tos-doc-link" href="${href("/terms")}" target="_blank" rel="noopener noreferrer">Terms</a></span>

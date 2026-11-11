@@ -29,7 +29,7 @@ const STATIC_ROUTES = [
     path: "/about",
     title: "About Plebly",
     description:
-      "Non-custodial Bitcoin escrow. Public listings. Published fees.",
+      "On-chain Bitcoin escrow. The server holds no keys. Public listings. Published fees.",
   },
   {
     path: "/propose",
@@ -183,7 +183,7 @@ function replaceShell(html, attrs) {
         }
       </main>
       <footer class="boot-footer">
-        <p>Bitcoin on-chain. No custodian.</p>
+        <p>Bitcoin on-chain. The server holds no keys.</p>
         <nav aria-label="Footer">
           <a href="/">Projects</a>
           <a href="/propose">Start a project</a>
