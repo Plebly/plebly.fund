@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Build public/sitemap.xml for GitHub Pages.
- * Prefers the Worker dynamic sitemap; merges static discovery URLs;
+ * Build public/sitemap.xml for the deployed site.
+ * Prefers the Worker catalog (same source as the home page);
  * falls back to GitHub tree + static routes.
  */
 import { writeFileSync } from "node:fs";
@@ -9,76 +9,42 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { liveWorkersApi } from "./live-api.mjs";
+import {
+  STATIC_PATHS,
+  mergeCatalogProposals,
+  sitemapPaths,
+  xmlFor,
+  isSitemapListing,
+} from "./sitemap-urls.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "public", "sitemap.xml");
-const SITE = "https://plebly.fund";
 const WORKERS = process.env.VITE_WORKERS_API || liveWorkersApi();
 const REPO = "Plebly/proposals";
 
-const STATIC = [
-  "/",
-  "/about",
-  "/propose",
-  "/stats",
-  "/archive",
-  "/donations",
-  "/reviewers",
-  "/keyholder-responsibilities",
-  "/reviewer-responsibilities",
-  "/terms",
-  "/llms.txt",
-  "/llms-full.txt",
-  "/humans.txt",
-];
-
-function escapeXml(value) {
-  return value.replace(/[<>&'"]/g, (char) =>
-    ({
-      "<": "&lt;",
-      ">": "&gt;",
-      "&": "&amp;",
-      "'": "&apos;",
-      '"': "&quot;",
-    })[char],
+async function fetchCatalog(scope) {
+  const res = await fetch(
+    `${WORKERS.replace(/\/$/, "")}/proposals/catalog?scope=${scope}`,
+    { headers: { Accept: "application/json" } },
   );
+  if (!res.ok) throw new Error(`worker catalog ${scope} ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data?.proposals)) throw new Error("invalid worker catalog");
+  return data.proposals;
 }
 
-function xmlFor(urls) {
-  const unique = [...new Set(urls)];
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ...unique.map(
-      (path) =>
-        `  <url><loc>${escapeXml(`${SITE}${path.startsWith("/") ? path : `/${path}`}`)}</loc></url>`,
-    ),
-    "</urlset>",
-    "",
-  ].join("\n");
-}
-
-function pathsFromXml(text) {
-  const paths = [];
-  for (const match of text.matchAll(/<loc>([^<]+)<\/loc>/g)) {
-    try {
-      const url = new URL(match[1]);
-      paths.push(url.pathname === "" ? "/" : url.pathname);
-    } catch {
-      /* skip */
-    }
+async function fromCatalog() {
+  // Home uses scope=listed. Union with scope=all so completed rows that only
+  // appear there still get a URL; declined/voided/demo are filtered out.
+  const listed = await fetchCatalog("listed");
+  let all = [];
+  try {
+    all = await fetchCatalog("all");
+  } catch {
+    /* listed is enough */
   }
-  return paths;
-}
-
-async function fromWorker() {
-  const res = await fetch(`${WORKERS.replace(/\/$/, "")}/sitemap.xml`, {
-    headers: { Accept: "application/xml" },
-  });
-  if (!res.ok) throw new Error(`worker sitemap ${res.status}`);
-  const text = await res.text();
-  if (!text.includes("<urlset")) throw new Error("invalid worker sitemap");
-  return xmlFor([...STATIC, ...pathsFromXml(text)]);
+  const listings = mergeCatalogProposals([listed, all]);
+  return xmlFor(sitemapPaths(STATIC_PATHS, listings));
 }
 
 async function fromGitHub() {
@@ -97,7 +63,7 @@ async function fromGitHub() {
       )
       .map((e) => e.path) || [];
 
-  const ids = [];
+  const listings = [];
   for (const path of paths.slice(0, 80)) {
     try {
       const raw = await fetch(
@@ -105,26 +71,31 @@ async function fromGitHub() {
       );
       if (!raw.ok) continue;
       const text = await raw.text();
-      const m = text.match(/^id:\s*["']?([A-Za-z0-9][A-Za-z0-9._-]{0,119})/m);
-      if (m) ids.push(m[1].trim().toLowerCase());
+      const idMatch = text.match(
+        /^id:\s*["']?([A-Za-z0-9][A-Za-z0-9._-]{0,119})/m,
+      );
+      const statusMatch = text.match(/^status:\s*["']?([A-Za-z0-9_-]+)/m);
+      if (!idMatch) continue;
+      const entry = {
+        id: idMatch[1].trim(),
+        status: statusMatch ? statusMatch[1].trim() : "listed",
+      };
+      if (isSitemapListing(entry)) listings.push(entry);
     } catch {
       /* skip */
     }
   }
-  return xmlFor([
-    ...STATIC,
-    ...[...new Set(ids)].map((id) => `/p/${encodeURIComponent(id)}`),
-  ]);
+  return xmlFor(sitemapPaths(STATIC_PATHS, listings));
 }
 
 async function main() {
   try {
-    const body = await fromWorker();
+    const body = await fromCatalog();
     writeFileSync(out, body);
-    console.log("Wrote sitemap.xml from Worker (+ static discovery URLs)");
+    console.log("Wrote sitemap.xml from Worker catalog (+ static discovery URLs)");
     return;
   } catch (e) {
-    console.warn("Worker sitemap unavailable:", (e && e.message) || e);
+    console.warn("Worker catalog unavailable:", (e && e.message) || e);
   }
   try {
     const body = await fromGitHub();
@@ -134,7 +105,7 @@ async function main() {
   } catch (e) {
     console.warn("GitHub sitemap fallback failed:", (e && e.message) || e);
   }
-  writeFileSync(out, xmlFor(STATIC));
+  writeFileSync(out, xmlFor(sitemapPaths(STATIC_PATHS, [])));
   console.log("Wrote static sitemap.xml fallback");
 }
 

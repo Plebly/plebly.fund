@@ -57,6 +57,7 @@ import { applyStandaloneClass, registerPwaServiceWorker } from "./pwa";
 import { signetSiteBannerHtml } from "./signet";
 import { installStaleChunkReload } from "./stale-chunk";
 import { installModalA11y } from "./modal-a11y";
+import { bindSkipLink, ensureMainFocusTarget } from "./skip-link";
 import { escapeHtml } from "./util";
 import { syncWebPushIfEnabled } from "./web-push";
 
@@ -72,6 +73,8 @@ installDonateClickCapture();
 installStaleChunkReload();
 // Every .site-modal: Tab stays inside, Esc closes, focus returns to the opener.
 installModalA11y();
+// One skip link (in index.html, outside #app): focus main on activate.
+bindSkipLink();
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -191,7 +194,6 @@ function shell(inner: string): string {
     r.name === name ? ' aria-current="page"' : "";
   const listing = listingNav();
   return `
-    <a class="skip-link" href="#main-content">Skip to content</a>
     ${signetSiteBannerHtml()}
     <header class="wrap-wide site-header">
       <a class="brand" href="${href("/")}">
@@ -210,12 +212,13 @@ function shell(inner: string): string {
         </nav>
       </div>
     </header>
-    <main id="main-content">${inner}</main>
+    <main id="main-content" tabindex="-1">${inner}</main>
     ${siteFooterHtml(r.name)}
   `;
 }
 
 function bindAuthHandlers() {
+  ensureMainFocusTarget();
   document.getElementById("logout-btn")?.addEventListener("click", async () => {
     await logout();
     currentUser = null;

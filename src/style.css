@@ -94,6 +94,10 @@ a.tos-doc-link {
   flex-direction: column;
 }
 
+#main-content:focus {
+  outline: none;
+}
+
 /* Shared page rail — matches header + footer. Prefer wrap-wide in markup. */
 .wrap,
 .wrap-wide {
@@ -1693,9 +1697,12 @@ body.modal-open {
 }
 
 /* Project title first, catalog id as quiet secondary text (feeds, ledger). */
-.project-ref-id {
+.project-ref-id,
+.project-ref-id.mono {
   color: var(--muted);
   font-size: 0.85em;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .activity-strip-date {
@@ -1788,9 +1795,13 @@ body.modal-open {
   font-weight: 600;
 }
 
-.donations-live-amount {
+.donations-live-amount,
+.donations-live-amount.mono {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .donations-live-target {
@@ -1844,9 +1855,13 @@ body.modal-open {
   color: var(--muted);
 }
 
-.donations-amount {
+.donations-amount,
+.donations-amount.mono {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .donations-target {
@@ -1862,6 +1877,21 @@ body.modal-open {
 .donations-when {
   margin-left: auto;
   font-size: 0.8125rem;
+}
+
+@media (max-width: 520px) {
+  .donations-live-row {
+    grid-template-columns: 1fr;
+  }
+
+  .donations-live-when {
+    white-space: normal;
+  }
+
+  .donations-when {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
 }
 
 .donations-pager {
@@ -7014,6 +7044,18 @@ a.claim-app-bond:hover {
   font-size: 0.75rem;
 }
 
+@media (max-width: 420px) {
+  .funding-meter-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+
+  .funding-meter-label {
+    white-space: nowrap;
+  }
+}
+
 .funding-meter-label {
   color: var(--ink-secondary);
   font-weight: 500;
@@ -7713,11 +7755,14 @@ a.claim-app-bond:hover {
 }
 
 .dep-list-ref,
+.dep-list-ref.mono,
+.dep-list-ref a,
 .dep-list-note {
   margin: 0.35rem 0 0;
   font-size: 0.8125rem;
   color: var(--ink-secondary, var(--muted));
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .milestone-rail-deps {

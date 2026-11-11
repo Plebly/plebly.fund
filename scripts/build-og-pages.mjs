@@ -11,6 +11,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { liveWorkersApi } from "./live-api.mjs";
+import {
+  isSitemapListing,
+  listingIdsFromCatalog,
+  mergeCatalogProposals,
+} from "./sitemap-urls.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
@@ -158,8 +163,8 @@ function replaceShell(html, attrs) {
         }`;
 
   // Semantic boot chrome for crawlers (same landmarks as the live SPA shell).
-  const body = `<a class="skip-link" href="#main-content">Skip to content</a>
-      <header class="boot-header">
+  // Skip link stays on <body> from index.html — do not add a second one inside #app.
+  const body = `<header class="boot-header">
         <a class="boot-brand" href="/">
           <img src="/logo.jpeg" alt="Plebly" width="28" height="28" />
           <span>Plebly</span>
@@ -170,7 +175,7 @@ function replaceShell(html, attrs) {
           <a href="/about"${navClass("/about")}>About</a>
         </nav>
       </header>
-      <main id="main-content" class="boot-main">
+      <main id="main-content" class="boot-main" tabindex="-1">
         ${
           isArticle
             ? `<article>${mainInner}</article>`
@@ -192,27 +197,29 @@ function replaceShell(html, attrs) {
     /<div id="app">[\s\S]*?<\/div>\s*<script type="module"/i,
     `<div id="app">\n      ${body}\n    </div>\n    <script type="module"`,
   );
-  // Drop the homepage skip-link duplicate outside #app if present in template.
-  out = out.replace(
-    /<body>\s*<a class="skip-link"[^>]*>Skip to content<\/a>\s*/i,
-    "<body>\n    ",
-  );
   return out;
 }
 
-async function listFromWorker() {
-  const res = await fetch(`${WORKERS.replace(/\/$/, "")}/sitemap.xml`);
-  if (!res.ok) throw new Error(`sitemap ${res.status}`);
-  const text = await res.text();
-  const ids = [];
-  for (const match of text.matchAll(/\/p\/([^<]+)</g)) {
-    try {
-      ids.push(decodeURIComponent(match[1]).trim().toLowerCase());
-    } catch {
-      /* skip */
-    }
+async function fetchCatalog(scope) {
+  const res = await fetch(
+    `${WORKERS.replace(/\/$/, "")}/proposals/catalog?scope=${scope}`,
+    { headers: { Accept: "application/json" } },
+  );
+  if (!res.ok) throw new Error(`worker catalog ${scope} ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data?.proposals)) throw new Error("invalid worker catalog");
+  return data.proposals;
+}
+
+async function listFromCatalog() {
+  const listed = await fetchCatalog("listed");
+  let all = [];
+  try {
+    all = await fetchCatalog("all");
+  } catch {
+    /* listed is enough */
   }
-  return [...new Set(ids)];
+  return listingIdsFromCatalog(mergeCatalogProposals([listed, all]));
 }
 
 async function listFromGitHub() {
@@ -245,7 +252,10 @@ async function listFromGitHub() {
         .toLowerCase();
       const title =
         text.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]?.trim() || id;
-      if (id) out.push({ id, title, path });
+      const status =
+        text.match(/^status:\s*["']?([A-Za-z0-9_-]+)/m)?.[1]?.trim() ||
+        "listed";
+      if (id && isSitemapListing({ id, status })) out.push({ id, title, path });
     } catch {
       /* skip */
     }
@@ -370,11 +380,11 @@ async function main() {
 
   let entries = [];
   try {
-    const ids = await listFromWorker();
+    const ids = await listFromCatalog();
     entries = ids.map((id) => ({ id }));
-    console.log(`OG pages: ${ids.length} ids from Worker sitemap`);
+    console.log(`OG pages: ${ids.length} ids from Worker catalog`);
   } catch (e) {
-    console.warn("Worker sitemap unavailable:", e.message || e);
+    console.warn("Worker catalog unavailable:", e.message || e);
     try {
       entries = await listFromGitHub();
       console.log(`OG pages: ${entries.length} ids from GitHub`);

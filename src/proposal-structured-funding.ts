@@ -77,11 +77,15 @@ export type StructuredFundingView = {
 export function bindStructuredFunding(
   root: ParentNode,
   proposalId: string,
+  structuredState?: string | null,
 ): void {
   const panel = root.querySelector<HTMLElement>("#structured-funding");
   const statusEl = root.querySelector<HTMLElement>("#structured-funding-status");
   const bodyEl = root.querySelector<HTMLElement>("#structured-funding-body");
   if (!panel || !statusEl || !bodyEl || !proposalId) return;
+  // Catalog advertised no structured record: skip the request so a legitimate
+  // 404 does not appear in the console. Unknown (undefined) still fetches.
+  if (structuredState === null || structuredState === "") return;
   const jump = root.querySelector<HTMLAnchorElement>("#funding-side-link");
   if (jump && jump.dataset.fundingJump !== "1") {
     jump.dataset.fundingJump = "1";
