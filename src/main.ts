@@ -151,7 +151,7 @@ function siteFooterHtml(routeName: string): string {
     <div class="wrap-wide footer-inner">
       <div class="footer-brand">
         <a class="footer-brand-name" href="${href("/")}">Plebly</a>
-        <p class="footer-tagline">Bitcoin on-chain. No custodian.</p>
+        <p class="footer-tagline">Bitcoin on-chain. The server holds no keys.</p>
       </div>
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
