@@ -3,7 +3,7 @@ import { proposalRepoPath, proposalSlug, proposalStablePath } from "./util";
 
 export const SITE_ORIGIN = "https://plebly.fund";
 const DEFAULT_DESCRIPTION =
-  "Fund open Bitcoin work with publicly verifiable on-chain escrow. The server never holds keys. On signet, release is 2-of-3, keyholders are not yet independent of the operator, and the listed project uses an operator-controlled test address.";
+  "Fund open Bitcoin work with publicly verifiable on-chain escrow. Signet test build: Plebly's server holds no keys.";
 
 /** Vite base path, always with trailing slash (e.g. "/" or "/plebly.fund/"). */
 export function basePath(): string {
@@ -477,7 +477,7 @@ export function seoForRoute(
       return {
         title: "About Plebly",
         description:
-          "On-chain Bitcoin escrow. The server holds no keys. Public listings. Published fees.",
+          "On-chain Bitcoin escrow. Plebly's server holds no keys. Public listings. Published fees.",
         path: "/about",
       };
     case "params":

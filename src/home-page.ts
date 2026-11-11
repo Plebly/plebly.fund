@@ -398,6 +398,15 @@ export function settleTxidChipHtml(txid: string | undefined | null): string {
   return `<a class="project-card-settle" href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener" title="Settle txid: ${escapeHtml(t)}">Settle: <span class="mono">${escapeHtml(short)}</span></a>`;
 }
 
+
+/** Accessible name includes the visible count so it matches the button's text. */
+function cardWatchLabel(watching: boolean, title: string, count: number): string {
+  const verb = watching ? "Unwatch" : "Watch";
+  const name = title.trim();
+  // Keep the visible count out of parentheses (axe strips parentheticals).
+  return name ? `${verb} ${name}, ${count}` : `${verb} ${count}`;
+}
+
 /** Public card renderer — also used on `/endowment` funded grid. */
 export function proposalCardHtml(
   p: Proposal,
@@ -455,8 +464,9 @@ export function proposalCardHtml(
     : "";
   const watchCount =
     typeof p.watch_count === "number" ? p.watch_count : 0;
+  const watchLabel = cardWatchLabel(watching, p.title || "", watchCount);
   const watchCtrl = p.id
-    ? `<button type="button" class="project-card-watch-btn" data-card-watch="${escapeHtml(p.id)}" data-path="${escapeHtml(p.path)}" data-watching="${watching ? "1" : "0"}" aria-label="${watching ? "Unwatch" : "Watch"}" title="${watching ? "Unwatch" : "Watch"}"><span class="project-card-watch-icon" aria-hidden="true">${watching ? "★" : "☆"}</span><span class="mono project-card-watch-count">${watchCount}</span></button>`
+    ? `<button type="button" class="project-card-watch-btn" data-card-watch="${escapeHtml(p.id)}" data-path="${escapeHtml(p.path)}" data-watch-title="${escapeHtml(p.title || "")}" data-watching="${watching ? "1" : "0"}" aria-label="${escapeHtml(watchLabel)}" title="${escapeHtml(watchLabel)}"><span class="project-card-watch-icon" aria-hidden="true">${watching ? "★" : "☆"}</span><span class="mono project-card-watch-count">${watchCount}</span></button>`
     : "";
   const settleChip = settleTxidChipHtml(p.settle_txid);
   return `
@@ -865,16 +875,18 @@ export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void
         const icon = btn.querySelector(".project-card-watch-icon");
         if (icon) icon.textContent = btn.dataset.watching === "1" ? "★" : "☆";
         const countEl = btn.querySelector(".project-card-watch-count");
+        let count = Number(countEl?.textContent || "0") || 0;
         if (countEl) {
-          const n = Number(countEl.textContent || "0") || 0;
-          countEl.textContent = String(
-            Math.max(0, n + (btn.dataset.watching === "1" ? 1 : -1)),
-          );
+          count = Math.max(0, count + (btn.dataset.watching === "1" ? 1 : -1));
+          countEl.textContent = String(count);
         }
-        btn.setAttribute(
-          "aria-label",
-          btn.dataset.watching === "1" ? "Unwatch" : "Watch",
+        const label = cardWatchLabel(
+          btn.dataset.watching === "1",
+          btn.dataset.watchTitle || "",
+          count,
         );
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("title", label);
       } catch {
         /* login required or network — leave UI */
       }

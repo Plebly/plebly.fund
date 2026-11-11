@@ -119,6 +119,7 @@ export function keyholdersHtml(live: {
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
     <p class="about-section-lede">${lede}</p>
+    <p class="muted" id="trust">On signet, release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address.</p>
     <p class="muted">After reviewers approve, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>
     ${status}
     <div class="about-keyholders-roster">
@@ -296,7 +297,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       <section class="about-section" id="how-it-works">
         <h2>How it works</h2>
-        <p class="about-section-lede">Four steps. Funds stay on Bitcoin. The server never holds a spending key.</p>
+        <p class="about-section-lede">Four steps. Funds stay on Bitcoin. Plebly's server never holds a spending key.</p>
         ${flowHtml()}
         <p class="about-section-foot">
           Reviewers confirm bounty work. A listed AI Reviewer, powered by BTCDecoded Intelligence, may analyze a deliverable against its spec. When confident it casts a decisive pass/fail vote; humans take over on escalate. It never releases funds.

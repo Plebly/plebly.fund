@@ -151,7 +151,7 @@ function siteFooterHtml(routeName: string): string {
     <div class="wrap-wide footer-inner">
       <div class="footer-brand">
         <a class="footer-brand-name" href="${href("/")}">Plebly</a>
-        <p class="footer-tagline">Bitcoin on-chain. The server holds no keys.</p>
+        <p class="footer-tagline">Bitcoin on-chain. Plebly's server holds no keys.</p>
       </div>
       <nav class="footer-nav" aria-label="Site">
         <div class="footer-col">
@@ -197,7 +197,7 @@ function shell(inner: string): string {
     ${signetSiteBannerHtml()}
     <header class="wrap-wide site-header">
       <a class="brand" href="${href("/")}">
-        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="Plebly" width="28" height="28" />
+        <img src="${import.meta.env.BASE_URL}logo.jpeg" alt="" width="28" height="28" />
         <span>Plebly</span>
       </a>
       ${mobileNavToggleHtml()}
