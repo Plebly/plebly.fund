@@ -1,6 +1,6 @@
 import { claimFloorShortfall } from "./builder";
 import { CLAIM_FLOOR_SATS } from "./config";
-import { listListedProposals } from "./github";
+import { listAllPublicProposals } from "./github";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { href, projectsHref } from "./router";
 import type { Proposal } from "./types";
@@ -202,7 +202,7 @@ export async function renderStats(shell: StatsShell): Promise<void> {
   );
 
   try {
-    const proposals = await enrichBalances(await listListedProposals());
+    const proposals = await enrichBalances(await listAllPublicProposals());
     const stats = computePublicStats(proposals);
     app.innerHTML = shell(statsBodyHtml(stats));
   } catch (error) {
