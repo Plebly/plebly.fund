@@ -31,12 +31,12 @@ export function fundingBarTrackHtml(
   const floorPct = Math.min(100, (safeFloor / scale) * 100);
 
   if (funded <= safeFloor || scale <= safeFloor) {
-    return `<div class="${variant}" role="progressbar" aria-valuemin="0" aria-valuemax="${scale}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${fillPct}%"></span></div>`;
+    return `<div class="${variant}" role="progressbar" aria-label="Funding progress" aria-valuemin="0" aria-valuemax="${scale}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${fillPct}%"></span></div>`;
   }
   if (funded <= scale) {
     const greenPct = Math.min(fillPct, floorPct);
     const restPct = Math.max(0, fillPct - greenPct);
-    return `<div class="${variant}" role="progressbar" aria-valuemin="0" aria-valuemax="${scale}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span>${
+    return `<div class="${variant}" role="progressbar" aria-label="Funding progress" aria-valuemin="0" aria-valuemax="${scale}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span>${
       restPct > 0
         ? `<span class="progress-toward-target" style="width:${restPct}%"></span>`
         : ""
@@ -44,7 +44,7 @@ export function fundingBarTrackHtml(
   }
   const greenPct = Math.max(0.5, (safeFloor / funded) * 100);
   const orangePct = Math.max(0, 100 - greenPct);
-  return `<div class="${variant} is-overfunded" role="progressbar" aria-valuemin="0" aria-valuemax="${Math.round(funded)}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span><span class="progress-over" style="width:${orangePct}%"></span></div>`;
+  return `<div class="${variant} is-overfunded" role="progressbar" aria-label="Funding progress" aria-valuemin="0" aria-valuemax="${Math.round(funded)}" aria-valuenow="${Math.round(funded)}"><span class="progress-floor" style="width:${greenPct}%"></span><span class="progress-over" style="width:${orangePct}%"></span></div>`;
 }
 
 export type FundingBarMarker = {

@@ -30,7 +30,7 @@ export function signetFaucetLinksHtml(opts?: { className?: string }): string {
  */
 export function signetSiteBannerHtml(): string {
   if (!isSignet()) return "";
-  return `<aside class="signet-banner" role="status" aria-label="Signet test network">
+  return `<aside class="signet-banner" aria-label="Signet test network">
     <div class="wrap-wide signet-banner-inner">
       <p class="signet-banner-text">
         <strong>Signet</strong> — test coins only. Listed projects share one test escrow; balances are not separate pots.

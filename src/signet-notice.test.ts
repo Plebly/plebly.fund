@@ -23,7 +23,8 @@ describe("signet test-network notice", () => {
 
     const banner = signetSiteBannerHtml();
     expect(banner).toContain('class="signet-banner"');
-    expect(banner).toContain('role="status"');
+    expect(banner).toContain('aria-label="Signet test network"');
+    expect(banner).not.toContain('role="status"');
     expect(banner).toContain("test coins only");
     const home = landingMarketingHtml();
     expect(home).toContain("Signet · test coins");

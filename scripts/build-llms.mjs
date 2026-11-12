@@ -55,7 +55,7 @@ function render(projects) {
 
   return `# Plebly
 
-> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the current listed project uses an operator-controlled test address. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until a batched on-chain sweep.
+> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until a batched on-chain sweep.
 
 Listings and escrow balances are on the site at ${SITE}. Published fees and keyholder rules are in git. Lightning donations (when enabled) settle into the same on-chain escrow after an on-chain sweep.
 

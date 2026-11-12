@@ -141,3 +141,13 @@ describe("donations SEO", () => {
     expect(seo.description).not.toMatch(/endowment/i);
   });
 });
+
+describe("home SEO description", () => {
+  it("uses the short signet custody meta", () => {
+    const seo = seoForRoute({ name: "home" });
+    expect(seo.description).toBe(
+      "Fund open Bitcoin work with publicly verifiable on-chain escrow. Signet test build: Plebly's server holds no keys; keyholders aren't yet independent of the operator.",
+    );
+    expect(JSON.stringify(seo.jsonLd)).toContain(seo.description);
+  });
+});
