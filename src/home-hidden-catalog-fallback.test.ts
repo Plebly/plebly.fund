@@ -154,6 +154,15 @@ function assertHiddenOffHomeAndDonations(): void {
   expect(donationIds).not.toContain("d-011");
 }
 
+function assertCompletedRailHidden(): void {
+  const rail = app().querySelector("#completed-rail");
+  expect(rail).not.toBeNull();
+  expect(rail!.innerHTML.trim()).toBe("");
+  expect(rail!.querySelector("h2, section, .rail-head, .project-rail")).toBeNull();
+  expect(textOf(rail)).not.toContain("Recently completed");
+  expect(textOf(app())).not.toContain("Recently completed");
+}
+
 describe("hidden listings when the listed catalog falls back to GitHub folders", () => {
   let catalogDown = false;
 
@@ -291,6 +300,7 @@ describe("hidden listings when the listed catalog falls back to GitHub folders",
     expect(listText).not.toContain("Hidden completed 011");
     expect(completedRail).not.toContain("Hidden completed 010");
     expect(completedRail).not.toContain("Hidden completed 011");
+    assertCompletedRailHidden();
 
     history.replaceState(null, "", "/stats");
     await renderStats(shell);
@@ -310,5 +320,47 @@ describe("hidden listings when the listed catalog falls back to GitHub folders",
     expect(textOf(app())).toContain("Hidden completed 010");
     expect(textOf(app())).toContain("Hidden completed 011");
     expect(app().querySelector(".account-tab")!.textContent).toMatch(/Completed 3/);
+  });
+
+  it("keeps 010 and 011 off donations, activity, and the home list when both catalogs fail from first load", async () => {
+    catalogDown = true;
+    history.replaceState(null, "", "/");
+    await bindDonationsLive(document);
+    await bindActivityStrip(document);
+
+    const donationIds = [...app().querySelectorAll(".donations-live-row")].map(
+      (el) => (el as HTMLElement).dataset.donationId,
+    );
+    expect(donationIds).toEqual(["d-open", "d-endowment"]);
+    expect(donationIds).not.toContain("d-010");
+    expect(donationIds).not.toContain("d-011");
+    const donationText = textOf(app().querySelector("#donations-live"));
+    expect(donationText).toContain("Knots size/value spam");
+    expect(donationText).not.toContain("Hidden completed 010");
+    expect(donationText).not.toContain("Hidden completed 011");
+    expect(donationText).not.toContain(HIDDEN_010);
+    expect(donationText).not.toContain(HIDDEN_011);
+    const activityText = textOf(app().querySelector("#activity-strip"));
+    expect(activityText).not.toContain("Hidden completed 010");
+    expect(activityText).not.toContain("Hidden completed 011");
+    expect(activityText).not.toContain(HIDDEN_010);
+    expect(activityText).not.toContain(HIDDEN_011);
+    assertHiddenOffHomeAndDonations();
+
+    document.body.innerHTML = `<div id="app"></div>`;
+    await renderHome(shell);
+    const home = textOf(app());
+    expect(home).toContain("Knots size/value spam");
+    expect(home).not.toContain("Hidden completed 010");
+    expect(home).not.toContain("Hidden completed 011");
+    expect(home).not.toContain(HIDDEN_010);
+    expect(home).not.toContain(HIDDEN_011);
+    const listText = textOf(app().querySelector("#list"));
+    expect(listText).toContain("Knots size/value spam");
+    expect(listText).not.toContain("Hidden completed 010");
+    expect(listText).not.toContain("Hidden completed 011");
+    expect(listText).not.toContain(HIDDEN_010);
+    expect(listText).not.toContain(HIDDEN_011);
+    assertCompletedRailHidden();
   });
 });
