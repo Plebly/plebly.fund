@@ -1,8 +1,8 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { liveWorkersApi } from "./live-api.mjs";
 
-/** GitHub Pages and Cloudflare 404-page handling serve 404.html for unknown paths. */
+/** GitHub Pages serves 404.html for unknown paths; copy index for SPA routes. */
 const dist = join(process.cwd(), "dist");
 const index = join(dist, "index.html");
 const fallback = join(dist, "404.html");
@@ -47,38 +47,4 @@ if (!html.includes("Content-Security-Policy")) {
 }
 
 copyFileSync(index, fallback);
-console.log("Wrote dist/404.html for unknown paths (HTTP 404)");
-
-/** Exact SPA paths that should stay HTTP 200 under not_found_handling=404-page. */
-const SPA_SHELL_ROUTES = [
-  "about",
-  "stats",
-  "archive",
-  "completed",
-  "declined",
-  "donations",
-  "keyholders",
-  "keyholder-responsibilities",
-  "docs/keyholder-responsibilities",
-  "parameters",
-  "terms",
-  "account",
-  "work",
-  "propose",
-  "submit",
-  "reviewers",
-  "governance",
-  "reviewer-responsibilities",
-  "reviewer-rules",
-  "wanted",
-  "endowment",
-  "admin",
-  "home",
-];
-
-for (const route of SPA_SHELL_ROUTES) {
-  const dest = join(dist, route, "index.html");
-  mkdirSync(dirname(dest), { recursive: true });
-  copyFileSync(index, dest);
-}
-console.log(`Wrote ${SPA_SHELL_ROUTES.length} SPA shell routes`);
+console.log("Wrote dist/404.html for SPA deep links");

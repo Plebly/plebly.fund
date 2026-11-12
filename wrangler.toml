@@ -11,11 +11,7 @@ routes = [
 
 [assets]
 directory = "./dist"
-# Unknown paths serve dist/404.html with HTTP 404. Known SPA routes are
-# materialized as dist/<route>/index.html by scripts/spa-fallback.mjs so they
-# stay 200. Dynamic routes (/p/*, /u/*, /proposal/*, /org/*, /admin/*) use the
-# 404.html shell (same as GitHub Pages) and the client router renders them.
-not_found_handling = "404-page"
+not_found_handling = "single-page-application"
 html_handling = "auto-trailing-slash"
 
 # main → wrangler deploy --env signet (after the apex deploy)
