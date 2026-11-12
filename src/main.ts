@@ -423,7 +423,7 @@ async function render() {
         <a class="back-link" href="${projectsHref()}">← Bounties</a>
         <div class="empty-state">
           <div class="empty-state-inner">
-            <p class="empty-state-title">Page not found</p>
+            <h1 class="empty-state-title">Page not found</h1>
             <p class="empty-state-body">Nothing here. The project listing or page may have moved.</p>
             <p><a class="btn ghost" href="${projectsHref()}">Browse projects</a></p>
           </div>
