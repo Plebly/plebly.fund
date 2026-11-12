@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  LEGACY_LLMS_SIGNET_NOTICES,
   LLMS_SIGNET_NOTICE,
   withNetworkNotice,
 } from "../scripts/llms-network-notice.mjs";
@@ -46,6 +47,29 @@ describe("signet test-network notice", () => {
     // Idempotent across repeated builds.
     expect(withNetworkNotice(outLlms, "signet", "llms")).toBe(outLlms);
     expect(withNetworkNotice(outFull, "signet", "full")).toBe(outFull);
+  });
+
+  it("does not claim a shared escrow, and replaces an old-notice copy", () => {
+    // Escrow sharing is per listing (catalog escrow_shared); the signet Worker
+    // runs multisig with an address per listing.
+    expect(LLMS_SIGNET_NOTICE).not.toMatch(/share one (test )?escrow/i);
+    for (const legacy of LEGACY_LLMS_SIGNET_NOTICES) {
+      for (const [src, kind] of [
+        [llms, "llms"],
+        [llmsFull, "full"],
+      ] as const) {
+        const oldCopy = withNetworkNotice(src, "signet", kind).replace(
+          LLMS_SIGNET_NOTICE,
+          legacy,
+        );
+        expect(oldCopy).toContain(legacy);
+        const rebuilt = withNetworkNotice(oldCopy, "signet", kind);
+        expect(rebuilt).toBe(withNetworkNotice(src, "signet", kind));
+        expect(rebuilt).not.toContain(legacy);
+        expect(rebuilt.split(LLMS_SIGNET_NOTICE).length).toBe(2);
+        expect(withNetworkNotice(oldCopy, "mainnet", kind)).toBe(src);
+      }
+    }
   });
 
   it("does not appear on mainnet, even from a signet-built copy", async () => {

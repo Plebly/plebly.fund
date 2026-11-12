@@ -26,14 +26,15 @@ export function signetFaucetLinksHtml(opts?: { className?: string }): string {
 
 /**
  * Persistent site chrome when on signet — every page, not only the hero badge.
- * Empty string on mainnet/testnet builds.
+ * Empty string on mainnet/testnet builds. Network-level facts only: escrow
+ * sharing is per listing, so it is not claimed here.
  */
 export function signetSiteBannerHtml(): string {
   if (!isSignet()) return "";
   return `<aside class="signet-banner" aria-label="Signet test network">
     <div class="wrap-wide signet-banner-inner">
       <p class="signet-banner-text">
-        <strong>Signet</strong> — test coins only. Listed projects share one test escrow; balances are not separate pots.
+        <strong>Signet</strong> — test coins only, not mainnet. Coins here have no value.
       </p>
       <p class="signet-banner-links">
         <span class="signet-banner-links-label">Get free signet sats:</span>
@@ -45,19 +46,20 @@ export function signetSiteBannerHtml(): string {
   </aside>`;
 }
 
-/** Compact note for donate / fee-pay surfaces. */
+/**
+ * Compact note for donate / fee-pay surfaces.
+ * Says nothing about shared escrow: whether an address is shared is per
+ * listing (catalog `escrow_shared`), and the pages that know it show their
+ * own note (home `sharedEscrowNoteHtml`, donate shared-count copy).
+ */
 export function signetPayNoteHtml(kind: "donate" | "fee" = "donate"): string {
   if (!isSignet()) return "";
   const action =
     kind === "fee"
       ? "Pay fees from a <strong>signet</strong> wallet."
       : "Donate from a <strong>signet</strong> wallet — mainnet payments will not credit this escrow.";
-  const shared =
-    kind === "donate"
-      ? " Listings on this network share one test escrow."
-      : "";
   return `<p class="donate-network-note signet-pay-note" role="status">
-    ${action}${shared}
+    ${action}
     Need coins?
     ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}
   </p>`;
@@ -67,8 +69,7 @@ export function signetPayNoteHtml(kind: "donate" | "fee" = "donate"): string {
 export function signetHeroNoteHtml(): string {
   if (!isSignet()) return "";
   return `<p class="signet-hero-note" role="status">
-    Soft launch on <strong>signet</strong> (test network). Listings share one
-    test escrow. Use a signet wallet;
+    Soft launch on <strong>signet</strong> (test network). Use a signet wallet;
     get coins from ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}.
   </p>`;
 }

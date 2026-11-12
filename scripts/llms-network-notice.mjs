@@ -7,14 +7,28 @@
  */
 
 export const LLMS_SIGNET_NOTICE =
-  "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Escrow addresses are signet (tb1) addresses, and listings share one test escrow.";
+  "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Escrow addresses are signet (tb1) addresses.";
+
+/**
+ * Earlier notice text. It also said "listings share one test escrow", which
+ * stopped being true when the signet Worker moved to multisig (address per
+ * listing). Stripped like the current notice so a copy built with the old
+ * text never ends up with two notices.
+ */
+export const LEGACY_LLMS_SIGNET_NOTICES = [
+  "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Escrow addresses are signet (tb1) addresses, and listings share one test escrow.",
+];
 
 export function isSignetNetwork(network) {
   return String(network || "").toLowerCase() === "signet";
 }
 
 function stripNotice(text) {
-  return text.split(`${LLMS_SIGNET_NOTICE}\n\n`).join("");
+  let out = text;
+  for (const notice of [LLMS_SIGNET_NOTICE, ...LEGACY_LLMS_SIGNET_NOTICES]) {
+    out = out.split(`${notice}\n\n`).join("");
+  }
+  return out;
 }
 
 /**
