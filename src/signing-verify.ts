@@ -276,3 +276,57 @@ export function outputsMatchPublished(
   }
   return pool.length === 0;
 }
+
+function decodeBase64(psbtBase64: string): Uint8Array | null {
+  try {
+    const bin = atob(psbtBase64.trim().replace(/\s+/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function sameBytes(a: Uint8Array | undefined, b: Uint8Array | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * Prevouts and outputs of `signedBase64` are the same as `originalBase64`.
+ * Signatures may differ. Both strings are public PSBT bytes, not secrets.
+ * A scanned SeedSigner QR is untrusted until this passes.
+ */
+export async function psbtStructureMatches(
+  originalBase64: string,
+  signedBase64: string,
+): Promise<boolean> {
+  const { Transaction } = await import("@scure/btc-signer");
+  const originalBytes = decodeBase64(originalBase64);
+  const signedBytes = decodeBase64(signedBase64);
+  if (!originalBytes || !signedBytes) return false;
+  let original: InstanceType<typeof Transaction>;
+  let signed: InstanceType<typeof Transaction>;
+  try {
+    original = Transaction.fromPSBT(originalBytes, { allowUnknown: true });
+    signed = Transaction.fromPSBT(signedBytes, { allowUnknown: true });
+  } catch {
+    return false;
+  }
+  if (original.inputsLength !== signed.inputsLength) return false;
+  if (original.outputsLength !== signed.outputsLength) return false;
+  for (let i = 0; i < original.inputsLength; i++) {
+    const left = original.getInput(i);
+    const right = signed.getInput(i);
+    if (left.index !== right.index || !sameBytes(left.txid, right.txid)) return false;
+  }
+  for (let i = 0; i < original.outputsLength; i++) {
+    const left = original.getOutput(i);
+    const right = signed.getOutput(i);
+    if (left.amount !== right.amount || !sameBytes(left.script, right.script)) return false;
+  }
+  return true;
+}
