@@ -29,7 +29,7 @@ const STATIC_ROUTES = [
     path: "/about",
     title: "About Plebly",
     description:
-      "On-chain Bitcoin escrow. The server holds no keys. Public listings. Published fees.",
+      "On-chain Bitcoin escrow. Plebly's server holds no keys. Public listings. Published fees.",
   },
   {
     path: "/propose",
@@ -166,7 +166,7 @@ function replaceShell(html, attrs) {
   // Skip link stays on <body> from index.html — do not add a second one inside #app.
   const body = `<header class="boot-header">
         <a class="boot-brand" href="/">
-          <img src="/logo.jpeg" alt="Plebly" width="28" height="28" />
+          <img src="/logo.jpeg" alt="" width="28" height="28" />
           <span>Plebly</span>
         </a>
         <nav class="boot-nav" aria-label="Primary">
@@ -183,7 +183,7 @@ function replaceShell(html, attrs) {
         }
       </main>
       <footer class="boot-footer">
-        <p>Bitcoin on-chain. The server holds no keys.</p>
+        <p>Bitcoin on-chain. Plebly's server holds no keys.</p>
         <nav aria-label="Footer">
           <a href="/">Projects</a>
           <a href="/propose">Start a project</a>

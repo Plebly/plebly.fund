@@ -59,6 +59,24 @@ describe("keyholdersHtml", () => {
     expect(html).not.toContain("temporary");
     expect(html).not.toContain("single-key");
   });
+
+  it("exposes a single id=trust anchor for the signet caveat", () => {
+    const html = keyholdersHtml({
+      escrow_mode: "2-of-3",
+      keyholders: [
+        { github: "alice", xpub: "xpub1", fingerprint: "aaa" },
+        { github: "bob", xpub: "xpub2", fingerprint: "bbb" },
+        { github: "carol", xpub: "xpub3", fingerprint: "ccc" },
+      ],
+      seats: 3,
+      threshold: 2,
+      min_seats: 3,
+      target_seats: 5,
+    });
+    expect(html.match(/id="trust"/g)?.length).toBe(1);
+    expect(html).toContain("Keyholders are not yet independent of the operator");
+    expect(html).toContain("Live <strong>2-of-3</strong>. Target 3-of-5.");
+  });
 });
 
 describe("publicKeyholderStatus", () => {
