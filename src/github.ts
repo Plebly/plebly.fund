@@ -376,7 +376,7 @@ export function applyCatalogRuntimeToProposal(
  * `/p/plebly-knots-size-value-spam`). Compared with `===` only. Never derived
  * from a path.
  */
-function catalogIdKey(id: string | null | undefined): string {
+export function catalogIdKey(id: string | null | undefined): string {
   return typeof id === "string" ? id.trim().toUpperCase() : "";
 }
 

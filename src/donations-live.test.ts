@@ -5,6 +5,16 @@ vi.mock("./config", async (importOriginal) => {
   return { ...actual, WORKERS_API: "https://api.test" };
 });
 
+const gh = vi.hoisted(() => ({ listAll: vi.fn(), listListed: vi.fn() }));
+vi.mock("./github", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./github")>();
+  return {
+    ...actual,
+    listAllPublicProposals: gh.listAll,
+    listListedProposals: gh.listListed,
+  };
+});
+
 import { bindDonationsLive } from "./donations-live";
 import type { PublicDonation } from "./donations-page";
 
@@ -57,6 +67,10 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: false });
   document.body.innerHTML = `<div id="root"><div id="donations-live-mount"></div></div>`;
   pages = [];
+  gh.listAll.mockReset();
+  gh.listListed.mockReset();
+  gh.listAll.mockResolvedValue([]);
+  gh.listListed.mockResolvedValue([]);
   endowmentReply = { body: LEGACY_ENDOWMENT, status: 200 };
   fetchMock = vi.fn(async (url: string) => {
     if (String(url).endsWith("/endowment")) {
@@ -96,7 +110,7 @@ describe("bindDonationsLive", () => {
     endowmentReply = { body: OWN_ENDOWMENT, status: 200 };
     pages = [[don("a"), don("b", { anonymous: true }), don("c", { target_type: "endowment", target_label: "Endowment" })]];
     await bindDonationsLive(document);
-    expect(ledgerCalls()[0]).toBe("https://api.test/donations?limit=10&offset=0");
+    expect(ledgerCalls()[0]).toBe("https://api.test/donations?limit=40&offset=0");
     expect(rows()).toEqual([
       { id: "a", isNew: false },
       { id: "b", isNew: false },

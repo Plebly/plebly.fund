@@ -188,5 +188,16 @@ describe("withoutHiddenCompletedListings", () => {
       "VIS-1",
     ]);
   });
+
+  it("hides every completed row when the listed catalog is empty (fail safe)", () => {
+    const all = [
+      row("VIS-1", "completed"),
+      row("HID-DONE", "completed"),
+      row("PUB-DECLINED", "declined"),
+    ];
+    expect(withoutHiddenCompletedListings(all, []).map((p) => p.id)).toEqual([
+      "PUB-DECLINED",
+    ]);
+  });
 });
 
