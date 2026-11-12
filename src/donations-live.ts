@@ -6,7 +6,11 @@ import {
   type PublicDonation,
 } from "./donations-page";
 import { catalogIdKey } from "./github";
-import { hiddenCompletedListingIds } from "./home-feed-hidden";
+import {
+  homeFeedVisibility,
+  isHiddenFromHomeFeed,
+  type HomeFeedVisibility,
+} from "./home-feed-hidden";
 import { href } from "./router";
 import { escapeHtml, timeAgoHtml } from "./util";
 
@@ -17,12 +21,12 @@ const LIVE_FETCH_LIMIT = 40;
 
 function withoutHiddenCompletedDonations(
   donations: PublicDonation[],
-  hiddenIds: Set<string>,
+  view: HomeFeedVisibility,
 ): PublicDonation[] {
   return donations.filter((d) => {
     if (d.target_type !== "project") return true;
     const key = catalogIdKey(d.target_id);
-    return !key || !hiddenIds.has(key);
+    return !key || !isHiddenFromHomeFeed(view, key);
   });
 }
 
@@ -94,11 +98,11 @@ export async function bindDonationsLive(root: ParentNode): Promise<void> {
 
   const paint = async (initial: boolean) => {
     try {
-      const [{ donations }, hiddenIds] = await Promise.all([
+      const [{ donations }, view] = await Promise.all([
         fetchPublicDonations({ limit: LIVE_FETCH_LIMIT, offset: 0 }),
-        hiddenCompletedListingIds(),
+        homeFeedVisibility(),
       ]);
-      const visible = withoutHiddenCompletedDonations(donations, hiddenIds).slice(
+      const visible = withoutHiddenCompletedDonations(donations, view).slice(
         0,
         LIVE_LIMIT,
       );

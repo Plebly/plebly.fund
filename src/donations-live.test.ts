@@ -11,6 +11,10 @@ vi.mock("./github", async (importOriginal) => {
   return {
     ...actual,
     listAllPublicProposals: gh.listAll,
+    loadAllPublicProposals: async () => ({
+      proposals: await gh.listAll(),
+      fromCatalog: true,
+    }),
     listListedProposals: gh.listListed,
     loadListedProposals: async () => ({
       proposals: await gh.listListed(),

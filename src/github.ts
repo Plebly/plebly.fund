@@ -561,12 +561,25 @@ export function cachedProposalTitle(id: string): string | null {
 }
 
 export async function listAllPublicProposals(): Promise<Proposal[]> {
+  return (await loadAllPublicProposals()).proposals;
+}
+
+/**
+ * scope=all catalog — Worker blob first, GitHub walk as fallback.
+ * `fromCatalog` is false when only the GitHub folders answered. The live
+ * folders do not hold every Worker catalog row (completed 009–011 exist only
+ * in the Worker), so the fallback cannot be used to tell which ids are hidden.
+ */
+export async function loadAllPublicProposals(): Promise<{
+  proposals: Proposal[];
+  fromCatalog: boolean;
+}> {
   if (
     listedCache &&
     listedCache.scope === "all" &&
     Date.now() - listedCache.at < LISTED_TTL_MS
   ) {
-    return listedCache.data;
+    return { proposals: listedCache.data, fromCatalog: listedCache.fromCatalog };
   }
   const fromWorker = await fetchWorkerCatalog("all");
   const fromCatalog = fromWorker != null;
@@ -580,7 +593,7 @@ export async function listAllPublicProposals(): Promise<Proposal[]> {
       "declined",
     ]));
   listedCache = { at: Date.now(), data, scope: "all", fromCatalog };
-  return data;
+  return { proposals: data, fromCatalog };
 }
 
 /**
