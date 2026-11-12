@@ -23,6 +23,8 @@ from fontTools.ttLib import TTFont
 ROOT = Path(__file__).resolve().parents[1]
 FONTS = ROOT / "public" / "fonts"
 
+# woff2 filenames are not content-hashed; rename them (for example with a version suffix) whenever their contents change.
+
 # Standard Latin range (same coverage Google Fonts uses for Inter Latin),
 # plus code points the site actually renders that sit outside that range.
 LATIN = [
