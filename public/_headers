@@ -12,3 +12,10 @@
 
 /boot-login.js
   Cache-Control: no-store
+
+# woff2 filenames are not content-hashed; rename them (for example with a version suffix) whenever their contents change.
+/fonts/inter/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/ibm-plex-mono/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
