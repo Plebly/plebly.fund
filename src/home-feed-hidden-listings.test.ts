@@ -20,6 +20,11 @@ vi.mock("./github", async (importOriginal) => {
 import { bindActivityStrip } from "./activity";
 import { renderArchive } from "./archive-page";
 import { bindDonationsLive } from "./donations-live";
+import { LISTED_TTL_MS } from "./github";
+import {
+  clearHiddenCompletedListingIdsCache,
+  hiddenCompletedListingIds,
+} from "./home-feed-hidden";
 import { renderStats } from "./stats-page";
 
 const VISIBLE_COMPLETED = "PLEBLY-2026-001";
@@ -130,6 +135,7 @@ describe("hidden completed listings on home feeds", () => {
       <div id="donations-live-mount"></div>
       <section id="activity-strip" hidden aria-label="Recent activity"></section>
     </div>`;
+    clearHiddenCompletedListingIdsCache();
     gh.listAll.mockReset();
     gh.listListed.mockReset();
     seedCatalog();
@@ -156,7 +162,9 @@ describe("hidden completed listings on home feeds", () => {
     );
   });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+    clearHiddenCompletedListingIdsCache();
     document.body.innerHTML = "";
   });
 
@@ -227,5 +235,52 @@ describe("hidden completed listings on home feeds", () => {
     expect(activityText).not.toContain("Visible completed");
     expect(activityText).not.toContain(HIDDEN_COMPLETED);
     expect(activityText).not.toContain(VISIBLE_COMPLETED);
+  });
+
+  it("repeated calls within LISTED_TTL_MS fetch the catalogs once", async () => {
+    const first = await hiddenCompletedListingIds();
+    const second = await hiddenCompletedListingIds();
+    expect(gh.listAll).toHaveBeenCalledTimes(1);
+    expect(gh.listListed).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+    expect(first.has(HIDDEN_COMPLETED)).toBe(true);
+    expect(first.has(VISIBLE_COMPLETED)).toBe(false);
+  });
+
+  it("concurrent callers share one in-flight request", async () => {
+    let release!: (value: Proposal[]) => void;
+    gh.listAll.mockImplementation(
+      () => new Promise<Proposal[]>((resolve) => (release = resolve)),
+    );
+    const a = hiddenCompletedListingIds();
+    const b = hiddenCompletedListingIds();
+    expect(gh.listAll).toHaveBeenCalledTimes(1);
+    release(ALL);
+    const [left, right] = await Promise.all([a, b]);
+    expect(left).toBe(right);
+    expect(left.has(HIDDEN_COMPLETED)).toBe(true);
+    expect(gh.listAll).toHaveBeenCalledTimes(1);
+    expect(gh.listListed).toHaveBeenCalledTimes(1);
+  });
+
+  it("refetches after LISTED_TTL_MS and does not cache a thrown load", async () => {
+    vi.useFakeTimers();
+    await hiddenCompletedListingIds();
+    expect(gh.listAll).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(LISTED_TTL_MS - 1);
+    await hiddenCompletedListingIds();
+    expect(gh.listAll).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await hiddenCompletedListingIds();
+    expect(gh.listAll).toHaveBeenCalledTimes(2);
+    expect(gh.listListed).toHaveBeenCalledTimes(2);
+
+    gh.listAll.mockRejectedValueOnce(new Error("catalog down"));
+    await vi.advanceTimersByTimeAsync(LISTED_TTL_MS);
+    await expect(hiddenCompletedListingIds()).rejects.toThrow("catalog down");
+    seedCatalog();
+    const ids = await hiddenCompletedListingIds();
+    expect(ids.has(HIDDEN_COMPLETED)).toBe(true);
+    expect(gh.listAll).toHaveBeenCalledTimes(4);
   });
 });

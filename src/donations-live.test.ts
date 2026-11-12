@@ -17,6 +17,8 @@ vi.mock("./github", async (importOriginal) => {
 
 import { bindDonationsLive } from "./donations-live";
 import type { PublicDonation } from "./donations-page";
+import { LISTED_TTL_MS } from "./github";
+import { clearHiddenCompletedListingIdsCache } from "./home-feed-hidden";
 
 const don = (id: string, over: Partial<PublicDonation> = {}): PublicDonation => ({
   id,
@@ -67,6 +69,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: false });
   document.body.innerHTML = `<div id="root"><div id="donations-live-mount"></div></div>`;
   pages = [];
+  clearHiddenCompletedListingIdsCache();
   gh.listAll.mockReset();
   gh.listListed.mockReset();
   gh.listAll.mockResolvedValue([]);
@@ -86,6 +89,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  clearHiddenCompletedListingIdsCache();
   document.body.innerHTML = "";
 });
 
@@ -271,6 +275,28 @@ describe("bindDonationsLive", () => {
     expect(rows().every((r) => !r.isNew)).toBe(true);
     await vi.advanceTimersByTimeAsync(15_000);
     expect(ledgerCalls()).toHaveLength(3);
+  });
+
+  it("an initial catalog load throw leaves the mount empty, without leaking rows", async () => {
+    pages = [[don("a")]];
+    gh.listAll.mockRejectedValue(new Error("catalog down"));
+    await bindDonationsLive(document);
+    expect(document.querySelector("#donations-live-mount")!.innerHTML).toBe("");
+    expect(rows()).toEqual([]);
+  });
+
+  it("a later catalog load throw keeps the last rows and keeps polling", async () => {
+    pages = [[don("a")]];
+    await bindDonationsLive(document);
+    expect(rows().map((r) => r.id)).toEqual(["a"]);
+    gh.listAll.mockRejectedValue(new Error("catalog down"));
+    await vi.advanceTimersByTimeAsync(LISTED_TTL_MS);
+    expect(rows().map((r) => r.id)).toEqual(["a"]);
+    expect(ledgerCalls().length).toBeGreaterThan(1);
+    gh.listAll.mockResolvedValue([]);
+    pages = [[don("b"), don("a")]];
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(rows().map((r) => r.id)).toEqual(["b", "a"]);
   });
 
   it("an initial failure leaves the mount empty; a later failure keeps the last panel and keeps polling", async () => {

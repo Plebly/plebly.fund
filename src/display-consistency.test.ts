@@ -24,6 +24,7 @@ import {
   shortKey,
 } from "./display-names";
 import { clearListedProposalsCache } from "./github";
+import { clearHiddenCompletedListingIdsCache } from "./home-feed-hidden";
 import { clearProjectTitlesCache, projectRefHtml } from "./project-titles";
 import { withDisplayLabels, type PublicDonation } from "./donations-page";
 import { bindActivityStrip } from "./activity";
@@ -46,6 +47,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   clearProjectTitlesCache();
   clearListedProposalsCache();
+  clearHiddenCompletedListingIdsCache();
   document.body.innerHTML = "";
 });
 

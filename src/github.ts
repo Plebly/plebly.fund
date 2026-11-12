@@ -154,7 +154,7 @@ export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {
   return out;
 }
 
-const LISTED_TTL_MS = 60_000;
+export const LISTED_TTL_MS = 60_000;
 let listedCache: { at: number; data: Proposal[]; scope: "listed" | "all" } | null =
   null;
 

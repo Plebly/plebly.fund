@@ -111,6 +111,8 @@ export async function bindDonationsLive(root: ParentNode): Promise<void> {
           .forEach((el) => el.classList.remove("is-new"));
       }, 900);
     } catch {
+      // First paint stays empty if the ledger or catalog throws, so hidden
+      // completed rows cannot leak. Later paints keep the last drawn rows.
       if (initial) {
         mount.innerHTML = "";
       }
