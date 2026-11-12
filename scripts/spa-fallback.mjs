@@ -35,6 +35,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "base-uri 'self'",
+  "frame-ancestors 'none'",
 ].join("; ");
 const meta = `    <meta http-equiv="Content-Security-Policy" content="${csp}" />`;
 

@@ -1,3 +1,11 @@
+# Applied by Cloudflare Workers static assets (same format as Pages).
+# HSTS starts at 1 day (max-age=86400) with no preload and no includeSubDomains.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self'; connect-src 'self' https://api.plebly.fund https://api.signet.plebly.fund https://mempool.space https://mempool.space/signet https://mempool.space/signet/api https://mempool.space/testnet https://mempool.space/testnet/api https://mempool.space/api https://api.github.com https://raw.githubusercontent.com; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; base-uri 'self'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=86400
+
 /
   Cache-Control: no-store
 

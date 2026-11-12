@@ -58,7 +58,7 @@ import { signetSiteBannerHtml } from "./signet";
 import { installStaleChunkReload } from "./stale-chunk";
 import { installModalA11y } from "./modal-a11y";
 import { bindSkipLink, ensureMainFocusTarget } from "./skip-link";
-import { escapeHtml } from "./util";
+import { escapeHtml, proposalStablePath } from "./util";
 import { syncWebPushIfEnabled } from "./web-push";
 
 /** Styles land with this module — first paint used index.html skeleton chrome. */
@@ -415,8 +415,29 @@ async function render() {
     scrollToHashTarget();
     return;
   }
+  if (r.name === "notFound") {
+    applySeo({ ...seoForRoute(r), path: appPathname() });
+    const app = document.querySelector<HTMLDivElement>("#app")!;
+    app.innerHTML = shell(`
+      <section class="wrap-wide detail">
+        <a class="back-link" href="${projectsHref()}">← Bounties</a>
+        <div class="empty-state">
+          <div class="empty-state-inner">
+            <h1 class="empty-state-title">Page not found</h1>
+            <p class="empty-state-body">Nothing here. The project listing or page may have moved.</p>
+            <p><a class="btn ghost" href="${projectsHref()}">Browse projects</a></p>
+          </div>
+        </div>
+      </section>`);
+    bindAuthHandlers();
+    return;
+  }
   if (r.name === "proposal") {
     // Stable /p/{id}: resolve via Worker idmap (O(1)). Legacy /proposal/... uses path directly.
+    // Bare /proposal/{id} uses the same lookup as /p/{id} and canonicalizes to it.
+    if (r.stable && appPathname().startsWith("/proposal/")) {
+      history.replaceState(null, "", href(proposalStablePath(r.id)));
+    }
     const proposal = r.stable ? await findListedProposalById(r.id) : null;
     const path = proposal?.path || (!r.stable ? r.id : "");
     if (!path) {
