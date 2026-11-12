@@ -766,6 +766,21 @@ describe("proposal UI critical render helpers", () => {
     ).toBe("");
   });
 
+  it("bindStructuredFunding does not fetch when the catalog says there is no structured record", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    document.body.innerHTML = structuredFundingPanelHtml({
+      id: "PLEBLY-KNOTS-SIZE-VALUE-SPAM",
+      escrow_address: "tb1qtest",
+      proposal_type: "bounty",
+      milestones: [],
+    } as Proposal);
+    bindStructuredFunding(document, "PLEBLY-KNOTS-SIZE-VALUE-SPAM", null);
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.querySelector("#structured-funding")?.hidden).toBe(true);
+  });
+
   it("bindStructuredFunding shows Type 1 ready copy, hash-gates, and never offers broadcast", async () => {
     vi.stubGlobal(
       "fetch",

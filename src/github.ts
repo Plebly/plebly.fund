@@ -209,6 +209,10 @@ function catalogFundingSignals(
   }
   if (typeof catalog.structured_state === "string" && catalog.structured_state) {
     signals.structured_state = catalog.structured_state;
+  } else {
+    // Catalog row present but no structured record: callers can skip the
+    // /structured-funding fetch (a 404 would otherwise show in the console).
+    signals.structured_state = null;
   }
   if (typeof catalog.bounty_settled === "boolean") {
     signals.bounty_settled = catalog.bounty_settled;

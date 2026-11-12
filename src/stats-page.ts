@@ -152,7 +152,7 @@ function statsBodyHtml(stats: PublicStats): string {
     <header class="stats-hero">
       <p class="about-eyebrow">Public ledger</p>
       <h1>Funding stats</h1>
-      <p class="lede">Best-effort totals from public proposal files and on-chain escrow balances. Plebly does not custody or settle these funds.</p>
+      <p class="lede">Best-effort totals from public proposal files and on-chain escrow balances. The server does not hold spending keys or settle these funds.</p>
     </header>
 
     <section class="stats-primary" aria-labelledby="stats-escrowed-label">

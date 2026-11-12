@@ -22,7 +22,7 @@ describe("tosCheckboxHtml", () => {
     expect(html).toContain('id="propose-tos-ack"');
     expect(html).toContain("propose-tos-card");
     expect(html).toContain("does not sell");
-    expect(html).toContain("never holds your keys");
+    expect(html).toContain("The server never holds your keys");
     expect(html).toContain("propose-wizard-submit");
     expect(html).toContain("List project");
     expect(html).toContain("propose-wizard-back");

@@ -1,0 +1,145 @@
+/* Latin+site subsets are the default download. Full files are a fallback
+   for any other unicode-range (user content, future copy). Subsets are
+   built by scripts/subset-fonts.py. */
+
+/* Latin + glyphs the site actually uses (arrows, dashes, ₿, ≥, stars, …). */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./inter/InterVariable-Latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20BF, U+2122, U+2154,
+    U+2190-2193, U+2212, U+2215, U+2260, U+2264-2265, U+2308-2309, U+25B8,
+    U+25BE, U+2605-2606, U+26A1, U+2713, U+FEFF, U+FFFD;
+}
+
+/* Remaining Inter coverage; downloaded only when a non-subset glyph appears. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./inter/InterVariable.woff2") format("woff2");
+  unicode-range:
+    U+0100-0130, U+0132-0151, U+0154-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB,
+    U+02DD-0303, U+0305-0307, U+0309-0328, U+032A-1FFF, U+2070-20AB,
+    U+20AD-20BE, U+20C0-2121, U+2123-2153, U+2155-218F, U+2194-2211,
+    U+2213-2214, U+2216-225F, U+2261-2263, U+2266-2307, U+230A-25B7,
+    U+25B9-25BD, U+25BF-2604, U+2607-26A0, U+26A2-2712, U+2714-FEFE,
+    U+FF00-FFFC, U+FFFE-10FFFF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-Regular-Latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20BF, U+2122, U+2154,
+    U+2190-2193, U+2212, U+2215, U+2260, U+2264-2265, U+2308-2309, U+25B8,
+    U+25BE, U+2605-2606, U+26A1, U+2713, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-Regular.woff2") format("woff2");
+  unicode-range:
+    U+0100-0130, U+0132-0151, U+0154-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB,
+    U+02DD-0303, U+0305-0307, U+0309-0328, U+032A-1FFF, U+2070-20AB,
+    U+20AD-20BE, U+20C0-2121, U+2123-2153, U+2155-218F, U+2194-2211,
+    U+2213-2214, U+2216-225F, U+2261-2263, U+2266-2307, U+230A-25B7,
+    U+25B9-25BD, U+25BF-2604, U+2607-26A0, U+26A2-2712, U+2714-FEFE,
+    U+FF00-FFFC, U+FFFE-10FFFF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-Medium-Latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20BF, U+2122, U+2154,
+    U+2190-2193, U+2212, U+2215, U+2260, U+2264-2265, U+2308-2309, U+25B8,
+    U+25BE, U+2605-2606, U+26A1, U+2713, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-Medium.woff2") format("woff2");
+  unicode-range:
+    U+0100-0130, U+0132-0151, U+0154-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB,
+    U+02DD-0303, U+0305-0307, U+0309-0328, U+032A-1FFF, U+2070-20AB,
+    U+20AD-20BE, U+20C0-2121, U+2123-2153, U+2155-218F, U+2194-2211,
+    U+2213-2214, U+2216-225F, U+2261-2263, U+2266-2307, U+230A-25B7,
+    U+25B9-25BD, U+25BF-2604, U+2607-26A0, U+26A2-2712, U+2714-FEFE,
+    U+FF00-FFFC, U+FFFE-10FFFF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-SemiBold-Latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20BF, U+2122, U+2154,
+    U+2190-2193, U+2212, U+2215, U+2260, U+2264-2265, U+2308-2309, U+25B8,
+    U+25BE, U+2605-2606, U+26A1, U+2713, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-SemiBold.woff2") format("woff2");
+  unicode-range:
+    U+0100-0130, U+0132-0151, U+0154-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB,
+    U+02DD-0303, U+0305-0307, U+0309-0328, U+032A-1FFF, U+2070-20AB,
+    U+20AD-20BE, U+20C0-2121, U+2123-2153, U+2155-218F, U+2194-2211,
+    U+2213-2214, U+2216-225F, U+2261-2263, U+2266-2307, U+230A-25B7,
+    U+25B9-25BD, U+25BF-2604, U+2607-26A0, U+26A2-2712, U+2714-FEFE,
+    U+FF00-FFFC, U+FFFE-10FFFF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-Bold-Latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+20BF, U+2122, U+2154,
+    U+2190-2193, U+2212, U+2215, U+2260, U+2264-2265, U+2308-2309, U+25B8,
+    U+25BE, U+2605-2606, U+26A1, U+2713, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./ibm-plex-mono/IBMPlexMono-Bold.woff2") format("woff2");
+  unicode-range:
+    U+0100-0130, U+0132-0151, U+0154-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB,
+    U+02DD-0303, U+0305-0307, U+0309-0328, U+032A-1FFF, U+2070-20AB,
+    U+20AD-20BE, U+20C0-2121, U+2123-2153, U+2155-218F, U+2194-2211,
+    U+2213-2214, U+2216-225F, U+2261-2263, U+2266-2307, U+230A-25B7,
+    U+25B9-25BD, U+25BF-2604, U+2607-26A0, U+26A2-2712, U+2714-FEFE,
+    U+FF00-FFFC, U+FFFE-10FFFF;
+}
