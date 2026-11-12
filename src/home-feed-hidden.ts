@@ -2,7 +2,7 @@ import {
   catalogIdKey,
   LISTED_TTL_MS,
   listAllPublicProposals,
-  listListedProposals,
+  loadListedProposals,
   withoutHiddenCompletedListings,
 } from "./github";
 
@@ -16,9 +16,11 @@ export function clearHiddenCompletedListingIdsCache(): void {
 
 async function computeHiddenCompletedListingIds(): Promise<Set<string>> {
   const all = await listAllPublicProposals();
-  let listed: Awaited<ReturnType<typeof listListedProposals>> = [];
+  let listed: Awaited<ReturnType<typeof loadListedProposals>>["proposals"] = [];
   try {
-    listed = await listListedProposals();
+    const loaded = await loadListedProposals();
+    // Folder fallback includes `completed`, so hidden rows look listed.
+    listed = loaded.fromCatalog ? loaded.proposals : [];
   } catch {
     listed = [];
   }
@@ -34,7 +36,8 @@ async function computeHiddenCompletedListingIds(): Promise<Set<string>> {
 
 /**
  * Catalog ids that withoutHiddenCompletedListings drops. If the listed
- * catalog fails to load, every completed row in scope=all is treated as hidden.
+ * catalog fails to load, or only the GitHub folder fallback answered,
+ * every completed row in scope=all is treated as hidden.
  * Successful results are cached for LISTED_TTL_MS; concurrent callers share
  * one in-flight load. A thrown load is not cached.
  */

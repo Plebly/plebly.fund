@@ -49,6 +49,7 @@ import { orgAttestationTitle, orgLoginLabel } from "./github-orgs-client";
 import {
   listAllPublicProposals,
   listListedProposals,
+  loadListedProposals,
   proposalsForProfile,
   withoutHiddenCompletedListings,
 } from "./github";
@@ -1617,9 +1618,10 @@ export async function renderPublicProfile(
     ),
   );
 
+  const listed = await loadListedProposals();
   const all = withoutHiddenCompletedListings(
     await listAllPublicProposals(),
-    await listListedProposals(),
+    listed.fromCatalog ? listed.proposals : [],
   );
   const work = proposalsForProfile(all, profile);
 

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PROPOSALS_API, PROPOSALS_RAW } from "./config";
 import {
   applyCatalogRuntimeToProposal,
   clearListedProposalsCache,
   listListedProposals,
+  loadListedProposals,
   withoutHiddenCompletedListings,
 } from "./github";
 import type { Proposal } from "./types";
@@ -147,6 +149,87 @@ describe("worker catalog funding signals", () => {
     expect(row?.accepting_funds).toBe(false);
     expect(row?.structured_state).toBe("psbt_ready");
     expect(row?.balance_sats).toBe(200_000);
+  });
+});
+
+describe("loadListedProposals catalog source", () => {
+  afterEach(() => {
+    clearListedProposalsCache();
+    vi.unstubAllGlobals();
+  });
+
+  it("sets fromCatalog when the Worker scope=listed catalog answers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/proposals/catalog?scope=listed")) {
+          return Response.json({
+            proposals: [
+              {
+                id: "PLEBLY-2026-001",
+                path: "proposals/completed/PLEBLY-2026-001.md",
+                title: "Visible completed",
+                status: "completed",
+              },
+            ],
+          });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    const loaded = await loadListedProposals();
+    expect(loaded.fromCatalog).toBe(true);
+    expect(loaded.proposals.map((p) => p.id)).toEqual(["PLEBLY-2026-001"]);
+  });
+
+  it("sets fromCatalog false when the catalog is down and the folder fallback returns completed", async () => {
+    const folders: Record<string, { id: string; status: string; dir: string }[]> = {
+      listed: [{ id: "OPEN", status: "listed", dir: "listed" }],
+      claimed: [],
+      completed: [
+        { id: "PLEBLY-2026-001", status: "completed", dir: "completed" },
+        { id: "PLEBLY-2026-010", status: "completed", dir: "completed" },
+        { id: "PLEBLY-2026-011", status: "completed", dir: "completed" },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/proposals/catalog")) {
+          return new Response("down", { status: 503 });
+        }
+        if (url.startsWith(`${PROPOSALS_API}/`)) {
+          const dir = url.slice(PROPOSALS_API.length + 1);
+          const files = (folders[dir] || []).map((row) => ({
+            name: `${row.id}.md`,
+            path: `proposals/${row.dir}/${row.id}.md`,
+            type: "file",
+            download_url: `${PROPOSALS_RAW}/proposals/${row.dir}/${row.id}.md`,
+          }));
+          return Response.json(files);
+        }
+        if (url.startsWith(`${PROPOSALS_RAW}/`)) {
+          const path = url.slice(PROPOSALS_RAW.length + 1);
+          const id = path.split("/").pop()?.replace(/\.md$/, "") || "unknown";
+          const status = path.includes("/completed/") ? "completed" : "listed";
+          return new Response(
+            `---\nid: ${id}\ntitle: ${id}\nstatus: ${status}\n---\n`,
+          );
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    const loaded = await loadListedProposals();
+    expect(loaded.fromCatalog).toBe(false);
+    expect(loaded.proposals.map((p) => p.id).sort()).toEqual([
+      "OPEN",
+      "PLEBLY-2026-001",
+      "PLEBLY-2026-010",
+      "PLEBLY-2026-011",
+    ]);
+    expect(await listListedProposals()).toBe(loaded.proposals);
   });
 });
 

@@ -16,6 +16,10 @@ vi.mock("./builder", async (orig) => ({
 vi.mock("./github", async (orig) => ({
   ...(await orig<typeof import("./github")>()),
   listListedProposals: (...args: unknown[]) => m.list(...args),
+  loadListedProposals: async (...args: unknown[]) => ({
+    proposals: await m.list(...args),
+    fromCatalog: true,
+  }),
 }));
 
 vi.mock("./donations-live", () => ({

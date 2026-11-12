@@ -5,7 +5,7 @@ import { authFetch, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
 import {
   listAllPublicProposals,
-  listListedProposals,
+  loadListedProposals,
   proposalsForOrgClaimer,
   proposalsForOrgProposer,
   withoutHiddenCompletedListings,
@@ -268,9 +268,10 @@ export async function renderPublicOrgProfile(
     ),
   );
 
+  const listed = await loadListedProposals();
   const all = withoutHiddenCompletedListings(
     await listAllPublicProposals(),
-    await listListedProposals(),
+    listed.fromCatalog ? listed.proposals : [],
   );
   const proposed = proposalsForOrgProposer(all, org.login);
   const proposedHtml =

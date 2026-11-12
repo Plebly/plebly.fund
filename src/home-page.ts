@@ -15,7 +15,7 @@ import { isKnownProposalStatus } from "./types";
 import { isCatalogDonateBlocked } from "./next-action";
 import { CLAIM_FLOOR_SATS, WORKERS_API, isFundableStatus, lightningUiAllowed, mempoolWeb } from "./config";
 import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
-import { listListedProposals } from "./github";
+import { loadListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeCoverImageUrl } from "./media";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
@@ -1002,7 +1002,13 @@ export async function renderHome(
 
   const listEl = app.querySelector("#list")!;
   try {
-    let proposals = await listListedProposals();
+    const loaded = await loadListedProposals();
+    // Folder fallback includes `completed`, so hidden listings look public.
+    let proposals = loaded.fromCatalog
+      ? loaded.proposals
+      : loaded.proposals.filter(
+          (p) => String(p.status || "").trim().toLowerCase() !== "completed",
+        );
     const [withBalances, lnStatus, watches, endowmentTeaser] = await Promise.all([
       enrichBalances(proposals),
       lightningUiAllowed()

@@ -8,6 +8,10 @@ vi.mock("./github", async (importOriginal) => {
     ...actual,
     listAllPublicProposals: gh.listAll,
     listListedProposals: gh.listListed,
+    loadListedProposals: async () => ({
+      proposals: await gh.listListed(),
+      fromCatalog: true,
+    }),
   };
 });
 
