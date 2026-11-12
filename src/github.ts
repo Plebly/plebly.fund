@@ -155,8 +155,12 @@ export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {
 }
 
 export const LISTED_TTL_MS = 60_000;
-let listedCache: { at: number; data: Proposal[]; scope: "listed" | "all" } | null =
-  null;
+let listedCache: {
+  at: number;
+  data: Proposal[];
+  scope: "listed" | "all";
+  fromCatalog: boolean;
+} | null = null;
 
 type CatalogProposal = {
   id: string | null;
@@ -419,21 +423,38 @@ async function fetchWorkerCatalog(
   }
 }
 
-/** Listed/claimed/completed catalog — Worker blob first, GitHub walk as fallback. */
-export async function listListedProposals(): Promise<Proposal[]> {
+/**
+ * Listed/claimed/completed catalog — Worker blob first, GitHub walk as fallback.
+ * `fromCatalog` is true only when the Worker `scope=listed` catalog itself
+ * answered. The folder fallback includes `completed`, so hidden listings
+ * cannot be distinguished from public ones; callers that hide completed
+ * rows must treat every completed row as hidden when `fromCatalog` is false.
+ */
+export async function loadListedProposals(): Promise<{
+  proposals: Proposal[];
+  fromCatalog: boolean;
+}> {
   if (
     listedCache &&
     listedCache.scope === "listed" &&
     Date.now() - listedCache.at < LISTED_TTL_MS
   ) {
-    return listedCache.data;
+    return {
+      proposals: listedCache.data,
+      fromCatalog: listedCache.fromCatalog,
+    };
   }
   const fromWorker = await fetchWorkerCatalog("listed");
-  const data =
+  const fromCatalog = fromWorker != null;
+  const proposals =
     fromWorker ||
     (await listProposalsInDirs(["listed", "claimed", "completed"]));
-  listedCache = { at: Date.now(), data, scope: "listed" };
-  return data;
+  listedCache = { at: Date.now(), data: proposals, scope: "listed", fromCatalog };
+  return { proposals, fromCatalog };
+}
+
+export async function listListedProposals(): Promise<Proposal[]> {
+  return (await loadListedProposals()).proposals;
 }
 
 export function clearListedProposalsCache(): void {
@@ -548,6 +569,7 @@ export async function listAllPublicProposals(): Promise<Proposal[]> {
     return listedCache.data;
   }
   const fromWorker = await fetchWorkerCatalog("all");
+  const fromCatalog = fromWorker != null;
   const data =
     fromWorker ||
     (await listProposalsInDirs([
@@ -557,7 +579,7 @@ export async function listAllPublicProposals(): Promise<Proposal[]> {
       "unindexed",
       "declined",
     ]));
-  listedCache = { at: Date.now(), data, scope: "all" };
+  listedCache = { at: Date.now(), data, scope: "all", fromCatalog };
   return data;
 }
 
