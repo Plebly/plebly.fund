@@ -137,14 +137,20 @@ export function parseLocation(
   }
   if (path.startsWith("proposal/")) {
     const slug = path.slice("proposal/".length);
+    if (!slug.includes("/")) {
+      const id = decodeURIComponent(slug).trim();
+      if (id) return { name: "proposal", id, stable: true };
+      return { name: "notFound" };
+    }
     return { name: "proposal", id: proposalRepoPath(slug) };
   }
   if (path.startsWith("p/")) {
     const id = decodeURIComponent(path.slice("p/".length)).trim();
     if (id) return { name: "proposal", id, stable: true };
+    return { name: "notFound" };
   }
   void search;
-  return { name: "home" };
+  return { name: "notFound" };
 }
 
 /** Current app path + query for OAuth return_to (no origin). */
@@ -608,6 +614,13 @@ export function seoForRoute(
           extra?.description ||
           "Open Bitcoin project with publicly verifiable on-chain escrow on Plebly.",
         path: extra?.path || `/proposal/${proposalSlug(route.id)}`,
+      };
+    case "notFound":
+      return {
+        title: "Page not found",
+        description: "This Plebly page could not be found.",
+        path: extra?.path || "/",
+        noindex: true,
       };
     default:
       return { title: "Plebly", description: DEFAULT_DESCRIPTION, path: "/" };

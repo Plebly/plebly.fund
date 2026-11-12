@@ -151,3 +151,41 @@ describe("home SEO description", () => {
     expect(JSON.stringify(seo.jsonLd)).toContain(seo.description);
   });
 });
+
+describe("unknown paths and bare proposal ids", () => {
+  it("treats a bare /proposal/{id} as a stable proposal id", () => {
+    expect(parseLocation("/proposal/PLEBLY-KNOTS-SIZE-VALUE-SPAM", "")).toEqual({
+      name: "proposal",
+      id: "PLEBLY-KNOTS-SIZE-VALUE-SPAM",
+      stable: true,
+    });
+    expect(parseLocation("/proposal/plebly-knots-size-value-spam", "")).toEqual({
+      name: "proposal",
+      id: "plebly-knots-size-value-spam",
+      stable: true,
+    });
+  });
+
+  it("keeps legacy /proposal/{folder}/{name} repo paths", () => {
+    expect(parseLocation("/proposal/listed/PLEBLY-KNOTS-SIZE-VALUE-SPAM", "")).toEqual({
+      name: "proposal",
+      id: "proposals/listed/PLEBLY-KNOTS-SIZE-VALUE-SPAM.md",
+    });
+  });
+
+  it("returns notFound for unknown paths instead of the homepage", () => {
+    expect(parseLocation("/this-page-does-not-exist", "")).toEqual({
+      name: "notFound",
+    });
+    expect(parseLocation("/events", "")).toEqual({ name: "notFound" });
+    expect(parseLocation("/", "")).toEqual({ name: "home" });
+    expect(parseLocation("/home", "")).toEqual({ name: "home" });
+    expect(parseLocation("/about", "")).toEqual({ name: "about" });
+  });
+
+  it("marks the not-found route noindex", () => {
+    const seo = seoForRoute({ name: "notFound" });
+    expect(seo.title).toMatch(/not found/i);
+    expect(seo.noindex).toBe(true);
+  });
+});

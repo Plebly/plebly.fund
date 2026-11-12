@@ -259,4 +259,5 @@ export type Route =
   | { name: "admin" }
   | { name: "proposal"; id: string; stable?: boolean }
   | { name: "profile"; username: string }
-  | { name: "org"; login: string };
+  | { name: "org"; login: string }
+  | { name: "notFound" };
