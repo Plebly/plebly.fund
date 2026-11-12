@@ -9876,7 +9876,7 @@ a.proposal-comment-author:hover {
   font-size: 0.8125rem;
   line-height: 1.35;
   color: var(--muted);
-  font-style: italic;
+  font-style: normal;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
