@@ -154,7 +154,7 @@ export async function listProposalsInDirs(dirs: string[]): Promise<Proposal[]> {
   return out;
 }
 
-const LISTED_TTL_MS = 60_000;
+export const LISTED_TTL_MS = 60_000;
 let listedCache: { at: number; data: Proposal[]; scope: "listed" | "all" } | null =
   null;
 
@@ -376,7 +376,7 @@ export function applyCatalogRuntimeToProposal(
  * `/p/plebly-knots-size-value-spam`). Compared with `===` only. Never derived
  * from a path.
  */
-function catalogIdKey(id: string | null | undefined): string {
+export function catalogIdKey(id: string | null | undefined): string {
   return typeof id === "string" ? id.trim().toUpperCase() : "";
 }
 

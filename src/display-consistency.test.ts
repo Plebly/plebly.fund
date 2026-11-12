@@ -23,6 +23,8 @@ import {
   looksLikeProjectId,
   shortKey,
 } from "./display-names";
+import { clearListedProposalsCache } from "./github";
+import { clearHiddenCompletedListingIdsCache } from "./home-feed-hidden";
 import { clearProjectTitlesCache, projectRefHtml } from "./project-titles";
 import { withDisplayLabels, type PublicDonation } from "./donations-page";
 import { bindActivityStrip } from "./activity";
@@ -44,6 +46,8 @@ const HEX = "a5a22eafd45e989049a63bf9be8259535aca162d9b4ae526b33edc35261733f6";
 afterEach(() => {
   vi.unstubAllGlobals();
   clearProjectTitlesCache();
+  clearListedProposalsCache();
+  clearHiddenCompletedListingIdsCache();
   document.body.innerHTML = "";
 });
 

@@ -5,10 +5,27 @@ import {
   fetchPublicDonations,
   type PublicDonation,
 } from "./donations-page";
+import { catalogIdKey } from "./github";
+import { hiddenCompletedListingIds } from "./home-feed-hidden";
 import { href } from "./router";
 import { escapeHtml, timeAgoHtml } from "./util";
 
 const POLL_MS = 15_000;
+const LIVE_LIMIT = 10;
+// Pull a wider page so hidden completed rows don't leave the strip short.
+const LIVE_FETCH_LIMIT = 40;
+
+function withoutHiddenCompletedDonations(
+  donations: PublicDonation[],
+  hiddenIds: Set<string>,
+): PublicDonation[] {
+  return donations.filter((d) => {
+    if (d.target_type !== "project") return true;
+    const key = catalogIdKey(d.target_id);
+    return !key || !hiddenIds.has(key);
+  });
+}
+
 
 function liveRowHtml(d: PublicDonation, isNew: boolean, endowmentOpen: boolean): string {
   const { donor, amount, target } = donationRowCopy(d, endowmentOpen);
@@ -77,16 +94,25 @@ export async function bindDonationsLive(root: ParentNode): Promise<void> {
 
   const paint = async (initial: boolean) => {
     try {
-      const { donations } = await fetchPublicDonations({ limit: 10, offset: 0 });
+      const [{ donations }, hiddenIds] = await Promise.all([
+        fetchPublicDonations({ limit: LIVE_FETCH_LIMIT, offset: 0 }),
+        hiddenCompletedListingIds(),
+      ]);
+      const visible = withoutHiddenCompletedDonations(donations, hiddenIds).slice(
+        0,
+        LIVE_LIMIT,
+      );
       await endowmentRead;
-      mount.innerHTML = panelHtml(donations, initial ? new Set() : known, endowmentOpen);
-      known = new Set(donations.map((d) => d.id));
+      mount.innerHTML = panelHtml(visible, initial ? new Set() : known, endowmentOpen);
+      known = new Set(visible.map((d) => d.id));
       window.setTimeout(() => {
         mount
           .querySelectorAll(".donations-live-row.is-new")
           .forEach((el) => el.classList.remove("is-new"));
       }, 900);
     } catch {
+      // First paint stays empty if the ledger or catalog throws, so hidden
+      // completed rows cannot leak. Later paints keep the last drawn rows.
       if (initial) {
         mount.innerHTML = "";
       }

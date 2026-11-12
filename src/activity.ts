@@ -1,4 +1,6 @@
 import { WORKERS_API } from "./config";
+import { catalogIdKey } from "./github";
+import { hiddenCompletedListingIds } from "./home-feed-hidden";
 import { proposalHref } from "./router";
 import { escapeHtml, timeAgoHtml } from "./util";
 import { projectRefHtml, projectTitles } from "./project-titles";
@@ -35,7 +37,13 @@ export async function bindActivityStrip(root: ParentNode): Promise<void> {
     if (!res.ok) return;
     const data = (await res.json()) as { events?: ActivityEvent[] } | ActivityEvent[];
     const events = Array.isArray(data) ? data : data.events || [];
-    const visible = events.filter((event) => event.proposal_id).slice(0, 5);
+    const hiddenIds = await hiddenCompletedListingIds();
+    const visible = events
+      .filter((event) => {
+        const key = catalogIdKey(event.proposal_id);
+        return Boolean(key) && !hiddenIds.has(key);
+      })
+      .slice(0, 5);
     if (!visible.length) return;
     const titles = await projectTitles(visible.map((e) => e.proposal_id || ""));
     strip.innerHTML = `<span class="activity-strip-label">Recent</span>
