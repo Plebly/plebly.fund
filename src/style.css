@@ -2138,6 +2138,19 @@ a.project-card-by:hover .project-card-by-text {
   min-width: 0;
 }
 
+.project-card-watch-msg {
+  padding: 0 1.25rem 1.1rem;
+}
+
+.project-card-actions:has(+ .project-card-watch-msg) {
+  padding-bottom: 0.5rem;
+}
+
+.project-card-watch-msg .login-choices,
+.project-card-watch-msg.builder-msg {
+  margin: 0;
+}
+
 .project-donate-btn {
   padding: 0.5rem 1rem;
   font-size: 0.8125rem;

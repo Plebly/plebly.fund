@@ -37,7 +37,9 @@ import {
 import { balanceUnavailableHtml, isKnownBalance } from "./proposal-funding-bar";
 import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
+import { bindLoginHandlers, loginChoicesHtml } from "./auth";
 import { projectCardProposerHtml } from "./github-orgs-client";
+import { sanitizePublicError } from "./public-errors";
 import {
   href,
   orgHref,
@@ -591,6 +593,15 @@ function sortProposals(proposals: Proposal[], key: SortKey, floor: number): Prop
   return list;
 }
 
+/** Clear the home list's skeleton once loading finishes, including empty and error. */
+function settleListLoading(listEl: Element): void {
+  listEl.setAttribute("aria-busy", "false");
+  if (listEl.getAttribute("aria-label") === "Loading open projects") {
+    listEl.removeAttribute("aria-label");
+  }
+  listEl.classList.remove("project-grid-skeleton");
+}
+
 function bindDiscover(
   root: ParentNode,
   proposals: Proposal[],
@@ -803,6 +814,7 @@ function bindDiscover(
         <p class="empty-state-body">Try another search, or start something new.</p>
         <a class="btn" href="${href("/propose")}">Start a project</a>
       </div>`;
+      settleListLoading(listEl);
       return;
     }
     listEl.className = "project-grid";
@@ -819,6 +831,7 @@ function bindDiscover(
       )
       .join("");
     bindCardWatches(listEl, watchPaths);
+    settleListLoading(listEl);
   };
 
   const scheduleAvatars = () => {
@@ -850,6 +863,47 @@ function bindDiscover(
   });
   renderList();
   scheduleAvatars();
+}
+
+const CARD_WATCH_MSG = "project-card-watch-msg";
+
+function cardWatchMessageEl(btn: HTMLElement): HTMLElement {
+  const card = btn.closest(".project-card");
+  const host = card || btn.parentElement || btn;
+  let msg = host.querySelector<HTMLElement>(`:scope > .${CARD_WATCH_MSG}`);
+  if (!msg) {
+    msg = document.createElement("div");
+    msg.className = CARD_WATCH_MSG;
+    const actions = host.querySelector(".project-card-actions");
+    if (actions && actions.parentElement === host) actions.after(msg);
+    else if (btn.parentElement === host) btn.after(msg);
+    else host.append(msg);
+  }
+  return msg;
+}
+
+function clearCardWatchMessage(btn: HTMLElement): void {
+  const host = btn.closest(".project-card") || btn.parentElement;
+  host?.querySelector(`:scope > .${CARD_WATCH_MSG}`)?.remove();
+}
+
+function showCardWatchLogin(btn: HTMLElement): void {
+  const msg = cardWatchMessageEl(btn);
+  msg.hidden = false;
+  msg.className = CARD_WATCH_MSG;
+  msg.setAttribute("role", "status");
+  msg.setAttribute("aria-live", "polite");
+  msg.innerHTML = loginChoicesHtml("Sign in to watch this project.");
+  bindLoginHandlers(() => location.reload());
+}
+
+function showCardWatchError(btn: HTMLElement, text: string): void {
+  const msg = cardWatchMessageEl(btn);
+  msg.hidden = false;
+  msg.className = `${CARD_WATCH_MSG} builder-msg error`;
+  msg.setAttribute("role", "alert");
+  msg.removeAttribute("aria-live");
+  msg.textContent = sanitizePublicError(text);
 }
 
 export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void {
@@ -887,8 +941,13 @@ export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void
         );
         btn.setAttribute("aria-label", label);
         btn.setAttribute("title", label);
-      } catch {
-        /* login required or network — leave UI */
+        clearCardWatchMessage(btn);
+      } catch (e) {
+        if ((e as Error).message === "login_required") {
+          showCardWatchLogin(btn);
+        } else {
+          showCardWatchError(btn, (e as Error).message);
+        }
       }
     });
   });
@@ -1095,6 +1154,7 @@ export async function renderHome(
         <p class="empty-state-body">Be the first to list a bounty or campaign.</p>
         <a class="btn" href="${href("/propose")}">Start a project</a>
       </div>`;
+      settleListLoading(listEl);
       return;
     }
     bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled, watchPaths);
@@ -1124,5 +1184,6 @@ export async function renderHome(
   } catch (e) {
     listEl.className = "error";
     listEl.textContent = `Could not load projects: ${(e as Error).message}`;
+    settleListLoading(listEl);
   }
 }
