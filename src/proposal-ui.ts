@@ -2881,7 +2881,8 @@ export function onChainPanelHtml(
     rows.push(onChainEscrowRowHtml(escrowText));
   }
 
-  if (p.submission_fee_txid) {
+  // An all-zero txid is a placeholder, not a real transaction: no explorer link or copy.
+  if (p.submission_fee_txid && !/^0+$/.test(p.submission_fee_txid)) {
     const tx = p.submission_fee_txid;
     const short = `${tx.slice(0, 8)}…${tx.slice(-8)}`;
     rows.push(`<div class="onchain-row">

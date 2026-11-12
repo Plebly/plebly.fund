@@ -87,8 +87,8 @@ function supportMetricHtml(
 ): string {
   return `<div class="stats-metric">
     <dt>${escapeHtml(label)}</dt>
-    <dd>${escapeHtml(value)}</dd>
-    <p>${escapeHtml(detail)}</p>
+    <dd class="stats-metric-value">${escapeHtml(value)}</dd>
+    <dd class="stats-metric-detail">${escapeHtml(detail)}</dd>
   </div>`;
 }
 
