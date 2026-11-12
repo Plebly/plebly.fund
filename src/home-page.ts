@@ -38,6 +38,7 @@ import { balanceUnavailableHtml, isKnownBalance } from "./proposal-funding-bar";
 import { isSignet, signetHeroNoteHtml } from "./signet";
 import type { Proposal } from "./types";
 import { projectCardProposerHtml } from "./github-orgs-client";
+import { bindLoginHandlers, loginChoicesHtml } from "./auth";
 import {
   href,
   orgHref,
@@ -852,6 +853,59 @@ function bindDiscover(
   scheduleAvatars();
 }
 
+const WATCH_LOGIN_PROMPT = "Sign in to watch projects.";
+const WATCH_FAILED_MESSAGE = "Couldn't update watch. Try again.";
+
+function cardWatchStatusHost(btn: HTMLElement): HTMLElement | null {
+  return btn.closest("article.project-card") ?? btn.parentElement;
+}
+
+function cardWatchStatusEl(btn: HTMLElement): HTMLElement | null {
+  const host = cardWatchStatusHost(btn);
+  if (!host) return null;
+  let status = host.querySelector<HTMLElement>(".project-card-watch-status");
+  if (!status) {
+    status = document.createElement("div");
+    status.className = "project-card-watch-status";
+    status.setAttribute("aria-live", "polite");
+    const actions = host.querySelector(".project-card-actions");
+    if (actions) actions.insertAdjacentElement("afterend", status);
+    else host.appendChild(status);
+  }
+  return status;
+}
+
+function clearCardWatchStatus(btn: HTMLElement): void {
+  const status = cardWatchStatusHost(btn)?.querySelector<HTMLElement>(
+    ".project-card-watch-status",
+  );
+  if (!status) return;
+  status.hidden = true;
+  status.replaceChildren();
+}
+
+function showCardWatchLogin(btn: HTMLElement): void {
+  const status = cardWatchStatusEl(btn);
+  if (!status) return;
+  status.hidden = false;
+  status.innerHTML = loginChoicesHtml(WATCH_LOGIN_PROMPT);
+  bindLoginHandlers(() => {
+    window.location.reload();
+  });
+}
+
+function showCardWatchError(btn: HTMLElement): void {
+  const status = cardWatchStatusEl(btn);
+  if (!status) return;
+  status.hidden = false;
+  status.textContent = WATCH_FAILED_MESSAGE;
+}
+
+function settleHomeList(listEl: Element): void {
+  listEl.setAttribute("aria-busy", "false");
+  listEl.setAttribute("aria-label", "Open projects");
+}
+
 export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void {
   root.querySelectorAll<HTMLButtonElement>("[data-card-watch]").forEach((btn) => {
     btn.addEventListener("click", async (ev) => {
@@ -887,8 +941,13 @@ export function bindCardWatches(root: ParentNode, watchPaths: Set<string>): void
         );
         btn.setAttribute("aria-label", label);
         btn.setAttribute("title", label);
-      } catch {
-        /* login required or network — leave UI */
+        clearCardWatchStatus(btn);
+      } catch (e) {
+        if ((e as Error).message === "login_required") {
+          showCardWatchLogin(btn);
+        } else {
+          showCardWatchError(btn);
+        }
       }
     });
   });
@@ -1124,5 +1183,7 @@ export async function renderHome(
   } catch (e) {
     listEl.className = "error";
     listEl.textContent = `Could not load projects: ${(e as Error).message}`;
+  } finally {
+    settleHomeList(listEl);
   }
 }

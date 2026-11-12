@@ -4117,6 +4117,15 @@ a.project-card-by:hover .project-card-by-text {
   border-color: var(--tertiary-border);
 }
 
+.project-card-watch-status {
+  padding: 0 1.25rem 1rem;
+  font-size: 0.875rem;
+}
+
+.project-card-watch-status .login-choices {
+  margin: 0;
+}
+
 .wanted-list {
   display: flex;
   flex-direction: column;
