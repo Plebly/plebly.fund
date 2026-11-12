@@ -561,6 +561,27 @@ export async function listAllPublicProposals(): Promise<Proposal[]> {
   return data;
 }
 
+/**
+ * Hidden listings are identified the same way the home page is scoped:
+ * they appear in catalog?scope=all but not in catalog?scope=listed.
+ * workers#128 only adds hidden rows to scope=all when status is completed,
+ * so dropping completed rows that are absent from the listed catalog
+ * leaves other scope=all rows (public declined, unindexed) intact.
+ */
+export function withoutHiddenCompletedListings(
+  all: readonly Proposal[],
+  listed: readonly Proposal[],
+): Proposal[] {
+  const listedIds = new Set(
+    listed.map((p) => catalogIdKey(p.id)).filter(Boolean),
+  );
+  return all.filter((p) => {
+    const key = catalogIdKey(p.id);
+    if (key && listedIds.has(key)) return true;
+    return String(p.status || "").trim().toLowerCase() !== "completed";
+  });
+}
+
 export function proposalsForProfile(
   proposals: Proposal[],
   profile: { username?: string; github?: string },

@@ -3,6 +3,7 @@ import {
   applyCatalogRuntimeToProposal,
   clearListedProposalsCache,
   listListedProposals,
+  withoutHiddenCompletedListings,
 } from "./github";
 import type { Proposal } from "./types";
 
@@ -148,3 +149,44 @@ describe("worker catalog funding signals", () => {
     expect(row?.balance_sats).toBe(200_000);
   });
 });
+
+describe("withoutHiddenCompletedListings", () => {
+  const row = (id: string, status: string): Proposal =>
+    ({
+      id,
+      title: id,
+      path: `proposals/${status}/${id}.md`,
+      status,
+      proposal_type: "bounty",
+      target_sats: null,
+      escrow_address: null,
+      submission_fee_txid: null,
+      created_at: null,
+      escrow_index: null,
+      milestones: [],
+      body: "",
+    }) as Proposal;
+
+  it("drops completed rows in scope=all that are absent from scope=listed", () => {
+    const listed = [row("VIS-1", "completed"), row("VIS-2", "listed")];
+    const all = [
+      ...listed,
+      row("HID-DONE", "completed"),
+      row("PUB-DECLINED", "declined"),
+    ];
+    expect(withoutHiddenCompletedListings(all, listed).map((p) => p.id)).toEqual([
+      "VIS-1",
+      "VIS-2",
+      "PUB-DECLINED",
+    ]);
+  });
+
+  it("matches listed ids case-insensitively", () => {
+    const listed = [row("vis-1", "completed")];
+    const all = [row("VIS-1", "completed"), row("HID-DONE", "completed")];
+    expect(withoutHiddenCompletedListings(all, listed).map((p) => p.id)).toEqual([
+      "VIS-1",
+    ]);
+  });
+});
+

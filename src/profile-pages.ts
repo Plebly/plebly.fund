@@ -50,6 +50,7 @@ import {
   listAllPublicProposals,
   listListedProposals,
   proposalsForProfile,
+  withoutHiddenCompletedListings,
 } from "./github";
 import { nostrAccountLink, socialAccountLink } from "./icons";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
@@ -1616,7 +1617,10 @@ export async function renderPublicProfile(
     ),
   );
 
-  const all = await listAllPublicProposals();
+  const all = withoutHiddenCompletedListings(
+    await listAllPublicProposals(),
+    await listListedProposals(),
+  );
   const work = proposalsForProfile(all, profile);
 
   const linksHtml = profileLinksListHtml(profile);
