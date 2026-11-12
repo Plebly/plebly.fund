@@ -1,6 +1,6 @@
 import { WORKERS_API } from "./config";
 import { catalogIdKey } from "./github";
-import { hiddenCompletedListingIds } from "./home-feed-hidden";
+import { homeFeedVisibility, isHiddenFromHomeFeed } from "./home-feed-hidden";
 import { proposalHref } from "./router";
 import { escapeHtml, timeAgoHtml } from "./util";
 import { projectRefHtml, projectTitles } from "./project-titles";
@@ -37,11 +37,11 @@ export async function bindActivityStrip(root: ParentNode): Promise<void> {
     if (!res.ok) return;
     const data = (await res.json()) as { events?: ActivityEvent[] } | ActivityEvent[];
     const events = Array.isArray(data) ? data : data.events || [];
-    const hiddenIds = await hiddenCompletedListingIds();
+    const view = await homeFeedVisibility();
     const visible = events
       .filter((event) => {
         const key = catalogIdKey(event.proposal_id);
-        return Boolean(key) && !hiddenIds.has(key);
+        return Boolean(key) && !isHiddenFromHomeFeed(view, key);
       })
       .slice(0, 5);
     if (!visible.length) return;
