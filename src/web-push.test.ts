@@ -45,6 +45,35 @@ describe("parsePushEventData", () => {
       ).url,
     ).toBe("/account?tab=funds");
   });
+
+  it("refuses scheme-relative and backslash URLs that leave the origin", () => {
+    const fallback = "/account?tab=notifications";
+    const origin = "https://plebly.fund";
+    for (const url of [
+      "//evil.com",
+      "//evil.com/phish",
+      "///evil.com",
+      "/\\evil.com",
+      "\\\\evil.com",
+      "\\evil.com",
+    ]) {
+      const path = parsePushEventData(JSON.stringify({ url })).url;
+      expect(path.startsWith("//"), url).toBe(false);
+      expect(path.includes("\\"), url).toBe(false);
+      expect(new URL(path, origin).origin, url).toBe(origin);
+      expect(path, url).toBe(fallback);
+    }
+    expect(
+      parsePushEventData(
+        JSON.stringify({ url: "https://plebly.fund/p/abc?x=1#y" }),
+      ).url,
+    ).toBe("/p/abc?x=1#y");
+    // An absolute foreign URL is reduced to a path on our origin, not followed.
+    const foreign = parsePushEventData(
+      JSON.stringify({ url: "https://evil.com/steal" }),
+    ).url;
+    expect(new URL(foreign, origin).origin).toBe(origin);
+  });
 });
 
 describe("urlBase64ToUint8Array", () => {
@@ -194,5 +223,25 @@ describe("service worker push contract", () => {
     expect(sw).toContain('addEventListener("push"');
     expect(sw).toContain('addEventListener("notificationclick"');
     expect(sw).toContain("parsePushEventData");
+    expect(sw).toContain("notificationClickUrl");
+    const start = sw.indexOf("const PUSH_FALLBACK_PATH");
+    const end = sw.indexOf("self.addEventListener", start);
+    const load = new Function(
+      `${sw.slice(start, end)}; return { parsePushEventData, notificationClickUrl };`,
+    ) as () => {
+      parsePushEventData: (raw: string) => { url: string };
+      notificationClickUrl: (path: string, origin: string) => string | null;
+    };
+    const swApi = load();
+    const origin = "https://plebly.fund";
+    expect(swApi.parsePushEventData(JSON.stringify({ url: "//evil.com/phish" })).url).toBe(
+      "/account?tab=notifications",
+    );
+    expect(swApi.parsePushEventData(JSON.stringify({ url: "/\\evil.com" })).url).toBe(
+      "/account?tab=notifications",
+    );
+    const click = swApi.notificationClickUrl("//evil.com", origin);
+    expect(click).toBe(`${origin}/account?tab=notifications`);
+    expect(swApi.notificationClickUrl("/p/abc?x=1", origin)).toBe(`${origin}/p/abc?x=1`);
   });
 });

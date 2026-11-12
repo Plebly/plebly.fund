@@ -20,6 +20,44 @@ async function cacheFirst(request) {
   return response;
 }
 
+const PUSH_FALLBACK_PATH = "/account?tab=notifications";
+const PUSH_PATH_ORIGIN = "https://plebly.invalid";
+
+/** Keep in sync with src/web-push.ts pushNavigationPath. */
+function pushNavigationPath(raw) {
+  let url = typeof raw === "string" ? raw.trim() : "";
+  if (!url) return PUSH_FALLBACK_PATH;
+  if (/^https?:\/\//i.test(url)) {
+    try {
+      const abs = new URL(url);
+      url = `${abs.pathname}${abs.search}${abs.hash}` || "/";
+    } catch {
+      return PUSH_FALLBACK_PATH;
+    }
+  }
+  if (!url.startsWith("/")) url = `/${url}`;
+  if (url.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(url)) return PUSH_FALLBACK_PATH;
+  try {
+    const resolved = new URL(url, PUSH_PATH_ORIGIN);
+    if (resolved.origin !== PUSH_PATH_ORIGIN) return PUSH_FALLBACK_PATH;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}` || "/";
+  } catch {
+    return PUSH_FALLBACK_PATH;
+  }
+}
+
+/** Click target, or null when the path would leave this origin. */
+function notificationClickUrl(path, origin) {
+  const safe = pushNavigationPath(path);
+  try {
+    const target = new URL(safe, origin);
+    if (target.origin !== origin) return null;
+    return target.href;
+  } catch {
+    return null;
+  }
+}
+
 /** Keep in sync with src/web-push.ts parsePushEventData. */
 function parsePushEventData(raw) {
   if (!raw) {
@@ -39,20 +77,9 @@ function parsePushEventData(raw) {
       typeof data.body === "string" && data.body.trim()
         ? data.body.trim()
         : "Open Plebly for details.";
-    let url =
-      typeof data.url === "string" && data.url.trim()
-        ? data.url.trim()
-        : "/account?tab=notifications";
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      try {
-        const u = new URL(url);
-        url = `${u.pathname}${u.search}${u.hash}` || "/";
-      } catch {
-        url = "/account?tab=notifications";
-      }
-    } else if (!url.startsWith("/")) {
-      url = `/${url}`;
-    }
+    const url = pushNavigationPath(
+      typeof data.url === "string" ? data.url : PUSH_FALLBACK_PATH,
+    );
     return {
       title,
       body,
@@ -113,7 +140,8 @@ self.addEventListener("notificationclick", (event) => {
   const path =
     (event.notification.data && event.notification.data.url) ||
     "/account?tab=notifications";
-  const target = new URL(path, self.location.origin).href;
+  const target = notificationClickUrl(path, self.location.origin);
+  if (!target) return;
   event.waitUntil(
     (async () => {
       const all = await self.clients.matchAll({
