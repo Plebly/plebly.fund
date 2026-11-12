@@ -5,8 +5,10 @@ import { authFetch, type AuthUser } from "./auth";
 import { WORKERS_API } from "./config";
 import {
   listAllPublicProposals,
+  listListedProposals,
   proposalsForOrgClaimer,
   proposalsForOrgProposer,
+  withoutHiddenCompletedListings,
 } from "./github";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import {
@@ -266,7 +268,10 @@ export async function renderPublicOrgProfile(
     ),
   );
 
-  const all = await listAllPublicProposals();
+  const all = withoutHiddenCompletedListings(
+    await listAllPublicProposals(),
+    await listListedProposals(),
+  );
   const proposed = proposalsForOrgProposer(all, org.login);
   const proposedHtml =
     proposed.length === 0
