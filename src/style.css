@@ -2260,7 +2260,7 @@ a.project-card-by:hover .project-card-by-text {
   color: var(--muted);
 }
 
-.stats-metric dd {
+.stats-metric .stats-metric-value {
   margin: 0.45rem 0 0.4rem;
   font-family: var(--mono);
   font-size: clamp(1.35rem, 2.6vw, 1.75rem);
@@ -2270,7 +2270,7 @@ a.project-card-by:hover .project-card-by-text {
   font-variant-numeric: tabular-nums;
 }
 
-.stats-metric p {
+.stats-metric .stats-metric-detail {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;

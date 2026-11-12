@@ -144,7 +144,7 @@ function fundingDetailTrackHtml(
     const orangePct = Math.max(0, 100 - greenPct);
     fillHtml = `<span class="progress-floor" style="width:${greenPct}%"></span><span class="progress-over" style="width:${orangePct}%"></span>`;
   }
-  return `<div class="proposal-progress proposal-progress-detail${overClass}" role="progressbar" aria-valuemin="0" aria-valuemax="${safeScale}" aria-valuenow="${Math.round(funded)}">
+  return `<div class="proposal-progress proposal-progress-detail${overClass}" role="progressbar" aria-label="Funding progress" aria-valuemin="0" aria-valuemax="${safeScale}" aria-valuenow="${Math.round(funded)}">
       <div class="proposal-progress-fill">${fillHtml}</div>
       <div class="funding-markers">${ticks}</div>
     </div>`;
