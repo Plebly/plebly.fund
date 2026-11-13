@@ -15,7 +15,7 @@ Plebly funds Bitcoin work in public. New listings pay the builder. That payment 
 1. **List:** A bounty for builders or a campaign for a cause.
 2. **Donate:** Send Bitcoin to the address on the listing.
 3. **Build or receive:** Builders apply, or the organizer receives.
-4. **Pay:** A direct payment is already with the builder. A listing that already has an escrow pays after reviewers approve.
+4. **Pay:** A direct payment is already with the builder. A listing that already has an escrow pays once its funder flag window closes with no flag, or after reviewers approve a flagged deliverable.
 
 Browse [open projects](/) or [start a project](/propose).
 

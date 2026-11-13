@@ -689,7 +689,7 @@ export async function renderGovernance(
       <header class="gov-hero">
         <p class="about-eyebrow">Governance</p>
         <h1>Reviewers</h1>
-        <p class="lede">Reviewers confirm deliverables. Eligible funders may remove earned reviewers. Earned reviewers may apply as keyholders.</p>
+        <p class="lede">Reviewers vote on flagged deliverables. Eligible funders may remove earned reviewers. Earned reviewers may apply as keyholders.</p>
         ${statusStripHtml(me, user)}
         <div class="account-tabs gov-tabs" role="tablist" aria-label="Governance sections">
           <button type="button" class="account-tab ${tab === "roster" ? "active" : ""}" data-gov-tab="roster" role="tab" aria-selected="${tab === "roster"}">Roster${roster ? ` (${roster.count})` : ""}</button>
