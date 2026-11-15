@@ -24,5 +24,8 @@ export type SigningCard = {
     miner_fee_sats?: number;
     disbursed_sats?: number;
     input_sats?: number;
+    input_count?: number;
+    pool_refund_address?: string;
+    donate_address?: string;
   };
 };

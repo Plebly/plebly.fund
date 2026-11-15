@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { amountsMatchCard, computeMonthlyFeeOutput, splitWorkOutput } from "./signing-verify";
+import {
+  amountsMatchCard,
+  computeMonthlyFeeOutput,
+  estimateStructureMinerFeeSats,
+  splitWorkOutput,
+} from "./signing-verify";
 import fixture from "./fixtures/signet-structure-001.json";
 
 describe("signing verify", () => {
@@ -62,19 +67,68 @@ describe("signing verify", () => {
     expect(secondBuilder).toEqual({ ok: false, error: "unexpected output" });
   });
 
-  it("uses the frozen miner fee for a refund", () => {
+  it("checks a refund against the pool address and the fee formula", () => {
+    const pool = "tb1qpoolrefund000000000000000000000000000000";
+    const escrow = "tb1qescrowchange00000000000000000000000000000";
+    const fee = estimateStructureMinerFeeSats(1, 1);
+    const input = 80_000;
     const match = amountsMatchCard({
       kind: "refund",
-      recompute: { input_sats: 80_000, miner_fee_sats: 2_000 },
-      outputs: [{ label: "pool", amount_sats: 78_000 }],
+      recompute: {
+        input_sats: input,
+        input_count: 1,
+        pool_refund_address: pool,
+        donate_address: escrow,
+      },
+      outputs: [{ label: "donor_pool", address: pool, amount_sats: input - fee }],
     });
     expect(match.ok).toBe(true);
-    const bad = amountsMatchCard({
+    const badAmount = amountsMatchCard({
       kind: "refund",
-      recompute: { input_sats: 80_000, miner_fee_sats: 2_000 },
-      outputs: [{ label: "pool", amount_sats: 79_000 }],
+      recompute: { input_sats: input, input_count: 1, pool_refund_address: pool },
+      outputs: [{ label: "donor_pool", address: pool, amount_sats: input - fee + 1_000 }],
     });
-    expect(bad.ok).toBe(false);
+    expect(badAmount).toEqual({ ok: false, error: "pool amount does not match the frozen fee" });
+    const stranger = "tb1qstranger00000000000000000000000000000000";
+    const misdirected = amountsMatchCard({
+      kind: "refund",
+      recompute: { input_sats: input, input_count: 1, pool_refund_address: pool },
+      outputs: [{ label: "donor_pool", address: stranger, amount_sats: input - fee }],
+    });
+    expect(misdirected).toEqual({
+      ok: false,
+      error: "pool output does not pay the refund address",
+    });
+    const twoFee = estimateStructureMinerFeeSats(2, 2);
+    const change = 30_000;
+    const withChange = amountsMatchCard({
+      kind: "refund",
+      recompute: {
+        input_sats: 70_000 + change + twoFee,
+        input_count: 2,
+        pool_refund_address: pool,
+        donate_address: escrow,
+      },
+      outputs: [
+        { label: "donor_pool", address: pool, amount_sats: 70_000 },
+        { label: "escrow_change", address: escrow, amount_sats: change },
+      ],
+    });
+    expect(withChange.ok).toBe(true);
+    const changeAway = amountsMatchCard({
+      kind: "refund",
+      recompute: {
+        input_sats: 70_000 + change + twoFee,
+        input_count: 2,
+        pool_refund_address: pool,
+        donate_address: escrow,
+      },
+      outputs: [
+        { label: "donor_pool", address: pool, amount_sats: 70_000 },
+        { label: "escrow_change", address: stranger, amount_sats: change },
+      ],
+    });
+    expect(changeAway).toEqual({ ok: false, error: "change must return to the escrow" });
   });
 
   it("rejects an extra output on a monthly release", () => {

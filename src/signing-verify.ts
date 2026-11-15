@@ -70,6 +70,9 @@ export type VerifyCard = {
     miner_fee_sats?: number;
     disbursed_sats?: number;
     input_sats?: number;
+    input_count?: number;
+    pool_refund_address?: string;
+    donate_address?: string;
     escrow_by_proposal?: Record<string, string>;
     escrow_by_address?: Record<string, { budget_sats: number; pids?: string[] }>;
   };
@@ -105,10 +108,8 @@ export function expectedAmountRows(card: VerifyCard): AmountRow[] | { error: str
     return rows;
   }
   if (kind === "refund" || kind === "timelock" || kind === "reserve_refund") {
-    const input = rec.input_sats;
-    const fee = rec.miner_fee_sats;
-    if (input == null || fee == null) return { error: "missing pool or miner fee" };
-    return [{ label: "pool", amount_sats: input - fee }];
+    if (rec.input_sats == null) return { error: "missing pool or miner fee" };
+    return [{ label: "pool", amount_sats: rec.input_sats }];
   }
   if (kind === "structure") {
     if (!card.outputs.length) return { error: "missing structure outputs" };
@@ -126,9 +127,44 @@ export function amountsMatchCard(card: VerifyCard): { ok: true } | { ok: false; 
   const expected = expectedAmountRows(card);
   if ("error" in expected) return { ok: false, error: expected.error };
   if (card.kind === "refund" || card.kind === "timelock" || card.kind === "reserve_refund") {
-    const want = expected[0]?.amount_sats;
-    const got = card.outputs.reduce((n, o) => n + o.amount_sats, 0);
-    if (got !== want) return { ok: false, error: "pool amount does not match the frozen fee" };
+    const rec = card.recompute || {};
+    const input = rec.input_sats;
+    const nIn = rec.input_count;
+    const poolAddr = (rec.pool_refund_address || "").trim().toLowerCase();
+    const donateAddr = (rec.donate_address || "").trim().toLowerCase();
+    if (input == null || !nIn || nIn < 1 || !poolAddr) {
+      return { ok: false, error: "missing pool or miner fee" };
+    }
+    if (card.outputs.length < 1 || card.outputs.length > 2) {
+      return { ok: false, error: "unexpected output" };
+    }
+    const isPool = (label: string | undefined) => label === "donor_pool" || label === "pool";
+    const poolRows = card.outputs.filter((o) => isPool(o.label));
+    const changeRows = card.outputs.filter((o) => o.label === "escrow_change");
+    if (poolRows.length !== 1 || poolRows.length + changeRows.length !== card.outputs.length) {
+      return { ok: false, error: "unexpected output" };
+    }
+    const pool = poolRows[0]!;
+    if ((pool.address || "").trim().toLowerCase() !== poolAddr) {
+      return { ok: false, error: "pool output does not pay the refund address" };
+    }
+    if (changeRows.length) {
+      const change = changeRows[0]!;
+      if (!donateAddr || (change.address || "").trim().toLowerCase() !== donateAddr) {
+        return { ok: false, error: "change must return to the escrow" };
+      }
+    }
+    const outputSum = card.outputs.reduce((n, o) => n + o.amount_sats, 0);
+    const fee = input - outputSum;
+    const nOut = card.outputs.length;
+    const minFee = estimateStructureMinerFeeSats(nIn, nOut);
+    // One output may leave a sub-dust change to the miner. Two outputs pay
+    // the formula fee exactly: the rest is the escrow change above.
+    const maxFee =
+      nOut === 1 ? estimateStructureMinerFeeSats(nIn, 2) + DUST_SATS - 1 : minFee;
+    if (fee < minFee || fee > maxFee) {
+      return { ok: false, error: "pool amount does not match the frozen fee" };
+    }
     return { ok: true };
   }
   if (card.kind === "release") {
