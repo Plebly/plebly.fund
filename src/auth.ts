@@ -876,6 +876,12 @@ export type ProposalAuthorInput = {
 export type SubmitProposalInput = ProposalAuthorInput & {
   tos_ack?: boolean;
   submission_fee_txid: string;
+  /** On-chain receive address for a direct campaign when the route is direct-builder. */
+  pay_to_address?: string;
+  /** Compact P2WPKH signature over the pay-to message. */
+  pay_to_signature?: string;
+  /** Listing id from POST /proposals/reserve-id. The signature includes it. */
+  reserved_proposal_id?: string;
   source_issue?: {
     owner: string;
     repo: string;

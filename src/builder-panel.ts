@@ -71,6 +71,7 @@ import {
 } from "./claimer-track-ui";
 import { freshLinkedOrgs } from "./github-orgs-client";
 import { avatarImgHtml } from "./media";
+import { payToSignMessage } from "./pay-to";
 import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
@@ -104,6 +105,7 @@ import {
   mountDonateChromeWhenEscrowKnown,
   donateResultIsCurrent,
   onChainEscrowRowHtml,
+  proposalReceiveAddress,
   setDonateChromeContext,
   bindDonateModal,
   projectOutcomeHtml,
@@ -197,6 +199,10 @@ export function builderPanelHtml(
     user,
   });
   const isDirect = String(p.proposal_type || "bounty") === "direct";
+  const directPay = p.funding_route === "direct-builder";
+  const payoutLede = directPay
+    ? "Donors pay this address if you are awarded. That payment is final and is not held. Bond refunds still come back here. Not the fee/bond pay address."
+    : "One destination for bond refunds and, if you win and finish, escrow payout. Not the fee/bond pay address.";
   // Claim-view-first: suppress Donate button at first paint — claim view hasn't loaded yet.
   // The Donate button will be added after claim check passes in bindBuilderPanel.
   const firstPaintAction = first.button === "donate" ? { ...first, button: null as NextButton | null } : first;
@@ -204,7 +210,7 @@ export function builderPanelHtml(
       ${isDirect ? `<div id="direct-deliverable-slot"></div>` : `<div id="claim-apps-host"></div>`}`;
 
   if (isDirect) {
-    return `<div class="builder-panel" id="builder">
+    return `<div class="builder-panel" id="builder" data-funding-route="${directPay ? "direct-builder" : "multisig"}">
     <div class="builder-actions">
       <button type="button" class="btn ghost next-card-watch" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
@@ -217,7 +223,7 @@ export function builderPanelHtml(
   </div>`;
   }
 
-  return `<div class="builder-panel" id="builder">
+  return `<div class="builder-panel" id="builder" data-funding-route="${directPay ? "direct-builder" : "multisig"}">
     <div class="builder-actions">
       <button type="button" class="btn ghost next-card-watch" id="builder-watch" data-watching="${watching ? "1" : "0"}">${watchBtnHtml(watching)}</button>
     </div>
@@ -254,8 +260,7 @@ export function builderPanelHtml(
 
         <div class="claim-modal-section claim-refund" id="claim-step-refund" hidden>
           <p class="claim-refund-lede" id="claim-payout-hint" tabindex="-1">
-            One destination for bond refunds and, if you win and finish, escrow payout.
-            Not the fee/bond pay address.
+            ${payoutLede}
           </p>
 
           <div class="claim-refund-rules" role="group" aria-label="Bond refund conditions">
@@ -310,6 +315,16 @@ export function builderPanelHtml(
               Wallet you control on ${networkLabel()}.
             </p>
           </div>
+          ${
+            directPay
+              ? `<div class="claim-refund-dest" id="claim-pay-to-sign">
+            <p class="claim-refund-dest-hint muted">Sign this exact message with that address in Sparrow or Electrum. Donors see it only when the signature matches. Use a P2WPKH address.</p>
+            <code class="mono" id="claim-pay-to-message"></code>
+            <label class="donate-amount-label" for="claim-pay-to-signature">Signature</label>
+            <textarea id="claim-pay-to-signature" class="donate-amount mono" rows="3" autocomplete="off" spellcheck="false"></textarea>
+          </div>`
+              : ""
+          }
 
           <label class="claim-refund-ack" for="claim-payout-ack">
             <input type="checkbox" id="claim-payout-ack" />
@@ -608,7 +623,8 @@ export async function bindBuilderPanel(
       : fetchClaimStatus(opts.proposal.path, opts.proposal.id);
   {
     const earlyOpts = {
-      address: String(opts.proposal.escrow_address || ""),
+      address: proposalReceiveAddress(opts.proposal),
+      direct: opts.proposal.funding_route === "direct-builder",
       proposalId: opts.proposal.id,
       proposalPath: opts.proposal.path,
       proposalTitle: opts.proposal.title,
@@ -948,7 +964,9 @@ export async function bindBuilderPanel(
     const awareness = panel.querySelector("#claim-modal-awareness");
     if (awareness && step === "refund") {
       awareness.textContent =
-        "Set where your bond comes back — and where you get paid if you finish.";
+        opts.proposal.funding_route === "direct-builder"
+          ? "Set where your bond comes back — and where donors pay you if you are awarded. That payment is final."
+          : "Set where your bond comes back — and where you get paid if you finish.";
     } else if (awareness && step === "who") {
       awareness.textContent =
         "Review current applicants before paying the bond.";
@@ -969,7 +987,9 @@ export async function bindBuilderPanel(
         )?.value === "org";
       payoutHint.textContent = orgApply
         ? "Saved on this org application (not your personal Account payout)."
-        : "Claim bond refund and, if you finish, the monthly escrow payout. Not the fee/bond pay address.";
+        : opts.proposal.funding_route === "direct-builder"
+          ? "Donors pay this address if you are awarded. That payment is final and is not held. Bond refunds still come back here. Not the fee/bond pay address."
+          : "Claim bond refund and, if you finish, the monthly escrow payout. Not the fee/bond pay address.";
       syncPayoutRailUi();
     }
     if (step === "bond" || step === "submit") {
@@ -1371,8 +1391,10 @@ export async function bindBuilderPanel(
       }
       const mergedProposal = applyClaimStatusToProposal(opts.proposal, status);
       Object.assign(opts.proposal, mergedProposal);
+      const directListing = opts.proposal.funding_route === "direct-builder";
       const donatePanelOpts = {
-        address: String(opts.proposal.escrow_address || ""),
+        address: proposalReceiveAddress(opts.proposal),
+        direct: directListing,
         proposalId: opts.proposal.id,
         proposalPath: opts.proposal.path,
         proposalTitle: opts.proposal.title,
@@ -1611,10 +1633,16 @@ export async function bindBuilderPanel(
       }
 
       // Re-insert the row only for a real string address on this network.
-      const rowAddr = escrowAddressText(opts.proposal.escrow_address);
+      const rowAddr = proposalReceiveAddress(opts.proposal);
       if (onchainPanel && donateAllowed && rowAddr && escrowAddressMatchesNetwork(rowAddr)) {
         if (!onchainPanel.querySelector("#onchain-escrow-row")) {
-          onchainPanel.insertAdjacentHTML("afterbegin", onChainEscrowRowHtml(rowAddr));
+          onchainPanel.insertAdjacentHTML(
+            "afterbegin",
+            onChainEscrowRowHtml(
+              rowAddr,
+              opts.proposal.funding_route === "direct-builder" ? "Pay the builder" : undefined,
+            ),
+          );
         }
       }
       body.querySelector("#next-rebuttal")?.addEventListener("click", () => {
@@ -1877,9 +1905,19 @@ export async function bindBuilderPanel(
     }
   });
 
+  const refreshPayToMessage = () => {
+    const el = panel.querySelector("#claim-pay-to-message");
+    if (!el) return;
+    el.textContent = payToSignMessage(
+      payoutInput?.value || "",
+      opts.proposal.id || undefined,
+    );
+  };
   payoutInput?.addEventListener("input", () => {
     if (payoutAck) payoutAck.checked = false;
+    refreshPayToMessage();
   });
+  refreshPayToMessage();
 
   panel.querySelectorAll<HTMLInputElement>('input[name="claim_payout_rail"]').forEach(
     (radio) => {
@@ -1897,6 +1935,9 @@ export async function bindBuilderPanel(
       return;
     }
     const payout = payoutInput?.value.trim() || "";
+    const paySig =
+      panel.querySelector<HTMLTextAreaElement>("#claim-pay-to-signature")?.value.trim() ||
+      "";
     const bond = feePay?.getTxid() || "";
     if (
       isLightningPayoutDestination(payout) ||
@@ -1909,6 +1950,15 @@ export async function bindBuilderPanel(
         isLightningPayoutDestination(payout)
           ? BOUNTY_ONCHAIN_PAYOUT_ERROR
           : "Complete refund readiness before submitting.",
+        "error",
+      );
+      return;
+    }
+    if (opts.proposal.funding_route === "direct-builder" && !paySig) {
+      await showClaimStep("refund");
+      setMsg(
+        modalMsg(),
+        "Sign the pay-to message with that address and paste the signature.",
         "error",
       );
       return;
@@ -1953,6 +2003,7 @@ export async function bindBuilderPanel(
               submitClaim({
                 proposal_path: opts.proposal.path,
                 payout_address: payout,
+                pay_to_signature: paySig || undefined,
                 note: noteInput?.value.trim() || undefined,
                 claim_bond_txid: bond,
                 claimer_type: claimerType,
@@ -1967,6 +2018,7 @@ export async function bindBuilderPanel(
         : await submitClaim({
             proposal_path: opts.proposal.path,
             payout_address: payout,
+            pay_to_signature: paySig || undefined,
             note: noteInput?.value.trim() || undefined,
             claim_bond_txid: bond,
             claimer_type: claimerType,

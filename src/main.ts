@@ -159,7 +159,6 @@ function siteFooterHtml(routeName: string): string {
           <a href="${projectsHref()}"${listing.bounties ? ' class="active"' : ""}>Bounties</a>
           <a href="${campaignsHref()}"${listing.campaigns ? ' class="active"' : ""}>Campaigns</a>
           <a href="${href("/wanted")}"${fa("wanted")}>Most wanted</a>
-          <a href="${href("/endowment")}"${fa("endowment")}>Endowment</a>
           <a href="${href("/donations")}"${fa("donations")}>Donations</a>
           <a href="${href("/archive")}"${fa("archive")}>Archive</a>
         </div>
@@ -174,6 +173,7 @@ function siteFooterHtml(routeName: string): string {
         <div class="footer-col">
           <h2 class="footer-col-title">About</h2>
           <a href="${href("/about")}"${fa("about")}>About</a>
+          <a href="${href("/endowment")}"${fa("endowment")}>Proposed endowment</a>
           <a href="${href("/parameters")}"${fa("params")}>Parameters</a>
           <a href="${href("/terms")}"${fa("terms")}>Terms</a>
           <a href="${href("/stats")}"${fa("stats")}>Stats</a>
@@ -205,7 +205,6 @@ function shell(inner: string): string {
         <nav class="nav" aria-label="Primary">
           <a href="${projectsHref()}" class="${listing.bounties ? "active" : ""}"${listing.bounties ? ' aria-current="page"' : ""}>Bounties</a>
           <a href="${campaignsHref()}" class="${listing.campaigns ? "active" : ""}"${listing.campaigns ? ' aria-current="page"' : ""}>Campaigns</a>
-          <a href="${href("/endowment")}" class="${active("endowment")}"${current("endowment")}>Endowment</a>
           <a href="${href("/propose")}" class="${active("propose")}"${current("propose")}>Start a project</a>
           <a href="${href("/about")}" class="${active("about")}"${current("about")}>About</a>
           ${authNavHtml()}

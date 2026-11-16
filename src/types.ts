@@ -162,6 +162,10 @@ export type Proposal = {
   path: string;
   target_sats: number | null;
   escrow_address: string | null;
+  funding_route?: "multisig" | "direct-builder" | null;
+  pay_to_address?: string | null;
+  /** False when a stored pay-to failed its signature check and is hidden. */
+  pay_to_verified?: boolean | null;
   submission_fee_txid: string | null;
   cover_image?: string | null;
   created_at: string | null;

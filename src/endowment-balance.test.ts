@@ -52,58 +52,24 @@ describe("endowmentBalanceView", () => {
 });
 
 describe("home endowment strip", () => {
-  it("current live API: shared line, no amount, no Donate", () => {
-    document.body.innerHTML = endowmentStripHtml({
-      configured: true,
-      balance: endowmentBalanceView(legacy),
-    });
-    const t = document.body.textContent!;
-    expect(t).toContain(ENDOWMENT_SHARED_LINE);
-    expect(t).not.toContain("148,106");
-    expect(document.body.querySelector(".endowment-meter")).toBeNull();
-    expect(document.body.querySelector('a[href*="?donate"]')).toBeNull();
-    expect(t).toContain("Funded projects");
-  });
-
-  it("own address: Balance, Total given to date and Donate", () => {
+  it("is one quiet line, with no amount and no Donate", () => {
     document.body.innerHTML = endowmentStripHtml({
       configured: true,
       balance: endowmentBalanceView(own),
     });
-    const t = document.body.textContent!.replace(/\s+/g, " ");
-    expect(t).not.toContain(ENDOWMENT_SHARED_LINE);
-    expect(t).toContain("Balance");
-    expect(t).toContain("10,586 sats");
-    expect(t).toContain("Total given to date");
-    expect(t).toContain("20,000 sats");
-    expect(document.body.querySelector('a[href*="?donate"]')).not.toBeNull();
-  });
-
-  it("own address, balance unavailable: the unavailable copy", () => {
-    document.body.innerHTML = endowmentStripHtml({
-      configured: true,
-      balance: endowmentBalanceView({ ...own, balance_unavailable: true }),
-    });
-    expect(document.body.textContent).toContain("Balance temporarily unavailable");
-    expect(document.body.textContent).not.toContain("10,586");
-  });
-
-  it("no teaser (fetch failed): no amount and no Donate", () => {
-    document.body.innerHTML = endowmentStripHtml(null);
+    const t = document.body.textContent!;
+    expect(t).toContain("Proposed endowment");
+    expect(t).toContain("Not open yet");
+    expect(t).not.toContain("10,586");
+    expect(document.body.querySelector(".endowment-meter")).toBeNull();
     expect(document.body.querySelector('a[href*="?donate"]')).toBeNull();
-    expect(document.body.querySelector(".endowment-figures")).toBeNull();
+    expect(document.body.querySelector("h2")).toBeNull();
   });
 });
 
 describe("copy", () => {
   it("unavailable copy ends with a period", () => {
     expect(ENDOWMENT_BALANCE_UNAVAILABLE).toBe("Balance temporarily unavailable.");
-    document.body.innerHTML = endowmentStripHtml({
-      configured: true,
-      balance: endowmentBalanceView({ ...own, balance_unavailable: true }),
-    });
-    expect(document.body.querySelector(".endowment-balance-unavailable")!.textContent).toBe(
-      "Balance temporarily unavailable.",
-    );
+    expect(ENDOWMENT_SHARED_LINE.endsWith(".")).toBe(true);
   });
 });

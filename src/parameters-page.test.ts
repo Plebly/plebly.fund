@@ -51,6 +51,7 @@ describe("renderParameters", () => {
         total_fee_percent: 99,
         keyholder_cap_sats: 250_000,
         keyholders: [],
+        funding_route: "direct-builder",
       }),
     );
     await renderParameters(shell);
@@ -61,6 +62,7 @@ describe("renderParameters", () => {
       ["Keyholder fee", "1.5%"],
       // Total is platform + keyholder, not the payload's total_fee_percent.
       ["Total take", "4.5%"],
+      ["Funding route for new listings", "Pay the builder"],
     ]);
     expect(v[1]!.hint).toContain("Cap 250,000 sats per keyholder.");
   });
@@ -77,6 +79,7 @@ describe("renderParameters", () => {
     expect(v[2]!.value).toBe(`${PLATFORM_FEE_PERCENT + KEYHOLDER_FEE_PERCENT}%`);
     expect(v[1]!.hint).toContain(`Cap ${KEYHOLDER_CAP_SATS.toLocaleString("en-US")} sats`);
     expect(app().textContent).toContain("No active keyholders published yet.");
+    expect(v[3]!.value).toBe("Pay the builder");
   });
 
   it("uses published values field-by-field when the live payload omits one", async () => {
@@ -86,6 +89,7 @@ describe("renderParameters", () => {
     expect(v[0]!.value).toBe("1%");
     expect(v[1]!.value).toBe(`${KEYHOLDER_FEE_PERCENT}%`);
     expect(v[2]!.value).toBe(`${1 + KEYHOLDER_FEE_PERCENT}%`);
+    expect(v[3]!.value).toBe("Pay the builder");
   });
 
   it("lists the keyholder roster, with — for missing keys and 0 for no signings", async () => {

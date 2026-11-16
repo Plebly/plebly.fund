@@ -414,12 +414,12 @@ export const ABOUT_PARAM_LABELS: AboutParamDisplay[] = ${JSON.stringify(
         {
           label: "Platform fee",
           value: params.platform_fee,
-          hint: "Taken when the project is paid, not when you donate.",
+          hint: "Taken from an escrow payout, not when you donate. A payment straight to the builder has no platform fee.",
         },
         {
           label: "Opens for builders",
           value: params.minimum_funding_claim_floor,
-          hint: "Builders can apply once this amount is in.",
+          hint: "On an escrow listing, builders can apply once this amount is in. A direct listing opens claims without it.",
         },
         {
           label: "Time to deliver",

@@ -23,6 +23,7 @@ type ParamsPayload = {
     invited_at?: string;
     signing_count?: number;
   }[];
+  funding_route?: string;
 };
 
 export async function renderParameters(shell: ParametersShell): Promise<void> {
@@ -40,12 +41,13 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
   const kh = live?.keyholder_fee_percent ?? KEYHOLDER_FEE_PERCENT;
   const cap = live?.keyholder_cap_sats ?? KEYHOLDER_CAP_SATS;
   const roster = live?.keyholders || [];
+  const directRoute = live?.funding_route !== "multisig";
   app.innerHTML = shell(`
     <section class="wrap-wide detail">
       <header class="declined-head">
         <p class="eyebrow"><a href="${href("/about")}">About</a></p>
         <h1>Parameters</h1>
-        <p class="lede">Fees are published. Completions do not change them. Keyholders are paid from a monthly batch, not per project.</p>
+        <p class="lede">These fees apply when an escrow pays out. A payment straight to the builder has no platform fee. Keyholders sign escrow payouts, from a monthly batch, not per project.</p>
       </header>
       <dl class="about-params">
         <div class="about-param">
@@ -61,7 +63,16 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
         <div class="about-param">
           <dt>Total take</dt>
           <dd><span class="about-param-value">${escapeHtml(String(platform + kh))}%</span>
-          <span class="about-param-hint">Taken from the monthly payout. Bond and donor refunds are 0%.</span></dd>
+          <span class="about-param-hint">Taken from an escrow payout. A direct payment has no fee. Bond and donor refunds are 0%.</span></dd>
+        </div>
+        <div class="about-param">
+          <dt>Funding route for new listings</dt>
+          <dd><span class="about-param-value">${directRoute ? "Pay the builder" : "Multisig escrow"}</span>
+          <span class="about-param-hint">${
+            directRoute
+              ? "New listings pay the builder. That payment is final and takes no fee. A listing that already has an escrow keeps it."
+              : "A keyholder quorum set new listings to multisig escrow. A listing keeps the route it was listed with."
+          }</span></dd>
         </div>
       </dl>
       <h2>Active keyholders</h2>

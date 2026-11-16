@@ -220,7 +220,7 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
       : `<div class="empty-state">
           <p class="empty-state-title">No confirmed donations yet</p>
           <p class="empty-state-body"><a href="${projectsHref()}">Fund a project</a>${
-            endowmentOpen ? ` or <a href="${href("/endowment")}">give to the endowment</a>` : ""
+            endowmentOpen ? ` or the <a href="${href("/endowment")}">proposed endowment</a>` : ""
           }.</p>
         </div>`;
 

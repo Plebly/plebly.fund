@@ -92,7 +92,7 @@ export function heroHtml(opts: {
   return `<section class="endowment-hero">
     <div class="endowment-hero-bg" aria-hidden="true"></div>
     <div class="wrap-wide endowment-hero-inner">
-      <h1 class="endowment-brand">Endowment</h1>
+      <h1 class="endowment-brand">Proposed endowment</h1>
       <p class="endowment-lede">${escapeHtml(ENDOWMENT_BLURB)}</p>
       ${signal}
       ${cta}

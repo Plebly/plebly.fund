@@ -49,9 +49,11 @@ import {
   metaChipsHtml,
   milestonesHtml,
   onChainPanelHtml,
+  proposalReceiveAddress,
   structuredFundingPanelHtml,
   bindStructuredFunding,
   proposalContextHtml,
+  directGiftMeterHtml,
   proposalFundingBarHtml,
   proposalLifecycleBannersHtml,
   proposalStepperHtml,
@@ -611,11 +613,10 @@ export async function renderProposalPage(
     // Donate-blocked by the catalog, or voided/settled by status: no Donate chrome,
     // no ?donate auto-open and no escrow row on first paint.
     const catalogEscrowHidden = isCatalogEscrowHidden(match);
-    const hasEscrow =
-      Boolean(match.escrow_address) &&
-      escrowAddressMatchesNetwork(String(match.escrow_address));
+    const receive = proposalReceiveAddress(match);
+    const hasReceive = Boolean(receive) && escrowAddressMatchesNetwork(receive);
     const statusOk = isDonateChromeStatus(String(match.status));
-    const showDonatePlaceholder = hasEscrow && statusOk && !catalogEscrowHidden;
+    const showDonatePlaceholder = hasReceive && statusOk && !catalogEscrowHidden;
     const wantsDonate =
       showDonatePlaceholder &&
       (/(?:^|[?&])donate(?:=[^&]*)?(?:&|$)/.test(location.search) ||
@@ -738,20 +739,22 @@ export async function renderProposalPage(
         </header>
 
         ${
-          match.escrow_address
-            ? (sharedEscrowPendingHtml({ ...match, balance_sats: balance }, "detail") ??
-              proposalFundingBarHtml(
-                balance,
-                CLAIM_FLOOR_SATS,
-                match.target_sats,
-                match.milestones,
-                {
-                  status: match.status,
-                  claimer: match.claimer,
-                  proposal_type: match.proposal_type,
-                },
-              ))
-            : ""
+          match.funding_route === "direct-builder"
+            ? directGiftMeterHtml(balance, match.target_sats, "detail")
+            : match.escrow_address
+              ? (sharedEscrowPendingHtml({ ...match, balance_sats: balance }, "detail") ??
+                proposalFundingBarHtml(
+                  balance,
+                  CLAIM_FLOOR_SATS,
+                  match.target_sats,
+                  match.milestones,
+                  {
+                    status: match.status,
+                    claimer: match.claimer,
+                    proposal_type: match.proposal_type,
+                  },
+                ))
+              : ""
         }
 
         ${proposalStepperHtml(match)}
@@ -833,7 +836,8 @@ export async function renderProposalPage(
     // Register Donate click context immediately (even without markdown escrow)
     // so first-paint CTAs work before bindBuilderPanel fills claimStatusPromise.
     const donatePanelOpts = {
-      address: String(match.escrow_address || ""),
+      address: receive,
+      direct: match.funding_route === "direct-builder",
       proposalId: match.id,
       proposalPath: match.path,
       proposalTitle: match.title,

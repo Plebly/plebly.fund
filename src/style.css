@@ -4789,6 +4789,15 @@ a.proposal-meta-chip-endowment:hover {
   background: rgba(var(--accent-rgb), 0.16);
 }
 
+.endowment-note {
+  margin: 0.2rem auto 0.15rem;
+  font-size: 0.92rem;
+}
+
+.endowment-note a {
+  color: inherit;
+}
+
 .landing-endowment {
   margin: 0.65rem auto 0;
 }

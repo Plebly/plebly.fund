@@ -327,7 +327,7 @@ describe("shared escrow and the endowment wording", () => {
     route([], OWN);
     await renderDonations(shell);
     expect(lede()).toBe("Confirmed gifts to projects and the endowment.");
-    expect(app().querySelector('a[href$="/endowment"]')!.textContent).toBe("give to the endowment");
+    expect(app().querySelector('a[href$="/endowment"]')!.textContent).toBe("proposed endowment");
   });
 
   it("with rows: lede carries the total; a shared-escrow row is plain text, not /endowment", async () => {

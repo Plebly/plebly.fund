@@ -91,6 +91,33 @@ describe("home card guards", () => {
       ...over,
     }) as Proposal;
 
+  it("direct-builder gifts are paid, not a pot waiting to open", async () => {
+    const { progressHtml } = await import("./home-page");
+    const html = progressHtml(
+      card({
+        funding_route: "direct-builder",
+        status: "claimed",
+        balance_sats: 40_000,
+        target_sats: 100_000,
+        escrow_address: "tb1qbuilder",
+      }),
+      10_000,
+    );
+    expect(html).toContain("Paid to the builder");
+    expect(html).toContain("40,000 of 100,000 sats paid");
+    expect(html).not.toMatch(/to open|escrow|raised/);
+  });
+
+  it("a later balance update leaves the paid-gift meter alone", async () => {
+    const { directGiftMeterHtml, updateProposalFundingBar } = await import("./proposal-funding-bar");
+    const host = document.createElement("div");
+    host.innerHTML = directGiftMeterHtml(40_000, 100_000, "detail");
+    updateProposalFundingBar(host, 80_000, 10_000, 100_000, [], { status: "claimed" });
+    expect(host.textContent).toContain("Paid to the builder");
+    expect(host.textContent).toContain("40,000 of 100,000 sats paid");
+    expect(host.textContent).not.toMatch(/to open/);
+  });
+
   it("still raising below open: 'X of Y sats to open'", async () => {
     const { progressHtml } = await import("./home-page");
     expect(progressHtml(card({}), 10_000)).toContain("4,000 of 10,000 sats to open");

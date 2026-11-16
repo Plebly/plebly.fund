@@ -1,6 +1,6 @@
 /** Public marketing copy for endowment surfaces. */
 export const ENDOWMENT_BLURB =
-  "A shared pool that gifts popular projects each month.";
+  "A proposed shared pool that would gift popular projects each month. It is not open yet.";
 
 export const ENDOWMENT_HOW_STEPS = [
   {

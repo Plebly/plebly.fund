@@ -7,7 +7,7 @@ These terms describe how the operator of [plebly.fund](https://plebly.fund) coor
 
 ## 1. Coordinator, not custodian
 
-Plebly routes proposals, reviews, and unsigned PSBTs. It does not hold signing keys and does not sign release transactions. The Worker constructs unsigned PSBTs for keyholder review and signing, and cannot force a 3-of-5 spend. Donors send bitcoin to a published escrow address. Keyholders sign offline.
+Plebly routes proposals, reviews, and unsigned PSBTs. It does not hold signing keys and does not sign release transactions. The Worker constructs unsigned PSBTs for keyholder review and signing, and cannot force a 3-of-5 spend. Donors send bitcoin to a published escrow address, or, when a listing says so, straight to the builder. A payment straight to the builder is final. Keyholders sign escrow releases offline.
 
 ## 2. Who accepts these terms
 
@@ -29,7 +29,7 @@ Standard `deliverable_confirm` votes are unpaid. The reviewer seat is earned by 
 
 - Proposal submission: 10,000 sats, exact, non-refundable, to the published fee address.
 - Claim bond: 10,000 sats to the same address. Refunded after `completed`. Forfeited on window expiry, checkpoint abandon, rebuttal expiry, final reject, or fraud.
-- Release: 3% platform + 2% keyholders of that month’s disbursed set, with a 500,000 sat cap per signing keyholder, plus 1% to Bitcoin District Initiative on bounty structured-funding completions. No fee on donor or bond refunds.
+- Release: 3% platform + 2% keyholders of that month’s disbursed escrow set, with a 500,000 sat cap per signing keyholder, plus 1% to Bitcoin District Initiative on bounty structured-funding completions. No fee on donor or bond refunds. No fee on a payment straight to the builder.
 - Bounty refunds on this architecture go to a single pool address (next receive index on the published escrow descriptor), not per-donor claim-based refunds (replaces Q17 for bounty). Direct campaigns stay on the existing drip / per-donor model.
 
 ## 5. Stall and replacement

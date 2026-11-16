@@ -174,6 +174,9 @@ type CatalogProposal = {
   created_at?: string | null;
   target_sats?: number | null;
   escrow_address?: string | null;
+  funding_route?: "multisig" | "direct-builder" | null;
+  pay_to_address?: string | null;
+  pay_to_verified?: boolean | null;
   balance_sats?: number | null;
   /** workers#50: escrow address shared with another catalog row. */
   escrow_shared?: boolean;
@@ -224,6 +227,20 @@ function catalogFundingSignals(
   return signals;
 }
 
+/** Direct-builder fields live only on the catalog. A pay-to is never an escrow. */
+function catalogPayTo(catalog: Proposal | null | undefined): Partial<Proposal> {
+  if (catalog?.funding_route !== "direct-builder") return {};
+  const out: Partial<Proposal> = {
+    funding_route: "direct-builder",
+    escrow_address: null,
+    pay_to_address:
+      catalog.pay_to_verified === true ? catalog.pay_to_address ?? null : null,
+  };
+  if (typeof catalog.pay_to_verified === "boolean") out.pay_to_verified = catalog.pay_to_verified;
+  if (typeof catalog.balance_sats === "number") out.balance_sats = catalog.balance_sats;
+  return out;
+}
+
 function proposalFromCatalog(entry: CatalogProposal): Proposal {
   return {
     id: entry.id,
@@ -238,7 +255,20 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     cover_image: entry.cover_image ?? null,
     created_at: entry.created_at ?? null,
     target_sats: entry.target_sats ?? null,
-    escrow_address: entry.escrow_address ?? null,
+    escrow_address:
+      entry.funding_route === "direct-builder" ? null : entry.escrow_address ?? null,
+    funding_route:
+      entry.funding_route === "direct-builder" || entry.funding_route === "multisig"
+        ? entry.funding_route
+        : null,
+    pay_to_address:
+      entry.funding_route === "direct-builder" && entry.pay_to_verified === true
+        ? entry.pay_to_address ?? null
+        : null,
+    pay_to_verified:
+      entry.funding_route === "direct-builder" && typeof entry.pay_to_verified === "boolean"
+        ? entry.pay_to_verified
+        : null,
     balance_sats:
       typeof entry.balance_sats === "number" ? entry.balance_sats : undefined,
     // Keep an explicit false: isSharedEscrow treats a missing flag as shared.
@@ -323,6 +353,7 @@ export function applyCatalogRuntimeToProposal(
   const withSignals = (proposal: Proposal): Proposal => ({
     ...proposal,
     ...catalogFundingSignals(catalog),
+    ...catalogPayTo(catalog),
   });
   // No catalog row (KNOTS, 2026-10-08): sharing is unknown, so treat the
   // escrow as shared for its balance (workers#50 fail-closed). The page never
