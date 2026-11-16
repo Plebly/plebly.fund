@@ -2,6 +2,8 @@
 
 Live paths only. Plebly is a coordinator: review + PSBT routing, 3% platform + 2% keyholders, no keys. Review is final. Donors funded a process, not a veto. Keyholders do not re-try quality. AI is optional triage and never releases funds.
 
+A `direct-builder` listing pays the named address. A review of that work does not move those coins. Refund and redirect ballots do not apply. The fees in the table below are escrow fees.
+
 “Proposer accepts” means **applicant award**, not quality sign-off. The reviewer seat is earned by completing a bounty (`addEarnedReviewer`). Standard reviews are the unpaid duty of that seat.
 
 ## Money

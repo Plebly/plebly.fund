@@ -279,6 +279,53 @@ describe("applyClaimStatusToProposal", () => {
     });
   });
 
+  it("keeps a direct pay-to and drops a stuffed escrow", () => {
+    const base = proposal({
+      status: "listed",
+      escrow_address: "tb1qescrow",
+    });
+    const merged = applyClaimStatusToProposal(base, {
+      proposal_id: "demo",
+      proposal_path: base.path,
+      state: "claimed",
+      status: "claimed",
+      confirmed_balance_sats: 40_000,
+      claim_floor_sats: 10_000,
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      pay_to_verified: true,
+      escrow_address: "tb1qbuilder",
+      accepting_funds: true,
+    });
+    expect(merged.funding_route).toBe("direct-builder");
+    expect(merged.pay_to_address).toBe("tb1qbuilder");
+    expect(merged.escrow_address).toBeNull();
+  });
+
+  it("drops a direct pay-to the claim view did not verify", () => {
+    const base = proposal({
+      status: "listed",
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      pay_to_verified: true,
+    });
+    const merged = applyClaimStatusToProposal(base, {
+      proposal_id: "demo",
+      proposal_path: base.path,
+      state: "claimed",
+      status: "claimed",
+      confirmed_balance_sats: 0,
+      claim_floor_sats: 10_000,
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qattacker",
+      escrow_address: "tb1qattacker",
+      accepting_funds: true,
+    });
+    expect(merged.pay_to_address).toBeNull();
+    expect(merged.pay_to_verified).toBe(false);
+    expect(merged.escrow_address).toBeNull();
+  });
+
   it("overlays settle_txid from claim status", () => {
     const txid = "abcdef01" + "23".repeat(28);
     const base = proposal({ status: "in_review", claimer: "bob" });

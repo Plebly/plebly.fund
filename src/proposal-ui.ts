@@ -134,6 +134,8 @@ export type DonateBindOpts = {
   utxoPollMs?: number;
   /** Override confirmed-balance poll interval (tests use a short value). */
   balancePollMs?: number;
+  /** Pay-to listing. Do not poll the address balance; that is the builder's wallet. */
+  direct?: boolean;
 };
 
 /** Hard-label beside Donate/escrow address — mirrors claim-bond feePay contrast. */
@@ -179,8 +181,12 @@ function donateRefundRouteHtml(o: { signedIn: boolean; shared: boolean }): strin
   return `<p class="donate-refund-route muted" id="donate-refund-route" role="note">${escapeHtml(copy)}</p>`;
 }
 
-function donateEscrowHardLabelHtml(): string {
+function donateEscrowHardLabelHtml(direct = false): string {
   const net = networkLabel();
+  if (direct) {
+    return `<p class="fee-pay-bond-label" id="donate-escrow-label">PAY THE BUILDER</p>
+    <p class="fee-pay-bond-contrast" id="donate-escrow-contrast">Send on <strong>${escapeHtml(net)}</strong>. Signed by that address. This payment is final. It is not held and cannot be refunded.</p>`;
+  }
   return `<p class="fee-pay-bond-label" id="donate-escrow-label">DONATE / ESCROW ADDRESS</p>
     <p class="fee-pay-bond-contrast" id="donate-escrow-contrast">Send any amount here on <strong>${escapeHtml(net)}</strong>. Not claim bond · not payout.</p>`;
 }
@@ -221,9 +227,10 @@ function donatePayStepHtml(
   onchainPresets: string,
   lnPresets: string,
   signedIn: boolean,
-  opts?: { endowment?: boolean; shared?: boolean },
+  opts?: { endowment?: boolean; shared?: boolean; direct?: boolean },
 ): string {
   const endowment = Boolean(opts?.endowment);
+  const direct = Boolean(opts?.direct);
   // One sign-in note per modal: the anonymous-credit line shows only when no
   // shared-count or refund-route note is on the pay step.
   const noteOpts = { signedIn, shared: Boolean(opts?.shared) };
@@ -266,16 +273,20 @@ function donatePayStepHtml(
         <span class="donate-rail-kicker">Bitcoin</span>
         <span class="donate-rail-name">On-chain</span>
       </button>
-      <button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
+      ${
+        direct
+          ? ""
+          : `<button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
         <span class="donate-rail-kicker">Lightning</span>
         <span class="donate-rail-name">Invoice</span>
-      </button>
+      </button>`
+      }
     </div>
 
     <div class="donate-pane donate-pane-onchain" data-pane="onchain" role="tabpanel" aria-labelledby="donate-rail-onchain">
       <div class="donate-pay-notes">
-          ${endowment ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
-          ${endowment ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${endowment || direct ? "" : donateSharedCountHtml({ signedIn, shared: Boolean(opts?.shared) })}
+          ${endowment || direct ? "" : donateRefundRouteHtml({ signedIn, shared: Boolean(opts?.shared) })}
           ${
             otherSignInNote
               ? `<p class="donate-note-signin"><button type="button" class="donate-credit-signin" id="donate-credit-signin">Sign in</button></p>`
@@ -292,7 +303,7 @@ function donatePayStepHtml(
             <input id="donate-amount" class="donate-amount mono" type="number" min="0" step="1000" placeholder="Any amount" />
           </div>
           <div class="donate-presets">${onchainPresets}</div>
-          ${donateEscrowHardLabelHtml()}
+          ${donateEscrowHardLabelHtml(direct)}
           <div class="donate-address-block" data-escrow-address-block>
           <code class="donate-address mono escrow-addr" id="donate-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
           ${escrowAddressSignetNoteHtml()}
@@ -305,7 +316,22 @@ function donatePayStepHtml(
           <a class="donate-explorer-link" href="${escapeHtml(`${MEMPOOL_WEB}/address/${encodeURIComponent(addr)}`)}" target="_blank" rel="noreferrer noopener">View on explorer</a>
         </div>
       </div>
-      <p class="donate-watch-hint muted" id="donate-watch-hint">Payment is detected automatically.</p>
+      <p class="donate-watch-hint muted" id="donate-watch-hint">${
+        direct
+          ? "A payment to this address is final. Link the transaction after you send."
+          : "Payment is detected automatically."
+      }</p>
+      ${
+        direct
+          ? `<div class="donate-link-gift" id="donate-link-gift">
+        <label class="donate-amount-label" for="donate-link-txid">Transaction id</label>
+        <input id="donate-link-txid" class="donate-amount mono" maxlength="64" spellcheck="false" autocomplete="off" placeholder="64 hex characters" />
+        <label class="donate-amount-label" for="donate-link-vout">Output</label>
+        <input id="donate-link-vout" class="donate-amount mono" type="number" min="0" step="1" value="0" />
+        <button type="button" class="btn" id="donate-link-submit">Link this payment</button>
+      </div>`
+          : ""
+      }
       <p class="donate-watch-unavailable" id="donate-watch-unavailable" role="status" hidden>${DONATE_WATCH_UNAVAILABLE_COPY}</p>
       <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
@@ -414,6 +440,7 @@ export {
   fundingTargetSats,
   isPastFundingTarget,
   overfundRatioLabel,
+  directGiftMeterHtml,
   proposalFundingBarHtml,
   updateProposalFundingBar,
   type FundingBarMarker,
@@ -488,6 +515,19 @@ export function proposalLifecycleBannersHtml(
       "Release stalled",
       `${escapeHtml(p.release_blocked_reason)}${escapeHtml(seatLine)}`,
       "lifecycle-stall",
+    );
+  }
+  if (
+    p.funding_route === "direct-builder" &&
+    (String(p.status) === "abandoned_vote" ||
+      String(p.status) === "underfunded" ||
+      String(p.status) === "refunding" ||
+      String(p.status) === "redirect_pending" ||
+      String(p.status) === "redirected")
+  ) {
+    return lifecycleBanner(
+      "Final",
+      "This listing pays the builder directly. A gift already sent is final and cannot be refunded or redirected.",
     );
   }
   if (String(p.status) === "abandoned_vote") {
@@ -613,11 +653,34 @@ export function bindShareButtons(root: ParentNode): void {
 }
 
 /** Full donate flow inside a modal shell. */
+export function proposalReceiveAddress(
+  p:
+    | {
+        funding_route?: string | null;
+        pay_to_address?: string | null;
+        pay_to_verified?: boolean | null;
+        escrow_address?: string | null;
+      }
+    | null
+    | undefined,
+): string {
+  if (!p) return "";
+  if (p.funding_route === "direct-builder") {
+    if (p.pay_to_verified !== true) return "";
+    return String(p.pay_to_address || "").trim();
+  }
+  return String(p.escrow_address || "").trim();
+}
+
 export function donateModalHtml(
   p: Proposal,
   opts?: { signedIn?: boolean },
 ): string {
-  if (!p.escrow_address) return "";
+  const unverified =
+    p.funding_route === "direct-builder" &&
+    p.pay_to_verified !== true &&
+    Boolean(String(p.pay_to_address || "").trim());
+  if (!unverified && !proposalReceiveAddress(p)) return "";
   // Catalog-only blocking for static HTML; claim-view check happens at runtime
   if (isCatalogDonateBlocked(p)) return "";
   return `<div class="site-modal donate-modal" id="donate-modal" hidden${donateModalOwnerAttrs(p)}>
@@ -647,16 +710,24 @@ export function donatePanelHtml(
   p: Proposal,
   opts?: { signedIn?: boolean },
 ): string {
-  if (!p.escrow_address) return "";
-  const addr = p.escrow_address;
+  const direct = p.funding_route === "direct-builder";
+  if (direct && p.pay_to_verified !== true && p.pay_to_address) {
+    return `<div class="donate-panel" id="donate"><p class="donate-lede">This pay-to is not shown. The signature does not match this listing.</p></div>`;
+  }
+  if (direct && !p.pay_to_address) {
+    return `<div class="donate-panel" id="donate"><p class="donate-lede">A pay-to address opens when a builder is awarded. A gift then goes to that builder. It is not held and cannot be refunded.</p></div>`;
+  }
+  const addr = direct ? p.pay_to_address || "" : p.escrow_address || "";
+  if (!addr) return "";
   const signedIn = Boolean(opts?.signedIn);
-  const networkNote = signetPayNoteHtml("donate");
+  const networkNote = signetPayNoteHtml(direct ? "direct" : "donate");
   const presets = donatePresetButtons();
 
   return `<div class="donate-panel" id="donate" data-donate-step="credit">
     ${donateCreditStepHtml(signedIn)}
     ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn, {
       shared: isSharedEscrow(p, loadedCatalogRows()),
+      direct,
     })}
   </div>`;
 }
@@ -1366,9 +1437,36 @@ function bindDonateWizard(panel: Element, opts: DonateBindOpts): void {
       claimWrap.innerHTML = "";
     }
     if (!opts.signedIn) restoreStoredReceipt();
-    startBalanceWatch();
-    startUtxoWatch();
+    if (!opts.direct) {
+      startBalanceWatch();
+      startUtxoWatch();
+    }
   };
+
+  panel.querySelector<HTMLButtonElement>("#donate-link-submit")?.addEventListener(
+    "click",
+    () => {
+      const txid = (
+        panel.querySelector<HTMLInputElement>("#donate-link-txid")?.value || ""
+      )
+        .trim()
+        .toLowerCase();
+      const vout = Math.floor(
+        Number(panel.querySelector<HTMLInputElement>("#donate-link-vout")?.value),
+      );
+      if (!/^[0-9a-f]{64}$/.test(txid)) {
+        setDonateConfirmStatus(panel, "Enter the transaction id.", "bad");
+        return;
+      }
+      if (!Number.isInteger(vout) || vout < 0) {
+        setDonateConfirmStatus(panel, "Enter the output index.", "bad");
+        return;
+      }
+      const utxo = { txid, vout, value: 0 };
+      if (opts.signedIn && opts.proposalId) void linkOutpoint(utxo);
+      else showAnonymousReceipt(utxo);
+    },
+  );
 
   panel.querySelector<HTMLButtonElement>("#donate-credit-continue")?.addEventListener(
     "click",
@@ -2321,12 +2419,27 @@ export function closeDonateModalWhenBlocked(): void {
   surfaceGiftLinks();
 }
 
+function donateReceiveAddress(
+  ctx: {
+    proposal?: Parameters<typeof proposalReceiveAddress>[0];
+    panelOpts?: { address?: string; direct?: boolean };
+  } | null
+  | undefined,
+): string {
+  if (!ctx) return "";
+  const direct =
+    ctx.proposal?.funding_route === "direct-builder" || Boolean(ctx.panelOpts?.direct);
+  const verified = proposalReceiveAddress(
+    direct && ctx.proposal
+      ? { ...ctx.proposal, funding_route: "direct-builder" }
+      : ctx.proposal,
+  );
+  if (direct) return verified;
+  return (verified || String(ctx.panelOpts?.address || "")).trim();
+}
+
 function currentDonateEscrowAddress(): string {
-  return String(
-    donateChromeContext?.proposal.escrow_address ||
-      donateChromeContext?.panelOpts.address ||
-      "",
-  ).trim();
+  return donateReceiveAddress(donateChromeContext);
 }
 
 /** /p/{id} or /proposal/... → claim fetch keys when chrome context is missing. */
@@ -2447,20 +2560,32 @@ export async function ensureDonateModalMounted(
     target: DonateChromeContext,
     status: {
       escrow_address?: string | null;
+      funding_route?: string | null;
+      pay_to_address?: string | null;
+      pay_to_verified?: boolean | null;
       state?: string | null;
       status?: string | null;
     } | null,
   ) => {
-    if (!status?.escrow_address) return;
+    const receive = proposalReceiveAddress(status);
+    if (!receive) return;
+    const direct = status?.funding_route === "direct-builder";
     const nextStatus =
-      status.state === "claimed" ||
-      status.state === "in_review" ||
-      status.state === "completed"
+      status?.state === "claimed" ||
+      status?.state === "in_review" ||
+      status?.state === "completed"
         ? status.state
-        : status.status || target.proposal.status;
-    target.proposal.escrow_address = status.escrow_address;
+        : status?.status || target.proposal.status;
+    if (direct) {
+      target.proposal.funding_route = "direct-builder";
+      target.proposal.pay_to_address = receive;
+      target.proposal.pay_to_verified = true;
+      target.panelOpts.direct = true;
+    } else {
+      target.proposal.escrow_address = receive;
+    }
     if (nextStatus) target.proposal.status = nextStatus;
-    target.panelOpts.address = String(status.escrow_address);
+    target.panelOpts.address = receive;
   };
 
   if (!ctx) {
@@ -2482,15 +2607,16 @@ export async function ensureDonateModalMounted(
       closeDonateModalWhenBlocked();
       return null;
     }
-    if (!status.escrow_address) {
+    const addr0 = proposalReceiveAddress(status);
+    if (!addr0) {
       closeDonateModalWhenBlocked();
       return null;
     }
-    const addr0 = String(status.escrow_address).trim();
     if (!escrowAddressMatchesNetwork(addr0)) {
       closeDonateModalWhenBlocked();
       return null;
     }
+    const directListing = status.funding_route === "direct-builder";
     const synthetic: DonateChromeContext = {
       root: document,
       proposal: {
@@ -2498,10 +2624,14 @@ export async function ensureDonateModalMounted(
         path: status.proposal_path || path || "",
         title: status.title || "Project",
         status: status.state || status.status || "listed",
-        escrow_address: addr0,
+        funding_route: directListing ? "direct-builder" : null,
+        pay_to_address: directListing ? addr0 : null,
+        pay_to_verified: directListing ? true : null,
+        escrow_address: directListing ? null : addr0,
       } as Proposal,
       panelOpts: {
         address: addr0,
+        direct: directListing,
         proposalId: status.proposal_id || id,
         proposalPath: status.proposal_path || path,
         proposalTitle: status.title || "Project",
@@ -2516,6 +2646,9 @@ export async function ensureDonateModalMounted(
 
   type ResolvedClaimStatus = {
     escrow_address?: string | null;
+    funding_route?: string | null;
+    pay_to_address?: string | null;
+    pay_to_verified?: boolean | null;
     state?: string | null;
     status?: string | null;
     psbt?: { structured_state?: string } | null;
@@ -2534,9 +2667,7 @@ export async function ensureDonateModalMounted(
     applyClaimEscrow(ctx, resolvedClaimStatus);
   }
 
-  let addr = String(
-    ctx.proposal.escrow_address || ctx.panelOpts.address || "",
-  ).trim();
+  let addr = donateReceiveAddress(ctx);
 
   // Click-path fallback: in-flight promise missing/stale — fetch by proposal id.
   if (!addr) {
@@ -2560,9 +2691,7 @@ export async function ensureDonateModalMounted(
         ...ctx,
         claimStatusPromise: Promise.resolve(resolvedClaimStatus),
       });
-      addr = String(
-        ctx.proposal.escrow_address || ctx.panelOpts.address || "",
-      ).trim();
+      addr = donateReceiveAddress(ctx);
     }
   }
 
@@ -2676,7 +2805,7 @@ export function bindDonateModal(
         if (donateChromeContext) {
           await bindDonatePanel(host, {
             ...donateChromeContext.panelOpts,
-            address: addr || donateChromeContext.panelOpts.address,
+            address: addr,
           });
         }
       } catch {
@@ -2752,7 +2881,12 @@ export async function mountDonateChromeWhenEscrowKnown(
   panelOpts: DonateBindOpts,
   opts?: { ignoreStatusGate?: boolean; claimStatus?: ClaimViewForDonate },
 ): Promise<boolean> {
-  const addr = String(proposal.escrow_address || panelOpts.address || "").trim();
+  const directListing =
+    proposal.funding_route === "direct-builder" || Boolean(panelOpts.direct);
+  if (directListing) panelOpts.direct = true;
+  // A direct address has to come from the verified proposal. The options
+  // address is only the escrow fallback.
+  const addr = donateReceiveAddress({ proposal, panelOpts });
   if (!addr || !escrowAddressMatchesNetwork(addr)) return false;
   // Started for a project that is no longer on screen: touch nothing.
   if (!donateResultIsCurrent(proposal)) return false;
@@ -2812,7 +2946,14 @@ export async function mountDonateChromeWhenEscrowKnown(
   }
 
   const html = donateModalHtml(
-    { ...proposal, escrow_address: addr },
+    directListing
+      ? {
+          ...proposal,
+          funding_route: "direct-builder" as const,
+          pay_to_verified: true as const,
+          pay_to_address: proposal.pay_to_address || addr,
+        }
+      : { ...proposal, escrow_address: addr },
     { signedIn: Boolean(panelOpts.signedIn) },
   );
   if (!html) {
@@ -2834,7 +2975,11 @@ export async function mountDonateChromeWhenEscrowKnown(
 
   bindDonateModal(document);
   try {
-    await bindDonatePanel(document, { ...panelOpts, address: addr });
+    await bindDonatePanel(document, {
+      ...panelOpts,
+      address: addr,
+      direct: directListing || panelOpts.direct,
+    });
   } catch {
     /* Reveal/address sync must not depend on panel bind (LN status, etc.). */
   }
@@ -2844,13 +2989,16 @@ export async function mountDonateChromeWhenEscrowKnown(
 }
 
 /** Escrow address row for on-chain panel (injected after claim view confirms). */
-export function onChainEscrowRowHtml(escrowAddress: string): string {
+export function onChainEscrowRowHtml(
+  escrowAddress: string,
+  label = "Escrow address",
+): string {
   const addr = String(escrowAddress || "").trim();
   if (!addr) return "";
   // Chunked for reading (CSS margin only, no inserted characters); Copy uses
   // the exact address. Only rendered where the address row already was.
   return `<div class="onchain-row" id="onchain-escrow-row" data-escrow-address-block>
-    <span class="onchain-label">Escrow address</span>
+    <span class="onchain-label">${escapeHtml(label)}</span>
     <div class="onchain-value">
       <code class="mono escrow-addr" id="onchain-escrow-address" title="${escapeHtml(addr)}">${escrowAddressChunksHtml(addr)}</code>
       <span class="onchain-actions">
@@ -2871,8 +3019,18 @@ export function onChainPanelHtml(
 
   // Declined, voided, refunding, …: never show the escrow address.
   // A non-string or wrong-network address (bc1… on signet) never paints either.
+  if (p.funding_route === "direct-builder" && p.pay_to_verified !== true) {
+    if (p.pay_to_address) {
+      rows.push(
+        `<p class="donate-lede">This pay-to is not shown. The signature does not match this listing.</p>`,
+      );
+    }
+  } else if (p.funding_route === "direct-builder" && p.pay_to_address) {
+    rows.push(onChainEscrowRowHtml(p.pay_to_address, "Pay the builder"));
+  }
   const escrowText = escrowAddressText(p.escrow_address);
   if (
+    p.funding_route !== "direct-builder" &&
     escrowText &&
     escrowAddressMatchesNetwork(escrowText) &&
     !opts?.hideEscrow &&
@@ -2956,7 +3114,7 @@ export function metaChipsHtml(p: Proposal): string {
   bits.push(`<span class="proposal-meta-chip">${escapeHtml(type === "direct" ? "Campaign" : "Bounty")}</span>`);
   if (p.endowment_funded) {
     bits.push(
-      `<a class="proposal-meta-chip proposal-meta-chip-endowment" href="${href("/endowment")}" title="Endowment">Endowment</a>`,
+      `<a class="proposal-meta-chip proposal-meta-chip-endowment" href="${href("/endowment")}" title="Proposed endowment">Proposed</a>`,
     );
   }
   // Live-updated from applications API in bindBuilderPanel.

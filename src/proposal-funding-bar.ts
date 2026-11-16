@@ -304,6 +304,39 @@ export function fundingProgressHtml(
     </div>`;
 }
 
+/**
+ * Recorded gifts on a direct-builder listing. These coins are already paid
+ * to the builder, so the strip never uses a claim floor or "to open".
+ */
+export function directGiftMeterHtml(
+  balance: number | null | undefined,
+  target: number | null | undefined,
+  variant: "card" | "detail",
+): string {
+  if (!isKnownBalance(balance)) return "";
+  const paid = satsFloor(balance);
+  const goal = fundingTargetSats(target);
+  const line = goal
+    ? `${satsNumber(paid)} of ${formatSats(goal)} paid`
+    : `${formatSats(paid)} paid`;
+  if (variant === "card") {
+    return `<div class="project-card-meter">
+    <div class="project-card-meter-top">
+      <span>Paid to the builder</span>
+      <span class="sats">${line}</span>
+    </div>
+  </div>`;
+  }
+  return `<div class="proposal-funding-bar" data-direct-gift="1">
+    <div class="funding-meter">
+      <div class="funding-meter-top">
+        <span class="funding-meter-label">Paid to the builder</span>
+        <span class="funding-meter-goal sats">${line}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
 /** Slim funding strip under the hero: progress only, no duplicate stat cards. */
 export function proposalFundingBarHtml(
   balance: number | null | undefined,
@@ -360,6 +393,7 @@ export function updateProposalFundingBar(
   // A shared row's "Awaiting confirmation" block (#62, data-shared-pending) is
   // not a meter and never becomes one from a balance update.
   if (host.hasAttribute("data-shared-pending")) return;
+  if (host.hasAttribute("data-direct-gift")) return;
   const prevUnlocked = new Set(
     [...host.querySelectorAll(".funding-marker.is-unlocked")].map(
       (el) => (el as HTMLElement).style.left,

@@ -143,7 +143,7 @@ export function installModalA11y(doc: Document = document): () => void {
     if (isControl(ctl)) remember(ctl);
   };
 
-  const sync = () => {
+  const applyModalFocus = () => {
     const now = new Set(openModals(doc));
     for (const modal of now) {
       if (known.has(modal)) continue;
@@ -187,6 +187,26 @@ export function installModalA11y(doc: Document = document): () => void {
       if (under) focusInto(under);
     }
     known = now;
+  };
+
+  // Focusing a control can mutate the DOM and re-enter this pass. A nested
+  // pass would record "known" before the outer pass finished and drop the close.
+  let syncing = false;
+  let syncAgain = false;
+  const sync = () => {
+    if (syncing) {
+      syncAgain = true;
+      return;
+    }
+    syncing = true;
+    try {
+      do {
+        syncAgain = false;
+        applyModalFocus();
+      } while (syncAgain);
+    } finally {
+      syncing = false;
+    }
   };
 
   const onKeyDown = (ev: KeyboardEvent) => {
@@ -238,9 +258,12 @@ export function installModalA11y(doc: Document = document): () => void {
       // Let the modal's own Esc handler run first; close it ourselves only
       // if it is still open afterwards and nothing inside consumed the key.
       win.setTimeout(() => {
-        if (ev.defaultPrevented) return;
-        if (!isModalOpen(modal)) return;
-        modalCloseControl(modal)?.click();
+        if (!ev.defaultPrevented && isModalOpen(modal)) {
+          modalCloseControl(modal)?.click();
+        }
+        // A handler may already have closed the modal, and the attribute
+        // observer can miss that hide. Restore focus in this turn either way.
+        sync();
       }, 0);
     }
   };

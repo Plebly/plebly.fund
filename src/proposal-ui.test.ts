@@ -3,8 +3,12 @@ import {
   bindStructuredFunding,
   canEditProposal,
   deliverableChipHtml,
+  beginDonateProject,
   donateModalHtml,
+  proposalReceiveAddress,
   donatePanelHtml,
+  endDonateProject,
+  mountDonateChromeWhenEscrowKnown,
   fundingBarScale,
   fundingBarTrackHtml,
   fundingProgressHtml,
@@ -440,6 +444,96 @@ describe("proposal UI critical render helpers", () => {
     expect(signedOut).toContain('id="donate-escrow-label"');
     expect(signedIn).toContain("DONATE / ESCROW ADDRESS");
     expect(signedIn).toContain("Not claim bond · not payout");
+    expect(signedOut).not.toContain('id="donate-link-txid"');
+  });
+
+  it("direct-builder donate pane pays the builder and hides lightning", () => {
+    const waiting = donatePanelHtml({
+      funding_route: "direct-builder",
+    } as Proposal);
+    expect(waiting).toContain("A pay-to address opens when a builder is awarded");
+    expect(waiting).not.toContain("DONATE / ESCROW ADDRESS");
+
+    const html = donatePanelHtml({
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      pay_to_verified: true,
+      status: "claimed",
+    } as Proposal);
+    expect(html).toContain("PAY THE BUILDER");
+    expect(html).toContain("Signed by that address");
+    expect(html).toContain("This payment is final");
+    expect(html).toContain("tb1qbuilder");
+    expect(html).toContain('id="donate-link-txid"');
+    expect(html).toContain("Link this payment");
+    expect(html).not.toContain("Payment is detected automatically.");
+    expect(html).not.toContain("DONATE / ESCROW ADDRESS");
+    expect(html).not.toContain('id="donate-rail-lightning"');
+    expect(html).not.toContain("Not claim bond");
+
+    const hidden = donatePanelHtml({
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      pay_to_verified: false,
+      status: "claimed",
+    } as Proposal);
+    expect(hidden).toContain("signature does not match");
+    expect(hidden).not.toContain("tb1qbuilder");
+
+    const unsigned = donatePanelHtml({
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      status: "claimed",
+    } as Proposal);
+    expect(unsigned).toContain("signature does not match");
+    expect(unsigned).not.toContain("tb1qbuilder");
+  });
+
+  it("does not mount a direct pay-to from the pane options alone", async () => {
+    const pay = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
+    const path = "proposals/listed/PLEBLY-1.md";
+    document.body.innerHTML = "";
+    endDonateProject();
+    beginDonateProject(path);
+    const proposal = {
+      id: "PLEBLY-1",
+      path,
+      title: "Pay",
+      status: "claimed",
+      funding_route: "direct-builder",
+      pay_to_address: pay,
+    } as Proposal;
+    const hidden = await mountDonateChromeWhenEscrowKnown(
+      document,
+      proposal,
+      {
+        address: pay,
+        direct: true,
+        proposalId: "PLEBLY-1",
+        proposalPath: path,
+      },
+      { ignoreStatusGate: true },
+    );
+    expect(hidden).toBe(false);
+    expect(document.body.innerHTML).not.toContain(pay);
+
+    const verified = { ...proposal, pay_to_verified: true } as Proposal;
+    expect(proposalReceiveAddress(verified)).toBe(pay);
+    const shown = await mountDonateChromeWhenEscrowKnown(
+      document,
+      verified,
+      {
+        address: pay,
+        direct: true,
+        proposalId: "PLEBLY-1",
+        proposalPath: path,
+      },
+      { ignoreStatusGate: true },
+    );
+    expect(shown).toBe(true);
+    expect(document.body.innerHTML).toContain(pay);
+    expect(document.body.innerHTML).toContain("PAY THE BUILDER");
+    endDonateProject();
   });
 
   it("meta chips show type and tags", () => {

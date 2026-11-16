@@ -28,6 +28,8 @@ describe("signet helpers", () => {
     expect(signetHeroNoteHtml()).toContain("Soft launch on");
     expect(signetHeroNoteHtml()).toContain("signet</strong> (test network)");
     expect(signetPayNoteHtml("donate")).toContain("mainnet payments will not credit");
+    expect(signetPayNoteHtml("direct")).toContain("will not reach this address");
+    expect(signetPayNoteHtml("direct")).not.toContain("escrow");
     expect(signetPayNoteHtml("fee")).toContain("signet</strong> wallet");
   });
 

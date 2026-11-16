@@ -181,6 +181,9 @@ export function isCatalogEscrowHidden(
 export type ClaimViewForDonate = {
   /** The only escrow address Donate may use (never the catalog's). */
   escrow_address?: string | null;
+  funding_route?: string | null;
+  pay_to_address?: string | null;
+  pay_to_verified?: boolean | null;
   psbt?: { structured_state?: string | null } | null;
   accepting_funds?: boolean | null;
   state?: string | null;
@@ -231,7 +234,14 @@ export function isClaimViewDonateAllowed(claim: ClaimViewForDonate): boolean {
 
   // No claim-view escrow address: nothing to donate to. Must be a real,
   // non-blank string; a truthy non-string (123, {}, [addr]) never opens Donate.
-  if (!escrowAddressText(claim.escrow_address)) return false;
+  if (claim.funding_route === "direct-builder" && claim.pay_to_verified !== true) {
+    return false;
+  }
+  const directPay =
+    claim.funding_route === "direct-builder" &&
+    claim.pay_to_verified === true &&
+    Boolean(escrowAddressText(claim.pay_to_address));
+  if (!directPay && !escrowAddressText(claim.escrow_address)) return false;
 
   // Settled bounty blocks donations (workers#41)
   if (claim.state === "settled" || claim.claim_phase === "settled") return false;

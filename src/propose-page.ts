@@ -19,6 +19,7 @@ import { isBusy, runFormBusy } from "./form-busy";
 import { sanitizePublicError } from "./public-errors";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
 import { clearListedProposalsCache } from "./github";
+import { payToSignMessage } from "./pay-to";
 import { isSignet, signetFaucetLinksHtml } from "./signet";
 import {
   clientCoverPrecheck,
@@ -209,6 +210,17 @@ async function loadBridgeSource(sourceUrl: string): Promise<{
   };
 }
 
+async function fetchListingFundingRoute(): Promise<"multisig" | "direct-builder"> {
+  try {
+    const res = await fetch(`${WORKERS_API}/parameters`);
+    if (!res.ok) return "direct-builder";
+    const data = (await res.json()) as { funding_route?: string };
+    return data.funding_route === "multisig" ? "multisig" : "direct-builder";
+  } catch {
+    return "direct-builder";
+  }
+}
+
 export async function renderPropose(ctx: ShellContext): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const params = new URLSearchParams(location.search);
@@ -329,6 +341,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       /* optional */
     }
   }
+  const fundingRoute = await fetchListingFundingRoute();
+  const directBuilder = fundingRoute === "direct-builder";
   const windowChips = claimWindowPresets
     .map(
       (d) =>
@@ -380,7 +394,11 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                 isSignet()
                   ? ` Signet test coins — ${signetFaucetLinksHtml({ className: "signet-faucet-links" })}.`
                   : ""
-              }</p>`
+              }</p>${
+                directBuilder
+                  ? `<p class="lede">New listings pay the builder. A gift is final and is not held.</p>`
+                  : ""
+              }`
         }
       </header>
 
@@ -457,8 +475,27 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             </fieldset>
             <fieldset class="field propose-type">
               <span>Proposal type</span>
-              <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: builders apply with a bond and get paid after review</span></label>
-              <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Campaign</strong>: charity or cause — you receive donations, no builder claim</span></label>
+              <label class="radio-row"><input type="radio" name="proposal_type" value="bounty" ${String(prefill?.proposal_type || "bounty") !== "direct" ? "checked" : ""} /><span><strong>Bounty</strong>: ${
+                directBuilder
+                  ? "builders apply with a bond. Donors pay the awarded builder. That payment is final."
+                  : "builders apply with a bond and get paid after review"
+              }</span></label>
+              <label class="radio-row"><input type="radio" name="proposal_type" value="direct" ${String(prefill?.proposal_type) === "direct" ? "checked" : ""} /><span><strong>Campaign</strong>: ${
+                directBuilder
+                  ? "you name an address. Donors pay it. The payment is final and is not held."
+                  : "charity or cause — you receive donations, no builder claim"
+              }</span></label>
+            </fieldset>
+            <fieldset class="field propose-pay-to" data-pay-to hidden>
+              <span>Pay-to address</span>
+              <p class="field-hint">Donors pay this address. The payment is final and is not held. Use an address that no other listing uses.</p>
+              <input name="pay_to_address" class="mono" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(bitcoinNetworkLabel() === "signet" ? "tb1q…" : "bc1q…")}" />
+              <p class="field-hint">Sign this exact message with that address in Sparrow or Electrum. It includes this listing's id. Donors see the address only when the signature matches. Use a P2WPKH address.</p>
+              <input type="hidden" name="reserved_proposal_id" value="" />
+              <code class="mono" id="propose-pay-to-message"></code>
+              <label>Signature
+                <textarea name="pay_to_signature" class="mono" rows="3" autocomplete="off" spellcheck="false"></textarea>
+              </label>
             </fieldset>
             <fieldset class="field propose-direct-term" data-direct-term hidden>
               <span>Recurring payout <em class="optional">(optional)</em></span>
@@ -706,6 +743,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     persistTimer = window.setTimeout(persistDraft, 200);
   };
 
+  let reservedProposalId = "";
+  let reserveInflight: Promise<void> | null = null;
   const syncClaimModeFields = () => {
     const bounty =
       readNamedValue(form, "proposal_type") !== "direct";
@@ -713,7 +752,42 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const presets = form.querySelector<HTMLElement>("[data-claim-window-presets]");
     if (modeFields) modeFields.hidden = !bounty;
     const termFields = form.querySelector<HTMLElement>("[data-direct-term]");
-    if (termFields) termFields.hidden = bounty;
+    if (termFields) termFields.hidden = bounty || directBuilder;
+    const payToFields = form.querySelector<HTMLElement>("[data-pay-to]");
+    const showPayTo = !bounty && directBuilder && !isEdit;
+    if (payToFields) payToFields.hidden = !showPayTo;
+    const payMsg = form.querySelector("#propose-pay-to-message");
+    if (payMsg) {
+      const addr = readNamedValue(form, "pay_to_address") || "";
+      payMsg.textContent = !reservedProposalId
+        ? "Reserving a listing id…"
+        : addr
+          ? payToSignMessage(addr, reservedProposalId)
+          : "Enter a P2WPKH address. The message to sign includes this listing.";
+    }
+    if (showPayTo && !reservedProposalId && !reserveInflight) {
+      reserveInflight = (async () => {
+        const res = await authFetch(`${WORKERS_API.replace(/\/$/, "")}/proposals/reserve-id`, {
+          method: "POST",
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          proposal_id?: string;
+          error?: string;
+        };
+        if (!res.ok || !data.proposal_id) {
+          if (payMsg) payMsg.textContent = data.error || "Could not reserve a listing id.";
+          return;
+        }
+        reservedProposalId = data.proposal_id;
+        const hidden = form.querySelector<HTMLInputElement>(
+          'input[name="reserved_proposal_id"]',
+        );
+        if (hidden) hidden.value = reservedProposalId;
+        syncClaimModeFields();
+      })().finally(() => {
+        reserveInflight = null;
+      });
+    }
     const showWindow = showApplicationWindow(
       readNamedValue(form, "proposal_type") || "bounty",
       readNamedValue(form, "claim_mode") || "proposer_select",
@@ -1015,6 +1089,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const t = e.target as Element | null;
     if (!t) return;
     clearControlFieldError(t);
+    if ((t as HTMLInputElement).name === "pay_to_address") syncClaimModeFields();
     schedulePersist();
   });
   form.addEventListener("change", (e) => {
@@ -1666,7 +1741,7 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
             : 7
           : undefined,
       term_months:
-        proposal_type === "direct"
+        proposal_type === "direct" && !directBuilder
           ? String(fd.get("term_months") || "").trim()
             ? Number(fd.get("term_months"))
             : null
@@ -1710,6 +1785,44 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
       const tosAck = (
         document.getElementById("propose-tos-ack") as HTMLInputElement | null
       )?.checked;
+      const payToRaw = String(fd.get("pay_to_address") || "").trim();
+      if (directBuilder && proposal_type === "direct") {
+        const paySig = String(fd.get("pay_to_signature") || "").trim();
+        const reservedId = String(fd.get("reserved_proposal_id") || "").trim();
+        if (!reservedId) {
+          setWizardStep("basics");
+          showWizardMsg("Wait for the listing id, then sign the message.", "error");
+          return;
+        }
+        if (!payToRaw || !escrowAddressMatchesNetwork(payToRaw)) {
+          setWizardStep("basics");
+          const payInput = form.querySelector<HTMLInputElement>(
+            'input[name="pay_to_address"]',
+          );
+          showWizardMsg("");
+          focusControl(
+            setControlFieldError(
+              payInput,
+              `Enter an on-chain ${bitcoinNetworkLabel()} address. Donors pay it, and the payment is final.`,
+            ) || payInput,
+          );
+          return;
+        }
+        if (!paySig) {
+          setWizardStep("basics");
+          const sigInput = form.querySelector<HTMLTextAreaElement>(
+            'textarea[name="pay_to_signature"]',
+          );
+          showWizardMsg("");
+          focusControl(
+            setControlFieldError(
+              sigInput,
+              "Sign the pay-to message with that address and paste the signature.",
+            ) || sigInput,
+          );
+          return;
+        }
+      }
       if (!tosAck) {
         showWizardMsg("Accept the Terms to submit.", "error");
         const box = document.getElementById("propose-tos-ack") as HTMLInputElement | null;
@@ -1730,6 +1843,13 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
               tos_ack: true,
               submission_fee_txid: feeTxid,
               source_issue: bridgeSource,
+              ...(directBuilder && proposal_type === "direct"
+                ? {
+                    pay_to_address: payToRaw,
+                    pay_to_signature: String(fd.get("pay_to_signature") || "").trim(),
+                    reserved_proposal_id: String(fd.get("reserved_proposal_id") || "").trim(),
+                  }
+                : {}),
             }),
           { busyLabel: "Listing project…", stayBusyOnSuccess: true },
         );
@@ -1744,8 +1864,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           title: proposal_type === "direct" ? "Campaign listed" : "Bounty listed",
           body:
             proposal_type === "direct"
-              ? "Your campaign is live. Open the page to receive donations."
-              : "Your bounty is live. Open the project page to donate to escrow.",
+              ? directBuilder
+                ? "Your campaign is live. Donors pay the address you gave. That payment is final."
+                : "Your campaign is live. Open the page to receive donations."
+              : directBuilder
+                ? "Your bounty is live. A pay-to address opens when a builder is awarded. A gift is final."
+                : "Your bounty is live. Open the project page to donate to escrow.",
           backHref: listedPath
             ? proposalHref(listedPath, listedId)
             : projectsHref(),

@@ -52,12 +52,14 @@ export function signetSiteBannerHtml(): string {
  * listing (catalog `escrow_shared`), and the pages that know it show their
  * own note (home `sharedEscrowNoteHtml`, donate shared-count copy).
  */
-export function signetPayNoteHtml(kind: "donate" | "fee" = "donate"): string {
+export function signetPayNoteHtml(kind: "donate" | "fee" | "direct" = "donate"): string {
   if (!isSignet()) return "";
   const action =
     kind === "fee"
       ? "Pay fees from a <strong>signet</strong> wallet."
-      : "Donate from a <strong>signet</strong> wallet — mainnet payments will not credit this escrow.";
+      : kind === "direct"
+        ? "Pay from a <strong>signet</strong> wallet — mainnet payments will not reach this address."
+        : "Donate from a <strong>signet</strong> wallet — mainnet payments will not credit this escrow.";
   return `<p class="donate-network-note signet-pay-note" role="status">
     ${action}
     Need coins?

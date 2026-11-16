@@ -29,6 +29,7 @@ type InventoryRow = {
   source: string;
   edit_hint?: string;
   open_ballot_id?: string;
+  locked?: boolean;
 };
 
 type Ballot = {
@@ -225,10 +226,17 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
                   <button type="button" class="btn ghost btn-compact" data-soft-clear="${escapeHtml(row.key)}">Clear</button>
                 </div>`;
               }
-              if (quorum) {
+              if (quorum && !row.locked) {
                 const signet = BITCOIN_NETWORK.toLowerCase() === "signet";
+                const routeSelect =
+                  row.key === "funding_route"
+                    ? `<select data-quorum-field="${escapeHtml(row.key)}">
+                      <option value="multisig" ${row.value === "direct-builder" ? "" : "selected"}>Multisig escrow</option>
+                      <option value="direct-builder" ${row.value === "direct-builder" ? "selected" : ""}>Pay the builder</option>
+                    </select>`
+                    : `<input data-quorum-field="${escapeHtml(row.key)}" placeholder="New address" />`;
                 controls = `<div class="admin-row-edit">
-                  <input data-quorum-field="${escapeHtml(row.key)}" placeholder="New address" />
+                  ${routeSelect}
                   <input data-quorum-rationale="${escapeHtml(row.key)}" placeholder="Rationale" />
                   ${
                     signet
@@ -322,7 +330,7 @@ export async function renderAdmin(shell: AdminShell): Promise<void> {
       app.querySelectorAll<HTMLButtonElement>("[data-quorum-propose]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const field = btn.dataset.quorumPropose!;
-          const proposed = app.querySelector<HTMLInputElement>(
+          const proposed = app.querySelector<HTMLInputElement | HTMLSelectElement>(
             `[data-quorum-field="${field}"]`,
           )?.value;
           const rationale = app.querySelector<HTMLInputElement>(

@@ -33,6 +33,17 @@ function proposal(partial: Partial<Proposal> = {}): Proposal {
 }
 
 describe("builderPanelHtml proposal types", () => {
+  it("tells a direct-builder applicant the payment is final", () => {
+    const html = builderPanelHtml(
+      proposal({ funding_route: "direct-builder", escrow_address: null }),
+      0,
+      false,
+    );
+    expect(html).toContain("That payment is final and is not held");
+    expect(html).not.toContain("monthly escrow payout");
+    expect(html).toContain('data-funding-route="direct-builder"');
+  });
+
   it("hides claim UI for direct proposals", () => {
     const html = builderPanelHtml(
       proposal({ proposal_type: "direct" }),

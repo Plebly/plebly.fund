@@ -183,6 +183,68 @@ describe("loadListedProposals catalog source", () => {
     expect(loaded.proposals.map((p) => p.id)).toEqual(["PLEBLY-2026-001"]);
   });
 
+  it("keeps a direct-builder pay-to and does not treat it as escrow", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/proposals/catalog?scope=listed")) {
+          return Response.json({
+            proposals: [
+              {
+                id: "PLEBLY-2026-004",
+                path: "proposals/listed/PLEBLY-2026-004.md",
+                title: "Pay the builder",
+                status: "claimed",
+                funding_route: "direct-builder",
+                pay_to_address: "tb1qbuilder",
+                pay_to_verified: true,
+                escrow_address: "tb1qbuilder",
+                balance_sats: 40_000,
+                accepting_funds: true,
+              },
+            ],
+          });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    const [row] = await listListedProposals();
+    expect(row?.funding_route).toBe("direct-builder");
+    expect(row?.pay_to_address).toBe("tb1qbuilder");
+    expect(row?.pay_to_verified).toBe(true);
+    expect(row?.escrow_address).toBeNull();
+    expect(row?.balance_sats).toBe(40_000);
+  });
+
+  it("hides a direct pay-to when the catalog does not say it is verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/proposals/catalog?scope=listed")) {
+          return Response.json({
+            proposals: [
+              {
+                id: "PLEBLY-2026-004",
+                path: "proposals/listed/PLEBLY-2026-004.md",
+                title: "Pay the builder",
+                status: "claimed",
+                funding_route: "direct-builder",
+                pay_to_address: "tb1qbuilder",
+                escrow_address: "tb1qbuilder",
+              },
+            ],
+          });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    const [row] = await listListedProposals();
+    expect(row?.pay_to_address).toBeNull();
+    expect(row?.escrow_address).toBeNull();
+  });
+
   it("sets fromCatalog false when the catalog is down and the folder fallback returns completed", async () => {
     const folders: Record<string, { id: string; status: string; dir: string }[]> = {
       listed: [{ id: "OPEN", status: "listed", dir: "listed" }],

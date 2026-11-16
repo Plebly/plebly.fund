@@ -64,7 +64,7 @@ function panelHtml(
     : `<div class="donations-live-empty">
         <p>No confirmed gifts yet — be the first.</p>
         <p class="muted">${
-          endowmentOpen ? `<a href="${href("/endowment")}">Donate to the endowment</a> · ` : ""
+          endowmentOpen ? `<a href="${href("/endowment")}">Proposed endowment</a> · ` : ""
         }<a href="${href("/", "", "#projects")}">Fund a project</a></p>
       </div>`;
 

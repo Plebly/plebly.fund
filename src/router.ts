@@ -510,9 +510,9 @@ export function seoForRoute(
       };
     case "endowment":
       return {
-        title: "Endowment",
+        title: "Proposed endowment",
         description:
-          "A shared Bitcoin pool that supports open work on Plebly.",
+          "A proposed shared Bitcoin pool. It is not open yet.",
         path: "/endowment",
       };
     case "admin":

@@ -14,7 +14,7 @@ import {
 import { isKnownProposalStatus } from "./types";
 import { isCatalogDonateBlocked } from "./next-action";
 import { CLAIM_FLOOR_SATS, WORKERS_API, isFundableStatus, lightningUiAllowed, mempoolWeb } from "./config";
-import { sharedEscrowPendingHtml } from "./proposal-funding-bar";
+import { directGiftMeterHtml, sharedEscrowPendingHtml } from "./proposal-funding-bar";
 import { loadListedProposals } from "./github";
 import { fetchLightningStatus } from "./lightning";
 import { safeCoverImageUrl } from "./media";
@@ -23,8 +23,6 @@ import { claimModeChipHtml, refreshClaimModeChips } from "./claim-mode-ui";
 import { bindDonationsLive } from "./donations-live";
 import {
   endowmentBalanceView,
-  endowmentFiguresHtml,
-  endowmentGiveAllowed,
   type EndowmentBalanceView,
 } from "./endowment-balance";
 import {
@@ -156,28 +154,9 @@ async function fetchEndowmentTeaser(): Promise<EndowmentTeaser | null> {
   }
 }
 
-/** Home endowment strip. Amounts and Donate only when the endowment has its own address. */
-export function endowmentStripHtml(teaser: EndowmentTeaser | null): string {
-  const progress =
-    teaser && teaser.configured ? endowmentFiguresHtml(teaser.balance) : "";
-  const give = Boolean(
-    teaser && teaser.configured && endowmentGiveAllowed(teaser.balance),
-  );
-  return `<section class="wrap-wide landing-endowment" aria-labelledby="endowment-strip-heading">
-    <div class="endowment-strip">
-      <div class="endowment-strip-head">
-        <div class="endowment-strip-copy">
-          <p class="path-kicker">Endowment</p>
-          <h2 id="endowment-strip-heading">Monthly gifts to popular projects</h2>
-        </div>
-        <div class="landing-cta-row endowment-strip-cta">
-          ${give ? `<a class="btn" href="${href("/endowment")}?donate">Donate</a>` : ""}
-          <a class="btn ghost" href="${href("/endowment")}#funded">Funded projects</a>
-        </div>
-      </div>
-      ${progress}
-    </div>
-  </section>`;
+/** One quiet line on the home page. The endowment is a proposal, not a live fund. */
+export function endowmentStripHtml(_teaser: EndowmentTeaser | null): string {
+  return `<p class="wrap-wide endowment-note"><a href="${href("/endowment")}">Proposed endowment</a> <span class="muted">A shared pool that would gift popular projects. Not open yet.</span></p>`;
 }
 
 function howItWorksHtml(): string {
@@ -301,11 +280,6 @@ function discoverToolbarHtml(count: number): string {
               <button type="button" class="builder-filter" data-type="bounty">Bounty</button>
               <button type="button" class="builder-filter" data-type="direct">Campaign</button>
             </div>
-            <div class="builder-filter-group" role="group" aria-label="Endowment">
-              <span class="builder-filter-label">Endowment</span>
-              <button type="button" class="builder-filter active" data-endowment="all">Any</button>
-              <button type="button" class="builder-filter" data-endowment="funded">Funded</button>
-            </div>
           </div>
         </div>
       </details>
@@ -315,6 +289,9 @@ function discoverToolbarHtml(count: number): string {
 
 /** Card meter (exported for tests). */
 export function progressHtml(p: Proposal, floor: number): string {
+  if (p.funding_route === "direct-builder") {
+    return directGiftMeterHtml(p.balance_sats, p.target_sats, "card");
+  }
   const sharedPending = sharedEscrowPendingHtml(p, "card");
   if (sharedPending != null) return sharedPending;
   const bal = p.balance_sats ?? 0;
@@ -428,7 +405,7 @@ export function proposalCardHtml(
     ? `<span class="project-card-type" title="Organizer receives donations">Campaign</span>`
     : "";
   const endowmentBadge = p.endowment_funded
-    ? `<a class="project-card-endowment" href="${href("/endowment")}" title="Endowment">Endowment</a>`
+    ? `<a class="project-card-endowment" href="${href("/endowment")}" title="Proposed endowment">Proposed</a>`
     : "";
   const claimModeBadge = claimModeChipHtml(p, floor);
   const secondaryBadge = claimModeBadge

@@ -98,6 +98,9 @@ export type ClaimStatus = {
   /** Claim-level open-claimability (workers#44); false without bounty_settled blocks every action. */
   accepting_claims?: boolean | null;
   escrow_address?: string | null;
+  funding_route?: "multisig" | "direct-builder" | null;
+  pay_to_address?: string | null;
+  pay_to_verified?: boolean | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
   milestones_due_at?: string | null;
@@ -455,6 +458,29 @@ export async function removeWatch(proposalPath: string): Promise<void> {
   }
 }
 
+function mergedDirectPay(
+  status: ClaimStatus,
+  proposal: Proposal,
+): { address: Proposal["pay_to_address"]; verified: Proposal["pay_to_verified"] } {
+  const route = status.funding_route ?? proposal.funding_route;
+  if (route !== "direct-builder") {
+    return { address: proposal.pay_to_address, verified: proposal.pay_to_verified };
+  }
+  if (status.pay_to_verified === true) {
+    return {
+      address: status.pay_to_address ?? proposal.pay_to_address ?? null,
+      verified: true,
+    };
+  }
+  if (status.pay_to_verified === false || status.pay_to_address) {
+    return { address: null, verified: false };
+  }
+  return {
+    address: proposal.pay_to_verified === true ? proposal.pay_to_address ?? null : null,
+    verified: proposal.pay_to_verified === true ? true : proposal.pay_to_verified,
+  };
+}
+
 /** Overlay Worker claim/listing state onto a git-catalog proposal. */
 export function applyClaimStatusToProposal(
   proposal: Proposal,
@@ -468,6 +494,7 @@ export function applyClaimStatusToProposal(
     status.state === "completed"
       ? status.state
       : status.status || proposal.status;
+  const pay = mergedDirectPay(status, proposal);
   return {
     ...proposal,
     status: nextStatus,
@@ -475,7 +502,13 @@ export function applyClaimStatusToProposal(
     claimer_type: status.claimer_type ?? proposal.claimer_type,
     claim_agent: status.claim_agent ?? proposal.claim_agent,
     claimed_at: status.claimed_at ?? proposal.claimed_at,
-    escrow_address: status.escrow_address || proposal.escrow_address,
+    escrow_address:
+      (status.funding_route ?? proposal.funding_route) === "direct-builder"
+        ? null
+        : status.escrow_address || proposal.escrow_address,
+    funding_route: status.funding_route ?? proposal.funding_route,
+    pay_to_verified: pay.verified,
+    pay_to_address: pay.address,
     funding_window_ends_at:
       status.funding_window_ends_at || proposal.funding_window_ends_at,
     delivery_window_ends_at:
@@ -699,6 +732,7 @@ export async function fetchClaimApplications(
 export async function submitClaim(input: {
   proposal_path: string;
   payout_address: string;
+  pay_to_signature?: string;
   note?: string;
   claim_bond_txid: string;
   claimer_type?: "individual" | "org";
