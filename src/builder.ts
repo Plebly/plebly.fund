@@ -318,6 +318,8 @@ export function claimFloorShortfall(
     const status = String(p.status).toLowerCase();
     if (status === "completed" || status === "voided") continue;
     if (isDirectProposal(p)) continue;
+    // Direct-builder bounties open for applications with no pot.
+    if (p.funding_route === "direct-builder") continue;
     if (isTakenStatus(status) || isBlockedStatus(status) || p.claimer) continue;
     if (!stillAcceptingFunds(p) || isCatalogVoided(p)) continue;
     // Shared escrow with no confirmed own funding yet: not a 0-sat row.

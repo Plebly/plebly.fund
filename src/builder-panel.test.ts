@@ -41,6 +41,8 @@ describe("builderPanelHtml proposal types", () => {
     );
     expect(html).toContain("That payment is final and is not held");
     expect(html).not.toContain("monthly escrow payout");
+    expect(html).not.toMatch(/presigned PSBT/i);
+    expect(html).toContain("Open for builders.");
     expect(html).toContain('data-funding-route="direct-builder"');
   });
 

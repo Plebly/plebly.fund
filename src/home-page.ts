@@ -108,7 +108,7 @@ function excerptFromBody(body: string, max = 140): string {
     .replace(/[*_`>#-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (!text) return "Open project with on-chain escrow.";
+  if (!text) return "Open project. Donors pay the builder.";
   return text.length > max ? `${text.slice(0, max - 1).trim()}…` : text;
 }
 
@@ -120,9 +120,9 @@ function landingHeroHtml(): string {
       <h1 class="landing-brand">Plebly</h1>
       <p class="landing-title">Fund Bitcoin work in public.</p>
       <ul class="landing-facts">
-        <li>On-chain escrow</li>
+        <li>Pay the builder</li>
         <li>Bounties &amp; campaigns</li>
-        <li>5% when paid</li>
+        <li>A gift is final</li>
       </ul>
       ${signetHeroNoteHtml()}
       <div class="landing-cta-row">
@@ -162,9 +162,9 @@ export function endowmentStripHtml(_teaser: EndowmentTeaser | null): string {
 function howItWorksHtml(): string {
   const steps = [
     { title: "List", body: "a bounty or campaign" },
-    { title: "Donate", body: "to the public address" },
-    { title: "Build", body: "or the organizer receives" },
-    { title: "Pay", body: "after public review" },
+    { title: "Award", body: "a builder, or name an address" },
+    { title: "Donate", body: "to that address" },
+    { title: "Pay", body: "the gift is final" },
   ];
   return `<section class="landing-how landing-how-compact" aria-label="How it works">
     <div class="wrap-wide">

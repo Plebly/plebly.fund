@@ -1416,6 +1416,32 @@ describe("resolveNextAction", () => {
   });
 });
 
+describe("direct-builder listed bounty", () => {
+  it("asks a builder to apply and does not offer a pot", () => {
+    const action = resolveNextAction({
+      proposal: proposal({
+        status: "listed",
+        funding_route: "direct-builder",
+        escrow_address: null,
+        balance_sats: 0,
+      }),
+      claim: claim({
+        state: "open",
+        status: "listed",
+        confirmed_balance_sats: 0,
+        claim_floor_sats: 10_000,
+        funding_route: "direct-builder",
+        pay_to_verified: false,
+      }),
+      user: builder,
+    });
+    expect(action.sentence).toBe("Apply with a bond.");
+    expect(action.detail).toContain("That payment is final");
+    expect(action.button).toBe("apply");
+    expect(action.detail).not.toMatch(/donations are open/i);
+  });
+});
+
 describe("listed status ignores balance-derived open", () => {
   it("keeps Donate + explainer when listed with open state above floor", () => {
     const action = resolveNextAction({

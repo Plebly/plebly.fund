@@ -38,6 +38,32 @@ describe("claimFloorShortfall", () => {
     expect(out.fundedTowardFloor).toBe(2_000 + 8_000);
   });
 
+  it("does not count a direct-builder bounty as waiting on a pot", () => {
+    const out = claimFloorShortfall(
+      [
+        proposal({
+          status: "listed",
+          balance_sats: 0,
+          funding_route: "direct-builder",
+          id: "direct",
+        }),
+      ],
+      10_000,
+    );
+    expect(out.projectCount).toBe(0);
+    expect(gapTickerHtml(
+      [
+        proposal({
+          status: "listed",
+          balance_sats: 0,
+          funding_route: "direct-builder",
+          id: "direct",
+        }),
+      ],
+      10_000,
+    )).toContain("Ready for builders");
+  });
+
   it("returns zero when every open project meets the floor", () => {
     const out = claimFloorShortfall(
       [proposal({ status: "claimable", balance_sats: 50_000 })],
@@ -80,7 +106,10 @@ describe("landing marketing copy", () => {
     expect(html).toContain("Fund Bitcoin work in public.");
     expect(html).toContain("Browse");
     expect(html).toContain("Start a project");
-    expect(html).toContain("On-chain escrow");
+    expect(html).toContain("Pay the builder");
+    expect(html).toContain("A gift is final");
+    expect(html).not.toContain("On-chain escrow");
+    expect(html).not.toContain("5% when paid");
     expect(html).not.toContain("Protocol over platform");
     expect(html).not.toContain("funding loop");
     expect(html).not.toContain("How Plebly works");

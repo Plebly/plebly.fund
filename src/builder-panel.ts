@@ -294,7 +294,11 @@ export function builderPanelHtml(
               </label>
             </div>
             <p class="claim-refund-dest-hint muted" id="claim-ln-rail-note">
-              Bounty payouts must be an on-chain address so they can be baked into a presigned PSBT. Lightning Address and LNURL are for Direct campaigns only.
+              ${
+                directPay
+                  ? "Donors pay this address on-chain if you are awarded. That payment is final. Use a P2WPKH address."
+                  : "Bounty payouts must be an on-chain address so they can be baked into a presigned PSBT. Lightning Address and LNURL are for Direct campaigns only."
+              }
             </p>
           </fieldset>
 
