@@ -224,6 +224,10 @@ function catalogFundingSignals(
   if (typeof catalog.bounty_settled === "boolean") {
     signals.bounty_settled = catalog.bounty_settled;
   }
+  // The project page otherwise waits on GET /endowment before first paint.
+  if (typeof catalog.endowment_funded === "boolean") {
+    signals.endowment_funded = catalog.endowment_funded;
+  }
   return signals;
 }
 

@@ -114,6 +114,14 @@ describe("applyCatalogRuntimeToProposal", () => {
     expect(merged.accepting_funds).toBe(false);
     expect(merged.structured_state).toBe("psbt_ready");
   });
+
+  it("copies catalog endowment_funded so the page does not wait on /endowment", () => {
+    const merged = applyCatalogRuntimeToProposal(
+      doc(),
+      doc({ endowment_funded: false }),
+    );
+    expect(merged.endowment_funded).toBe(false);
+  });
 });
 
 describe("worker catalog funding signals", () => {

@@ -552,11 +552,16 @@ export async function renderProposalPage(
       donateResultIsCurrent(match) || donateResultIsCurrent({ path });
     if (!stillHere()) return;
     if (match.id && WORKERS_API && match.endowment_funded == null) {
+      // A cold /endowment (several seconds) must not hold the home skeleton
+      // on a project URL. The chip can wait; the listing cannot.
       try {
-        const er = await fetch(
-          `${WORKERS_API.replace(/\/$/, "")}/endowment`,
-        );
-        if (er.ok) {
+        const er = await Promise.race([
+          fetch(`${WORKERS_API.replace(/\/$/, "")}/endowment`),
+          new Promise<undefined>((resolve) => {
+            setTimeout(() => resolve(undefined), 800);
+          }),
+        ]);
+        if (er?.ok) {
           const ev = (await er.json()) as { funded_proposal_ids?: string[] };
           const set = new Set(
             (ev.funded_proposal_ids || []).map((id) =>
