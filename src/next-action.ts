@@ -560,6 +560,22 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
   }
 
   if (isDirect(p)) {
+    if (p.funding_route === "direct-builder") {
+      if (status === "completed") {
+        return { sentence: "Paid to the address on this listing.", button: null, moreIds };
+      }
+      if (p.pay_to_verified === true && isFundableStatus(status)) {
+        return { sentence: "Donate. The payment is final.", button: "donate", moreIds };
+      }
+      if (isFundableStatus(status)) {
+        return {
+          sentence: "The pay-to address is not published yet.",
+          button: null,
+          moreIds,
+        };
+      }
+      return { sentence: "This campaign is not taking gifts.", button: null, moreIds };
+    }
     const bal = p.balance_sats ?? claim?.confirmed_balance_sats ?? 0;
     const floor = claim?.claim_floor_sats ?? CLAIM_FLOOR_SATS;
     const canSubmit = ["listed", "funding", "claimable", "in_review"].includes(
@@ -829,6 +845,13 @@ function resolveNextActionInner(input: NextActionInput): NextAction {
     status !== "claimable" &&
     frontmatter !== "claimable"
   ) {
+    if (p.funding_route === "direct-builder") {
+      const detail = "Donors pay the awarded builder. That payment is final.";
+      if (user && !isProposer) {
+        return { sentence: "Apply with a bond.", detail, button: "apply", moreIds };
+      }
+      return { sentence: "Open for builders.", detail, button: null, moreIds };
+    }
     if (claim?.state === "below_floor") {
       const structured = structuredState(claim);
       if (isStructuredTerminalOrUnknown(structured)) {
