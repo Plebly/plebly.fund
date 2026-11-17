@@ -177,6 +177,7 @@ type CatalogProposal = {
   funding_route?: "multisig" | "direct-builder" | null;
   pay_to_address?: string | null;
   pay_to_verified?: boolean | null;
+  lightning_address?: string | null;
   balance_sats?: number | null;
   /** workers#50: escrow address shared with another catalog row. */
   escrow_shared?: boolean;
@@ -240,6 +241,9 @@ function catalogPayTo(catalog: Proposal | null | undefined): Partial<Proposal> {
     pay_to_address:
       catalog.pay_to_verified === true ? catalog.pay_to_address ?? null : null,
   };
+  if (typeof catalog.lightning_address === "string" && catalog.lightning_address.trim()) {
+    out.lightning_address = catalog.lightning_address.trim();
+  }
   if (typeof catalog.pay_to_verified === "boolean") out.pay_to_verified = catalog.pay_to_verified;
   if (typeof catalog.balance_sats === "number") out.balance_sats = catalog.balance_sats;
   return out;
@@ -272,6 +276,12 @@ function proposalFromCatalog(entry: CatalogProposal): Proposal {
     pay_to_verified:
       entry.funding_route === "direct-builder" && typeof entry.pay_to_verified === "boolean"
         ? entry.pay_to_verified
+        : null,
+    lightning_address:
+      entry.funding_route === "direct-builder" &&
+      typeof entry.lightning_address === "string" &&
+      entry.lightning_address.trim()
+        ? entry.lightning_address.trim()
         : null,
     balance_sats:
       typeof entry.balance_sats === "number" ? entry.balance_sats : undefined,

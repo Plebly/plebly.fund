@@ -880,6 +880,9 @@ export type SubmitProposalInput = ProposalAuthorInput & {
   pay_to_address?: string;
   /** Compact P2WPKH signature over the pay-to message. */
   pay_to_signature?: string;
+  /** Optional Lightning Address signed by the same pay-to key. */
+  lightning_address?: string;
+  lightning_signature?: string;
   /** Listing id from POST /proposals/reserve-id. The signature includes it. */
   reserved_proposal_id?: string;
   source_issue?: {

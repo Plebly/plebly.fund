@@ -42,6 +42,15 @@ function lightningFlagOff(value: string | undefined): boolean {
  * `VITE_LIGHTNING=0` hides LN on a mainnet build until OpenNode is on.
  * `VITE_LIGHTNING_TESTNET=1` / `VITE_LIGHTNING=1` are for testnet staging.
  */
+/**
+ * Creator Lightning Addresses are a donate rail of their own.
+ * Signet stays hidden. This does not follow the OpenNode flag.
+ */
+export function creatorLightningUiAllowed(): boolean {
+  const n = BITCOIN_NETWORK.toLowerCase();
+  return n === "mainnet" || n === "bitcoin" || n === "testnet";
+}
+
 export function lightningUiAllowed(): boolean {
   const n = BITCOIN_NETWORK.toLowerCase();
   if (n === "signet") return false;

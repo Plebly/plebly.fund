@@ -101,6 +101,7 @@ export type ClaimStatus = {
   funding_route?: "multisig" | "direct-builder" | null;
   pay_to_address?: string | null;
   pay_to_verified?: boolean | null;
+  lightning_address?: string | null;
   funding_window_ends_at?: string | null;
   delivery_window_ends_at?: string | null;
   milestones_due_at?: string | null;
@@ -511,6 +512,10 @@ export function applyClaimStatusToProposal(
     funding_route: status.funding_route ?? proposal.funding_route,
     pay_to_verified: pay.verified,
     pay_to_address: pay.address,
+    lightning_address:
+      status.lightning_address !== undefined
+        ? status.lightning_address
+        : proposal.lightning_address,
     funding_window_ends_at:
       status.funding_window_ends_at || proposal.funding_window_ends_at,
     delivery_window_ends_at:
@@ -735,6 +740,8 @@ export async function submitClaim(input: {
   proposal_path: string;
   payout_address: string;
   pay_to_signature?: string;
+  lightning_address?: string;
+  lightning_signature?: string;
   note?: string;
   claim_bond_txid: string;
   claimer_type?: "individual" | "org";
