@@ -10,6 +10,7 @@ import {
   PROPOSALS_RAW,
   SUBMISSION_FEE_SATS,
   WORKERS_API,
+  creatorLightningUiAllowed,
   escrowAddressMatchesNetwork,
   networkLabel as bitcoinNetworkLabel,
 } from "./config";
@@ -19,7 +20,8 @@ import { isBusy, runFormBusy } from "./form-busy";
 import { sanitizePublicError } from "./public-errors";
 import { extractBodySections, parseFrontMatter } from "./frontmatter";
 import { clearListedProposalsCache } from "./github";
-import { payToSignMessage } from "./pay-to";
+import { lightningPaySignMessage, payToSignMessage } from "./pay-to";
+import { isLightningPayoutDestination } from "./payout-destination";
 import { isSignet, signetFaucetLinksHtml } from "./signet";
 import {
   clientCoverPrecheck,
@@ -497,6 +499,19 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                 <textarea name="pay_to_signature" class="mono" rows="3" autocomplete="off" spellcheck="false"></textarea>
               </label>
             </fieldset>
+            ${
+              creatorLightningUiAllowed()
+                ? `<fieldset class="field propose-ln" data-ln-pay hidden>
+              <span>Lightning Address <em class="optional">(optional)</em></span>
+              <p class="field-hint">Donors can also pay this address. That payment is final. Plebly does not receive it. Sign the message with the same pay-to address.</p>
+              <input name="lightning_address" class="mono" autocomplete="off" spellcheck="false" placeholder="you@wallet.com or lnurl1…" />
+              <code class="mono" id="propose-ln-message"></code>
+              <label>Lightning signature
+                <textarea name="lightning_signature" class="mono" rows="3" autocomplete="off" spellcheck="false"></textarea>
+              </label>
+            </fieldset>`
+                : ""
+            }
             <fieldset class="field propose-direct-term" data-direct-term hidden>
               <span>Recurring payout <em class="optional">(optional)</em></span>
               <p class="field-hint">Leave both empty to pay the balance each month. Set both to pay one cycle per month.</p>
@@ -756,6 +771,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const payToFields = form.querySelector<HTMLElement>("[data-pay-to]");
     const showPayTo = !bounty && directBuilder && !isEdit;
     if (payToFields) payToFields.hidden = !showPayTo;
+    const lnFields = form.querySelector<HTMLElement>("[data-ln-pay]");
+    if (lnFields) lnFields.hidden = !showPayTo;
     const payMsg = form.querySelector("#propose-pay-to-message");
     if (payMsg) {
       const addr = readNamedValue(form, "pay_to_address") || "";
@@ -764,6 +781,14 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
         : addr
           ? payToSignMessage(addr, reservedProposalId)
           : "Enter a P2WPKH address. The message to sign includes this listing.";
+    }
+    const lnMsg = form.querySelector("#propose-ln-message");
+    if (lnMsg) {
+      const ln = readNamedValue(form, "lightning_address") || "";
+      lnMsg.textContent =
+        !reservedProposalId || !ln
+          ? "Enter a Lightning Address. The message to sign includes this listing."
+          : lightningPaySignMessage(ln, reservedProposalId);
     }
     if (showPayTo && !reservedProposalId && !reserveInflight) {
       reserveInflight = (async () => {
@@ -1089,7 +1114,8 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
     const t = e.target as Element | null;
     if (!t) return;
     clearControlFieldError(t);
-    if ((t as HTMLInputElement).name === "pay_to_address") syncClaimModeFields();
+    const name = (t as HTMLInputElement).name;
+    if (name === "pay_to_address" || name === "lightning_address") syncClaimModeFields();
     schedulePersist();
   });
   form.addEventListener("change", (e) => {
@@ -1822,6 +1848,18 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
           );
           return;
         }
+        const lnRaw = String(fd.get("lightning_address") || "").trim();
+        const lnSig = String(fd.get("lightning_signature") || "").trim();
+        if (lnRaw || lnSig) {
+          if (!lnRaw || !isLightningPayoutDestination(lnRaw) || !lnSig) {
+            setWizardStep("basics");
+            showWizardMsg(
+              "Enter a Lightning Address and the signature from the pay-to key, or leave both empty.",
+              "error",
+            );
+            return;
+          }
+        }
       }
       if (!tosAck) {
         showWizardMsg("Accept the Terms to submit.", "error");
@@ -1848,6 +1886,12 @@ export async function renderPropose(ctx: ShellContext): Promise<void> {
                     pay_to_address: payToRaw,
                     pay_to_signature: String(fd.get("pay_to_signature") || "").trim(),
                     reserved_proposal_id: String(fd.get("reserved_proposal_id") || "").trim(),
+                    ...(String(fd.get("lightning_address") || "").trim()
+                      ? {
+                          lightning_address: String(fd.get("lightning_address") || "").trim(),
+                          lightning_signature: String(fd.get("lightning_signature") || "").trim(),
+                        }
+                      : {}),
                   }
                 : {}),
             }),

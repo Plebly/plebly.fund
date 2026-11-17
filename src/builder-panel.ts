@@ -42,6 +42,7 @@ import {
   WORKERS_API,
   addressHrp,
   escrowAddressMatchesNetwork,
+  creatorLightningUiAllowed,
   lightningUiAllowed,
   mempoolWeb,
   networkLabel,
@@ -71,7 +72,7 @@ import {
 } from "./claimer-track-ui";
 import { freshLinkedOrgs } from "./github-orgs-client";
 import { avatarImgHtml } from "./media";
-import { payToSignMessage } from "./pay-to";
+import { lightningPaySignMessage, payToSignMessage } from "./pay-to";
 import { href, orgHref, profileHref } from "./router";
 import { tosCheckboxHtml } from "./tos-modal";
 import {
@@ -326,7 +327,19 @@ export function builderPanelHtml(
             <code class="mono" id="claim-pay-to-message"></code>
             <label class="donate-amount-label" for="claim-pay-to-signature">Signature</label>
             <textarea id="claim-pay-to-signature" class="donate-amount mono" rows="3" autocomplete="off" spellcheck="false"></textarea>
+          </div>
+          ${
+            creatorLightningUiAllowed()
+              ? `<div class="claim-refund-dest" id="claim-ln-sign">
+            <label class="donate-amount-label" for="claim-ln-address">Lightning Address (optional)</label>
+            <input id="claim-ln-address" class="donate-amount mono" type="text" autocomplete="off" spellcheck="false" placeholder="you@wallet.com or lnurl1…" />
+            <p class="claim-refund-dest-hint muted">Donors can also pay this address if you are awarded. That payment is final. Plebly does not receive it. Sign the message with the same on-chain address.</p>
+            <code class="mono" id="claim-ln-message"></code>
+            <label class="donate-amount-label" for="claim-ln-signature">Lightning signature</label>
+            <textarea id="claim-ln-signature" class="donate-amount mono" rows="3" autocomplete="off" spellcheck="false"></textarea>
           </div>`
+              : ""
+          }`
               : ""
           }
 
@@ -1916,9 +1929,20 @@ export async function bindBuilderPanel(
       payoutInput?.value || "",
       opts.proposal.id || undefined,
     );
+    const lnEl = panel.querySelector("#claim-ln-message");
+    const lnAddr = panel.querySelector<HTMLInputElement>("#claim-ln-address")?.value || "";
+    if (lnEl) {
+      lnEl.textContent =
+        lnAddr && opts.proposal.id
+          ? lightningPaySignMessage(lnAddr, opts.proposal.id)
+          : "Enter a Lightning Address. The message to sign includes this listing.";
+    }
   };
   payoutInput?.addEventListener("input", () => {
     if (payoutAck) payoutAck.checked = false;
+    refreshPayToMessage();
+  });
+  panel.querySelector("#claim-ln-address")?.addEventListener("input", () => {
     refreshPayToMessage();
   });
   refreshPayToMessage();
@@ -1942,6 +1966,10 @@ export async function bindBuilderPanel(
     const paySig =
       panel.querySelector<HTMLTextAreaElement>("#claim-pay-to-signature")?.value.trim() ||
       "";
+    const lnAddr =
+      panel.querySelector<HTMLInputElement>("#claim-ln-address")?.value.trim() || "";
+    const lnSig =
+      panel.querySelector<HTMLTextAreaElement>("#claim-ln-signature")?.value.trim() || "";
     const bond = feePay?.getTxid() || "";
     if (
       isLightningPayoutDestination(payout) ||
@@ -1954,6 +1982,15 @@ export async function bindBuilderPanel(
         isLightningPayoutDestination(payout)
           ? BOUNTY_ONCHAIN_PAYOUT_ERROR
           : "Complete refund readiness before submitting.",
+        "error",
+      );
+      return;
+    }
+    if ((lnAddr || lnSig) && (!lnAddr || !lnSig || !isLightningPayoutDestination(lnAddr))) {
+      await showClaimStep("refund");
+      setMsg(
+        modalMsg(),
+        "Enter a Lightning Address and the signature from the pay-to key, or leave both empty.",
         "error",
       );
       return;
@@ -2008,6 +2045,8 @@ export async function bindBuilderPanel(
                 proposal_path: opts.proposal.path,
                 payout_address: payout,
                 pay_to_signature: paySig || undefined,
+                lightning_address: lnAddr || undefined,
+                lightning_signature: lnSig || undefined,
                 note: noteInput?.value.trim() || undefined,
                 claim_bond_txid: bond,
                 claimer_type: claimerType,
@@ -2023,6 +2062,8 @@ export async function bindBuilderPanel(
             proposal_path: opts.proposal.path,
             payout_address: payout,
             pay_to_signature: paySig || undefined,
+            lightning_address: lnAddr || undefined,
+            lightning_signature: lnSig || undefined,
             note: noteInput?.value.trim() || undefined,
             claim_bond_txid: bond,
             claimer_type: claimerType,

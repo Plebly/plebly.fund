@@ -216,6 +216,46 @@ export async function createEndowmentLightningInvoice(input: {
   return data;
 }
 
+export type CreatorLightningInvoice = {
+  bolt11: string;
+  invoice_amount_sats: number;
+  lightning_address: string;
+  hold_id?: string | null;
+};
+
+/** Invoice from the creator's Lightning Address. Does not create an OpenNode charge. */
+export async function createCreatorLightningInvoice(input: {
+  proposal_id: string;
+  amount_sats: number;
+}): Promise<CreatorLightningInvoice> {
+  const res = await authFetch(`${API()}/lightning/creator/invoice`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      proposal_id: input.proposal_id,
+      amount_sats: input.amount_sats,
+    }),
+  });
+  const data = (await res.json()) as CreatorLightningInvoice & { error?: string };
+  if (!res.ok || !data.bolt11) {
+    throw new Error(data.error || `Invoice failed (${res.status})`);
+  }
+  return data;
+}
+
+export async function confirmCreatorLightning(
+  holdId: string,
+): Promise<{ paid: boolean; amount_sats?: number }> {
+  const res = await authFetch(`${API()}/lightning/creator/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ hold_id: holdId }),
+  });
+  const data = (await res.json()) as { paid?: boolean; amount_sats?: number; error?: string };
+  if (!res.ok) throw new Error(data.error || `Confirm failed (${res.status})`);
+  return { paid: Boolean(data.paid), amount_sats: data.amount_sats };
+}
+
 export async function fetchLightningSwap(id: string): Promise<LightningSwapView> {
   const res = await fetch(`${API()}/lightning/swap/${encodeURIComponent(id)}`);
   const data = (await res.json()) as LightningSwapView & { error?: string };

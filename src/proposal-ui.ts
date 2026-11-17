@@ -58,6 +58,8 @@ import {
 import { signetPayNoteHtml } from "./signet";
 import { openShareMenu, prefersNativeShare } from "./share-menu";
 import {
+  confirmCreatorLightning,
+  createCreatorLightningInvoice,
   createEndowmentLightningInvoice,
   createLightningInvoice,
   fetchLightningStatus,
@@ -227,7 +229,7 @@ function donatePayStepHtml(
   onchainPresets: string,
   lnPresets: string,
   signedIn: boolean,
-  opts?: { endowment?: boolean; shared?: boolean; direct?: boolean },
+  opts?: { endowment?: boolean; shared?: boolean; direct?: boolean; creatorLn?: string },
 ): string {
   const endowment = Boolean(opts?.endowment);
   const direct = Boolean(opts?.direct);
@@ -255,9 +257,12 @@ function donatePayStepHtml(
              </aside>`
       }
     </div>`;
-  const lnIntro = endowment
-    ? "Pay now. Lands on-chain after the sweep (0.002 BTC min)."
-    : "Pay now. Counts after the on-chain sweep (0.002 BTC min).";
+  const creatorLn = String(opts?.creatorLn || "").trim();
+  const lnIntro = creatorLn
+    ? "Pay the creator's Lightning Address. That payment is final. Plebly does not receive it."
+    : endowment
+      ? "Pay now. Lands on-chain after the sweep (0.002 BTC min)."
+      : "Pay now. Counts after the on-chain sweep (0.002 BTC min).";
   const creditBlock = endowment
     ? ""
     : `<div class="donate-credit-link" id="donate-credit">
@@ -274,7 +279,7 @@ function donatePayStepHtml(
         <span class="donate-rail-name">On-chain</span>
       </button>
       ${
-        direct
+        direct && !creatorLn
           ? ""
           : `<button type="button" class="donate-rail" role="tab" aria-selected="false" data-tab="lightning" id="donate-rail-lightning">
         <span class="donate-rail-kicker">Lightning</span>
@@ -336,9 +341,14 @@ function donatePayStepHtml(
       <p class="donate-confirm-status" id="donate-confirm-status" aria-live="polite" hidden></p>
     </div>
 
-    <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning" hidden>
+    <div class="donate-pane" data-pane="lightning" role="tabpanel" aria-labelledby="donate-rail-lightning"${creatorLn ? ` data-creator-ln="${escapeHtml(creatorLn)}"` : ""} hidden>
       <div id="donate-ln-ready" hidden>
         <p class="donate-pane-intro">${lnIntro}</p>
+        ${
+          creatorLn
+            ? `<p class="donate-ln-address">Lightning Address <code class="mono" id="donate-ln-address">${escapeHtml(creatorLn)}</code></p>`
+            : ""
+        }
         <p class="donate-ln-login muted" id="donate-ln-login" hidden>
           Sign in to create a Lightning invoice. On-chain works without an account.
           <button type="button" class="donate-credit-signin" id="donate-ln-signin">Sign in</button>
@@ -728,6 +738,7 @@ export function donatePanelHtml(
     ${donatePayStepHtml(addr, networkNote, presets.onchain, presets.ln, signedIn, {
       shared: isSharedEscrow(p, loadedCatalogRows()),
       direct,
+      creatorLn: p.lightning_address || "",
     })}
   </div>`;
 }
@@ -1921,6 +1932,110 @@ function bindLightningDonate(
   }
 }
 
+/** Pay the listing's Lightning Address. No OpenNode charge and no swap poll. */
+function bindCreatorLightning(
+  panel: Element,
+  opts: DonateBindOpts,
+  address: string,
+): void {
+  setLightningReady(panel);
+  const amountInput = panel.querySelector<HTMLInputElement>("#donate-ln-amount");
+  const createBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-create");
+  const invoiceWrap = panel.querySelector<HTMLElement>("#donate-ln-invoice");
+  const qrImg = panel.querySelector<HTMLImageElement>("#donate-ln-qr");
+  const bolt11El = panel.querySelector<HTMLElement>("#donate-ln-bolt11");
+  const copyBtn = panel.querySelector<HTMLButtonElement>("#donate-ln-copy");
+  const statusEl = panel.querySelector<HTMLElement>("#donate-ln-status");
+  const errorEl = panel.querySelector<HTMLElement>("#donate-ln-error");
+  const feeEl = panel.querySelector<HTMLElement>("#donate-ln-fee");
+  const loginEl = panel.querySelector<HTMLElement>("#donate-ln-login");
+  const guest = !opts.signedIn;
+  if (loginEl) loginEl.hidden = !guest;
+  if (feeEl) {
+    feeEl.hidden = false;
+    feeEl.textContent = "Paid to the creator's Lightning Address. Plebly does not hold it.";
+  }
+  if (createBtn && guest) {
+    createBtn.disabled = true;
+    createBtn.textContent = "Sign in to invoice";
+  }
+  const setError = (msg: string | null) => {
+    if (!errorEl) return;
+    errorEl.hidden = !msg;
+    errorEl.textContent = msg || "";
+  };
+  createBtn?.addEventListener("click", async () => {
+    if (guest || !opts.proposalId) {
+      setError("Sign in to create a Lightning invoice.");
+      return;
+    }
+    const amount = Math.floor(Number(amountInput?.value));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter an amount in sats.");
+      return;
+    }
+    setError(null);
+    if (createBtn) createBtn.disabled = true;
+    try {
+      const invoice = await createCreatorLightningInvoice({
+        proposal_id: opts.proposalId,
+        amount_sats: amount,
+      });
+      if (invoiceWrap) invoiceWrap.hidden = false;
+      if (bolt11El) bolt11El.textContent = invoice.bolt11;
+      if (qrImg) {
+        const uri = `lightning:${invoice.bolt11.trim()}`;
+        qrImg.src = await QRCode.toDataURL(uri.toUpperCase(), {
+          width: 168,
+          margin: 1,
+          errorCorrectionLevel: "L",
+          color: themeQrColors(),
+        });
+      }
+      if (statusEl) {
+        statusEl.textContent = invoice.hold_id
+          ? "Pay this invoice from your wallet. After it settles, check the payment."
+          : "Pay this invoice from your wallet. This service does not report the payment, so it will not be listed here.";
+      }
+      if (invoice.hold_id && statusEl) {
+        panel.querySelectorAll(".donate-ln-check").forEach((el) => el.remove());
+        const check = document.createElement("button");
+        check.type = "button";
+        check.className = "btn donate-ln-check";
+        check.textContent = "I paid — check";
+        check.addEventListener("click", async () => {
+          check.disabled = true;
+          try {
+            const result = await confirmCreatorLightning(invoice.hold_id || "");
+            statusEl.textContent = result.paid
+              ? "Payment confirmed."
+              : "Not confirmed yet. Pay the invoice, then check again.";
+          } catch (e) {
+            statusEl.textContent = (e as Error).message;
+          } finally {
+            check.disabled = false;
+          }
+        });
+        statusEl.after(check);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      if (createBtn) createBtn.disabled = false;
+    }
+  });
+  copyBtn?.addEventListener("click", async () => {
+    const text = bolt11El?.textContent?.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* ignore */
+    }
+  });
+  void address;
+}
+
 export async function bindDonatePanel(
   root: ParentNode,
   opts: DonateBindOpts | string,
@@ -1938,6 +2053,14 @@ export async function bindDonatePanel(
   bindDonateRails(panel);
   bindDonateWizard(panel, normalized);
   void bindOnchainDonate(panel, normalized.address);
+
+  const creatorLn =
+    panel.querySelector<HTMLElement>("[data-creator-ln]")?.dataset.creatorLn?.trim() ||
+    "";
+  if (creatorLn) {
+    bindCreatorLightning(panel, normalized, creatorLn);
+    return;
+  }
 
   if (!endowment && !normalized.proposalPath) {
     setLightningUnavailable(

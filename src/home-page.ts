@@ -412,9 +412,11 @@ export function proposalCardHtml(
     ? claimModeBadge
     : watching
       ? `<span class="project-card-watch">Watching</span>`
-      : lightningEnabled && p.escrow_address
-        ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
-        : "";
+      : p.lightning_address
+        ? `<span class="project-card-ln" title="Donors can pay this Lightning Address. That payment is final.">Lightning</span>`
+        : lightningEnabled && p.escrow_address
+          ? `<span class="project-card-ln" title="Lightning settles into on-chain escrow">Lightning</span>`
+          : "";
   const cover = safeCoverImageUrl(p.cover_image);
   const coverHtml = cover
     ? `<div class="project-card-cover"><img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" /></div>`

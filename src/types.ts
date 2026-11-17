@@ -166,6 +166,8 @@ export type Proposal = {
   pay_to_address?: string | null;
   /** False when a stored pay-to failed its signature check and is hidden. */
   pay_to_verified?: boolean | null;
+  /** Creator Lightning Address. Present only when the worker seal matches. */
+  lightning_address?: string | null;
   submission_fee_txid: string | null;
   cover_image?: string | null;
   created_at: string | null;

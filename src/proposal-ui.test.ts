@@ -4,6 +4,7 @@ import {
   canEditProposal,
   deliverableChipHtml,
   beginDonateProject,
+  bindDonatePanel,
   donateModalHtml,
   proposalReceiveAddress,
   donatePanelHtml,
@@ -447,7 +448,7 @@ describe("proposal UI critical render helpers", () => {
     expect(signedOut).not.toContain('id="donate-link-txid"');
   });
 
-  it("direct-builder donate pane pays the builder and hides lightning", () => {
+  it("direct-builder donate pane pays the builder and hides lightning", async () => {
     const waiting = donatePanelHtml({
       funding_route: "direct-builder",
     } as Proposal);
@@ -470,6 +471,35 @@ describe("proposal UI critical render helpers", () => {
     expect(html).not.toContain("DONATE / ESCROW ADDRESS");
     expect(html).not.toContain('id="donate-rail-lightning"');
     expect(html).not.toContain("Not claim bond");
+
+    const withLn = donatePanelHtml({
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      pay_to_verified: true,
+      lightning_address: "builder@wallets.example",
+      status: "claimed",
+    } as Proposal);
+    expect(withLn).toContain('id="donate-rail-lightning"');
+    expect(withLn).toContain("builder@wallets.example");
+    expect(withLn).toContain("Plebly does not receive it");
+    expect(withLn).toContain("data-creator-ln");
+    document.body.innerHTML = withLn;
+    await bindDonatePanel(document, {
+      address: "tb1qbuilder",
+      proposalId: "p",
+      proposalPath: "proposals/listed/p.md",
+      signedIn: false,
+      direct: true,
+    });
+    expect(document.querySelector("#donate-ln-address")?.textContent).toContain(
+      "builder@wallets.example",
+    );
+    expect(
+      (document.querySelector("#donate-ln-ready") as HTMLElement | null)?.hidden,
+    ).toBe(false);
+    expect(
+      (document.querySelector("#donate-ln-create") as HTMLButtonElement | null)?.disabled,
+    ).toBe(true);
 
     const hidden = donatePanelHtml({
       funding_route: "direct-builder",
