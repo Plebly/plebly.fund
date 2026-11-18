@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Plebly",
   "short_name": "Plebly",
-  "description": "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
+  "description": "Fund open Bitcoin work. New listings pay the builder. That payment is final.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",

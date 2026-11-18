@@ -28,6 +28,7 @@ import {
   type ClaimLedgerView,
 } from "./builder";
 import { CLAIM_FLOOR_SATS, WORKERS_API, mempoolWeb } from "./config";
+import { loadFundingRoute } from "./funding-route";
 import {
   applyCreditPreferencesToFields,
   bindCreditPreferenceGates,
@@ -641,6 +642,7 @@ export async function renderAccount(
       show_amount: false,
     };
 
+  const escrowOn = (await loadFundingRoute()) === "multisig";
   app.innerHTML = ctx.shell(`
     <section class="wrap-wide detail account-page">
       <div class="account-head">
@@ -650,7 +652,7 @@ export async function renderAccount(
           ${
             reviewerMe?.active
               ? `<p class="account-head-meta muted">${escapeHtml(reviewerMe.reviewer?.kind || "earned")} reviewer · <a href="${href("/reviewers")}">Governance</a>${
-                  (reviewerMe.reviewer?.completed_proposal_ids?.length || 0) >= 1
+                  escrowOn && (reviewerMe.reviewer?.completed_proposal_ids?.length || 0) >= 1
                     ? ` · <a href="${href("/keyholders")}">Apply as keyholder</a>`
                     : ""
                 }</p>`

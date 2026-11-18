@@ -282,7 +282,7 @@ function parseProposalMeta(text, id) {
     heading: title,
     description:
       problem ||
-      "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
+      "Fund open Bitcoin work. New listings pay the builder. That payment is final.",
     image:
       cover && /^https:\/\//i.test(cover) ? cover : `${SITE}/logo.jpeg`,
     status,
@@ -310,7 +310,7 @@ async function metaForId(id) {
     title: `${id} · Plebly`,
     heading: id,
     description:
-      "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
+      "Fund open Bitcoin work. New listings pay the builder. That payment is final.",
     image: `${SITE}/logo.jpeg`,
     status: "listed",
   };
@@ -405,7 +405,7 @@ async function main() {
           title: `${entry.title} · Plebly`,
           heading: entry.title,
           description:
-            "Fund open Bitcoin work with publicly verifiable on-chain escrow.",
+            "Fund open Bitcoin work. New listings pay the builder. That payment is final.",
           image: `${SITE}/logo.jpeg`,
           status: "listed",
         }

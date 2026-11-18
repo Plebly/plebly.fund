@@ -7,6 +7,7 @@ import {
 } from "./generated/about-data";
 import { PLEBLY_GITHUB_URL } from "./icons";
 import { WORKERS_API } from "./config";
+import { loadFundingRoute } from "./funding-route";
 import { fetchPublicOrg, type PublicOrg } from "./org-page";
 import { hydrateAvatarSlots } from "./profile-avatars";
 import { href, orgHref, profileHref, projectsHref } from "./router";
@@ -35,8 +36,12 @@ function flowHtml(): string {
   ).join("")}</ol>`;
 }
 
-function feesHtml(): string {
-  const want = new Set(["Platform fee", "Submission fee", "Opens for builders"]);
+function feesHtml(escrowOn: boolean): string {
+  const want = new Set(
+    escrowOn
+      ? ["Platform fee", "Submission fee", "Opens for builders"]
+      : ["Submission fee", "Opens for builders"],
+  );
   const rows = ABOUT_PARAM_LABELS.filter((p) => want.has(p.label));
   if (!rows.length) return "";
   return `<dl class="about-params about-params-short">${rows
@@ -237,6 +242,7 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
   `);
 
   const api = WORKERS_API.replace(/\/$/, "");
+  const escrowOn = (await loadFundingRoute()) === "multisig";
   const [orgResult, khLive, health] = await Promise.all([
     fetchPublicOrg(PLEBLY_ORG_LOGIN).catch(
       () =>
@@ -279,9 +285,13 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
     target_seats: khLive?.target_seats,
   };
 
-  const lightning = ABOUT_LIGHTNING_HTML
-    ? `<div class="about-prose prose-rich">${ABOUT_LIGHTNING_HTML}</div>`
-    : "";
+  const lightning =
+    escrowOn && ABOUT_LIGHTNING_HTML
+      ? `<div class="about-prose prose-rich">${ABOUT_LIGHTNING_HTML}</div>`
+      : "";
+  const feesLede = escrowOn
+    ? `Taken when a project is paid, not when you donate. <a href="${href("/parameters")}">All parameters</a> · <a href="${href("/terms")}">Terms</a>.`
+    : `A direct payment takes no platform fee. <a href="${href("/parameters")}">All parameters</a> · <a href="${href("/terms")}">Terms</a>.`;
 
   app.innerHTML = shell(`
     <section class="wrap-wide detail about-page">
@@ -309,12 +319,12 @@ export async function renderAbout(shell: AboutShell): Promise<void> {
 
       ${teamSectionHtml(org)}
 
-      ${keyholdersHtml(liveKh)}
+      ${escrowOn ? keyholdersHtml(liveKh) : ""}
 
       <section class="about-section" id="parameters">
         <h2>Fees</h2>
-        <p class="about-section-lede">Taken when a project is paid, not when you donate. <a href="${href("/parameters")}">All parameters</a> · <a href="${href("/terms")}">Terms</a>.</p>
-        ${feesHtml()}
+        <p class="about-section-lede">${feesLede}</p>
+        ${feesHtml(escrowOn)}
         ${lightning}
       </section>
     </section>

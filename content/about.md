@@ -4,7 +4,7 @@ Plebly funds Bitcoin work in public. New listings pay the builder. That payment 
 
 ## What we believe
 
-**Plebly's server holds no keys.** Escrow coins stay in a public multisig until keyholders sign. A direct payment goes to the builder and is not held. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until the on-chain sweep.
+**Plebly's server holds no keys.** A direct payment goes to the builder and is not held. A listing that already has an escrow keeps those coins until its keyholders sign.
 
 **Public listings.** Every project and address is visible.
 
@@ -15,7 +15,7 @@ Plebly funds Bitcoin work in public. New listings pay the builder. That payment 
 1. **List:** A bounty for builders or a campaign for a cause.
 2. **Donate:** Send Bitcoin to the address on the listing.
 3. **Build or receive:** Builders apply, or the organizer receives.
-4. **Pay:** Reviewers confirm escrow bounty work before it pays. A direct payment is already with the builder.
+4. **Pay:** A direct payment is already with the builder. A listing that already has an escrow pays after reviewers approve.
 
 Browse [open projects](/) or [start a project](/propose).
 

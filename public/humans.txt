@@ -6,5 +6,5 @@ GitHub: https://github.com/Plebly
 
 /* SITE */
 Standards: HTML5, CSS, TypeScript
-Components: Cloudflare Workers API, GitHub Pages, Bitcoin on-chain escrow
+Components: Cloudflare Workers API, GitHub Pages, Bitcoin. New listings pay the builder.
 LLM index: https://plebly.fund/llms.txt

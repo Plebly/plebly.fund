@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DIRECT_SITE_DESCRIPTION } from "./funding-route";
 import {
   parseLocation,
   campaignsHref,
@@ -145,9 +146,7 @@ describe("donations SEO", () => {
 describe("home SEO description", () => {
   it("uses the short signet custody meta", () => {
     const seo = seoForRoute({ name: "home" });
-    expect(seo.description).toBe(
-      "Fund open Bitcoin work with publicly verifiable on-chain escrow. Signet test build: Plebly's server holds no keys; keyholders aren't yet independent of the operator.",
-    );
+    expect(seo.description).toBe(DIRECT_SITE_DESCRIPTION);
     expect(JSON.stringify(seo.jsonLd)).toContain(seo.description);
   });
 });

@@ -1,9 +1,8 @@
+import { escrowListingsOn, siteDescription } from "./funding-route";
 import type { Route } from "./types";
 import { proposalRepoPath, proposalSlug, proposalStablePath } from "./util";
 
 export const SITE_ORIGIN = "https://plebly.fund";
-const DEFAULT_DESCRIPTION =
-  "Fund open Bitcoin work with publicly verifiable on-chain escrow. Signet test build: Plebly's server holds no keys; keyholders aren't yet independent of the operator.";
 
 /** Vite base path, always with trailing slash (e.g. "/" or "/plebly.fund/"). */
 export function basePath(): string {
@@ -323,7 +322,7 @@ function applyJsonLd(
 /** Update document title + Open Graph / Twitter / canonical for the active route. */
 export function applySeo(input: SeoInput): void {
   const title = input.title?.trim() || "Plebly";
-  const description = input.description?.trim() || DEFAULT_DESCRIPTION;
+  const description = input.description?.trim() || siteDescription();
   const path = input.path || currentReturnPath().split("?")[0] || "/";
   const canonical = canonicalUrl(path);
   const image = input.image || `${SITE_ORIGIN}/logo.jpeg`;
@@ -446,7 +445,7 @@ export function seoForRoute(
     case "home":
       return {
         title: "Plebly: Fund open Bitcoin work",
-        description: DEFAULT_DESCRIPTION,
+        description: siteDescription(),
         path: "/",
         jsonLd: {
           "@context": "https://schema.org",
@@ -467,7 +466,7 @@ export function seoForRoute(
               "@id": `${SITE_ORIGIN}/#website`,
               name: "Plebly",
               url: `${SITE_ORIGIN}/`,
-              description: DEFAULT_DESCRIPTION,
+              description: siteDescription(),
               publisher: { "@id": `${SITE_ORIGIN}/#organization` },
             },
           ],
@@ -476,15 +475,15 @@ export function seoForRoute(
     case "about":
       return {
         title: "About Plebly",
-        description:
-          "On-chain Bitcoin escrow. Plebly's server holds no keys. Public listings. Published fees.",
+        description: siteDescription(),
         path: "/about",
       };
     case "params":
       return {
         title: "Parameters",
-        description:
-          "Live Plebly fee percents, keyholder cap, and published keyholder xpubs.",
+        description: escrowListingsOn()
+          ? "Live Plebly fee percents, keyholder cap, and published keyholder xpubs."
+          : "New listings pay the builder. That payment is final and takes no fee.",
         path: "/parameters",
       };
     case "terms":
@@ -546,15 +545,17 @@ export function seoForRoute(
     case "keyholders":
       return {
         title: "Keyholders",
-        description:
-          "Sparrow cosign console for escrow releases.",
+        description: escrowListingsOn()
+          ? "Sparrow cosign console for escrow releases."
+          : "New listings pay the builder. Keyholder applications are closed.",
         path: "/keyholders",
       };
     case "khDuties":
       return {
         title: "Keyholder responsibilities",
-        description:
-          "What a Plebly keyholder does, how they are paid, and what happens if they stall.",
+        description: escrowListingsOn()
+          ? "What a Plebly keyholder does, how they are paid, and what happens if they stall."
+          : "New listings pay the builder. Keyholder duties apply only to a listing that already has an escrow.",
         path: "/keyholder-responsibilities",
       };
     case "propose":
@@ -606,10 +607,10 @@ export function seoForRoute(
         title: extra?.title || "Project",
         description:
           extra?.description ||
-          "Open Bitcoin project with publicly verifiable on-chain escrow on Plebly.",
+          siteDescription(),
         path: extra?.path || `/proposal/${proposalSlug(route.id)}`,
       };
     default:
-      return { title: "Plebly", description: DEFAULT_DESCRIPTION, path: "/" };
+      return { title: "Plebly", description: siteDescription(), path: "/" };
   }
 }

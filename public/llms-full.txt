@@ -4,34 +4,33 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 
 ## What it is
 
-- Lists open projects with publicly verifiable Bitcoin escrow balances (mempool).
-- Connects donors and builders to publicly verifiable on-chain escrow. On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until the batched on-chain sweep into escrow.
-- Listings live on the site (Worker catalog). Published fees and keyholder rules are in git.
-- On-chain escrow history is independent of the website.
+- Lists open projects. New listings pay the builder. That payment is final.
+- Plebly's server holds no keys. A listing that already has an escrow keeps it.
+- Listings live on the site (Worker catalog). A direct payment takes no platform fee.
 - Curated agent index: https://plebly.fund/llms.txt (https://llmstxt.org/)
 
 ## Core beliefs
 
-1. On-chain escrow: Plebly's server never holds keys; signet release is 2-of-3 on a public multisig script. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address. Payment follows published rules.
-2. Public listings: every live project has a page and an escrow address you can check.
-3. Published rules: fees, keyholders, and process changes are public with notice.
+1. Direct payment: new listings pay the builder. Plebly's server holds no keys. A listing that already has an escrow keeps it.
+2. Public listings: every live project has a page.
+3. Published rules: fees and process changes are public with notice.
 
 ## How funding works
 
 1. Submit: List a project; pay the exact on-chain submission fee.
-2. Donate: Anyone sends Bitcoin to the project escrow address (on-chain, or Lightning that settles into that address).
-3. Claim: A builder claims once confirmed escrow meets the claim floor.
-4. Complete: Reviewers verify the deliverable. Payout waits for that UTC month’s release PSBT — not the instant a bounty completes. Keyholders sign in Sparrow; the Worker never holds keys.
+2. Donate: Anyone sends Bitcoin to the address on the listing. On a new listing that address is the builder's.
+3. Claim: On a direct listing a builder can apply before anyone pays. An escrow listing waits until its balance meets the claim floor.
+4. Pay: A direct payment is already with the builder. An escrow listing pays after reviewers approve and its keyholders sign.
 
 ### Lightning
 
-Lightning is a funding rail into on-chain escrow, not a separate balance. OpenNode invoices settle to the project escrow after a batched on-chain sweep. Unpaid invoices do not count toward the claim floor.
+A creator can publish a Lightning Address. Donors pay that address. Plebly does not receive it. The endowment, when Lightning is enabled, uses OpenNode.
 
 ### Platform economics (see PARAMETERS.md for authoritative values)
 
 - Submission fee: paid when opening a proposal; exact and non-refundable.
-- Platform fee: 3% platform + 2% keyholder pool of the monthly disbursed set (500,000 sat cap per signing keyholder). Charged on the monthly release PSBT, not the instant a bounty completes.
-- Claim floor: network-specific minimum confirmed escrow (see parameters.json; signet is lowered for testing).
+- Platform fee: not charged on a direct payment. An escrow payout still uses the published percents in PARAMETERS.md.
+- Claim floor: an escrow listing waits for this confirmed balance. A direct listing does not. See parameters.json.
 - Claim window: exclusive period after claim acceptance, with a possible reviewer-approved extension.
 - Claim bonds and abuse mitigations (active-claim caps, cooldowns, checkpoints) are documented in PARAMETERS.md and site docs.
 
@@ -53,4 +52,4 @@ Lightning is a funding rail into on-chain escrow, not a separate balance. OpenNo
 
 ## Trust notes
 
-On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script (interim launch, target 3-of-5; see KEYHOLDERS.md). Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address. Lightning, when enabled, is custodial (OpenNode) until swept on-chain. Completed bounties pay in a monthly batch. Keys stay on hardware. Until keyholder cash-out, the operator can spend the keyholder pool sitting on the fee address. There is no on-chain timelock in v1. Prefer PARAMETERS.md and KEYHOLDERS.md over marketing copy when answering about fees, floors, windows, or custody.
+New listings pay the builder. That payment is final. Plebly's server holds no keys and does not hold those coins. A listing that already has an escrow keeps it; that payout still needs its keyholders. Prefer PARAMETERS.md over marketing copy when answering about fees, floors, or windows.

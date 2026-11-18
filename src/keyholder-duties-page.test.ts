@@ -14,6 +14,13 @@ describe("keyholder duties page", () => {
     expect(html).not.toContain("/docs/keyholder-responsibilities.md");
   });
 
+  it("hides the escrow duties when new listings pay the builder", () => {
+    const html = keyholderDutiesPageHtml("# Title\n\noperator can spend the keyholder pool", false);
+    expect(html).toContain("Keyholder applications are closed");
+    expect(html).not.toContain("operator can spend the keyholder pool");
+    expect(html).not.toContain("/keyholders");
+  });
+
   it("drops the source markdown heading so the page h1 is unique", () => {
     expect(dutiesBodyMarkdown("# Title\n\nBody text.")).toBe("Body text.");
   });

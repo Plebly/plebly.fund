@@ -600,7 +600,9 @@ export async function renderProposalPage(
 
     const seoDescription =
       proposalSeoDescription(match) ||
-      "Fund open Bitcoin work with publicly verifiable on-chain escrow.";
+      (match.funding_route === "multisig"
+        ? "Open Bitcoin project. Donors pay its escrow address."
+        : "Open Bitcoin project. Donors pay the builder. That payment is final.");
     const seoPath = match.id
       ? proposalStablePath(match.id)
       : `/proposal/${match.path.replace(/^proposals\//, "").replace(/\.md$/, "")}`;

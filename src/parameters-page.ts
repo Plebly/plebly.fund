@@ -1,4 +1,5 @@
 import { WORKERS_API } from "./config";
+import { platformUsesEscrow } from "./funding-route";
 import {
   KEYHOLDER_CAP_SATS,
   KEYHOLDER_FEE_PERCENT,
@@ -41,16 +42,18 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
   const kh = live?.keyholder_fee_percent ?? KEYHOLDER_FEE_PERCENT;
   const cap = live?.keyholder_cap_sats ?? KEYHOLDER_CAP_SATS;
   const roster = live?.keyholders || [];
-  const directRoute = live?.funding_route !== "multisig";
-  app.innerHTML = shell(`
-    <section class="wrap-wide detail">
-      <header class="declined-head">
-        <p class="eyebrow"><a href="${href("/about")}">About</a></p>
-        <h1>Parameters</h1>
-        <p class="lede">These fees apply when an escrow pays out. A payment straight to the builder has no platform fee. Keyholders sign escrow payouts, from a monthly batch, not per project.</p>
-      </header>
-      <dl class="about-params">
-        <div class="about-param">
+  const escrowOn = platformUsesEscrow(live?.funding_route);
+  const routeRow = `<div class="about-param">
+          <dt>Funding route for new listings</dt>
+          <dd><span class="about-param-value">${escrowOn ? "Multisig escrow" : "Pay the builder"}</span>
+          <span class="about-param-hint">${
+            escrowOn
+              ? "A keyholder quorum set new listings to multisig escrow. A listing keeps the route it was listed with."
+              : "New listings pay the builder. That payment is final and takes no fee. A listing that already has an escrow keeps it."
+          }</span></dd>
+        </div>`;
+  const escrowFees = escrowOn
+    ? `<div class="about-param">
           <dt>Platform fee</dt>
           <dd><span class="about-param-value">${escapeHtml(String(platform))}%</span>
           <span class="about-param-hint">Of that month’s disbursed bounty total.</span></dd>
@@ -64,18 +67,10 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
           <dt>Total take</dt>
           <dd><span class="about-param-value">${escapeHtml(String(platform + kh))}%</span>
           <span class="about-param-hint">Taken from an escrow payout. A direct payment has no fee. Bond and donor refunds are 0%.</span></dd>
-        </div>
-        <div class="about-param">
-          <dt>Funding route for new listings</dt>
-          <dd><span class="about-param-value">${directRoute ? "Pay the builder" : "Multisig escrow"}</span>
-          <span class="about-param-hint">${
-            directRoute
-              ? "New listings pay the builder. That payment is final and takes no fee. A listing that already has an escrow keeps it."
-              : "A keyholder quorum set new listings to multisig escrow. A listing keeps the route it was listed with."
-          }</span></dd>
-        </div>
-      </dl>
-      <h2>Active keyholders</h2>
+        </div>`
+    : "";
+  const rosterHtml = escrowOn
+    ? `<h2>Active keyholders</h2>
       ${
         roster.length
           ? `<table class="about-keyholders-table"><thead><tr><th>Handle</th><th>Fingerprint</th><th>xpub</th><th>Signed</th></tr></thead><tbody>${roster
@@ -85,9 +80,30 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
               )
               .join("")}</tbody></table>`
           : `<p class="muted">No active keyholders published yet.</p>`
-      }
+      }`
+    : "";
+  app.innerHTML = shell(`
+    <section class="wrap-wide detail">
+      <header class="declined-head">
+        <p class="eyebrow"><a href="${href("/about")}">About</a></p>
+        <h1>Parameters</h1>
+        <p class="lede">${
+          escrowOn
+            ? "These fees apply when an escrow pays out. A payment straight to the builder has no platform fee. Keyholders sign escrow payouts, from a monthly batch, not per project."
+            : "New listings pay the builder. That payment is final and takes no fee."
+        }</p>
+      </header>
+      <dl class="about-params">
+        ${escrowFees}
+        ${routeRow}
+      </dl>
+      ${rosterHtml}
       <p class="muted">Some dispute votes pay 10,000 sats each, from forfeited claim bonds. That payment is not enabled yet. Ordinary completion review is unpaid.</p>
-      <p class="muted"><a href="${href("/reviewer-responsibilities")}">Reviewer rules</a> · <a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a> · <a href="${href("/terms")}">Terms</a> · <a href="${projectsHref()}">Projects</a></p>
+      <p class="muted"><a href="${href("/reviewer-responsibilities")}">Reviewer rules</a>${
+        escrowOn
+          ? ` · <a href="${href("/keyholder-responsibilities")}">Keyholder responsibilities</a>`
+          : ""
+      } · <a href="${href("/terms")}">Terms</a> · <a href="${projectsHref()}">Projects</a></p>
     </section>
   `);
 }

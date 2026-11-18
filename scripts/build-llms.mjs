@@ -42,7 +42,18 @@ async function loadProjects() {
   }
 }
 
-function render(projects) {
+async function escrowListingsOn() {
+  try {
+    const res = await fetch(`${WORKERS.replace(/\/$/, "")}/parameters`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.funding_route === "multisig";
+  } catch {
+    return false;
+  }
+}
+
+function render(projects, escrowOn) {
   const projectLines =
     projects.length > 0
       ? projects.map(
@@ -53,22 +64,33 @@ function render(projects) {
           `- [Open projects on the home page](${SITE}/): Live listed projects (catalog unavailable at build time)`,
         ];
 
+  const blurb = escrowOn
+    ? `Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. Plebly's server holds no keys. Keyholders sign a release.`
+    : `Plebly is a public funding platform for Bitcoin development and research. New listings pay the builder. That payment is final. Plebly's server holds no keys. A listing that already has an escrow keeps it.`;
+  const listings = escrowOn
+    ? `Listings and escrow balances are on the site at ${SITE}. Published fees and keyholder rules are in git.`
+    : `Listings are on the site at ${SITE}. A direct payment takes no platform fee.`;
+  const keyholderLines = escrowOn
+    ? `- [Keyholder responsibilities](${SITE}/keyholder-responsibilities): What a keyholder does and how they are paid\n`
+    : "";
+  const keyholderProtocol = escrowOn
+    ? `- [Keyholders](${SITE}/about#keyholders): Multisig roster and rules\n`
+    : "";
   return `# Plebly
 
-> Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. On signet, Plebly's server never holds keys; release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address. Lightning donations (when enabled) are held by OpenNode, a custodial processor, until a batched on-chain sweep.
+> ${blurb}
 
-Listings and escrow balances are on the site at ${SITE}. Published fees and keyholder rules are in git. Lightning donations (when enabled) settle into the same on-chain escrow after an on-chain sweep.
+${listings}
 
 ## Site
 
-- [Home / open projects](${SITE}/): Browse listed projects and escrow funding progress
+- [Home / open projects](${SITE}/): Browse listed projects
 - [About](${SITE}/about): Beliefs, how it works, fees, and network status
 - [Start a project](${SITE}/propose): List a bounty or campaign (login; on-chain fee required)
 - [Funding stats](${SITE}/stats): Public funding and completion totals
 - [Reviewers](${SITE}/reviewers): Reviewer roster and open decisions
 - [Reviewer rules](${SITE}/reviewer-responsibilities): Who can review and how a vote passes
-- [Keyholder responsibilities](${SITE}/keyholder-responsibilities): What a keyholder does and how they are paid
-- [Full context for LLMs](${SITE}/llms-full.txt): Longer plain-text overview of product rules and flows
+${keyholderLines}- [Full context for LLMs](${SITE}/llms-full.txt): Longer plain-text overview of product rules and flows
 
 ## Projects
 
@@ -77,8 +99,7 @@ ${projectLines.join("\n")}
 ## Protocol (published rules)
 
 - [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md): Fees, claim floor, windows
-- [Keyholders](${SITE}/about#keyholders): Multisig roster and rules
-- [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
+${keyholderProtocol}- [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
 
 ## Optional
 
@@ -92,7 +113,8 @@ ${projectLines.join("\n")}
 
 async function main() {
   const projects = await loadProjects();
-  writeFileSync(out, withNetworkNotice(render(projects), NETWORK, "llms"));
+  const escrowOn = await escrowListingsOn();
+  writeFileSync(out, withNetworkNotice(render(projects, escrowOn), NETWORK, "llms"));
   console.log(
     `Wrote llms.txt (${projects.length} project link${projects.length === 1 ? "" : "s"}, ${NETWORK})`,
   );

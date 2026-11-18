@@ -1,5 +1,6 @@
 import { claimFloorShortfall } from "./builder";
 import { CLAIM_FLOOR_SATS } from "./config";
+import { loadFundingRoute } from "./funding-route";
 import { listAllPublicProposals } from "./github";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { href, projectsHref } from "./router";
@@ -140,7 +141,7 @@ function gapSectionHtml(stats: PublicStats): string {
   </section>`;
 }
 
-function statsBodyHtml(stats: PublicStats): string {
+function statsBodyHtml(stats: PublicStats, escrowOn: boolean): string {
   const rateValue =
     stats.completionRate == null ? "—" : `${stats.completionRate}%`;
   const rateDetail =
@@ -152,16 +153,22 @@ function statsBodyHtml(stats: PublicStats): string {
     <header class="stats-hero">
       <p class="about-eyebrow">Public ledger</p>
       <h1>Funding stats</h1>
-      <p class="lede">Best-effort totals from public proposal files and on-chain escrow balances. Plebly's server does not hold spending keys or settle these funds.</p>
+      <p class="lede">${
+        escrowOn
+          ? "Best-effort totals from public proposal files and on-chain escrow balances. Plebly's server does not hold spending keys or settle these funds."
+          : "Best-effort totals from public listings. A direct payment is already with the builder. Plebly's server does not hold those coins."
+      }</p>
     </header>
 
     <section class="stats-primary" aria-labelledby="stats-escrowed-label">
-      <p class="stats-primary-label" id="stats-escrowed-label">Currently escrowed</p>
+      <p class="stats-primary-label" id="stats-escrowed-label">${escrowOn ? "Currently escrowed" : "Recorded on listings"}</p>
       <p class="stats-primary-value mono">${escapeHtml(formatSats(stats.escrowed))}</p>
       <p class="stats-primary-detail">${
         stats.escrowed
           ? `Live confirmed balances across ${stats.tracked} tracked project${stats.tracked === 1 ? "" : "s"}`
-          : "No public escrow balance is tracked yet"
+          : escrowOn
+            ? "No public escrow balance is tracked yet"
+            : "No recorded gifts yet"
       }</p>
     </section>
 
@@ -183,13 +190,13 @@ function statsBodyHtml(stats: PublicStats): string {
       ${supportMetricHtml("Claim completion", rateValue, rateDetail)}
     </dl>
 
-    ${gapSectionHtml(stats)}
+    ${escrowOn ? gapSectionHtml(stats) : ""}
 
     <footer class="stats-foot">
       <p class="stats-source">Figures refresh when this page loads.</p>
       <div class="stats-actions">
         <a class="btn" href="${projectsHref()}">Browse projects</a>
-        <a class="btn ghost" href="${href("/about")}#trust">Trust</a>
+        <a class="btn ghost" href="${escrowOn ? `${href("/about")}#trust` : href("/about")}">About</a>
       </div>
     </footer>
   </section>`;
@@ -202,9 +209,12 @@ export async function renderStats(shell: StatsShell): Promise<void> {
   );
 
   try {
-    const proposals = await enrichBalances(await listAllPublicProposals());
+    const [proposals, route] = await Promise.all([
+      listAllPublicProposals().then((rows) => enrichBalances(rows)),
+      loadFundingRoute(),
+    ]);
     const stats = computePublicStats(proposals);
-    app.innerHTML = shell(statsBodyHtml(stats));
+    app.innerHTML = shell(statsBodyHtml(stats, route === "multisig"));
   } catch (error) {
     app.innerHTML = shell(`<section class="wrap-wide detail stats-page">
       <header class="stats-hero">

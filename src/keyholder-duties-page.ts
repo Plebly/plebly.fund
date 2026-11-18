@@ -1,4 +1,5 @@
 import dutiesMarkdown from "../content/keyholder-responsibilities.md?raw";
+import { loadFundingRoute } from "./funding-route";
 import { href, projectsHref } from "./router";
 import { renderMarkdown } from "./markdown";
 
@@ -8,7 +9,20 @@ export function dutiesBodyMarkdown(raw: string = dutiesMarkdown): string {
   return raw.replace(/^#\s+.+\n+/, "").trim();
 }
 
-export function keyholderDutiesPageHtml(markdown = dutiesMarkdown): string {
+export function keyholderDutiesPageHtml(
+  markdown = dutiesMarkdown,
+  escrowOn = true,
+): string {
+  if (!escrowOn) {
+    return `<section class="wrap-wide detail">
+      <header class="declined-head">
+        <h1>Keyholder responsibilities</h1>
+        <p class="lede">New listings pay the builder. Keyholder applications are closed.</p>
+      </header>
+      <p class="muted">A listing that already has an escrow keeps its keyholders.</p>
+      <p class="muted"><a href="${href("/reviewer-responsibilities")}">Reviewer rules</a> · <a href="${href("/terms")}">Terms</a> · <a href="${projectsHref()}">Projects</a></p>
+    </section>`;
+  }
   const body = dutiesBodyMarkdown(markdown);
   return `<section class="wrap-wide detail">
       <header class="declined-head">
@@ -21,7 +35,8 @@ export function keyholderDutiesPageHtml(markdown = dutiesMarkdown): string {
     </section>`;
 }
 
-export function renderKeyholderDuties(shell: DutiesShell): void {
+export async function renderKeyholderDuties(shell: DutiesShell): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
-  app.innerHTML = shell(keyholderDutiesPageHtml());
+  const escrowOn = (await loadFundingRoute()) === "multisig";
+  app.innerHTML = shell(keyholderDutiesPageHtml(dutiesMarkdown, escrowOn));
 }

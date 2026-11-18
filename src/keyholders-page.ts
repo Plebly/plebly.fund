@@ -1,6 +1,7 @@
 import { authFetch, currentReturnPath, githubLoginUrl, loginChoicesHtml, logout, updateProfile, type AuthUser } from "./auth";
 import { solidIcon } from "./icons";
 import { WORKERS_API } from "./config";
+import { loadFundingRoute } from "./funding-route";
 import { confirmAction } from "./confirm-modal";
 import { bindKhApplyForm, khApplyFormHtml } from "./governance-page";
 import { href } from "./router";
@@ -1300,12 +1301,36 @@ export function keyholderRosterHtml(rows: RosterSeat[], selfId: string): string 
     ${group("Sitting", sitting)}`.value;
 }
 
+function escrowClosedHtml(): string {
+  return `<section class="wrap-wide detail keyholders-page">
+      <header class="declined-head">
+        <h1>Keyholders</h1>
+        <p class="lede">New listings pay the builder. Keyholder applications are closed.</p>
+      </header>
+      <p class="muted">A listing that already has an escrow keeps its keyholders.</p>
+    </section>`;
+}
+
 export async function renderKeyholders(
   shell: KeyholdersShell,
   user: AuthUser | null,
 ): Promise<void> {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const rerender = () => void renderKeyholders(shell, user);
+  if ((await loadFundingRoute()) !== "multisig") {
+    let active = false;
+    if (user) {
+      const meRes = await authFetch(`${api()}/keyholders/me`).catch(() => null);
+      if (meRes?.ok) {
+        const meBody = (await meRes.json()) as { keyholder?: { status?: string } | null };
+        active = meBody.keyholder?.status === "active";
+      }
+    }
+    if (!active) {
+      app.innerHTML = shell(escrowClosedHtml());
+      return;
+    }
+  }
   const activeSeats = await loadActiveSeats();
   if (!user) {
     app.innerHTML = shell(html`

@@ -3,6 +3,7 @@ import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
 import "@fortawesome/fontawesome-free/css/brands.min.css";
 import "@fortawesome/fontawesome-free/css/solid.min.css";
 import { renderAbout } from "./about-page";
+import { loadFundingRoute, escrowListingsOn } from "./funding-route";
 import { renderParameters } from "./parameters-page";
 import { renderKeyholderDuties } from "./keyholder-duties-page";
 import { renderReviewerRules } from "./reviewer-rules-page";
@@ -102,8 +103,14 @@ function opsNavHtml(): string {
   const here = route().name;
   const items: { name: string; href: string; label: string }[] = [
     { name: "reviewers", href: href("/reviewers"), label: "Reviewers" },
-    { name: "keyholders", href: href("/keyholders"), label: "Keyholders" },
   ];
+  if (escrowListingsOn()) {
+    items.splice(1, 0, {
+      name: "keyholders",
+      href: href("/keyholders"),
+      label: "Keyholders",
+    });
+  }
   if (platformAdminNav) {
     items.push({ name: "admin", href: href("/admin"), label: "Admin" });
   }
@@ -167,8 +174,12 @@ function siteFooterHtml(routeName: string): string {
           <a href="${href("/propose")}"${fa("propose")}>Start a project</a>
           <a href="${href("/reviewers")}"${fa("reviewers")}>Reviewers</a>
           <a href="${href("/reviewer-responsibilities")}"${fa("reviewerDuties")}>Reviewer rules</a>
-          <a href="${href("/keyholders")}">Apply as keyholder</a>
-          <a href="${href("/keyholder-responsibilities")}"${fa("khDuties")}>Keyholder responsibilities</a>
+          ${
+            escrowListingsOn()
+              ? `<a href="${href("/keyholders")}">Apply as keyholder</a>
+          <a href="${href("/keyholder-responsibilities")}"${fa("khDuties")}>Keyholder responsibilities</a>`
+              : ""
+          }
         </div>
         <div class="footer-col">
           <h2 class="footer-col-title">About</h2>
@@ -233,6 +244,7 @@ function scrollToHashTarget(): void {
 }
 
 async function render() {
+  await loadFundingRoute();
   // Any page that isn't a project page: no project is active any more, its
   // Donate context is cleared and its modal closed (proposal-ui.ts).
   if (route().name !== "proposal") endDonateProject();
@@ -378,7 +390,7 @@ async function render() {
     if (appPathname() !== "/keyholder-responsibilities") {
       history.replaceState(null, "", href("/keyholder-responsibilities"));
     }
-    renderKeyholderDuties(shell);
+    await renderKeyholderDuties(shell);
     bindAuthHandlers();
     scrollToHashTarget();
     return;

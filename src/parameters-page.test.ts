@@ -51,7 +51,7 @@ describe("renderParameters", () => {
         total_fee_percent: 99,
         keyholder_cap_sats: 250_000,
         keyholders: [],
-        funding_route: "direct-builder",
+        funding_route: "multisig",
       }),
     );
     await renderParameters(shell);
@@ -62,9 +62,28 @@ describe("renderParameters", () => {
       ["Keyholder fee", "1.5%"],
       // Total is platform + keyholder, not the payload's total_fee_percent.
       ["Total take", "4.5%"],
-      ["Funding route for new listings", "Pay the builder"],
+      ["Funding route for new listings", "Multisig escrow"],
     ]);
     expect(v[1]!.hint).toContain("Cap 250,000 sats per keyholder.");
+  });
+
+  it("hides the escrow fee table when new listings pay the builder", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        platform_fee_percent: 3,
+        keyholder_fee_percent: 2,
+        keyholders: [{ github: "alice", xpub: "tpub", fingerprint: "aa", signing_count: 1 }],
+        funding_route: "direct-builder",
+      }),
+    );
+    await renderParameters(shell);
+    const v = values();
+    expect(v.map((x) => x.dt)).toEqual(["Funding route for new listings"]);
+    expect(v[0]!.value).toBe("Pay the builder");
+    expect(app().textContent).toContain("New listings pay the builder");
+    expect(app().querySelector(".about-keyholders-table")).toBeNull();
+    expect(app().textContent).not.toContain("Keyholders sign");
+    expect(app().textContent).not.toContain("alice");
   });
 
   it.each([
@@ -74,22 +93,24 @@ describe("renderParameters", () => {
     fetchMock.mockImplementation(impl);
     await renderParameters(shell);
     const v = values();
-    expect(v[0]!.value).toBe(`${PLATFORM_FEE_PERCENT}%`);
-    expect(v[1]!.value).toBe(`${KEYHOLDER_FEE_PERCENT}%`);
-    expect(v[2]!.value).toBe(`${PLATFORM_FEE_PERCENT + KEYHOLDER_FEE_PERCENT}%`);
-    expect(v[1]!.hint).toContain(`Cap ${KEYHOLDER_CAP_SATS.toLocaleString("en-US")} sats`);
-    expect(app().textContent).toContain("No active keyholders published yet.");
-    expect(v[3]!.value).toBe("Pay the builder");
+    expect(v.map((x) => x.dt)).toEqual(["Funding route for new listings"]);
+    expect(v[0]!.value).toBe("Pay the builder");
+    expect(app().textContent).not.toContain("No active keyholders published yet.");
+    expect(app().textContent).not.toContain(`${PLATFORM_FEE_PERCENT}%`);
+    expect(app().textContent).not.toContain(`${KEYHOLDER_FEE_PERCENT}%`);
+    expect(app().textContent).not.toContain(`${KEYHOLDER_CAP_SATS.toLocaleString("en-US")} sats`);
   });
 
   it("uses published values field-by-field when the live payload omits one", async () => {
-    fetchMock.mockResolvedValue(Response.json({ platform_fee_percent: 1, keyholders: [] }));
+    fetchMock.mockResolvedValue(
+      Response.json({ platform_fee_percent: 1, keyholders: [], funding_route: "multisig" }),
+    );
     await renderParameters(shell);
     const v = values();
     expect(v[0]!.value).toBe("1%");
     expect(v[1]!.value).toBe(`${KEYHOLDER_FEE_PERCENT}%`);
     expect(v[2]!.value).toBe(`${1 + KEYHOLDER_FEE_PERCENT}%`);
-    expect(v[3]!.value).toBe("Pay the builder");
+    expect(v[3]!.value).toBe("Multisig escrow");
   });
 
   it("lists the keyholder roster, with — for missing keys and 0 for no signings", async () => {
@@ -98,6 +119,7 @@ describe("renderParameters", () => {
         platform_fee_percent: 2.5,
         keyholder_fee_percent: 2,
         keyholder_cap_sats: 500_000,
+        funding_route: "multisig",
         keyholders: [
           { github: "alice", xpub: "tpubAAA", fingerprint: "deadbeef", signing_count: 3 },
           { github: "bob", xpub: null, fingerprint: null },
@@ -118,6 +140,7 @@ describe("renderParameters", () => {
   it("escapes roster fields from the API (no markup injection)", async () => {
     fetchMock.mockResolvedValue(
       Response.json({
+        funding_route: "multisig",
         keyholders: [
           { github: '<img src=x onerror="alert(1)">', xpub: "<b>x</b>", fingerprint: "<i>f</i>" },
         ],
