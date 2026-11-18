@@ -245,11 +245,15 @@ export async function createCreatorLightningInvoice(input: {
 
 export async function confirmCreatorLightning(
   holdId: string,
+  opts?: { anonymous?: boolean },
 ): Promise<{ paid: boolean; amount_sats?: number }> {
   const res = await authFetch(`${API()}/lightning/creator/confirm`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ hold_id: holdId }),
+    body: JSON.stringify({
+      hold_id: holdId,
+      anonymous: opts?.anonymous === true,
+    }),
   });
   const data = (await res.json()) as { paid?: boolean; amount_sats?: number; error?: string };
   if (!res.ok) throw new Error(data.error || `Confirm failed (${res.status})`);

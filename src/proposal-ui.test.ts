@@ -519,6 +519,67 @@ describe("proposal UI critical render helpers", () => {
     expect(unsigned).not.toContain("tb1qbuilder");
   });
 
+  it("sends the anonymous choice when checking a creator invoice", async () => {
+    localStorage.setItem(
+      "plebly_funder_credit_prefs",
+      JSON.stringify({
+        public_credit: false,
+        anonymous: true,
+        show_amount: false,
+        chosen: true,
+      }),
+    );
+    document.body.innerHTML = donatePanelHtml({
+      funding_route: "direct-builder",
+      pay_to_address: "tb1qbuilder",
+      pay_to_verified: true,
+      lightning_address: "builder@wallets.example",
+      status: "claimed",
+    } as Proposal);
+    const bodies: { anonymous?: boolean; hold_id?: string }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(_input);
+        if (init?.body) bodies.push(JSON.parse(String(init.body)));
+        if (url.endsWith("/lightning/creator/invoice")) {
+          return Response.json({
+            ok: true,
+            bolt11: "lnbc1u1example",
+            invoice_amount_sats: 100,
+            lightning_address: "builder@wallets.example",
+            hold_id: "hold-1",
+          });
+        }
+        if (url.endsWith("/lightning/creator/confirm")) {
+          return Response.json({ ok: true, paid: true, amount_sats: 100 });
+        }
+        return new Response("missing", { status: 404 });
+      }),
+    );
+    await bindDonatePanel(document, {
+      address: "tb1qbuilder",
+      proposalId: "p",
+      proposalPath: "proposals/listed/p.md",
+      signedIn: true,
+      direct: true,
+    });
+    const amount = document.querySelector<HTMLInputElement>("#donate-ln-amount");
+    expect(amount).toBeTruthy();
+    amount!.value = "100";
+    document.querySelector<HTMLButtonElement>("#donate-ln-create")?.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector(".donate-ln-check")).toBeTruthy();
+    });
+    document.querySelector<HTMLButtonElement>(".donate-ln-check")?.click();
+    await vi.waitFor(() => {
+      expect(bodies.some((body) => body.hold_id === "hold-1" && body.anonymous === true)).toBe(
+        true,
+      );
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("does not mount a direct pay-to from the pane options alone", async () => {
     const pay = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
     const path = "proposals/listed/PLEBLY-1.md";

@@ -1984,13 +1984,17 @@ function bindCreatorLightning(
       if (invoiceWrap) invoiceWrap.hidden = false;
       if (bolt11El) bolt11El.textContent = invoice.bolt11;
       if (qrImg) {
-        const uri = `lightning:${invoice.bolt11.trim()}`;
-        qrImg.src = await QRCode.toDataURL(uri.toUpperCase(), {
-          width: 168,
-          margin: 1,
-          errorCorrectionLevel: "L",
-          color: themeQrColors(),
-        });
+        try {
+          const uri = `lightning:${invoice.bolt11.trim()}`;
+          qrImg.src = await QRCode.toDataURL(uri.toUpperCase(), {
+            width: 168,
+            margin: 1,
+            errorCorrectionLevel: "L",
+            color: themeQrColors(),
+          });
+        } catch {
+          qrImg.removeAttribute("src");
+        }
       }
       if (statusEl) {
         statusEl.textContent = invoice.hold_id
@@ -2006,7 +2010,10 @@ function bindCreatorLightning(
         check.addEventListener("click", async () => {
           check.disabled = true;
           try {
-            const result = await confirmCreatorLightning(invoice.hold_id || "");
+            const prefs = activeCreditPreferences(panel);
+            const result = await confirmCreatorLightning(invoice.hold_id || "", {
+              anonymous: prefs.anonymous || !prefs.public_credit,
+            });
             statusEl.textContent = result.paid
               ? "Payment confirmed."
               : "Not confirmed yet. Pay the invoice, then check again.";
