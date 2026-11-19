@@ -108,6 +108,8 @@ describe("landing marketing copy", () => {
     expect(html).toContain("Start a project");
     expect(html).toContain("Pay the builder");
     expect(html).toContain("A gift is final");
+    expect(html).toContain("Funders get a window to flag the work, and reviewers vote only if it's flagged. Payment goes out monthly.");
+    expect(html).not.toContain("Reviewers check the work");
     expect(html).not.toContain("On-chain escrow");
     expect(html).not.toContain("5% when paid");
     expect(html).not.toContain("Protocol over platform");

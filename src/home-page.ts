@@ -173,6 +173,7 @@ function howItWorksHtml(): string {
           (s) => `<li><strong>${escapeHtml(s.title)}</strong> ${escapeHtml(s.body)}</li>`,
         )
         .join("")}</ol>
+      <p class="landing-how-note">Funders get a window to flag the work, and reviewers vote only if it's flagged. Payment goes out monthly.</p>
     </div>
   </section>`;
 }
