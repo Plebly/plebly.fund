@@ -2427,6 +2427,13 @@ a.project-card-by:hover .project-card-by-text {
   color: var(--ink);
 }
 
+.landing-how-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
 .how-grid {
   list-style: none;
   margin: 0;
