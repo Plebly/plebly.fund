@@ -20,7 +20,7 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 1. Submit: List a project; pay the exact on-chain submission fee.
 2. Donate: Anyone sends Bitcoin to the address on the listing. On a new listing that address is the builder's.
 3. Claim: On a direct listing a builder can apply before anyone pays. An escrow listing waits until its balance meets the claim floor.
-4. Pay: A direct payment is already with the builder. An escrow listing pays after reviewers approve and its keyholders sign.
+4. Pay: A direct payment is already with the builder. On an escrow listing, the proposer marks the deliverable done and confirmed funders get a flag window (7 days under 1M sats, 14 up to 10M, 30 above). With no flag it completes; a flag sends it to a reviewer vote. Keyholders then sign the payout.
 
 ### Lightning
 
