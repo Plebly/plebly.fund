@@ -60,4 +60,35 @@ describe("colour contrast (WCAG AA 4.5:1 for normal text)", () => {
       .filter((rule) => orange.test(rule) && light.test(rule));
     expect(offenders).toEqual([]);
   });
+
+  it("uses --accent-text for the About page title, not the button-fill --accent", () => {
+    const block = css.slice(css.indexOf(".about-hero h1"), css.indexOf("}", css.indexOf(".about-hero h1")));
+    expect(block).toMatch(/color:\s*var\(--accent-text\)/);
+    expect(block).not.toMatch(/color:\s*var\(--accent\)/);
+    expect(contrastRatio(token("accent-text"), token("bg"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("underlines body-copy links so they need not rely on colour alone", () => {
+    for (const sel of [
+      ".about-section-lede a",
+      ".about-section-foot a",
+      ".about-detail a",
+      ".prose-rich a",
+    ]) {
+      const start = css.indexOf(sel);
+      expect(start, sel).toBeGreaterThanOrEqual(0);
+      const block = css.slice(start, css.indexOf("}", start));
+      expect(block, sel).toMatch(/text-decoration:\s*underline/);
+      expect(block, sel).toMatch(/text-underline-offset:/);
+    }
+  });
+
+  it("does not fade .proposal-section-title through section opacity", () => {
+    expect(css).toMatch(
+      /\.proposal-section-muted\s*>\s*:not\(\.proposal-section-title\)\s*\{[^}]*opacity:\s*0\.85/,
+    );
+    const mutedRule = css.match(/\.proposal-section-muted\s*\{[^}]*\}/);
+    expect(mutedRule).toBeNull();
+    expect(contrastRatio(token("muted"), token("bg"))).toBeGreaterThanOrEqual(4.5);
+  });
 });
