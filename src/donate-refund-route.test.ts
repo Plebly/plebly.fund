@@ -237,6 +237,17 @@ describe("isSharedEscrow: fails toward shared (display only; the server is the g
     expect(renderRow(p, catalog)?.textContent).toBe(SHARED);
   });
 
+  it("flag false but the same bech32 address in another case: shared", () => {
+    const p = row(9, ADDR, false);
+    const catalog = [p, row(10, ` ${ADDR.toUpperCase()} `, false)];
+    expect(isSharedEscrow(p, catalog)).toBe(true);
+    expect(isSharedEscrow({ ...p, escrow_address: ADDR.toUpperCase() }, catalog)).toBe(true);
+    expect(renderRow(p, catalog)?.textContent).toBe(SHARED);
+    expect(isSharedEscrow(row(11, ADDR.toUpperCase(), false), [row(11, ADDR.toUpperCase(), false)])).toBe(
+      false,
+    );
+  });
+
   it("flag true on a single row: shared", () => {
     const p = row(9, ADDR, true);
     expect(isSharedEscrow(p, [p])).toBe(true);
