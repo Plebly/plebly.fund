@@ -2635,7 +2635,7 @@ a.project-card-by:hover .project-card-by-text {
 
 .about-hero h1 {
   margin: 0 0 1.15rem;
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--mono);
   font-size: clamp(2.5rem, 8vw, 3.5rem);
   font-weight: 600;
@@ -2779,6 +2779,8 @@ a.project-card-by:hover .project-card-by-text {
 .about-section-foot a,
 .about-detail a {
   color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
 }
 
 .about-section-lede a:hover,
@@ -3864,6 +3866,8 @@ a.project-card-by:hover .project-card-by-text {
 
 .prose-rich a {
   color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
 }
 
 .prose-rich code {
@@ -7386,7 +7390,7 @@ a.claim-app-bond:hover {
   color: var(--muted);
 }
 
-.proposal-section-muted {
+.proposal-section-muted > :not(.proposal-section-title) {
   opacity: 0.85;
 }
 
