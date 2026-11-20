@@ -4,9 +4,9 @@ Static frontend for [Plebly](https://plebly.fund) (mainnet, after cutover) and [
 
 Reads listings from the Workers catalog (`VITE_WORKERS_API`) and balances from Mempool.space. GitHub is a fallback, not the live listing path.
 
-### Lightning → escrow
+### Lightning
 
-Donors can pay Lightning on mainnet (or staging with `VITE_LIGHTNING_TESTNET=1` + Workers `LIGHTNING_ENABLED=true`). The Workers API creates an OpenNode invoice, accrues paid charges, and sweeps on-chain into the project `escrow_address`. Claim-floor math still uses the mempool address balance — never unpaid invoices. Signet stays on-chain only.
+A creator publishes their own Lightning Address. Donors pay that address. Plebly does not receive it. Endowment charges, when Lightning is enabled, use OpenNode. Signet hides creator Lightning because a payment there would be real mainnet sats. Production stays `LIGHTNING_ENABLED=false` until cutover.
 
 ## Develop
 

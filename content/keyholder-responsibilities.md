@@ -4,6 +4,6 @@ A Plebly keyholder holds an independent Bitcoin key on their own air-gapped hard
 
 They earn two percent of that month’s disbursed bounty total, split equally among the keyholders who signed that month’s PSBT, capped at 500,000 sats per keyholder. A settled bounty `kh_fee` output credits the same ledger from the output amount, with the same cap. The share is recorded on an earnings ledger. Until cash-out, the operator can spend the keyholder pool sitting on the fee address or the bounty `kh_fee` output.
 
-If a keyholder goes dark, the seven-day stall runbook applies, the incident goes public, and repeated non-response results in removal via reviewer vote. A keyholder may resign at any time with thirty days’ notice so the platform can update the multisig descriptor before the key is retired.
+If a keyholder goes dark, the seven-day stall runbook applies, the incident goes public, and repeated non-response results in removal via reviewer vote. A keyholder may resign at any time with thirty days’ notice so the platform can update the descriptor before the key is retired.
 
 Fulfillers are paid in the monthly batch, not the instant a bounty completes.

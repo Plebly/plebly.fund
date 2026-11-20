@@ -19,7 +19,6 @@ export function keyholderDutiesPageHtml(
         <h1>Keyholder responsibilities</h1>
         <p class="lede">New listings pay the builder. Keyholder applications are closed.</p>
       </header>
-      <p class="muted">A listing that already has an escrow keeps its keyholders.</p>
       <p class="muted"><a href="${href("/reviewer-responsibilities")}">Reviewer rules</a> · <a href="${href("/terms")}">Terms</a> · <a href="${projectsHref()}">Projects</a></p>
     </section>`;
   }

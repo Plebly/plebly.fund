@@ -1,6 +1,6 @@
 # Plebly
 
-> Plebly is a public funding platform for Bitcoin development and research. New listings pay the builder. That payment is final. Plebly's server holds no keys. A listing that already has an escrow keeps it.
+> Plebly is a public funding platform for Bitcoin development and research. New listings pay the builder. That payment is final. Plebly's server holds no keys.
 
 Listings are on the site at https://plebly.fund. A direct payment takes no platform fee.
 

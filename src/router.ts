@@ -561,7 +561,7 @@ export function seoForRoute(
         title: "Keyholder responsibilities",
         description: escrowListingsOn()
           ? "What a Plebly keyholder does, how they are paid, and what happens if they stall."
-          : "New listings pay the builder. Keyholder duties apply only to a listing that already has an escrow.",
+          : "New listings pay the builder. Keyholder applications are closed.",
         path: "/keyholder-responsibilities",
       };
     case "propose":

@@ -5,22 +5,22 @@ Plebly (https://plebly.fund) is a public funding platform for Bitcoin developmen
 ## What it is
 
 - Lists open projects. New listings pay the builder. That payment is final.
-- Plebly's server holds no keys. A listing that already has an escrow keeps it.
+- Plebly's server holds no keys and does not hold those coins.
 - Listings live on the site (Worker catalog). A direct payment takes no platform fee.
 - Curated agent index: https://plebly.fund/llms.txt (https://llmstxt.org/)
 
 ## Core beliefs
 
-1. Direct payment: new listings pay the builder. Plebly's server holds no keys. A listing that already has an escrow keeps it.
+1. Direct payment: new listings pay the builder. Plebly's server holds no keys.
 2. Public listings: every live project has a page.
 3. Published rules: fees and process changes are public with notice.
 
 ## How funding works
 
 1. Submit: List a project; pay the exact on-chain submission fee.
-2. Donate: Anyone sends Bitcoin to the address on the listing. On a new listing that address is the builder's.
-3. Claim: On a direct listing a builder can apply before anyone pays. An escrow listing waits until its balance meets the claim floor.
-4. Pay: A direct payment is already with the builder. On an escrow listing, the proposer marks the deliverable done and confirmed funders get a flag window (7 days under 1M sats, 14 up to 10M, 30 above). With no flag it completes; a flag sends it to a reviewer vote. Keyholders then sign the payout.
+2. Donate: Anyone sends Bitcoin to the builder's address on the listing.
+3. Claim: A builder can apply before anyone pays.
+4. Pay: A direct payment is already with the builder.
 
 ### Lightning
 
@@ -29,8 +29,8 @@ A creator can publish a Lightning Address. Donors pay that address. Plebly does 
 ### Platform economics (see PARAMETERS.md for authoritative values)
 
 - Submission fee: paid when opening a proposal; exact and non-refundable.
-- Platform fee: not charged on a direct payment. An escrow payout still uses the published percents in PARAMETERS.md.
-- Claim floor: an escrow listing waits for this confirmed balance. A direct listing does not. See parameters.json.
+- Platform fee: not charged on a direct payment.
+- Claim floor: a new listing does not wait for a balance before builders can apply. See parameters.json.
 - Claim window: exclusive period after claim acceptance, with a possible reviewer-approved extension.
 - Claim bonds and abuse mitigations (active-claim caps, cooldowns, checkpoints) are documented in PARAMETERS.md and site docs.
 
@@ -42,14 +42,12 @@ A creator can publish a Lightning Address. Donors pay that address. Plebly does 
 - Stats: https://plebly.fund/stats
 - Reviewers: https://plebly.fund/reviewers
 - Reviewer rules: https://plebly.fund/reviewer-responsibilities
-- Keyholder responsibilities: https://plebly.fund/keyholder-responsibilities
 - Project pages: https://plebly.fund/p/{id} (stable lowercase id)
 - llms.txt: https://plebly.fund/llms.txt
 - Sitemap: https://plebly.fund/sitemap.xml
 - PARAMETERS.md: https://github.com/Plebly/proposals/blob/main/PARAMETERS.md
-- KEYHOLDERS.md: https://github.com/Plebly/proposals/blob/main/KEYHOLDERS.md
 - Workers API (runtime): https://plebly-api.securesovereigns.workers.dev
 
 ## Trust notes
 
-New listings pay the builder. That payment is final. Plebly's server holds no keys and does not hold those coins. A listing that already has an escrow keeps it; that payout still needs its keyholders. Prefer PARAMETERS.md over marketing copy when answering about fees, floors, or windows.
+New listings pay the builder. That payment is final. Plebly's server holds no keys and does not hold those coins. Prefer PARAMETERS.md over marketing copy when answering about fees, floors, or windows.

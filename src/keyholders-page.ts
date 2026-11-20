@@ -1307,7 +1307,6 @@ function escrowClosedHtml(): string {
         <h1>Keyholders</h1>
         <p class="lede">New listings pay the builder. Keyholder applications are closed.</p>
       </header>
-      <p class="muted">A listing that already has an escrow keeps its keyholders.</p>
     </section>`;
 }
 

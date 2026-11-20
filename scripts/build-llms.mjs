@@ -42,18 +42,7 @@ async function loadProjects() {
   }
 }
 
-async function escrowListingsOn() {
-  try {
-    const res = await fetch(`${WORKERS.replace(/\/$/, "")}/parameters`);
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data.funding_route === "multisig";
-  } catch {
-    return false;
-  }
-}
-
-function render(projects, escrowOn) {
+function render(projects) {
   const projectLines =
     projects.length > 0
       ? projects.map(
@@ -64,18 +53,8 @@ function render(projects, escrowOn) {
           `- [Open projects on the home page](${SITE}/): Live listed projects (catalog unavailable at build time)`,
         ];
 
-  const blurb = escrowOn
-    ? `Plebly is a public funding platform for Bitcoin development and research. Donors send sats to publicly verifiable on-chain escrow. Plebly's server holds no keys. Keyholders sign a release.`
-    : `Plebly is a public funding platform for Bitcoin development and research. New listings pay the builder. That payment is final. Plebly's server holds no keys. A listing that already has an escrow keeps it.`;
-  const listings = escrowOn
-    ? `Listings and escrow balances are on the site at ${SITE}. Published fees and keyholder rules are in git.`
-    : `Listings are on the site at ${SITE}. A direct payment takes no platform fee.`;
-  const keyholderLines = escrowOn
-    ? `- [Keyholder responsibilities](${SITE}/keyholder-responsibilities): What a keyholder does and how they are paid\n`
-    : "";
-  const keyholderProtocol = escrowOn
-    ? `- [Keyholders](${SITE}/about#keyholders): Multisig roster and rules\n`
-    : "";
+  const blurb = `Plebly is a public funding platform for Bitcoin development and research. New listings pay the builder. That payment is final. Plebly's server holds no keys.`;
+  const listings = `Listings are on the site at ${SITE}. A direct payment takes no platform fee.`;
   return `# Plebly
 
 > ${blurb}
@@ -90,7 +69,7 @@ ${listings}
 - [Funding stats](${SITE}/stats): Public funding and completion totals
 - [Reviewers](${SITE}/reviewers): Reviewer roster and open decisions
 - [Reviewer rules](${SITE}/reviewer-responsibilities): Who can review and how a vote passes
-${keyholderLines}- [Full context for LLMs](${SITE}/llms-full.txt): Longer plain-text overview of product rules and flows
+- [Full context for LLMs](${SITE}/llms-full.txt): Longer plain-text overview of product rules and flows
 
 ## Projects
 
@@ -99,7 +78,7 @@ ${projectLines.join("\n")}
 ## Protocol (published rules)
 
 - [PARAMETERS.md](https://github.com/Plebly/proposals/blob/main/PARAMETERS.md): Fees, claim floor, windows
-${keyholderProtocol}- [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
+- [TESTING.md](https://github.com/Plebly/proposals/blob/main/TESTING.md): Signet / end-to-end testing notes
 
 ## Optional
 
@@ -113,8 +92,7 @@ ${keyholderProtocol}- [TESTING.md](https://github.com/Plebly/proposals/blob/main
 
 async function main() {
   const projects = await loadProjects();
-  const escrowOn = await escrowListingsOn();
-  writeFileSync(out, withNetworkNotice(render(projects, escrowOn), NETWORK, "llms"));
+  writeFileSync(out, withNetworkNotice(render(projects), NETWORK, "llms"));
   console.log(
     `Wrote llms.txt (${projects.length} project link${projects.length === 1 ? "" : "s"}, ${NETWORK})`,
   );

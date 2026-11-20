@@ -7,15 +7,15 @@
  */
 
 export const LLMS_SIGNET_NOTICE =
-  "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Escrow addresses are signet (tb1) addresses.";
+  "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Addresses on listings are signet (tb1) addresses.";
 
 /**
- * Earlier notice text. It also said "listings share one test escrow", which
- * stopped being true when the signet Worker moved to multisig (address per
- * listing). Stripped like the current notice so a copy built with the old
- * text never ends up with two notices.
+ * Earlier notice text. One version also said "listings share one test escrow".
+ * Stripped like the current notice so a copy built with the old text never
+ * ends up with two notices.
  */
 export const LEGACY_LLMS_SIGNET_NOTICES = [
+  "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Escrow addresses are signet (tb1) addresses.",
   "**Test network (signet):** This Plebly build runs on Bitcoin signet. Every listed project is a signet test listing funded with test coins that have no value, not a live mainnet project. Escrow addresses are signet (tb1) addresses, and listings share one test escrow.",
 ];
 

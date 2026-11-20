@@ -124,7 +124,7 @@ export function keyholdersHtml(live: {
   return `<section class="about-section" id="keyholders">
     <h2>Keyholders</h2>
     <p class="about-section-lede">${lede}</p>
-    <p class="muted" id="trust">On signet, release needs 2 of 3 keyholder signatures on a public multisig script. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address.</p>
+    <p class="muted" id="trust">On signet, a release needs keyholder signatures. Keyholders are not yet independent of the operator, and the Knots listing uses an operator-controlled test address.</p>
     <p class="muted">After reviewers approve, keyholders sign the payout. If they stall, the site shows which seats have not signed. Plebly cannot move the coins.</p>
     ${status}
     <div class="about-keyholders-roster">

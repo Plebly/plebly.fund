@@ -49,7 +49,7 @@ export async function renderParameters(shell: ParametersShell): Promise<void> {
           <span class="about-param-hint">${
             escrowOn
               ? "A keyholder quorum set new listings to multisig escrow. A listing keeps the route it was listed with."
-              : "New listings pay the builder. That payment is final and takes no fee. A listing that already has an escrow keeps it."
+              : "New listings pay the builder. That payment is final and takes no fee."
           }</span></dd>
         </div>`;
   const escrowFees = escrowOn
