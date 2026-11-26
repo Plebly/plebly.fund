@@ -63,6 +63,9 @@ describe("notificationTargetHref", () => {
     expect(notificationTargetHref({ type: "branch_ready" })).toMatch(
       /\/keyholders\?tab=branch$/,
     );
+    expect(
+      notificationTargetHref({ type: "maker_update", proposal_id: "Pid-1" }),
+    ).toMatch(/\/p\/pid-1#maker-updates$/);
     expect(notificationTypeLabel("keyholder_application")).toMatch(/Keyholder/);
     expect(
       notificationTargetHref({ type: "keyholder_application" }),

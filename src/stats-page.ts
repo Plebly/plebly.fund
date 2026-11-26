@@ -4,6 +4,7 @@ import { loadFundingRoute } from "./funding-route";
 import { listAllPublicProposals } from "./github";
 import { addressBalanceSats, balanceAddressFor } from "./mempool";
 import { href, projectsHref } from "./router";
+import { fetchUpdateMomentum } from "./maker-updates";
 import type { Proposal } from "./types";
 import { escapeHtml, formatSats } from "./util";
 
@@ -141,7 +142,11 @@ function gapSectionHtml(stats: PublicStats): string {
   </section>`;
 }
 
-function statsBodyHtml(stats: PublicStats, escrowOn: boolean): string {
+function statsBodyHtml(
+  stats: PublicStats,
+  escrowOn: boolean,
+  momentum: { projects: number; updates: number } | null = null,
+): string {
   const rateValue =
     stats.completionRate == null ? "—" : `${stats.completionRate}%`;
   const rateDetail =
@@ -188,7 +193,29 @@ function statsBodyHtml(stats: PublicStats, escrowOn: boolean): string {
           : "Completed work appears here after review",
       )}
       ${supportMetricHtml("Claim completion", rateValue, rateDetail)}
+      ${
+        momentum
+          ? supportMetricHtml(
+              "Projects posting",
+              String(momentum.projects),
+              momentum.projects
+                ? "Listings with a maker post"
+                : "No maker posts yet",
+            ) +
+            supportMetricHtml(
+              "Maker updates",
+              String(momentum.updates),
+              "Live posts. Removed posts are not counted.",
+            )
+          : ""
+      }
     </dl>
+
+    ${
+      momentum
+        ? `<p class="stats-source"><a href="${projectsHref("?sort=updated")}">Browse recently updated</a></p>`
+        : ""
+    }
 
     ${escrowOn ? gapSectionHtml(stats) : ""}
 
@@ -209,12 +236,13 @@ export async function renderStats(shell: StatsShell): Promise<void> {
   );
 
   try {
-    const [proposals, route] = await Promise.all([
+    const [proposals, route, momentum] = await Promise.all([
       listAllPublicProposals().then((rows) => enrichBalances(rows)),
       loadFundingRoute(),
+      fetchUpdateMomentum(),
     ]);
     const stats = computePublicStats(proposals);
-    app.innerHTML = shell(statsBodyHtml(stats, route === "multisig"));
+    app.innerHTML = shell(statsBodyHtml(stats, route === "multisig", momentum));
   } catch (error) {
     app.innerHTML = shell(`<section class="wrap-wide detail stats-page">
       <header class="stats-hero">

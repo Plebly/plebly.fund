@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFloorShortfall } from "./builder";
-import { gapTickerHtml, landingMarketingHtml, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList } from "./home-page";
+import { browseSortSearch, gapTickerHtml, landingMarketingHtml, partitionListings, proposalCardHtml, sharedEscrowNoteHtml, featuredDuplicatesOpenList, sortProposals } from "./home-page";
 import type { Proposal } from "./types";
 
 function proposal(
@@ -198,6 +198,59 @@ describe("proposalCardHtml lightning badge", () => {
       false,
     );
     expect(html).not.toContain("project-card-ln");
+  });
+
+  it("shows the maker's latest update title when one exists", () => {
+    const html = proposalCardHtml(
+      proposal({ status: "listed", id: "PLEBLY-2026-003" }),
+      10_000,
+      false,
+      false,
+      new Map([["PLEBLY-2026-003", { title: "Shipped the rehearsal", created_at: "2026-11-25T00:00:00.000Z" }]]),
+    );
+    expect(html).toContain("project-card-update");
+    expect(html).toContain("Update");
+    expect(html).toContain("Shipped the rehearsal");
+    expect(html).not.toContain("2 updates");
+    const counted = proposalCardHtml(
+      proposal({ status: "listed", id: "PLEBLY-2026-003" }),
+      10_000,
+      false,
+      false,
+      new Map([["PLEBLY-2026-003", { title: "Shipped the rehearsal", created_at: "2026-11-25T00:00:00.000Z", count: 2 }]]),
+    );
+    expect(counted).toContain("2 updates");
+    expect(
+      proposalCardHtml(proposal({ status: "listed", id: "PLEBLY-2026-003" }), 10_000, false, false),
+    ).not.toContain("project-card-update");
+  });
+});
+
+describe("browseSortSearch", () => {
+  it("keeps the other filters and drops the default sort", () => {
+    expect(browseSortSearch("?size=below-floor&type=direct", "updated")).toBe(
+      "?size=below-floor&type=direct&sort=updated",
+    );
+    expect(browseSortSearch("?sort=updated&size=below-floor", "funded")).toBe(
+      "?size=below-floor",
+    );
+  });
+});
+
+describe("sortProposals updated", () => {
+  it("puts projects with a maker update ahead of projects without one", () => {
+    const quiet = proposal({ status: "listed", id: "quiet", created_at: "2026-11-20T00:00:00.000Z" });
+    const fresh = proposal({ status: "listed", id: "fresh", created_at: "2026-01-01T00:00:00.000Z" });
+    const older = proposal({ status: "listed", id: "older", created_at: "2026-11-01T00:00:00.000Z" });
+    const latest = new Map([
+      ["FRESH", { title: "Now", created_at: "2026-11-25T00:00:00.000Z", count: 1 }],
+      ["OLDER", { title: "Then", created_at: "2026-11-10T00:00:00.000Z", count: 3 }],
+    ]);
+    expect(sortProposals([quiet, older, fresh], "updated", 10_000, latest).map((p) => p.id)).toEqual([
+      "fresh",
+      "older",
+      "quiet",
+    ]);
   });
 });
 

@@ -1709,6 +1709,131 @@ body.modal-open {
   color: var(--muted);
 }
 
+.proposal-glance {
+  margin: 0 0 1.25rem;
+}
+
+.proposal-glance p {
+  margin: 0;
+}
+
+.maker-update-latest {
+  margin-top: 0.45rem;
+}
+
+.proposal-updates {
+  margin: 0 0 1.5rem;
+}
+
+.maker-update-form {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.85rem 0 0.25rem;
+}
+
+.maker-update-form .comment-input {
+  margin-top: 0;
+}
+
+.maker-update-form[hidden] {
+  display: none;
+}
+
+.maker-update {
+  padding: 0.9rem 0 0.15rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.maker-update h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.015em;
+}
+
+.maker-update-meta {
+  margin: 0.2rem 0 0.45rem;
+  font-size: 0.8125rem;
+}
+
+.maker-update-body {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.maker-update a {
+  overflow-wrap: anywhere;
+}
+
+.maker-update-delete {
+  margin-top: 0.65rem;
+}
+
+.maker-update-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.maker-update-rail a {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: inherit;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.maker-update-rail a:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-hover);
+  color: inherit;
+}
+
+.maker-update-rail-project {
+  font-size: 0.75rem;
+  color: var(--ink-secondary);
+}
+
+.maker-update-rail-title {
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.maker-update-rail-excerpt {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.project-card-update {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.project-card-update-kicker {
+  margin-right: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.project-card-update .timeago {
+  margin-right: 0.35rem;
+}
+
 .donations-live {
   margin: 0.35rem auto 1rem;
   padding: 0;
