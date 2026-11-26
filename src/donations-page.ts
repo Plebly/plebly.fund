@@ -1,9 +1,10 @@
 import { WORKERS_API } from "./config";
 import { endowmentBalanceView, endowmentGiveAllowed } from "./endowment-balance";
 import { applySeo, href, proposalHref, projectsHref, seoForRoute } from "./router";
+import { catalogIdKey } from "./github";
 import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 import { displayHandle, displayIdentity, isRawIdentityKey, looksLikeProjectId } from "./display-names";
-import { projectRefHtml, projectTitles } from "./project-titles";
+import { projectCatalogIds, projectRefHtml, projectTitles } from "./project-titles";
 
 export type DonationsShell = (inner: string) => string;
 
@@ -70,13 +71,35 @@ export async function withDisplayLabels(rows: PublicDonation[]): Promise<PublicD
 export const SHARED_ESCROW_LABEL = "Shared escrow (001–008)";
 
 /**
- * Link for a donation's target, or null when it has no page (shared escrow,
- * unknown types, and `endowment` rows while the endowment isn't open: an older
- * workers still stores shared-address gifts as `endowment`).
+ * True when a project donation's target is missing from a successfully
+ * loaded catalog. `catalogIds` null/undefined means the catalog was not
+ * loaded, so the row is not treated as removed.
  */
-export function donationTargetHref(d: PublicDonation, endowmentOpen: boolean): string | null {
+export function isRemovedListing(
+  d: PublicDonation,
+  catalogIds?: Set<string> | null,
+): boolean {
+  if (d.target_type !== "project" || !catalogIds) return false;
+  const key = catalogIdKey(d.target_id);
+  return Boolean(key) && !catalogIds.has(key);
+}
+
+/**
+ * Link for a donation's target, or null when it has no page (shared escrow,
+ * unknown types, project targets not in a loaded catalog, and `endowment`
+ * rows while the endowment isn't open: an older workers still stores
+ * shared-address gifts as `endowment`).
+ */
+export function donationTargetHref(
+  d: PublicDonation,
+  endowmentOpen: boolean,
+  catalogIds?: Set<string> | null,
+): string | null {
   if (d.target_type === "endowment") return endowmentOpen ? href("/endowment") : null;
-  if (d.target_type === "project") return proposalHref("", d.target_id);
+  if (d.target_type === "project") {
+    if (isRemovedListing(d, catalogIds)) return null;
+    return proposalHref("", d.target_id);
+  }
   return null;
 }
 
@@ -86,11 +109,16 @@ export function donationTargetHtml(
   className: string,
   label: string,
   endowmentOpen: boolean,
+  catalogIds?: Set<string> | null,
 ): string {
-  const to = donationTargetHref(d, endowmentOpen);
-  // Projects: title first, catalog id as quiet secondary text.
+  const to = donationTargetHref(d, endowmentOpen, catalogIds);
+  // Projects still in the catalog: title first, catalog id as quiet secondary
+  // text. Removed listings stay exact plain text ("Removed listing (ID)").
   const inner =
-    d.target_type === "project" && d.target_id && !looksLikeProjectId(label, d.target_id)
+    d.target_type === "project" &&
+    d.target_id &&
+    !isRemovedListing(d, catalogIds) &&
+    !looksLikeProjectId(label, d.target_id)
       ? projectRefHtml(d.target_id, label)
       : escapeHtml(label);
   return to
@@ -143,7 +171,11 @@ export function donationsLedeText(endowmentOpen: boolean, total = 0): string {
   return `${base}${total ? ` (${total})` : ""}.`;
 }
 
-export function donationRowCopy(d: PublicDonation, endowmentOpen: boolean): {
+export function donationRowCopy(
+  d: PublicDonation,
+  endowmentOpen: boolean,
+  catalogIds?: Set<string> | null,
+): {
   donor: string;
   amount: string;
   target: string;
@@ -155,6 +187,8 @@ export function donationRowCopy(d: PublicDonation, endowmentOpen: boolean): {
   let target: string;
   if (d.target_type === "endowment" && !endowmentOpen) {
     target = SHARED_ESCROW_LABEL;
+  } else if (isRemovedListing(d, catalogIds)) {
+    target = `Removed listing (${d.target_id})`;
   } else if (
     d.target_type === "project" &&
     d.target_id &&
@@ -171,15 +205,19 @@ export function donationRowCopy(d: PublicDonation, endowmentOpen: boolean): {
   };
 }
 
-function rowHtml(d: PublicDonation, endowmentOpen: boolean): string {
-  const { donor, amount, target } = donationRowCopy(d, endowmentOpen);
+function rowHtml(
+  d: PublicDonation,
+  endowmentOpen: boolean,
+  catalogIds?: Set<string> | null,
+): string {
+  const { donor, amount, target } = donationRowCopy(d, endowmentOpen, catalogIds);
   const when = timeAgoHtml(d.donated_at);
   return `<li class="donations-row" data-donation-id="${escapeHtml(d.id)}">
     <span class="donations-donor">${escapeHtml(donor)}</span>
     <span class="donations-verb">donated</span>
     <span class="donations-amount mono">${escapeHtml(amount)}</span>
     <span class="donations-verb">to</span>
-    ${donationTargetHtml(d, "donations-target", target, endowmentOpen)}
+    ${donationTargetHtml(d, "donations-target", target, endowmentOpen, catalogIds)}
     ${when ? `<span class="donations-when muted">${when}</span>` : ""}
   </li>`;
 }
@@ -204,9 +242,15 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
   `);
 
   try {
-    const [{ donations, total }, endowmentOpen] = await Promise.all([
-      fetchPublicDonations({ limit: PAGE_SIZE, offset }),
+    const donationsP = fetchPublicDonations({ limit: PAGE_SIZE, offset });
+    // Start the catalog read only after /donations has been requested, so a
+    // one-shot ledger mock is not stolen, but still overlap it with the
+    // endowment read (and its timeout).
+    const catalogP = donationsP.then(() => projectCatalogIds()).catch(() => null);
+    const [{ donations, total }, endowmentOpen, catalogIds] = await Promise.all([
+      donationsP,
       fetchEndowmentOpen(),
+      catalogP,
     ]);
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     // ?page past the end (e.g. a stale link): go to the last real page instead
@@ -216,7 +260,7 @@ export async function renderDonations(shell: DonationsShell): Promise<void> {
       return renderDonations(shell);
     }
     const list = donations.length
-      ? `<ul class="donations-list">${donations.map((d) => rowHtml(d, endowmentOpen)).join("")}</ul>`
+      ? `<ul class="donations-list">${donations.map((d) => rowHtml(d, endowmentOpen, catalogIds)).join("")}</ul>`
       : `<div class="empty-state">
           <p class="empty-state-title">No confirmed donations yet</p>
           <p class="empty-state-body"><a href="${projectsHref()}">Fund a project</a>${

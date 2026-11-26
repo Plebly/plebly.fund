@@ -80,8 +80,10 @@ beforeEach(() => {
   clearHiddenCompletedListingIdsCache();
   gh.listAll.mockReset();
   gh.listListed.mockReset();
-  gh.listAll.mockResolvedValue([]);
-  gh.listListed.mockResolvedValue([]);
+  // Default catalog includes the usual test project so existing link
+  // assertions stay valid. Tests for removed listings stub this themselves.
+  gh.listAll.mockResolvedValue([{ id: "PLEBLY-2026-003", title: "Knots spam heuristics" }]);
+  gh.listListed.mockResolvedValue([{ id: "PLEBLY-2026-003", title: "Knots spam heuristics" }]);
   endowmentReply = { body: LEGACY_ENDOWMENT, status: 200 };
   fetchMock = vi.fn(async (url: string) => {
     if (String(url).endsWith("/endowment")) {
@@ -135,6 +137,29 @@ describe("bindDonationsLive", () => {
     expect(li[1]!.querySelector(".donations-live-donor")!.textContent).toBe("Anonymous");
     expect(li[2]!.querySelector("a")!.getAttribute("href")).toMatch(/\/endowment$/);
     expect(document.querySelector(".donations-live-when time")).toBeTruthy();
+  });
+
+  it("a target missing from the loaded catalog is plain text, not a /p/ link", async () => {
+    gh.listAll.mockResolvedValue([{ id: "PLEBLY-2026-003", title: "Knots spam heuristics" }]);
+    gh.listListed.mockResolvedValue([{ id: "PLEBLY-2026-003", title: "Knots spam heuristics" }]);
+    pages = [[
+      don("kept"),
+      don("gone", {
+        target_id: "PLEBLY-2026-011",
+        target_label: "Untitled project",
+      }),
+    ]];
+    await bindDonationsLive(document);
+    const li = document.querySelectorAll(".donations-live-row");
+    expect(li).toHaveLength(2);
+    const kept = li[0]!.querySelector(".donations-live-target")!;
+    expect(kept.tagName).toBe("A");
+    expect(kept.getAttribute("href")).toMatch(/\/p\/plebly-2026-003$/);
+    const gone = li[1]!.querySelector(".donations-live-target")!;
+    expect(gone.tagName).toBe("SPAN");
+    expect(gone.textContent).toBe("Removed listing (PLEBLY-2026-011)");
+    expect(li[1]!.querySelector("a")).toBeNull();
+    expect(document.querySelector('a[href$="/p/plebly-2026-011"]')).toBeNull();
   });
 
   it("an endowment row (older workers) shows the shared label with no link while shared", async () => {

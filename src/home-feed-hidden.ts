@@ -17,6 +17,13 @@ import {
 export type HomeFeedVisibility = {
   hidden: Set<string>;
   onlyKnown: Set<string> | null;
+  /**
+   * Catalog ids from a successful Worker scope=all load, or null when that
+   * catalog did not answer (folder fallback or a failed read). Donation
+   * targets missing from this set are shown as "Removed listing (ID)"
+   * without a link.
+   */
+  catalogIds: Set<string> | null;
 };
 
 let hiddenIdsCache: { at: number; view: HomeFeedVisibility } | null = null;
@@ -48,7 +55,10 @@ async function computeHomeFeedVisibility(): Promise<HomeFeedVisibility> {
     all.map((p) => catalogIdKey(p.id)).filter((key) => key && !visible.has(key)),
   );
   const fromCatalog = allLoaded.fromCatalog && listedFromCatalog;
-  return { hidden, onlyKnown: fromCatalog ? null : visible };
+  const catalogIds = allLoaded.fromCatalog
+    ? new Set(all.map((p) => catalogIdKey(p.id)).filter(Boolean))
+    : null;
+  return { hidden, onlyKnown: fromCatalog ? null : visible, catalogIds };
 }
 
 /**

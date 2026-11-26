@@ -146,7 +146,7 @@ export function missingProposalHtml(id: string): string {
     <a class="back-link" href="${projectsHref()}">← Bounties</a>
     <div class="empty-state">
       <div class="empty-state-inner">
-        <p class="empty-state-title">Project not found</p>
+        <h1 class="empty-state-title">Project not found</h1>
         <p class="empty-state-body">No listing for <span class="mono">${escapeHtml(id)}</span>.</p>
         <p><a class="btn ghost" href="${projectsHref()}">Browse projects</a></p>
       </div>

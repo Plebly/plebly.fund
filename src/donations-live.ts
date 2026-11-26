@@ -31,8 +31,13 @@ function withoutHiddenCompletedDonations(
 }
 
 
-function liveRowHtml(d: PublicDonation, isNew: boolean, endowmentOpen: boolean): string {
-  const { donor, amount, target } = donationRowCopy(d, endowmentOpen);
+function liveRowHtml(
+  d: PublicDonation,
+  isNew: boolean,
+  endowmentOpen: boolean,
+  catalogIds?: Set<string> | null,
+): string {
+  const { donor, amount, target } = donationRowCopy(d, endowmentOpen, catalogIds);
   const when = timeAgoHtml(d.donated_at);
   return `<li class="donations-live-row${isNew ? " is-new" : ""}" data-donation-id="${escapeHtml(d.id)}">
     <p class="donations-live-copy">
@@ -40,7 +45,7 @@ function liveRowHtml(d: PublicDonation, isNew: boolean, endowmentOpen: boolean):
       donated
       <span class="donations-live-amount mono">${escapeHtml(amount)}</span>
       to
-      ${donationTargetHtml(d, "donations-live-target", target, endowmentOpen)}
+      ${donationTargetHtml(d, "donations-live-target", target, endowmentOpen, catalogIds)}
     </p>
     ${when ? `<p class="donations-live-when muted">${when}</p>` : ""}
   </li>`;
@@ -56,10 +61,13 @@ function panelHtml(
   rows: PublicDonation[],
   knownIds: Set<string>,
   endowmentOpen: boolean,
+  catalogIds?: Set<string> | null,
 ): string {
   const list = rows.length
     ? `<ul class="donations-live-list">${rows
-        .map((d) => liveRowHtml(d, knownIds.size > 0 && !knownIds.has(d.id), endowmentOpen))
+        .map((d) =>
+          liveRowHtml(d, knownIds.size > 0 && !knownIds.has(d.id), endowmentOpen, catalogIds),
+        )
         .join("")}</ul>`
     : `<div class="donations-live-empty">
         <p>No confirmed gifts yet — be the first.</p>
@@ -107,7 +115,12 @@ export async function bindDonationsLive(root: ParentNode): Promise<void> {
         LIVE_LIMIT,
       );
       await endowmentRead;
-      mount.innerHTML = panelHtml(visible, initial ? new Set() : known, endowmentOpen);
+      mount.innerHTML = panelHtml(
+        visible,
+        initial ? new Set() : known,
+        endowmentOpen,
+        view.catalogIds,
+      );
       known = new Set(visible.map((d) => d.id));
       window.setTimeout(() => {
         mount

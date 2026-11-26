@@ -5,6 +5,7 @@ describe("missingProposalHtml", () => {
   it("says the project is gone instead of dumping home copy", () => {
     const html = missingProposalHtml("no-such-id");
     expect(html).toContain("Project not found");
+    expect(html).toContain("<h1 class=\"empty-state-title\">Project not found</h1>");
     expect(html).toContain("no-such-id");
     expect(html).toContain("Browse projects");
     expect(html).not.toContain("Fund Bitcoin work in public");

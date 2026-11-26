@@ -1,5 +1,5 @@
 import { WORKERS_API } from "./config";
-import { cachedProposalTitle } from "./github";
+import { cachedProposalTitle, catalogIdKey } from "./github";
 import { escapeHtml } from "./util";
 
 /**
@@ -9,28 +9,64 @@ import { escapeHtml } from "./util";
  * own cache so it never replaces the home listing's catalog cache.
  */
 const TTL_MS = 60_000;
-let cache: { at: number; titles: Promise<Map<string, string>> } | null = null;
+/** Hung catalog reads must not stall the donations ledger or live strip. */
+export const CATALOG_TITLES_TIMEOUT_MS = 4_000;
+type CatalogTitles = { titles: Map<string, string>; ids: Set<string> | null };
+let cache: { at: number; data: Promise<CatalogTitles> } | null = null;
 
-async function loadTitles(): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (!WORKERS_API) return out;
+async function loadTitles(): Promise<CatalogTitles> {
+  const titles = new Map<string, string>();
+  if (!WORKERS_API) return { titles, ids: null };
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const res = await fetch(`${WORKERS_API.replace(/\/$/, "")}/proposals/catalog?scope=all`);
-    if (!res || !res.ok) return out;
+    const res = await Promise.race([
+      fetch(`${WORKERS_API.replace(/\/$/, "")}/proposals/catalog?scope=all`, {
+        signal: ctrl.signal,
+      }),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => {
+          ctrl.abort();
+          resolve(null);
+        }, CATALOG_TITLES_TIMEOUT_MS);
+      }),
+    ]);
+    if (!res || !res.ok) return { titles, ids: null };
     const data = (await res.json()) as { proposals?: { id?: string | null; title?: string | null }[] };
+    const ids = new Set<string>();
     for (const p of Array.isArray(data?.proposals) ? data.proposals : []) {
-      const id = String(p?.id || "").trim().toLowerCase();
+      const raw = String(p?.id || "").trim();
+      const key = catalogIdKey(raw);
+      if (key) ids.add(key);
       const title = String(p?.title || "").trim();
-      if (id && title) out.set(id, title);
+      if (raw && title) titles.set(raw.toLowerCase(), title);
     }
+    return { titles, ids };
   } catch {
     /* titles are optional: callers fall back to the id */
+    return { titles, ids: null };
+  } finally {
+    clearTimeout(timer);
   }
-  return out;
+}
+
+function ensureCatalog(): Promise<CatalogTitles> {
+  if (!cache || Date.now() - cache.at > TTL_MS) {
+    cache = { at: Date.now(), data: loadTitles() };
+  }
+  return cache.data;
 }
 
 export function clearProjectTitlesCache(): void {
   cache = null;
+}
+
+/**
+ * Catalog ids from a successful scope=all read, or null when that catalog
+ * did not load. Shares the projectTitles cache. Never throws.
+ */
+export async function projectCatalogIds(): Promise<Set<string> | null> {
+  return (await ensureCatalog()).ids;
 }
 
 /** Title for each id it can find (lower-case id keys). Never throws. */
@@ -45,10 +81,7 @@ export async function projectTitles(ids: string[]): Promise<Map<string, string>>
     else missing.push(id);
   }
   if (!missing.length) return out;
-  if (!cache || Date.now() - cache.at > TTL_MS) {
-    cache = { at: Date.now(), titles: loadTitles() };
-  }
-  const titles = await cache.titles;
+  const { titles } = await ensureCatalog();
   for (const id of missing) {
     const t = titles.get(id);
     if (t) out.set(id, t);
