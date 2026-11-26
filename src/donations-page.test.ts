@@ -8,11 +8,14 @@ vi.mock("./config", async (importOriginal) => {
 import {
   donationRowCopy,
   donationTargetHref,
+  donationTargetHtml,
   fetchEndowmentOpen,
   fetchPublicDonations,
+  isRemovedListing,
   renderDonations,
   type PublicDonation,
 } from "./donations-page";
+import { clearProjectTitlesCache } from "./project-titles";
 
 const d = (over: Partial<PublicDonation> = {}): PublicDonation => ({
   id: "don-1",
@@ -47,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
+  clearProjectTitlesCache();
 });
 
 describe("donationRowCopy", () => {
@@ -91,6 +95,49 @@ describe("donationTargetHref", () => {
     expect(donationRowCopy(row, false).target).toBe("Shared escrow (001–008)");
     expect(donationRowCopy(row, true).target).toBe("Endowment");
     expect(donationRowCopy(d(), false).target).toBe("Relay hardening");
+  });
+
+  it("a project missing from a loaded catalog is Removed listing (ID) with no link", () => {
+    const catalog = new Set(["PLEBLY-2026-003"]);
+    const gone = d({
+      target_id: "PLEBLY-2026-011",
+      target_label: "Untitled project",
+    });
+    expect(isRemovedListing(gone, catalog)).toBe(true);
+    expect(donationRowCopy(gone, false, catalog).target).toBe(
+      "Removed listing (PLEBLY-2026-011)",
+    );
+    expect(donationTargetHref(gone, false, catalog)).toBeNull();
+    const html = donationTargetHtml(
+      gone,
+      "donations-target",
+      "Removed listing (PLEBLY-2026-011)",
+      false,
+      catalog,
+    );
+    expect(html).toContain("<span class=\"donations-target\">Removed listing (PLEBLY-2026-011)</span>");
+    expect(html).not.toContain("<a ");
+    expect(html).not.toContain("/p/");
+    // A stale API title is also replaced; the id in the label is the donation's.
+    expect(
+      donationRowCopy(d({ target_id: "PLEBLY-2026-011", target_label: "Old title" }), false, catalog)
+        .target,
+    ).toBe("Removed listing (PLEBLY-2026-011)");
+  });
+
+  it("a project still in the catalog keeps its title and link; no catalog leaves rows unchanged", () => {
+    const catalog = new Set(["PLEBLY-2026-003"]);
+    expect(isRemovedListing(d(), catalog)).toBe(false);
+    expect(donationRowCopy(d(), false, catalog).target).toBe("Relay hardening");
+    expect(donationTargetHref(d(), false, catalog)).toBe("/p/plebly-2026-003");
+    expect(donationRowCopy(d({ target_label: "" }), false).target).toBe(
+      "Untitled project (PLEBLY-2026-003)",
+    );
+    expect(donationTargetHref(d({ target_id: "PLEBLY-2026-011" }), false)).toBe(
+      "/p/plebly-2026-011",
+    );
+    expect(isRemovedListing(d({ target_id: "PLEBLY-2026-011" }), null)).toBe(false);
+    expect(isRemovedListing(d({ target_id: "PLEBLY-2026-011" }), undefined)).toBe(false);
   });
 });
 
@@ -139,6 +186,41 @@ describe("renderDonations", () => {
     expect(rows[1]!.querySelector(".donations-target .project-ref-id")!.textContent).toBe("PLEBLY-2026-003");
     expect(app().querySelector(".lede")!.textContent).toContain("(2)");
     expect(app().querySelector(".donations-pager")).toBeNull();
+  });
+
+  it("renders a target missing from the catalog as plain Removed listing text", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/proposals/catalog")) {
+        return Response.json({
+          proposals: [{ id: "PLEBLY-2026-003", title: "Relay hardening" }],
+        });
+      }
+      if (String(url).includes("/donations")) {
+        return Response.json({
+          donations: [
+            d(),
+            d({
+              id: "don-11",
+              target_id: "PLEBLY-2026-011",
+              target_label: "Untitled project",
+            }),
+          ],
+          total: 2,
+        });
+      }
+      return new Response("not mocked", { status: 599 });
+    });
+    await renderDonations(shell);
+    const rows = app().querySelectorAll(".donations-row");
+    expect(rows).toHaveLength(2);
+    const kept = rows[0]!.querySelector(".donations-target")!;
+    expect(kept.tagName).toBe("A");
+    expect(kept.getAttribute("href")).toMatch(/\/p\/plebly-2026-003$/);
+    const gone = rows[1]!.querySelector(".donations-target")!;
+    expect(gone.tagName).toBe("SPAN");
+    expect(gone.textContent).toBe("Removed listing (PLEBLY-2026-011)");
+    expect(rows[1]!.querySelector("a")).toBeNull();
+    expect(app().querySelector('a[href$="/p/plebly-2026-011"]')).toBeNull();
   });
 
   it("shows the empty state when there are no donations", async () => {
