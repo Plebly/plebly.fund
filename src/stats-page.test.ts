@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAIM_FLOOR_SATS } from "./config";
+import { clearFundingRouteCache } from "./funding-route";
 import type { Proposal } from "./types";
 
 const gh = vi.hoisted(() => ({ listAll: vi.fn(), listListed: vi.fn() }));
@@ -138,9 +139,24 @@ describe("renderStats", () => {
     history.replaceState(null, "", "/stats");
     gh.listAll.mockReset();
     gh.listListed.mockReset();
+    clearFundingRouteCache();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/updates/latest")) {
+          return Response.json({ latest: [{ title: "Shipped", count: 2 }] });
+        }
+        if (url.includes("/parameters")) {
+          return Response.json({ funding_route: "multisig" });
+        }
+        return new Response("{}", { status: 404 });
+      }),
+    );
   });
   afterEach(() => {
     document.body.innerHTML = "";
+    vi.unstubAllGlobals();
   });
 
   it("reads scope=all and includes a hidden completed listing in the totals", async () => {
@@ -171,6 +187,8 @@ describe("renderStats", () => {
     expect(gh.listListed).not.toHaveBeenCalled();
     expect(metric("Completed")).toBe("2");
     expect(metric("Open projects")).toBe("1");
+    expect(metric("Projects posting")).toBe("1");
+    expect(metric("Maker updates")).toBe("2");
     expect(app().querySelector(".stats-primary-detail")!.textContent).toBe(
       "Live confirmed balances across 3 tracked projects",
     );

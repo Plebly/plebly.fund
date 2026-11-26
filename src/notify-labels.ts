@@ -29,6 +29,7 @@ export function notificationTypeLabel(
     claim_application_rejected: "Application rejected",
     claim_application_lost: "Another applicant won",
     workboard_message: "New workboard message",
+    maker_update: "Project update",
     claim_window_grace: "Pick an applicant (grace)",
     claim_auto_awarded: "Auto-awarded earliest bond",
     checkpoint_submitted: "Checkpoint submitted",
@@ -84,7 +85,8 @@ export function notificationTargetHref(n: {
     return href("/admin", "?tab=votes");
   }
   if (n.proposal_path || n.proposal_id) {
-    return proposalHref(n.proposal_path || "", n.proposal_id || "");
+    const path = proposalHref(n.proposal_path || "", n.proposal_id || "");
+    return n.type === "maker_update" ? `${path}#maker-updates` : path;
   }
   return href("/account", "?tab=notifications");
 }

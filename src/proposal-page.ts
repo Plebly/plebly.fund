@@ -86,6 +86,7 @@ import {
 import type { Proposal } from "./types";
 import { safeCoverImageUrl } from "./media";
 import { hydrateAvatarSlots } from "./profile-avatars";
+import { bindMakerUpdates, makerUpdatesHtml, proposalGlanceHtml } from "./maker-updates";
 import {
   bindProposalEngagement,
   commentsHtml,
@@ -484,7 +485,11 @@ function proposalSectionsHtml(markdown: string): string {
     .join("");
 }
 
-function proposalSeoDescription(proposal: Proposal): string | undefined {
+/** Problem, then Deliverable, then the body. Shown in the glance and used for SEO. */
+export function proposalGlanceExcerpt(
+  proposal: Proposal,
+  max = 160,
+): string | undefined {
   const sections = ["Problem", "Deliverable"]
     .map((heading) =>
       new RegExp(
@@ -502,7 +507,7 @@ function proposalSeoDescription(proposal: Proposal): string | undefined {
     .replace(/^#+\s+.+$/gm, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 160) || undefined;
+    .slice(0, max) || undefined;
 }
 
 export async function renderProposalPage(
@@ -599,7 +604,7 @@ export async function renderProposalPage(
     }
 
     const seoDescription =
-      proposalSeoDescription(match) ||
+      proposalGlanceExcerpt(match) ||
       (match.funding_route === "multisig"
         ? "Open Bitcoin project. Donors pay its escrow address."
         : "Open Bitcoin project. Donors pay the builder. That payment is final.");
@@ -769,6 +774,7 @@ export async function renderProposalPage(
 
         <div class="proposal-layout">
           <div class="proposal-main">
+            ${proposalGlanceHtml(proposalGlanceExcerpt(match, 240))}
             <div class="proposal-sections">${sectionsHtml}</div>
             ${milestonesHtml(match.milestones, Date.now(), {
               hideOverdue: isFinishedStatus(status),
@@ -789,6 +795,7 @@ export async function renderProposalPage(
               <h2 class="proposal-block-title">Review</h2>
               ${reviewParts}
             </section>
+            ${makerUpdatesHtml(match.id)}
             ${funderCreditHtml(match.id)}
             ${commentsHtml(match.id, Boolean(user), {
               discussionClosed: discussionClosedForStatus(status),
@@ -812,6 +819,7 @@ export async function renderProposalPage(
             </div>
             <nav class="proposal-side-links" aria-label="On this page">
               <a class="proposal-side-link" id="funding-side-link" href="#structured-funding" hidden>How this pays out</a>
+              <a class="proposal-side-link" id="maker-updates-side-link" href="#maker-updates"${match.id ? "" : " hidden"}>Updates</a>
               <a class="proposal-side-link" id="review-side-link" href="#proposal-review"${reviewJump ? "" : " hidden"}>${escapeHtml(reviewJump || "Review")}</a>
             </nav>
             ${deliverableChipHtml(match.deliverable_url)}
@@ -919,6 +927,9 @@ export async function renderProposalPage(
     const reviewerMePromise = user
       ? fetchReviewerMe().catch(() => null)
       : Promise.resolve(null);
+    if (match.id) {
+      void bindMakerUpdates(app, match.id).catch(() => undefined);
+    }
     const engagementReady = (async () => {
       // Prefer moderation flags when reviewer/me returns quickly; never stall comments.
       const reviewerMe = await Promise.race([

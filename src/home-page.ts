@@ -46,9 +46,10 @@ import {
 } from "./router";
 import { hydrateAvatarSlots, orgAvatarSlotHtml } from "./profile-avatars";
 import { wantedEmptyHtml, wantedRowHtml } from "./wanted-page";
-import { escapeHtml, formatSats } from "./util";
+import { escapeHtml, formatSats, timeAgoHtml } from "./util";
 import { fetchProposalViewsBatch } from "./views";
 import { bindActivityStrip } from "./activity";
+import { bindMakerUpdateRail, fetchLatestUpdates, type CardUpdate } from "./maker-updates";
 
 export type HomeShell = (inner: string) => string;
 
@@ -91,7 +92,7 @@ export function sharedEscrowNoteHtml(proposals: Proposal[]): string {
   return `<p class="shared-escrow-note">These test listings share one escrow address. Each balance counts only that listing's own confirmed funding, so a block explorer will show a higher total for the address.</p>`;
 }
 
-type SortKey = "funded" | "newest" | "floor";
+type SortKey = "funded" | "newest" | "floor" | "updated";
 type ClaimFilter = "all" | "open" | "near" | "taken";
 type TypeFilter = "all" | "bounty" | "direct";
 type SizeFilter = "all" | "below-floor" | "at-floor" | "overfunded";
@@ -232,6 +233,7 @@ function discoverToolbarHtml(count: number): string {
         <select id="project-sort">
           <option value="funded">Most funded</option>
           <option value="newest">Newest</option>
+          <option value="updated">Recently updated</option>
           <option value="floor">Closest to opening</option>
         </select>
       </label>
@@ -392,6 +394,7 @@ export function proposalCardHtml(
   floor: number,
   lightningEnabled: boolean,
   watching: boolean,
+  latest?: Map<string, CardUpdate>,
 ): string {
   const status = String(p.status);
   const proposer = projectCardProposerHtml(p, {
@@ -450,6 +453,15 @@ export function proposalCardHtml(
     ? `<button type="button" class="project-card-watch-btn" data-card-watch="${escapeHtml(p.id)}" data-path="${escapeHtml(p.path)}" data-watch-title="${escapeHtml(p.title || "")}" data-watching="${watching ? "1" : "0"}" aria-label="${escapeHtml(watchLabel)}" title="${escapeHtml(watchLabel)}"><span class="project-card-watch-icon" aria-hidden="true">${watching ? "★" : "☆"}</span><span class="mono project-card-watch-count">${watchCount}</span></button>`
     : "";
   const settleChip = settleTxidChipHtml(p.settle_txid);
+  const key = (p.id || "").trim().toUpperCase();
+  const cardUpdate = key ? latest?.get(key) : undefined;
+  const updateHtml = cardUpdate
+    ? `<p class="project-card-update"><span class="project-card-update-kicker">Update</span> ${timeAgoHtml(cardUpdate.created_at)}${
+        cardUpdate.count && cardUpdate.count > 1
+          ? ` ${cardUpdate.count} updates ·`
+          : ""
+      } ${escapeHtml(cardUpdate.title)}</p>`
+    : "";
   return `
     <article class="project-card${rescue ? " is-rescue" : ""}">
       <div class="project-card-head">
@@ -467,6 +479,7 @@ export function proposalCardHtml(
           <p class="project-card-excerpt">${escapeHtml(excerptFromBody(p.body))}</p>
           ${tagsHtml}
           ${progressHtml(p, floor)}
+          ${updateHtml}
           ${views}
         </div>
       </a>
@@ -486,7 +499,11 @@ function railHtml(
   floor: number,
   lightningEnabled: boolean,
   watchPaths: Set<string>,
-  opts: { hideWhenEmpty?: boolean; browseHref?: string } = {},
+  opts: {
+    hideWhenEmpty?: boolean;
+    browseHref?: string;
+    latest?: Map<string, CardUpdate>;
+  } = {},
 ): string {
   const browse = opts.browseHref || projectsHref();
   if (!proposals.length) {
@@ -518,7 +535,7 @@ function railHtml(
       <a href="${escapeHtml(browse)}">Browse all →</a>
     </div>
     <div class="project-rail-list">${proposals
-      .map((p) => proposalCardHtml(p, floor, lightningEnabled, watchPaths.has(p.path) || Boolean(p.id && watchPaths.has(p.id))))
+      .map((p) => proposalCardHtml(p, floor, lightningEnabled, watchPaths.has(p.path) || Boolean(p.id && watchPaths.has(p.id)), opts.latest))
       .join("")}</div>
   </section>`;
 }
@@ -552,12 +569,26 @@ export async function enrichBalances(proposals: Proposal[]): Promise<Proposal[]>
   );
 }
 
-function sortProposals(proposals: Proposal[], key: SortKey, floor: number): Proposal[] {
+export function sortProposals(
+  proposals: Proposal[],
+  key: SortKey,
+  floor: number,
+  latest?: Map<string, CardUpdate>,
+): Proposal[] {
   const list = [...proposals];
+  const stamp = (proposal: Proposal) =>
+    latest?.get((proposal.id || "").trim().toUpperCase())?.created_at || "";
   const byKey = (a: Proposal, b: Proposal) => {
     if (key === "funded") return (b.balance_sats ?? 0) - (a.balance_sats ?? 0);
     if (key === "newest")
       return (b.created_at || "").localeCompare(a.created_at || "");
+    if (key === "updated") {
+      const aStamp = stamp(a);
+      const bStamp = stamp(b);
+      if (Boolean(aStamp) !== Boolean(bStamp)) return aStamp ? -1 : 1;
+      if (aStamp && bStamp && aStamp !== bStamp) return bStamp.localeCompare(aStamp);
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    }
     return (
       Math.max(0, floor - (a.balance_sats ?? 0)) -
       Math.max(0, floor - (b.balance_sats ?? 0))
@@ -572,16 +603,38 @@ function sortProposals(proposals: Proposal[], key: SortKey, floor: number): Prop
   return list;
 }
 
+/** Keep the browse address shareable. Most funded is the default, so it stays off the query. */
+export function browseSortSearch(search: string, sort: string): string {
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  if (!sort || sort === "funded") params.delete("sort");
+  else params.set("sort", sort);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
 function bindDiscover(
   root: ParentNode,
   proposals: Proposal[],
   floor: number,
   lightningEnabled: boolean,
   watchPaths: Set<string>,
+  latest?: Map<string, CardUpdate>,
 ): void {
   const listEl = root.querySelector("#list")!;
   const searchEl = root.querySelector<HTMLInputElement>("#project-search");
   const sortEl = root.querySelector<HTMLSelectElement>("#project-sort");
+  const sortFromUrl = new URLSearchParams(location.search).get("sort");
+  if (
+    sortEl &&
+    (sortFromUrl === "funded" ||
+      sortFromUrl === "newest" ||
+      sortFromUrl === "floor" ||
+      sortFromUrl === "updated")
+  ) {
+    sortEl.value = sortFromUrl;
+  }
   const tagEl = root.querySelector<HTMLSelectElement>("#project-tag-filter");
   const statusEl = root.querySelector<HTMLSelectElement>("#project-status-filter");
   const sizeEl = root.querySelector<HTMLSelectElement>("#project-size-filter");
@@ -759,7 +812,7 @@ function bindDiscover(
     if (endowmentFilter === "funded") {
       filtered = filtered.filter((p) => Boolean(p.endowment_funded));
     }
-    filtered = sortProposals(filtered, sort, floor);
+    filtered = sortProposals(filtered, sort, floor, latest);
     const heading = root.querySelector("#projects-heading");
     if (heading) {
       heading.textContent =
@@ -796,6 +849,7 @@ function bindDiscover(
           watchPaths.has(p.path) ||
             watchPaths.has(p.id || "") ||
             Boolean(p.id && watchPaths.has(p.id)),
+          latest,
         ),
       )
       .join("");
@@ -810,6 +864,11 @@ function bindDiscover(
     scheduleAvatars();
   });
   sortEl?.addEventListener("change", () => {
+    const next = browseSortSearch(location.search, sortEl.value || "funded");
+    const url = `${location.pathname}${next}${location.hash}`;
+    if (url !== `${location.pathname}${location.search}${location.hash}`) {
+      history.replaceState(history.state, "", url);
+    }
     renderList();
     scheduleAvatars();
   });
@@ -966,6 +1025,7 @@ export async function renderHome(
     <div id="wanted-rail"></div>
     <div id="featured-rail"></div>
     <div id="completed-rail"></div>
+    <div id="maker-updates-rail"></div>
     <section class="wrap-wide landing-discover" id="projects" aria-labelledby="projects-heading">
       ${discoverToolbarHtml(0)}
       <div id="shared-escrow-note"></div>
@@ -989,13 +1049,14 @@ export async function renderHome(
       : loaded.proposals.filter(
           (p) => String(p.status || "").trim().toLowerCase() !== "completed",
         );
-    const [withBalances, lnStatus, watches, endowmentTeaser] = await Promise.all([
+    const [withBalances, lnStatus, watches, endowmentTeaser, cardLatest] = await Promise.all([
       enrichBalances(proposals),
       lightningUiAllowed()
         ? fetchLightningStatus()
         : Promise.resolve({ enabled: false }),
       fetchWatches().catch(() => []),
       fetchEndowmentTeaser(),
+      fetchLatestUpdates().catch(() => new Map<string, CardUpdate>()),
     ]);
     proposals = withBalances;
     const endowmentStrip = app.querySelector("#endowment-strip");
@@ -1060,6 +1121,7 @@ export async function renderHome(
         watchPaths,
         {
           hideWhenEmpty: true,
+          latest: cardLatest,
           browseHref: campaigns.length
             ? projectsHref("?type=direct")
             : href("/propose"),
@@ -1095,6 +1157,7 @@ export async function renderHome(
     const gapTicker = app.querySelector("#gap-ticker");
     if (gapTicker) gapTicker.innerHTML = gapTickerHtml(proposals, CLAIM_FLOOR_SATS);
     void bindActivityStrip(app);
+    void bindMakerUpdateRail(app);
     void bindDonationsLive(app);
     const featuredRail = app.querySelector("#featured-rail");
     if (featuredRail) {
@@ -1115,7 +1178,7 @@ export async function renderHome(
             CLAIM_FLOOR_SATS,
             lightningEnabled,
             watchPaths,
-            { hideWhenEmpty: true },
+            { hideWhenEmpty: true, latest: cardLatest },
           );
       if (!hideFeatured) bindCardWatches(featuredRail, watchPaths);
     }
@@ -1129,7 +1192,7 @@ export async function renderHome(
         CLAIM_FLOOR_SATS,
         lightningEnabled,
         watchPaths,
-        { hideWhenEmpty: true, browseHref: href("/archive") },
+        { hideWhenEmpty: true, browseHref: href("/archive"), latest: cardLatest },
       );
       bindCardWatches(completedRail, watchPaths);
     }
@@ -1142,7 +1205,7 @@ export async function renderHome(
       </div>`;
       return;
     }
-    bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled, watchPaths);
+    bindDiscover(app, proposals, CLAIM_FLOOR_SATS, lightningEnabled, watchPaths, cardLatest);
     void hydrateAvatarSlots(app);
     const chipTimer = window.setInterval(
       () => refreshClaimModeChips(app),

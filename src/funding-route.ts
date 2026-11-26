@@ -22,6 +22,11 @@ export function siteDescription(): string {
   return escrowListingsOn() ? ESCROW_SITE_DESCRIPTION : DIRECT_SITE_DESCRIPTION;
 }
 
+export function clearFundingRouteCache(): void {
+  cached = null;
+  pending = null;
+}
+
 export async function loadFundingRoute(): Promise<"multisig" | "direct-builder"> {
   if (cached) return cached;
   if (!pending) {
