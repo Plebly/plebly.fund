@@ -32,9 +32,12 @@ async function loadTitles(): Promise<CatalogTitles> {
       }),
     ]);
     if (!res || !res.ok) return { titles, ids: null };
-    const data = (await res.json()) as { proposals?: { id?: string | null; title?: string | null }[] };
+    const data = (await res.json()) as { proposals?: unknown };
+    // A 200 whose body is not a proposals array is not a loaded catalog: an
+    // empty id set would mark every project gift as removed.
+    if (!data || !Array.isArray(data.proposals)) return { titles, ids: null };
     const ids = new Set<string>();
-    for (const p of Array.isArray(data?.proposals) ? data.proposals : []) {
+    for (const p of data.proposals as { id?: string | null; title?: string | null }[]) {
       const raw = String(p?.id || "").trim();
       const key = catalogIdKey(raw);
       if (key) ids.add(key);
